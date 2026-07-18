@@ -1,0 +1,66 @@
+import { createRouter, createWebHistory } from 'vue-router';
+import type { RouteRecordRaw } from 'vue-router';
+import Dashboard from '../views/Dashboard.vue';
+import LessonDetail from '../views/LessonDetail.vue';
+import QuizView from '../views/QuizView.vue';
+import Leaderboard from '../views/Leaderboard.vue';
+import Login from '../views/Login.vue';
+
+const routes: Array<RouteRecordRaw> = [
+  {
+    path: '/login',
+    name: 'Login',
+    component: Login
+  },
+  {
+    path: '/',
+    name: 'Dashboard',
+    component: Dashboard,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/lesson/:id',
+    name: 'LessonDetail',
+    component: LessonDetail,
+    props: true,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/quiz/:topicId',
+    name: 'QuizView',
+    component: QuizView,
+    props: true,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/leaderboard',
+    name: 'Leaderboard',
+    component: Leaderboard,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    redirect: '/'
+  }
+];
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes
+});
+
+// Navigation Guard to protect routes
+router.beforeEach((to, _, next) => {
+  const token = localStorage.getItem('accessToken');
+  const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
+
+  if (requiresAuth && !token) {
+    next('/login');
+  } else if (to.name === 'Login' && token) {
+    next('/');
+  } else {
+    next();
+  }
+});
+
+export default router;

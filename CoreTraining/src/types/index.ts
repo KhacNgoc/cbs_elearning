@@ -1,0 +1,67 @@
+export interface Comment {
+  id: string;
+  user: string;
+  avatar: string;
+  rating: number;
+  content: string;
+  date: string;
+}
+
+export interface ProcedureSection {
+  title: string;
+  steps: string[];
+}
+
+export interface Lesson {
+  id: string;
+  title: string;
+  topicId: string;
+  hint: string;
+  documentSlides: string[]; // Content/Text of each slide
+  videoUrl: string;
+  procedureSteps: ProcedureSection[];
+  comments: Comment[];
+}
+
+export interface Topic {
+  id: string;
+  name: string;
+  iconName: string;
+  lessons: Lesson[];
+}
+
+export interface Question {
+  id: number;
+  topicId: string;
+  text: string;
+  options: string[];
+  correctAnswer: number; // 0-indexed index of options
+}
+
+export interface Badge {
+  id: string;
+  title: string;
+  type: 'bronze' | 'silver' | 'gold';
+  topicId: string;
+  topicName: string;
+  unlockedAt: string;
+  icon: string;
+}
+
+export interface UserProgress {
+  completedLessons: string[]; // List of completed lesson IDs
+  quizScores: Record<string, number>; // topicId -> max score achieved (e.g. 3)
+  quizTotals: Record<string, number>; // topicId -> total questions (e.g. 5)
+  points: number; // Experience points
+  unlockedBadges: Badge[];
+}
+
+export interface LeaderboardUser {
+  rank: number;
+  username: string;
+  fullName: string;
+  points: number;
+  avatarColor: string;
+  badgesCount: number;
+  completedLessonsCount: number;
+}

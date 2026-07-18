@@ -1,0 +1,33 @@
+package com.bidv.coretraining.controller;
+
+import com.bidv.coretraining.dto.UserProgressDto;
+import com.bidv.coretraining.security.CustomUserDetails;
+import com.bidv.coretraining.service.UserService;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/users")
+public class UserController {
+
+    private final UserService userService;
+
+    public UserController(UserService userService) {
+        this.userService = userService;
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<UserProgressDto> getUserProgress(@AuthenticationPrincipal CustomUserDetails userDetails) {
+        UserProgressDto response = userService.getUserProgress(userDetails.getUsername());
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/me/complete-lesson/{lessonId}")
+    public ResponseEntity<UserProgressDto> completeLesson(
+            @PathVariable String lessonId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        UserProgressDto response = userService.completeLesson(userDetails.getUsername(), lessonId);
+        return ResponseEntity.ok(response);
+    }
+}

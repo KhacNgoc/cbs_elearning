@@ -1,0 +1,128 @@
+import { defineStore } from 'pinia';
+import type { UserProgress } from '../types';
+import { mockTopics } from '../data/mockData';
+import { authApi } from '../api/authApi';
+import type { LoginRequest } from '../api/authApi';
+import { courseApi } from '../api/courseApi';
+import router from '../router';
+
+export const useUserStore = defineStore('user', {
+  state: (): UserProgress & { isAuthenticated: boolean; role: string; username: string; fullName: string } => ({
+    completedLessons: [],
+    quizScores: {},
+    quizTotals: {},
+    points: 0,
+    unlockedBadges: [],
+    isAuthenticated: !!localStorage.getItem('accessToken'),
+    role: localStorage.getItem('userRole') || '',
+    username: localStorage.getItem('username') || '',
+    fullName: localStorage.getItem('fullName') || ''
+  }),
+
+  getters: {
+    totalLessonsCount(): number {
+      return mockTopics.reduce((acc, topic) => acc + topic.lessons.length, 0);
+    },
+    completedLessonsCount(): number {
+      return this.completedLessons.length;
+    },
+    overallProgressPercent(): number {
+      const total = this.totalLessonsCount;
+      if (total === 0) return 0;
+      return Math.round((this.completedLessons.length / total) * 100);
+    },
+    getTopicProgressPercent: (state) => (topicId: string): number => {
+      const topic = mockTopics.find(t => t.id === topicId);
+      if (!topic || topic.lessons.length === 0) return 0;
+      
+      const completedInTopic = topic.lessons.filter(lesson => 
+        state.completedLessons.includes(lesson.id)
+      ).length;
+      
+      return Math.round((completedInTopic / topic.lessons.length) * 100);
+    },
+    getTopicQuizScore: (state) => (topicId: string): { score: number, total: number, percent: number } | null => {
+      if (state.quizScores[topicId] === undefined) return null;
+      const score = state.quizScores[topicId];
+      const total = state.quizTotals[topicId] || 5;
+      return {
+        score,
+        total,
+        percent: Math.round((score / total) * 100)
+      };
+    }
+  },
+
+  actions: {
+    async login(credentials: LoginRequest) {
+      try {
+        const res = await authApi.login(credentials);
+        localStorage.setItem('accessToken', res.accessToken);
+        localStorage.setItem('userRole', res.role);
+        localStorage.setItem('username', res.username);
+        localStorage.setItem('fullName', res.fullName);
+        
+        this.isAuthenticated = true;
+        this.role = res.role;
+        this.username = res.username;
+        this.fullName = res.fullName;
+        
+        await this.fetchProgress();
+        router.push('/');
+      } catch (error) {
+        console.error('Login failed:', error);
+        throw error;
+      }
+    },
+
+    logout() {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('userRole');
+      localStorage.removeItem('username');
+      localStorage.removeItem('fullName');
+      
+      this.isAuthenticated = false;
+      this.role = '';
+      this.username = '';
+      this.fullName = '';
+      this.completedLessons = [];
+      this.quizScores = {};
+      this.quizTotals = {};
+      this.points = 0;
+      this.unlockedBadges = [];
+      
+      router.push('/login');
+    },
+
+    async fetchProgress() {
+      if (!this.isAuthenticated) return;
+      try {
+        const progress = await courseApi.getMyProgress();
+        this.completedLessons = progress.completedLessons || [];
+        this.quizScores = progress.quizScores || {};
+        this.quizTotals = progress.quizTotals || {};
+        this.points = progress.points || 0;
+        this.unlockedBadges = progress.unlockedBadges || [];
+
+        // Save progress to localstorage for mock caching if active
+        localStorage.setItem('mockCompletedLessons', JSON.stringify(this.completedLessons));
+      } catch (error) {
+        console.error('Failed to fetch user progress:', error);
+      }
+    },
+
+    async completeLesson(lessonId: string) {
+      if (!this.isAuthenticated) return;
+      try {
+        const updatedProgress = await courseApi.markComplete(lessonId);
+        this.completedLessons = updatedProgress.completedLessons;
+        this.points = updatedProgress.points;
+        
+        // Save mock complete to local cache
+        localStorage.setItem('mockCompletedLessons', JSON.stringify(this.completedLessons));
+      } catch (error) {
+        console.error('Failed to mark lesson complete:', error);
+      }
+    }
+  }
+});
