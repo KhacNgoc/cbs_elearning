@@ -227,6 +227,14 @@ const isCompleted = computed(() => {
 
 const loadLessonData = async (lessonId: string) => {
   await courseStore.fetchLessonDetail(lessonId);
+  
+  // Guard check: topic accessibility
+  if (topic.value && !userStore.isTopicAccessible(topic.value.id)) {
+    alert("Bạn cần đăng ký học chủ đề nghiệp vụ này trước!");
+    router.push('/');
+    return;
+  }
+
   // Auto complete lesson when viewed
   if (lesson.value) {
     await userStore.completeLesson(lesson.value.id);
@@ -234,6 +242,9 @@ const loadLessonData = async (lessonId: string) => {
 };
 
 onMounted(async () => {
+  if (userStore.mandatoryTopics.length === 0) {
+    await userStore.fetchProgress();
+  }
   if (courseStore.topics.length === 0) {
     await courseStore.fetchTopics();
   }

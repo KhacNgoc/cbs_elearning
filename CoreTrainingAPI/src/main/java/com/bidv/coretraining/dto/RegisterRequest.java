@@ -14,5 +14,14 @@ public class RegisterRequest {
     @NotBlank(message = "Full name cannot be blank")
     private String fullName;
 
+    @NotBlank(message = "Employee ID cannot be blank")
+    private String employeeId;
+
+    @NotBlank(message = "Email cannot be blank")
+    @jakarta.validation.constraints.Email(message = "Invalid email format")
+    private String email;
+
     private String avatarColor;
+
+    private String userGroupId;
 }

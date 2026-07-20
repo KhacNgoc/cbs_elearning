@@ -23,12 +23,13 @@ public class DataInitializer implements CommandLineRunner {
     private final UserQuizScoreRepository userQuizScoreRepository;
     private final CommentRepository commentRepository;
     private final PasswordEncoder passwordEncoder;
+    private final UserGroupRepository userGroupRepository;
 
     public DataInitializer(UserRepository userRepository, TopicRepository topicRepository,
                            LessonRepository lessonRepository, QuestionRepository questionRepository,
                            BadgeRepository badgeRepository, UserBadgeRepository userBadgeRepository,
                            UserQuizScoreRepository userQuizScoreRepository, CommentRepository commentRepository,
-                           PasswordEncoder passwordEncoder) {
+                           PasswordEncoder passwordEncoder, UserGroupRepository userGroupRepository) {
         this.userRepository = userRepository;
         this.topicRepository = topicRepository;
         this.lessonRepository = lessonRepository;
@@ -38,11 +39,28 @@ public class DataInitializer implements CommandLineRunner {
         this.userQuizScoreRepository = userQuizScoreRepository;
         this.commentRepository = commentRepository;
         this.passwordEncoder = passwordEncoder;
+        this.userGroupRepository = userGroupRepository;
     }
 
     @Override
     @Transactional
     public void run(String... args) throws Exception {
+        // Ensure system user is seeded even if database already has data from previous runs
+        if (!userRepository.existsByUsername("system")) {
+            UserGroup ksvGroup = userGroupRepository.findById("KSV").orElse(null);
+            userRepository.save(User.builder()
+                    .username("system")
+                    .password(passwordEncoder.encode("123@qwe"))
+                    .fullName("Hệ Thống")
+                    .avatarColor("#8B5CF6")
+                    .employeeId("SYSTEM")
+                    .email("system@bidv.com.vn")
+                    .role("ROLE_USER")
+                    .points(2000)
+                    .userGroup(ksvGroup)
+                    .build());
+        }
+
         if (topicRepository.count() > 0) {
             return; // Data already initialized
         }
@@ -55,6 +73,25 @@ public class DataInitializer implements CommandLineRunner {
         Topic teller = topicRepository.save(Topic.builder().id("TELLER").name("TELLER").iconName("Wallet").build());
         Topic gl = topicRepository.save(Topic.builder().id("GL").name("GL").iconName("BookOpen").build());
         Topic the = topicRepository.save(Topic.builder().id("THE").name("THẺ").iconName("CreditCard").build());
+
+        // 1b. Create User Groups
+        UserGroup gdvGroup = userGroupRepository.save(UserGroup.builder()
+                .id("GDV")
+                .name("Giao dịch viên")
+                .mandatoryTopics(new HashSet<>(Arrays.asList(cif, tienGui, teller, the)))
+                .build());
+
+        UserGroup qkhGroup = userGroupRepository.save(UserGroup.builder()
+                .id("QHKH")
+                .name("Quan hệ khách hàng")
+                .mandatoryTopics(new HashSet<>(Arrays.asList(cif, tienVay, chuyenTien)))
+                .build());
+
+        UserGroup ksvGroup = userGroupRepository.save(UserGroup.builder()
+                .id("KSV")
+                .name("Kiểm soát viên")
+                .mandatoryTopics(new HashSet<>(Arrays.asList(cif, gl)))
+                .build());
 
         // 2. Create Lessons for CIF
         Lesson cif01 = Lesson.builder()
@@ -458,8 +495,22 @@ public class DataInitializer implements CommandLineRunner {
                 .password(passwordEncoder.encode("admin123"))
                 .fullName("Quản trị hệ thống")
                 .avatarColor("#EF4444")
+                .employeeId("ADMIN")
+                .email("admin@bidv.com.vn")
                 .role("ROLE_ADMIN")
                 .points(0)
+                .build());
+
+        User systemUser = userRepository.save(User.builder()
+                .username("system")
+                .password(passwordEncoder.encode("123@qwe"))
+                .fullName("Hệ Thống")
+                .avatarColor("#8B5CF6")
+                .employeeId("SYSTEM")
+                .email("system@bidv.com.vn")
+                .role("ROLE_USER")
+                .points(2000)
+                .userGroup(ksvGroup)
                 .build());
 
         User quantrh = userRepository.save(User.builder()
@@ -467,8 +518,11 @@ public class DataInitializer implements CommandLineRunner {
                 .password(passwordEncoder.encode("123456"))
                 .fullName("Quản Trị Hệ Thống (Bạn)")
                 .avatarColor("#005B41")
+                .employeeId("BIDV001")
+                .email("quantrh@bidv.com.vn")
                 .role("ROLE_USER")
                 .points(1850)
+                .userGroup(gdvGroup)
                 .build());
 
         User userA = userRepository.save(User.builder()
@@ -476,8 +530,11 @@ public class DataInitializer implements CommandLineRunner {
                 .password(passwordEncoder.encode("123456"))
                 .fullName("Nguyễn Văn An")
                 .avatarColor("#4F46E5")
+                .employeeId("BIDV002")
+                .email("nguyenvana@bidv.com.vn")
                 .role("ROLE_USER")
                 .points(2850)
+                .userGroup(gdvGroup)
                 .build());
 
         User userB = userRepository.save(User.builder()
@@ -485,8 +542,11 @@ public class DataInitializer implements CommandLineRunner {
                 .password(passwordEncoder.encode("123456"))
                 .fullName("Trần Thị Bình")
                 .avatarColor("#10B981")
+                .employeeId("BIDV003")
+                .email("tranb@bidv.com.vn")
                 .role("ROLE_USER")
                 .points(2600)
+                .userGroup(qkhGroup)
                 .build());
 
         User userC = userRepository.save(User.builder()
@@ -494,8 +554,11 @@ public class DataInitializer implements CommandLineRunner {
                 .password(passwordEncoder.encode("123456"))
                 .fullName("Lê Hoàng Phúc")
                 .avatarColor("#F59E0B")
+                .employeeId("BIDV004")
+                .email("lephuc@bidv.com.vn")
                 .role("ROLE_USER")
                 .points(2450)
+                .userGroup(ksvGroup)
                 .build());
 
         User userD = userRepository.save(User.builder()
@@ -503,8 +566,11 @@ public class DataInitializer implements CommandLineRunner {
                 .password(passwordEncoder.encode("123456"))
                 .fullName("Phạm Minh Đức")
                 .avatarColor("#EF4444")
+                .employeeId("BIDV005")
+                .email("phamduc@bidv.com.vn")
                 .role("ROLE_USER")
                 .points(2100)
+                .userGroup(gdvGroup)
                 .build());
 
         User userE = userRepository.save(User.builder()
@@ -512,8 +578,11 @@ public class DataInitializer implements CommandLineRunner {
                 .password(passwordEncoder.encode("123456"))
                 .fullName("Hoàng Kim Yến")
                 .avatarColor("#EC4899")
+                .employeeId("BIDV006")
+                .email("hoangyen@bidv.com.vn")
                 .role("ROLE_USER")
                 .points(1500)
+                .userGroup(qkhGroup)
                 .build());
 
         User userF = userRepository.save(User.builder()
@@ -521,8 +590,11 @@ public class DataInitializer implements CommandLineRunner {
                 .password(passwordEncoder.encode("123456"))
                 .fullName("Vương Tuấn Minh")
                 .avatarColor("#8B5CF6")
+                .employeeId("BIDV007")
+                .email("vuongminh@bidv.com.vn")
                 .role("ROLE_USER")
                 .points(1200)
+                .userGroup(ksvGroup)
                 .build());
 
 

@@ -127,6 +127,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { useCourseStore } from '../stores/courseStore';
 import { useQuizStore } from '../stores/quizStore';
 import { useUserStore } from '../stores/userStore';
@@ -138,6 +139,7 @@ const props = defineProps({
     required: true
   }
 });
+const router = useRouter();
 const courseStore = useCourseStore();
 const quizStore = useQuizStore();
 const userStore = useUserStore();
@@ -158,7 +160,10 @@ const highScore = computed(() => {
 // Capture recently unlocked badge if any
 const unlockedBadge = ref<any | null>(null);
 
-onMounted(() => {
+onMounted(async () => {
+  if (userStore.mandatoryTopics.length === 0) {
+    await userStore.fetchProgress();
+  }
   startNewQuiz();
 });
 
@@ -167,6 +172,11 @@ watch(() => props.topicId, () => {
 });
 
 const startNewQuiz = () => {
+  if (!userStore.isTopicAccessible(props.topicId)) {
+    alert("Bạn cần đăng ký học chủ đề nghiệp vụ này trước khi thi!");
+    router.push('/');
+    return;
+  }
   unlockedBadge.value = null;
   quizStore.startQuiz(props.topicId);
 };

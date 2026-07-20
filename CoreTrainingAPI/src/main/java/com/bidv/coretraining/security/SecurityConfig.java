@@ -28,14 +28,12 @@ public class SecurityConfig {
     private final JwtTokenProvider tokenProvider;
     private final UserDetailsServiceImpl userDetailsService;
 
+    @org.springframework.beans.factory.annotation.Value("${app.cors.allowed-origins}")
+    private java.util.List<String> allowedOrigins;
+
     public SecurityConfig(JwtTokenProvider tokenProvider, UserDetailsServiceImpl userDetailsService) {
         this.tokenProvider = tokenProvider;
         this.userDetailsService = userDetailsService;
-    }
-
-    @Bean
-    public JwtAuthenticationFilter jwtAuthenticationFilter() {
-        return new JwtAuthenticationFilter(tokenProvider, userDetailsService);
     }
 
     @Bean
@@ -50,6 +48,8 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        JwtAuthenticationFilter jwtAuthenticationFilter = new JwtAuthenticationFilter(tokenProvider, userDetailsService);
+
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(AbstractHttpConfigurer::disable)
@@ -61,7 +61,7 @@ public class SecurityConfig {
             );
 
         // Add our custom JWT security filter
-        http.addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
+        http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -69,12 +69,8 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // Allow typical development ports for frontend
-        configuration.setAllowedOriginPatterns(Arrays.asList(
-                "http://localhost:5173", 
-                "http://localhost:3000", 
-                "http://127.0.0.1:5173"
-        ));
+        // Allow dynamic development ports from application configuration
+        configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "X-Requested-With", "accept", "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"));
         configuration.setExposedHeaders(Collections.singletonList("Authorization"));

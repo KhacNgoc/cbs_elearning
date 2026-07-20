@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/coretraining
-    username: postgres
-    password: postgres
+    url: jdbc:postgresql://ep-icy-haze-az1ohp84-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+    username: neondb_owner
+    password: npg_gr0ZeANCOmK2
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:

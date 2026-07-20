@@ -31,12 +31,31 @@ public class User {
     @Column(name = "avatar_color")
     private String avatarColor;
 
+    @Column(name = "employee_id")
+    private String employeeId;
+
+    @Column
+    private String email;
+
     @Column(nullable = false)
     private String role; // e.g. "ROLE_USER", "ROLE_ADMIN"
 
     @Column(nullable = false)
     @Builder.Default
     private Integer points = 0;
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "group_id")
+    private UserGroup userGroup;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "user_registered_topics",
+        joinColumns = @JoinColumn(name = "user_id"),
+        inverseJoinColumns = @JoinColumn(name = "topic_id")
+    )
+    @Builder.Default
+    private Set<Topic> registeredTopics = new HashSet<>();
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(

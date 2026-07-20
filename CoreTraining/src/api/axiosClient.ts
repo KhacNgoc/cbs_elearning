@@ -28,12 +28,15 @@ axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('userRole');
-      localStorage.removeItem('username');
-      localStorage.removeItem('fullName');
-      // Redirect to login if needed
-      window.location.href = '/login';
+      const isLoginRequest = error.config && error.config.url && error.config.url.includes('/api/auth/login');
+      if (!isLoginRequest) {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('userRole');
+        localStorage.removeItem('username');
+        localStorage.removeItem('fullName');
+        // Redirect to login if needed
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }

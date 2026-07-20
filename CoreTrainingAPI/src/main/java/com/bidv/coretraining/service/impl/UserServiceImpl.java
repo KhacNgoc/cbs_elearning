@@ -22,11 +22,14 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final LessonRepository lessonRepository;
+    private final com.bidv.coretraining.repository.TopicRepository topicRepository;
     private final UserMapper userMapper;
 
-    public UserServiceImpl(UserRepository userRepository, LessonRepository lessonRepository, UserMapper userMapper) {
+    public UserServiceImpl(UserRepository userRepository, LessonRepository lessonRepository,
+                           com.bidv.coretraining.repository.TopicRepository topicRepository, UserMapper userMapper) {
         this.userRepository = userRepository;
         this.lessonRepository = lessonRepository;
+        this.topicRepository = topicRepository;
         this.userMapper = userMapper;
     }
 
@@ -55,6 +58,22 @@ public class UserServiceImpl implements UserService {
         return buildUserProgressDto(user);
     }
 
+    @Override
+    @Transactional
+    public UserProgressDto registerTopic(String username, String topicId) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
+        com.bidv.coretraining.entity.Topic topic = topicRepository.findById(topicId)
+                .orElseThrow(() -> new ResourceNotFoundException("Topic", "id", topicId));
+
+        if (!user.getRegisteredTopics().contains(topic)) {
+            user.getRegisteredTopics().add(topic);
+            user = userRepository.save(user);
+        }
+
+        return buildUserProgressDto(user);
+    }
+
     private UserProgressDto buildUserProgressDto(User user) {
         // Map completed lessons IDs
         java.util.List<String> completedLessons = user.getCompletedLessons().stream()
@@ -70,12 +89,31 @@ public class UserServiceImpl implements UserService {
             quizTotals.put(topicId, score.getTotal());
         }
 
+        String groupId = null;
+        String groupName = null;
+        java.util.List<String> mandatoryTopics = new ArrayList<>();
+        if (user.getUserGroup() != null) {
+            groupId = user.getUserGroup().getId();
+            groupName = user.getUserGroup().getName();
+            mandatoryTopics = user.getUserGroup().getMandatoryTopics().stream()
+                    .map(com.bidv.coretraining.entity.Topic::getId)
+                    .collect(Collectors.toList());
+        }
+
+        java.util.List<String> registeredTopics = user.getRegisteredTopics().stream()
+                .map(com.bidv.coretraining.entity.Topic::getId)
+                .collect(Collectors.toList());
+
         return UserProgressDto.builder()
                 .completedLessons(completedLessons)
                 .quizScores(quizScores)
                 .quizTotals(quizTotals)
                 .points(user.getPoints())
                 .unlockedBadges(userMapper.toUserBadgeDtoList(new ArrayList<>(user.getUnlockedBadges())))
+                .groupId(groupId)
+                .groupName(groupName)
+                .mandatoryTopics(mandatoryTopics)
+                .registeredTopics(registeredTopics)
                 .build();
     }
 }

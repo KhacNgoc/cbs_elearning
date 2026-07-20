@@ -9,7 +9,10 @@ export interface RegisterRequest {
   username: string;
   password?: string;
   fullName: string;
+  employeeId: string;
+  email: string;
   avatarColor?: string;
+  userGroupId?: string;
 }
 
 export interface LoginResponse {

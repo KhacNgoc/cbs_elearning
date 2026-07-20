@@ -30,4 +30,12 @@ public class UserController {
         UserProgressDto response = userService.completeLesson(userDetails.getUsername(), lessonId);
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/me/register-topic/{topicId}")
+    public ResponseEntity<UserProgressDto> registerTopic(
+            @PathVariable String topicId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        UserProgressDto response = userService.registerTopic(userDetails.getUsername(), topicId);
+        return ResponseEntity.ok(response);
+    }
 }
