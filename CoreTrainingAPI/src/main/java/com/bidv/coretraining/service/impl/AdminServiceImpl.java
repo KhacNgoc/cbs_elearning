@@ -3,13 +3,11 @@ package com.bidv.coretraining.service.impl;
 import com.bidv.coretraining.dto.*;
 import com.bidv.coretraining.entity.*;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
-import com.bidv.coretraining.repository.LessonRepository;
-import com.bidv.coretraining.repository.QuestionRepository;
-import com.bidv.coretraining.repository.TopicRepository;
+import com.bidv.coretraining.repository.*;
 import com.bidv.coretraining.service.AdminService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import org.springframework.security.crypto.password.PasswordEncoder;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -22,16 +20,22 @@ public class AdminServiceImpl implements AdminService {
     private final QuestionRepository questionRepository;
     private final CourseMapper courseMapper;
     private final QuizMapper quizMapper;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public AdminServiceImpl(TopicRepository topicRepository, LessonRepository lessonRepository,
                             QuestionRepository questionRepository, CourseMapper courseMapper,
-                            QuizMapper quizMapper) {
+                            QuizMapper quizMapper, UserRepository userRepository,
+                            PasswordEncoder passwordEncoder) {
         this.topicRepository = topicRepository;
         this.lessonRepository = lessonRepository;
         this.questionRepository = questionRepository;
         this.courseMapper = courseMapper;
         this.quizMapper = quizMapper;
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
     }
+
 
     // Topic CRUD
     @Override
@@ -186,5 +190,64 @@ public class AdminServiceImpl implements AdminService {
         Question question = questionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Question", "id", id));
         questionRepository.delete(question);
+    }
+
+    // User CRUD implementation
+    private UserDto mapToUserDto(User user) {
+        return UserDto.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .fullName(user.getFullName())
+                .avatarColor(user.getAvatarColor())
+                .role(user.getRole())
+                .points(user.getPoints())
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserDto> getAllUsers() {
+        return userRepository.findAll().stream()
+                .map(this::mapToUserDto)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public UserDto createUser(UserDto userDto) {
+        User user = User.builder()
+                .username(userDto.getUsername())
+                .password(passwordEncoder.encode(userDto.getPassword() != null ? userDto.getPassword() : "123456"))
+                .fullName(userDto.getFullName())
+                .avatarColor(userDto.getAvatarColor() != null ? userDto.getAvatarColor() : "#005B41")
+                .role(userDto.getRole() != null ? userDto.getRole() : "ROLE_USER")
+                .points(userDto.getPoints() != null ? userDto.getPoints() : 0)
+                .build();
+        User saved = userRepository.save(user);
+        return mapToUserDto(saved);
+    }
+
+    @Override
+    @Transactional
+    public UserDto updateUser(Long id, UserDto userDto) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", id.toString()));
+        user.setFullName(userDto.getFullName());
+        user.setAvatarColor(userDto.getAvatarColor());
+        user.setRole(userDto.getRole());
+        user.setPoints(userDto.getPoints());
+        if (userDto.getPassword() != null && !userDto.getPassword().trim().isEmpty()) {
+            user.setPassword(passwordEncoder.encode(userDto.getPassword()));
+        }
+        User saved = userRepository.save(user);
+        return mapToUserDto(saved);
+    }
+
+    @Override
+    @Transactional
+    public void deleteUser(Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", id.toString()));
+        userRepository.delete(user);
     }
 }

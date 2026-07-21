@@ -3,6 +3,8 @@ package com.bidv.coretraining.service;
 import com.bidv.coretraining.dto.LessonDto;
 import com.bidv.coretraining.dto.QuestionDto;
 import com.bidv.coretraining.dto.TopicDto;
+import com.bidv.coretraining.dto.UserDto;
+import java.util.List;
 
 public interface AdminService {
     // Topic CRUD
@@ -19,4 +21,11 @@ public interface AdminService {
     QuestionDto createQuestion(QuestionDto questionDto);
     QuestionDto updateQuestion(Long id, QuestionDto questionDto);
     void deleteQuestion(Long id);
+
+    // User CRUD
+    List<UserDto> getAllUsers();
+    UserDto createUser(UserDto userDto);
+    UserDto updateUser(Long id, UserDto userDto);
+    void deleteUser(Long id);
 }
+

@@ -3,9 +3,11 @@ package com.bidv.coretraining.controller;
 import com.bidv.coretraining.dto.LessonDto;
 import com.bidv.coretraining.dto.QuestionDto;
 import com.bidv.coretraining.dto.TopicDto;
+import com.bidv.coretraining.dto.UserDto;
 import com.bidv.coretraining.service.AdminService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -65,6 +67,28 @@ public class AdminController {
     @DeleteMapping("/questions/{id}")
     public ResponseEntity<Void> deleteQuestion(@PathVariable Long id) {
         adminService.deleteQuestion(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // User CRUD endpoints
+    @GetMapping("/users")
+    public ResponseEntity<List<UserDto>> getAllUsers() {
+        return ResponseEntity.ok(adminService.getAllUsers());
+    }
+
+    @PostMapping("/users")
+    public ResponseEntity<UserDto> createUser(@RequestBody UserDto userDto) {
+        return ResponseEntity.ok(adminService.createUser(userDto));
+    }
+
+    @PutMapping("/users/{id}")
+    public ResponseEntity<UserDto> updateUser(@PathVariable Long id, @RequestBody UserDto userDto) {
+        return ResponseEntity.ok(adminService.updateUser(id, userDto));
+    }
+
+    @DeleteMapping("/users/{id}")
+    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
+        adminService.deleteUser(id);
         return ResponseEntity.noContent().build();
     }
 }

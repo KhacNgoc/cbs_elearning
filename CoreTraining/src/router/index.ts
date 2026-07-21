@@ -5,6 +5,7 @@ import LessonDetail from '../views/LessonDetail.vue';
 import QuizView from '../views/QuizView.vue';
 import Leaderboard from '../views/Leaderboard.vue';
 import Login from '../views/Login.vue';
+import AdminPortal from '../views/AdminPortal.vue';
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -39,6 +40,12 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/admin',
+    name: 'AdminPortal',
+    component: AdminPortal,
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     redirect: '/'
   }
@@ -52,10 +59,14 @@ const router = createRouter({
 // Navigation Guard to protect routes
 router.beforeEach((to, _, next) => {
   const token = localStorage.getItem('accessToken');
+  const role = localStorage.getItem('userRole') || '';
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
+  const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin);
 
   if (requiresAuth && !token) {
     next('/login');
+  } else if (requiresAdmin && role !== 'ROLE_ADMIN') {
+    next('/');
   } else if (to.name === 'Login' && token) {
     next('/');
   } else {

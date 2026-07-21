@@ -17,6 +17,13 @@
           <Trophy class="nav-icon" />
           <span>Bảng vinh danh</span>
         </router-link>
+        
+        <router-link v-slot="{ href, navigate, isActive }" v-if="userStore.role === 'ROLE_ADMIN'" to="/admin" custom>
+          <a :href="href" @click="navigate" class="nav-link" :class="{ 'router-link-active': isActive }">
+            <Settings class="nav-icon" />
+            <span>Quản trị</span>
+          </a>
+        </router-link>
       </div>
 
       <div class="nav-user-menu">
@@ -45,7 +52,7 @@
 import { computed, onMounted } from 'vue';
 import { useUserStore } from './stores/userStore';
 import { useCourseStore } from './stores/courseStore';
-import { Home, Trophy, LogOut } from 'lucide-vue-next';
+import { Home, Trophy, LogOut, Settings } from 'lucide-vue-next';
 
 const userStore = useUserStore();
 const courseStore = useCourseStore();

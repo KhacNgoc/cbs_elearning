@@ -2,6 +2,11 @@ import { axiosClient, isMockApi, mockDelay } from './axiosClient';
 import type { Question } from '../types';
 import { mockQuestions } from '../data/mockData';
 
+export let mockDbQuestions = JSON.parse(JSON.stringify(mockQuestions)) as Question[];
+export const setMockDbQuestions = (newQuestions: Question[]) => {
+  mockDbQuestions = newQuestions;
+};
+
 export interface QuizSubmitRequest {
   selectedAnswers: Record<string, number>;
   timeElapsed: number;
@@ -18,7 +23,7 @@ export const quizApi = {
   async getQuizQuestions(topicId: string): Promise<Omit<Question, 'correctAnswer'>[]> {
     if (isMockApi()) {
       await mockDelay(300);
-      const filtered = mockQuestions.filter(q => q.topicId === topicId);
+      const filtered = mockDbQuestions.filter(q => q.topicId === topicId);
       // Hide correctAnswer field from the returned payload to simulate backend anti-cheat logic
       return filtered.map(({ correctAnswer, ...q }) => q);
     }
@@ -30,7 +35,7 @@ export const quizApi = {
     if (isMockApi()) {
       await mockDelay(400);
       
-      const filteredOriginals = mockQuestions.filter(q => q.topicId === topicId);
+      const filteredOriginals = mockDbQuestions.filter(q => q.topicId === topicId);
       let score = 0;
       
       filteredOriginals.forEach(q => {

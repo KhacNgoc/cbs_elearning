@@ -3,7 +3,10 @@ import type { Topic, Lesson, Comment, UserProgress } from '../types';
 import { mockTopics } from '../data/mockData';
 
 // We maintain an in-memory database in mock mode so updates are reflected dynamically!
-let mockDbTopics = JSON.parse(JSON.stringify(mockTopics)) as Topic[];
+export let mockDbTopics = JSON.parse(JSON.stringify(mockTopics)) as Topic[];
+export const setMockDbTopics = (newTopics: Topic[]) => {
+  mockDbTopics = newTopics;
+};
 let mockDbCompleted: string[] = [];
 let mockDbPoints = 1000;
 
