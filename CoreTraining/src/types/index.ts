@@ -12,12 +12,22 @@ export interface ProcedureSection {
   steps: string[];
 }
 
+export interface LessonDocument {
+  id: string;
+  name: string;
+  type: 'slides' | 'pdf' | 'link';
+  slides?: string[];
+  url?: string;
+  size?: string;
+}
+
 export interface Lesson {
   id: string;
   title: string;
   topicId: string;
   hint: string;
   documentSlides: string[]; // Content/Text of each slide
+  documents?: LessonDocument[]; // Multiple learning files; documentSlides remains for legacy API compatibility
   videoUrl: string;
   procedureSteps: ProcedureSection[];
   comments: Comment[];
