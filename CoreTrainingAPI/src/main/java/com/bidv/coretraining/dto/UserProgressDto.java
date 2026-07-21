@@ -18,4 +18,8 @@ public class UserProgressDto {
     private Map<String, Integer> quizTotals; // topicId -> total questions
     private Integer points;
     private List<UserBadgeDto> unlockedBadges;
+    private String groupId;
+    private String groupName;
+    private List<String> mandatoryTopics;
+    private List<String> registeredTopics;
 }

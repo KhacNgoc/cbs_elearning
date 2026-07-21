@@ -13,6 +13,10 @@ export const useUserStore = defineStore('user', {
     quizTotals: {},
     points: 0,
     unlockedBadges: [],
+    groupId: '',
+    groupName: '',
+    mandatoryTopics: [],
+    registeredTopics: [],
     isAuthenticated: !!localStorage.getItem('accessToken'),
     role: localStorage.getItem('userRole') || '',
     username: localStorage.getItem('username') || '',
@@ -50,6 +54,10 @@ export const useUserStore = defineStore('user', {
         total,
         percent: Math.round((score / total) * 100)
       };
+    },
+    isTopicAccessible: (state) => (topicId: string): boolean => {
+      if (state.role === 'ROLE_ADMIN') return true;
+      return state.mandatoryTopics.includes(topicId) || state.registeredTopics.includes(topicId);
     }
   },
 
@@ -90,6 +98,10 @@ export const useUserStore = defineStore('user', {
       this.quizTotals = {};
       this.points = 0;
       this.unlockedBadges = [];
+      this.groupId = '';
+      this.groupName = '';
+      this.mandatoryTopics = [];
+      this.registeredTopics = [];
       
       router.push('/login');
     },
@@ -103,6 +115,10 @@ export const useUserStore = defineStore('user', {
         this.quizTotals = progress.quizTotals || {};
         this.points = progress.points || 0;
         this.unlockedBadges = progress.unlockedBadges || [];
+        this.groupId = progress.groupId || '';
+        this.groupName = progress.groupName || '';
+        this.mandatoryTopics = progress.mandatoryTopics || [];
+        this.registeredTopics = progress.registeredTopics || [];
 
         // Save progress to localstorage for mock caching if active
         localStorage.setItem('mockCompletedLessons', JSON.stringify(this.completedLessons));
@@ -122,6 +138,20 @@ export const useUserStore = defineStore('user', {
         localStorage.setItem('mockCompletedLessons', JSON.stringify(this.completedLessons));
       } catch (error) {
         console.error('Failed to mark lesson complete:', error);
+      }
+    },
+
+    async registerTopic(topicId: string) {
+      if (!this.isAuthenticated) return;
+      try {
+        const updatedProgress = await courseApi.registerTopic(topicId);
+        this.registeredTopics = updatedProgress.registeredTopics || [];
+        this.mandatoryTopics = updatedProgress.mandatoryTopics || [];
+        this.groupId = updatedProgress.groupId || '';
+        this.groupName = updatedProgress.groupName || '';
+      } catch (error) {
+        console.error('Failed to register topic:', error);
+        throw error;
       }
     }
   }

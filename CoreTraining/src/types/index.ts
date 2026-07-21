@@ -54,6 +54,10 @@ export interface UserProgress {
   quizTotals: Record<string, number>; // topicId -> total questions (e.g. 5)
   points: number; // Experience points
   unlockedBadges: Badge[];
+  groupId?: string;
+  groupName?: string;
+  mandatoryTopics: string[];
+  registeredTopics: string[];
 }
 
 export interface LeaderboardUser {

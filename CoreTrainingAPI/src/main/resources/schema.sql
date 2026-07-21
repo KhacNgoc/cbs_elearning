@@ -1,0 +1,153 @@
+-- BIDV Core Training (WebCSR) - PostgreSQL Database Schema DDL
+
+-- 1. Create topics table
+CREATE TABLE IF NOT EXISTS topics (
+    id VARCHAR(255) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    icon_name VARCHAR(255)
+);
+
+-- 2. Create user_groups table
+CREATE TABLE IF NOT EXISTS user_groups (
+    id VARCHAR(255) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL
+);
+
+-- 3. Create group_mandatory_topics join table
+CREATE TABLE IF NOT EXISTS group_mandatory_topics (
+    group_id VARCHAR(255) NOT NULL,
+    topic_id VARCHAR(255) NOT NULL,
+    PRIMARY KEY (group_id, topic_id),
+    CONSTRAINT fk_group_mandatory_groups FOREIGN KEY (group_id) REFERENCES user_groups(id) ON DELETE CASCADE,
+    CONSTRAINT fk_group_mandatory_topics FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
+);
+
+-- 4. Create users table
+CREATE TABLE IF NOT EXISTS users (
+    id BIGSERIAL PRIMARY KEY,
+    username VARCHAR(255) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    full_name VARCHAR(255) NOT NULL,
+    avatar_color VARCHAR(255),
+    role VARCHAR(255) NOT NULL,
+    points INTEGER NOT NULL DEFAULT 0,
+    group_id VARCHAR(255),
+    CONSTRAINT fk_users_group FOREIGN KEY (group_id) REFERENCES user_groups(id) ON DELETE SET NULL
+);
+
+-- 5. Create user_registered_topics join table
+CREATE TABLE IF NOT EXISTS user_registered_topics (
+    user_id BIGINT NOT NULL,
+    topic_id VARCHAR(255) NOT NULL,
+    PRIMARY KEY (user_id, topic_id),
+    CONSTRAINT fk_user_reg_users FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_user_reg_topics FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
+);
+
+-- 6. Create lessons table
+CREATE TABLE IF NOT EXISTS lessons (
+    id VARCHAR(255) PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    hint TEXT,
+    video_url VARCHAR(255),
+    topic_id VARCHAR(255) NOT NULL,
+    CONSTRAINT fk_lessons_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
+);
+
+-- 7. Create lesson_slides table (ElementCollection)
+CREATE TABLE IF NOT EXISTS lesson_slides (
+    lesson_id VARCHAR(255) NOT NULL,
+    slide_content TEXT,
+    slide_order INTEGER NOT NULL,
+    PRIMARY KEY (lesson_id, slide_order),
+    CONSTRAINT fk_lesson_slides_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
+);
+
+-- 8. Create user_completed_lessons join table
+CREATE TABLE IF NOT EXISTS user_completed_lessons (
+    user_id BIGINT NOT NULL,
+    lesson_id VARCHAR(255) NOT NULL,
+    PRIMARY KEY (user_id, lesson_id),
+    CONSTRAINT fk_user_completed_users FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_user_completed_lessons FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
+);
+
+-- 9. Create procedure_sections table
+CREATE TABLE IF NOT EXISTS procedure_sections (
+    id BIGSERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    lesson_id VARCHAR(255) NOT NULL,
+    section_order INTEGER,
+    CONSTRAINT fk_procedure_sections_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
+);
+
+-- 10. Create procedure_steps table (ElementCollection)
+CREATE TABLE IF NOT EXISTS procedure_steps (
+    section_id BIGINT NOT NULL,
+    step_text TEXT,
+    step_order INTEGER NOT NULL,
+    PRIMARY KEY (section_id, step_order),
+    CONSTRAINT fk_procedure_steps_section FOREIGN KEY (section_id) REFERENCES procedure_sections(id) ON DELETE CASCADE
+);
+
+-- 11. Create comments table
+CREATE TABLE IF NOT EXISTS comments (
+    id VARCHAR(255) PRIMARY KEY,
+    username VARCHAR(255) NOT NULL,
+    avatar VARCHAR(255) NOT NULL,
+    rating INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    lesson_id VARCHAR(255) NOT NULL,
+    CONSTRAINT fk_comments_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
+);
+
+-- 12. Create questions table
+CREATE TABLE IF NOT EXISTS questions (
+    id BIGSERIAL PRIMARY KEY,
+    text TEXT NOT NULL,
+    correct_answer INTEGER NOT NULL,
+    topic_id VARCHAR(255) NOT NULL,
+    CONSTRAINT fk_questions_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
+);
+
+-- 13. Create question_options table (ElementCollection)
+CREATE TABLE IF NOT EXISTS question_options (
+    question_id BIGINT NOT NULL,
+    option_text TEXT,
+    option_order INTEGER NOT NULL,
+    PRIMARY KEY (question_id, option_order),
+    CONSTRAINT fk_question_options_question FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+);
+
+-- 14. Create badges table
+CREATE TABLE IF NOT EXISTS badges (
+    id VARCHAR(255) PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    type VARCHAR(255) NOT NULL,
+    icon VARCHAR(255) NOT NULL,
+    topic_id VARCHAR(255) NOT NULL,
+    CONSTRAINT fk_badges_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
+);
+
+-- 15. Create user_badges table
+CREATE TABLE IF NOT EXISTS user_badges (
+    id BIGSERIAL PRIMARY KEY,
+    unlocked_at DATE NOT NULL,
+    user_id BIGINT NOT NULL,
+    badge_id VARCHAR(255) NOT NULL,
+    CONSTRAINT fk_user_badges_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_user_badges_badge FOREIGN KEY (badge_id) REFERENCES badges(id) ON DELETE CASCADE
+);
+
+-- 16. Create user_quiz_scores table
+CREATE TABLE IF NOT EXISTS user_quiz_scores (
+    id BIGSERIAL PRIMARY KEY,
+    score INTEGER NOT NULL,
+    total INTEGER NOT NULL,
+    taken_at TIMESTAMP NOT NULL,
+    user_id BIGINT NOT NULL,
+    topic_id VARCHAR(255) NOT NULL,
+    CONSTRAINT fk_user_quiz_scores_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_user_quiz_scores_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
+);

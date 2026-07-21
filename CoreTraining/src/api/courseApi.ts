@@ -74,12 +74,17 @@ export const courseApi = {
     if (isMockApi()) {
       await mockDelay(200);
       // Construct in-memory progress
+      const mockRegistered: string[] = JSON.parse(localStorage.getItem('mockRegisteredTopics') || '[]');
       return {
         completedLessons: mockDbCompleted,
         quizScores: JSON.parse(localStorage.getItem('mockQuizScores') || '{}'),
         quizTotals: JSON.parse(localStorage.getItem('mockQuizTotals') || '{}'),
         points: mockDbPoints,
-        unlockedBadges: JSON.parse(localStorage.getItem('mockUnlockedBadges') || '[]')
+        unlockedBadges: JSON.parse(localStorage.getItem('mockUnlockedBadges') || '[]'),
+        groupId: 'GDV',
+        groupName: 'Giao dịch viên',
+        mandatoryTopics: ['CIF', 'TIEN_GUI', 'TELLER', 'THE'],
+        registeredTopics: mockRegistered
       };
     }
     const response = await axiosClient.get<UserProgress>('/api/users/me');
@@ -96,6 +101,20 @@ export const courseApi = {
       return this.getMyProgress();
     }
     const response = await axiosClient.post<UserProgress>(`/api/users/me/complete-lesson/${lessonId}`);
+    return response.data;
+  },
+
+  async registerTopic(topicId: string): Promise<UserProgress> {
+    if (isMockApi()) {
+      await mockDelay(300);
+      const mockRegistered: string[] = JSON.parse(localStorage.getItem('mockRegisteredTopics') || '[]');
+      if (!mockRegistered.includes(topicId)) {
+        mockRegistered.push(topicId);
+        localStorage.setItem('mockRegisteredTopics', JSON.stringify(mockRegistered));
+      }
+      return this.getMyProgress();
+    }
+    const response = await axiosClient.post<UserProgress>(`/api/users/me/register-topic/${topicId}`);
     return response.data;
   }
 };

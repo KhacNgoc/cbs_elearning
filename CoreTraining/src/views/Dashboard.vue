@@ -4,7 +4,7 @@
     <div class="welcome-banner card">
       <div class="welcome-text">
         <span class="banner-tag">TỔNG QUAN HỌC TẬP</span>
-        <h1>Xin chào, {{ username }}</h1>
+        <h1>Xin chào, {{ username }} <span class="user-group-tag" v-if="userStore.groupName">({{ userStore.groupName }})</span></h1>
         <p class="last-lesson-info">
           Bài học xem gần nhất: 
           <span class="lesson-link" v-if="lastLesson" @click="goToLesson(lastLesson.id)">{{ lastLesson.title }}</span>
@@ -30,17 +30,33 @@
             v-for="topic in courseStore.topics" 
             :key="topic.id" 
             class="topic-card card card-hover"
-            @click="goToTopicFirstLesson(topic)"
+            :class="{ 'topic-locked': !userStore.isTopicAccessible(topic.id) }"
+            @click="userStore.isTopicAccessible(topic.id) ? goToTopicFirstLesson(topic) : openRegisterConfirm(topic)"
           >
             <div class="topic-icon-box">
               <component :is="getIconComponent(topic.iconName)" class="topic-icon" />
             </div>
             <div class="topic-details">
-              <h3>{{ topic.name }}</h3>
+              <div class="topic-header-row">
+                <h3>{{ topic.name }}</h3>
+                <span 
+                  v-if="userStore.mandatoryTopics.includes(topic.id)" 
+                  class="badge badge-mandatory"
+                >Bắt buộc</span>
+                <span 
+                  v-else-if="userStore.registeredTopics.includes(topic.id)" 
+                  class="badge badge-optional"
+                >Đã đăng ký</span>
+                <span 
+                  v-else 
+                  class="badge badge-locked"
+                >Chưa đăng ký</span>
+              </div>
               <span class="lesson-count">{{ topic.lessons.length }} bài học</span>
             </div>
             <div class="topic-action">
-              <ChevronRight class="arrow-icon" />
+              <Lock v-if="!userStore.isTopicAccessible(topic.id)" class="lock-icon" />
+              <ChevronRight v-else class="arrow-icon" />
             </div>
           </div>
         </div>
@@ -80,7 +96,11 @@
                   Thi thử: <strong class="quiz-score-highlight">{{ userStore.getTopicQuizScore(topic.id)?.score }}/{{ userStore.getTopicQuizScore(topic.id)?.total }}</strong>
                 </span>
                 <span v-else class="quiz-pending">Chưa thi đánh giá</span>
-                <button class="btn-go-quiz" @click.stop="goToQuiz(topic.id)">Thi thử</button>
+                <button 
+                  class="btn-go-quiz" 
+                  :disabled="!userStore.isTopicAccessible(topic.id)"
+                  @click.stop="goToQuiz(topic.id)"
+                >Thi thử</button>
               </div>
             </div>
           </div>
@@ -117,11 +137,34 @@
       </div>
       
     </div>
+
+    <!-- Registration Confirmation Modal -->
+    <div class="modal-overlay animate-fade-in" v-if="showRegisterModal" @click.self="showRegisterModal = false">
+      <div class="modal-card card animate-scale-up">
+        <div class="modal-header">
+          <div class="modal-icon-box">
+            <BookOpen class="modal-icon" />
+          </div>
+          <h2>Đăng ký học Nghiệp vụ</h2>
+        </div>
+        <div class="modal-body">
+          <p>Bạn có muốn đăng ký học thêm chủ đề nghiệp vụ <strong>{{ selectedTopicToRegister?.name }}</strong> không?</p>
+          <p class="modal-note">Sau khi đăng ký, tất cả tài liệu bài học và bài thi thử của chủ đề này sẽ được mở khóa.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="showRegisterModal = false" :disabled="isRegistering">HỦY BỎ</button>
+          <button class="btn btn-primary btn-confirm" @click="handleRegisterTopic" :disabled="isRegistering">
+            <span v-if="isRegistering" class="spinner"></span>
+            <span v-else>ĐỒNG Ý ĐĂNG KÝ</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useCourseStore } from '../stores/courseStore';
 import { useUserStore } from '../stores/userStore';
@@ -138,12 +181,17 @@ import {
   ChevronRight, 
   Award,
   Shield,
-  Medal
+  Medal,
+  Lock
 } from 'lucide-vue-next';
 
 const router = useRouter();
 const courseStore = useCourseStore();
 const userStore = useUserStore();
+
+const showRegisterModal = ref(false);
+const selectedTopicToRegister = ref<{ id: string, name: string } | null>(null);
+const isRegistering = ref(false);
 
 onMounted(async () => {
   await Promise.all([
@@ -166,10 +214,15 @@ const resumeLearning = () => {
   if (lastLesson.value) {
     router.push(`/lesson/${lastLesson.value.id}`);
   } else {
-    // Go to first lesson of first topic
-    const firstTopic = courseStore.topics[0];
-    if (firstTopic && firstTopic.lessons.length > 0) {
-      router.push(`/lesson/${firstTopic.lessons[0].id}`);
+    // Go to first lesson of first topic that is accessible
+    const firstAccessibleTopic = courseStore.topics.find(t => userStore.isTopicAccessible(t.id));
+    if (firstAccessibleTopic && firstAccessibleTopic.lessons.length > 0) {
+      router.push(`/lesson/${firstAccessibleTopic.lessons[0].id}`);
+    } else {
+      const firstTopic = courseStore.topics[0];
+      if (firstTopic && firstTopic.lessons.length > 0) {
+        router.push(`/lesson/${firstTopic.lessons[0].id}`);
+      }
     }
   }
 };
@@ -186,6 +239,25 @@ const goToTopicFirstLesson = (topic: any) => {
 
 const goToQuiz = (topicId: string) => {
   router.push(`/quiz/${topicId}`);
+};
+
+const openRegisterConfirm = (topic: any) => {
+  selectedTopicToRegister.value = topic;
+  showRegisterModal.value = true;
+};
+
+const handleRegisterTopic = async () => {
+  if (!selectedTopicToRegister.value) return;
+  isRegistering.value = true;
+  try {
+    await userStore.registerTopic(selectedTopicToRegister.value.id);
+    showRegisterModal.value = false;
+    selectedTopicToRegister.value = null;
+  } catch (error) {
+    alert('Đăng ký không thành công. Vui lòng kiểm tra lại kết nối!');
+  } finally {
+    isRegistering.value = false;
+  }
 };
 
 // Map string icon names to Lucide components
@@ -627,5 +699,178 @@ const getBadgeIcon = (icon: string) => {
   .dashboard-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* User group styles */
+.user-group-tag {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--accent-color);
+  margin-left: 0.5rem;
+}
+
+/* Badges for topic card */
+.topic-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.topic-header-row h3 {
+  margin: 0;
+}
+
+.badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge-mandatory {
+  background-color: var(--primary-light);
+  color: var(--primary-color);
+  border: 1px solid var(--primary-color);
+}
+
+.badge-optional {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+  border: 1px solid #3b82f6;
+}
+
+.badge-locked {
+  background-color: var(--bg-main);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+}
+
+/* Locked Card Styling */
+.topic-card.topic-locked {
+  opacity: 0.85;
+  background-color: var(--bg-main);
+  border-color: var(--border-color);
+  cursor: pointer;
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.topic-card.topic-locked:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary-color);
+  opacity: 1;
+}
+
+.topic-card.topic-locked:hover .lock-icon {
+  color: var(--primary-color);
+  transform: scale(1.1);
+}
+
+.lock-icon {
+  color: var(--text-muted);
+  width: 18px;
+  height: 18px;
+  transition: var(--transition);
+}
+
+.btn-go-quiz:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+/* Modal styling */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+.modal-card {
+  width: 90%;
+  max-width: 480px;
+  background-color: var(--bg-card);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.modal-icon-box {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  background-color: var(--primary-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-color);
+}
+
+.modal-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.modal-header h2 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--primary-color);
+  margin: 0;
+}
+
+.modal-body {
+  font-size: 0.95rem;
+  color: var(--text-main);
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.modal-note {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  background-color: var(--bg-main);
+  padding: 0.75rem;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--primary-color);
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.btn-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-width: 140px;
 }
 </style>
