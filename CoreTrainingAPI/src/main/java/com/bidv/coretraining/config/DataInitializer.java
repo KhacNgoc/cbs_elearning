@@ -3,6 +3,7 @@ package com.bidv.coretraining.config;
 import com.bidv.coretraining.entity.*;
 import com.bidv.coretraining.repository.*;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,6 +13,12 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 @Component
+@ConditionalOnProperty(
+        prefix = "app.data-initializer",
+        name = "enabled",
+        havingValue = "true",
+        matchIfMissing = false
+)
 public class DataInitializer implements CommandLineRunner {
 
     private final UserRepository userRepository;
