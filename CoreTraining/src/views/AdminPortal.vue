@@ -631,6 +631,71 @@
             </div>
           </div>
         </div>
+
+        <div v-if="activeTab === 'documents'" class="tab-pane animate-fade-in">
+          <div class="topics-summary card">
+            <div class="card-header-row">
+              <div class="header-left">
+                <h3 class="card-title">TÀI LIỆU RAG</h3>
+                <p class="card-subtitle">
+                  Tải PDF/DOCX lên để hệ thống index theo khóa học.
+                </p>
+              </div>
+            </div>
+            <label class="form-label">Khóa học</label>
+            <select
+              v-model="selectedTopicId"
+              class="form-input"
+              @change="loadDocuments"
+            >
+              <option
+                v-for="topic in courseStore.topics"
+                :key="topic.id"
+                :value="topic.id"
+              >
+                {{ topic.name }}
+              </option>
+            </select>
+            <div
+              style="
+                margin: 1rem 0;
+                display: flex;
+                gap: 0.75rem;
+                align-items: center;
+              "
+            >
+              <input
+                type="file"
+                accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                @change="uploadDocument"
+              />
+              <span v-if="documentUploadMessage">{{
+                documentUploadMessage
+              }}</span>
+            </div>
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Tệp</th>
+                  <th>Trạng thái</th>
+                  <th>Chunks</th>
+                  <th>Lỗi</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="document in courseDocuments" :key="document.id">
+                  <td>{{ document.fileName }}</td>
+                  <td>{{ document.status }}</td>
+                  <td>{{ document.indexedChunks ?? "-" }}</td>
+                  <td>{{ document.errorMessage || "-" }}</td>
+                </tr>
+                <tr v-if="courseDocuments.length === 0">
+                  <td colspan="4">Chưa có tài liệu.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1239,7 +1304,11 @@ import { useRoute, useRouter } from "vue-router";
 import { useCourseStore } from "../stores/courseStore";
 import { useNavigationStore } from "../stores/navigationStore";
 import { adminApi } from "../api/adminApi";
-import type { AdminUser, EnrollmentRequest } from "../api/adminApi";
+import type {
+  AdminUser,
+  CourseDocument,
+  EnrollmentRequest,
+} from "../api/adminApi";
 import { quizApi } from "../api/quizApi";
 import type { Topic, Lesson, LessonDocument, Question } from "../types";
 import ConfirmModal from "../components/ConfirmModal.vue";
@@ -1358,10 +1427,11 @@ const pendingEnrollmentCount = computed(
       .length,
 );
 const questions = ref<Question[]>([]);
-
 type ToastVariant = "success" | "error" | "info" | "warning";
 const showToast = (message: string, variant: ToastVariant = "success") =>
   window.dispatchEvent(new CustomEvent("app-toast", { detail: { message, variant } }));
+const courseDocuments = ref<CourseDocument[]>([]);
+const documentUploadMessage = ref("");
 const ALL_TOPICS = "__ALL__";
 const selectedTopicId = ref(
   typeof route.params.topicId === "string" ? route.params.topicId : ALL_TOPICS,
@@ -1649,6 +1719,35 @@ watch(
   { immediate: true },
 );
 
+const loadDocuments = async () => {
+  if (!selectedTopicId.value || selectedTopicId.value === ALL_TOPICS) return;
+  try {
+    courseDocuments.value = await adminApi.getCourseDocuments(
+      selectedTopicId.value,
+    );
+  } catch (error) {
+    console.error("Failed to load course documents:", error);
+  }
+};
+
+const uploadDocument = async (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file || !selectedTopicId.value || selectedTopicId.value === ALL_TOPICS)
+    return;
+  documentUploadMessage.value = "Đang gửi tài liệu để index...";
+  try {
+    await adminApi.uploadCourseDocument(selectedTopicId.value, file);
+    documentUploadMessage.value =
+      "Đã tạo job index. Làm mới danh sách sau ít phút để xem trạng thái.";
+    await loadDocuments();
+    input.value = "";
+  } catch (error) {
+    documentUploadMessage.value = "Tải tài liệu thất bại.";
+    console.error("Failed to upload course document:", error);
+  }
+};
+
 watch(
   () => [route.name, route.query.tab, route.params.topicId],
   async ([routeName, tab, topicId]) => {
@@ -1675,7 +1774,17 @@ watch(
     if (activeTab.value === "exams" && questions.value.length === 0) {
       await loadQuestions();
     }
+    if (activeTab.value === "documents") {
+      if (
+        selectedTopicId.value === ALL_TOPICS &&
+        courseStore.topics.length > 0
+      ) {
+        selectedTopicId.value = courseStore.topics[0].id;
+      }
+      void loadDocuments();
+    }
   },
+  { immediate: true },
 );
 
 // Helper for user avatar color fallback

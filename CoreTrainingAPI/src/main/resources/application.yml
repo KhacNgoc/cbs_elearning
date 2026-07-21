@@ -30,3 +30,5 @@ app:
     secret: ${VIDEO_ACCESS_SECRET:${app.jwt.secret}}
     duration-seconds: ${VIDEO_ACCESS_DURATION_SECONDS:3600}
 
+  rag-url: ${APP_RAG_URL:http://localhost:8001}
+  upload-directory: ${APP_UPLOAD_DIRECTORY:./uploads}
