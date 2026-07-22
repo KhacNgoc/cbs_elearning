@@ -21,7 +21,7 @@ import java.util.UUID;
 @Service
 public class DocumentStorageService {
 
-    private static final Set<String> ALLOWED_EXTENSIONS = Set.of("pdf", "doc", "docx");
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of("pdf", "doc", "docx", "ppt", "pptx");
 
     private final Path storageDirectory;
 
@@ -42,7 +42,7 @@ public class DocumentStorageService {
         String originalName = StringUtils.cleanPath(file.getOriginalFilename() == null ? "document" : file.getOriginalFilename());
         String extension = getExtension(originalName);
         if (!ALLOWED_EXTENSIONS.contains(extension)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chỉ hỗ trợ file PDF, DOC hoặc DOCX");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chỉ hỗ trợ file PDF, DOC, DOCX, PPT hoặc PPTX");
         }
 
         String storedName = UUID.randomUUID() + "." + extension;
@@ -59,7 +59,7 @@ public class DocumentStorageService {
 
         return LessonDocumentDto.builder()
                 .name(removeExtension(originalName))
-                .documentType("pdf".equals(extension) ? DocumentType.PDF : DocumentType.WORD)
+                .documentType(resolveDocumentType(extension))
                 .fileUrl("/uploads/documents/" + storedName)
                 .originalFileName(originalName)
                 .fileSize(file.getSize())
@@ -78,5 +78,13 @@ public class DocumentStorageService {
     private String removeExtension(String fileName) {
         int dotIndex = fileName.lastIndexOf('.');
         return dotIndex < 0 ? fileName : fileName.substring(0, dotIndex);
+    }
+
+    private DocumentType resolveDocumentType(String extension) {
+        return switch (extension) {
+            case "pdf" -> DocumentType.PDF;
+            case "ppt", "pptx" -> DocumentType.POWERPOINT;
+            default -> DocumentType.WORD;
+        };
     }
 }

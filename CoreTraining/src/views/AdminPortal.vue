@@ -668,11 +668,14 @@
       v-if="lessonModal.show"
       @click.self="lessonModal.show = false"
     >
-      <div class="modal-content card modal-large animate-scale-in">
-        <h3>
+      <div class="modal-content card modal-large lesson-modal-content animate-scale-in">
+        <header class="lesson-modal-header">
+          <h3>
           {{ lessonModal.isEdit ? "CẬP NHẬT BÀI HỌC" : "TẠO BÀI HỌC MỚI" }}
-        </h3>
-        <form @submit.prevent="saveLesson">
+          </h3>
+        </header>
+        <form class="lesson-modal-form" @submit.prevent="saveLesson">
+          <div ref="lessonModalBodyRef" class="lesson-modal-body">
           <div class="form-row">
             <div class="form-group col">
               <label>Chủ đề trực thuộc</label>
@@ -738,7 +741,7 @@
               style="display: flex; align-items: center; gap: 10px"
             >
               <label class="section-sub-label"
-                >Tài liệu PDF/Word đính kèm</label
+                >Tài liệu PDF/Word/PowerPoint đính kèm</label
               >
               <button
                 type="button"
@@ -774,7 +777,7 @@
                   />
                 </div>
                 <div class="form-group document-file-field">
-                  <label>Chọn file PDF hoặc Word</label>
+                  <label>Chọn file PDF, Word hoặc PowerPoint</label>
                   <label class="file-picker">
                     <Upload :size="18" />
                     <span>{{
@@ -784,7 +787,7 @@
                     }}</span>
                     <input
                       type="file"
-                      accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      accept=".pdf,.doc,.docx,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
                       :required="!document.fileUrl"
                       @change="handleDocumentFileChange($event, index)"
                     />
@@ -811,7 +814,8 @@
             </div>
           </div>
 
-          <div class="modal-buttons">
+          </div>
+          <footer class="modal-buttons lesson-modal-footer">
             <button
               type="button"
               class="btn btn-secondary"
@@ -820,7 +824,7 @@
               Hủy
             </button>
             <button type="submit" class="btn btn-primary">Lưu</button>
-          </div>
+          </footer>
         </form>
       </div>
     </div>
@@ -917,7 +921,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, nextTick, onMounted, watch } from "vue";
 import { useCourseStore } from "../stores/courseStore";
 import { adminApi } from "../api/adminApi";
 import type { AdminUser } from "../api/adminApi";
@@ -1481,13 +1485,29 @@ const openLessonModal = (lesson?: Lesson) => {
   }
 };
 
-const addLessonDocument = () => {
+const lessonModalBodyRef = ref<HTMLElement | null>(null);
+
+const addLessonDocument = async () => {
   lessonForm.value.documents.push({
     name: "",
     documentType: "PDF",
     fileUrl: "",
     originalFileName: "",
   });
+
+  await nextTick();
+  const cards = lessonModalBodyRef.value?.querySelectorAll<HTMLElement>(
+    ".document-form-card",
+  );
+  const newCard = cards?.[cards.length - 1];
+  if (!newCard) return;
+
+  newCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  window.setTimeout(() => {
+    newCard.querySelector<HTMLInputElement>('input.form-control')?.focus({
+      preventScroll: true,
+    });
+  }, 250);
 };
 
 const handleDocumentFileChange = (event: Event, index: number) => {
@@ -1496,8 +1516,8 @@ const handleDocumentFileChange = (event: Event, index: number) => {
   if (!file) return;
 
   const extension = file.name.split(".").pop()?.toLowerCase();
-  if (!["pdf", "doc", "docx"].includes(extension || "")) {
-    alert("Chỉ hỗ trợ file PDF, DOC hoặc DOCX.");
+  if (!["pdf", "doc", "docx", "ppt", "pptx"].includes(extension || "")) {
+    alert("Chỉ hỗ trợ file PDF, DOC, DOCX, PPT hoặc PPTX.");
     input.value = "";
     return;
   }
@@ -1506,7 +1526,11 @@ const handleDocumentFileChange = (event: Event, index: number) => {
   document.file = file;
   document.originalFileName = file.name;
   document.fileSize = file.size;
-  document.documentType = extension === "pdf" ? "PDF" : "WORD";
+  document.documentType = extension === "pdf"
+    ? "PDF"
+    : ["ppt", "pptx"].includes(extension || "")
+      ? "POWERPOINT"
+      : "WORD";
   if (!document.name.trim()) document.name = file.name.replace(/\.[^.]+$/, "");
 };
 
@@ -2163,6 +2187,7 @@ const handleDeleteQuestion = async (id: number) => {
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: 1.25rem;
 }
 
 .modal-content {
@@ -2176,6 +2201,52 @@ const handleDeleteQuestion = async (id: number) => {
 
 .modal-large {
   max-width: 650px;
+}
+
+.lesson-modal-content {
+  width: min(960px, 100%);
+  max-width: 960px;
+  max-height: calc(100dvh - 2.5rem);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.lesson-modal-header {
+  flex: 0 0 auto;
+  padding: 1.35rem 1.75rem 0;
+  background: white;
+}
+
+.lesson-modal-header h3 {
+  margin-bottom: 0;
+  padding-bottom: 0.75rem;
+}
+
+.lesson-modal-form {
+  min-height: 0;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.lesson-modal-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 1.25rem 1.75rem 0.5rem;
+}
+
+.lesson-modal-footer {
+  flex: 0 0 auto;
+  margin-top: 0;
+  padding: 1rem 1.75rem;
+  border-top: 1px solid var(--border-color);
+  background: white;
+  box-shadow: 0 -8px 20px rgba(15, 35, 29, 0.05);
 }
 
 .modal-content h3 {
@@ -2310,6 +2381,27 @@ const handleDeleteQuestion = async (id: number) => {
 }
 
 @media (max-width: 700px) {
+  .modal-overlay {
+    padding: 0.5rem;
+  }
+
+  .lesson-modal-content {
+    max-height: calc(100dvh - 1rem);
+  }
+
+  .lesson-modal-header {
+    padding: 1rem 1rem 0;
+  }
+
+  .lesson-modal-body {
+    padding: 1rem 1rem 0.25rem;
+    scrollbar-gutter: auto;
+  }
+
+  .lesson-modal-footer {
+    padding: 0.8rem 1rem;
+  }
+
   .document-form-fields {
     grid-template-columns: 1fr;
   }
