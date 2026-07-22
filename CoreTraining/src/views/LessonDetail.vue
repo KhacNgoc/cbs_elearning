@@ -4,7 +4,8 @@
       :total-lessons="topic?.lessons.length || 0" :completed="isCompleted" @complete="markAsCompleted" @open-content="sidebarOpen = true" />
     <div class="learning-stage" :class="{ 'sidebar-hidden': !sidebarOpen }">
       <LessonMediaStage :lesson="lesson" :selected-document="selectedDocument" :current-index="currentLessonIndex"
-        :total-lessons="topic?.lessons.length || 0" @adjacent="goToAdjacentLesson" @close-document="selectedDocument = null" />
+        :total-lessons="topic?.lessons.length || 0" @adjacent="goToAdjacentLesson" @close-document="selectedDocument = null"
+        @download-document="downloadDocument" />
       <LessonCourseSidebar :topic="topic" :active-lesson-id="lesson.id" :completed-lessons="userStore.completedLessons"
         :completed-count="completedCount" :progress="courseProgress" :open="sidebarOpen" :selected-document-id="selectedDocument?.id"
         @close="sidebarOpen = false" @select="switchLesson" @select-document="showDocument" @quiz="startQuiz" />
@@ -27,6 +28,7 @@ import { useRouter } from 'vue-router';
 import { ChevronLeft } from 'lucide-vue-next';
 import { useCourseStore } from '../stores/courseStore';
 import { useUserStore } from '../stores/userStore';
+import { axiosClient } from '../api/axiosClient';
 import LessonLearningHeader from '../components/lesson/LessonLearningHeader.vue';
 import LessonCourseSidebar from '../components/lesson/LessonCourseSidebar.vue';
 import LessonMediaStage from '../components/lesson/LessonMediaStage.vue';
@@ -95,6 +97,26 @@ const showDocument = (lessonId: string, document: import('../types').LessonDocum
     return;
   }
   selectedDocument.value = document;
+};
+const downloadDocument = async (document: import('../types').LessonDocument) => {
+  try {
+    const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+    const url = /^https?:\/\//i.test(document.fileUrl) || document.fileUrl.startsWith('blob:')
+      ? document.fileUrl
+      : `${apiBaseUrl}${document.fileUrl.startsWith('/') ? document.fileUrl : `/${document.fileUrl}`}`;
+    const response = await axiosClient.get<Blob>(url, { responseType: 'blob' });
+    const objectUrl = URL.createObjectURL(response.data);
+    const link = window.document.createElement('a');
+    link.href = objectUrl;
+    link.download = document.originalFileName || document.name;
+    window.document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+  } catch (cause) {
+    console.error('Failed to download document:', cause);
+    alert('Không thể tải tài liệu. Vui lòng thử lại.');
+  }
 };
 const goToAdjacentLesson = (offset: number) => {
   const nextLesson = topic.value?.lessons[currentLessonIndex.value + offset];
@@ -334,6 +356,9 @@ const submitFeedback = async () => {
 .selected-document-toolbar small { color: #92a39d; font-size: .68rem; }
 .selected-document-toolbar button { padding: .45rem .7rem; display: flex; align-items: center; gap: .4rem; border: 1px solid #52605b; border-radius: 6px; background: transparent; color: #dce7e3; cursor: pointer; white-space: nowrap; }
 .selected-document-toolbar button:hover { color: #fff; border-color: #e4c760; }
+.selected-document-actions { flex: 0 0 auto; display: flex; align-items: center; gap: .5rem; }
+.selected-document-toolbar .download-document-button { background: var(--primary-color); border-color: var(--primary-color); color: #fff; }
+.selected-document-toolbar .download-document-button:hover { background: #087657; border-color: #e4c760; }
 .selected-document-preview > .slide-viewer { flex: 1; min-height: 0; height: auto; }
 .selected-document-preview > iframe { flex: 1; width: 100%; min-height: 0; border: 0; background: #fff; }
 

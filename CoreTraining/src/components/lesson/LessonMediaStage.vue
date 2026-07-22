@@ -4,10 +4,13 @@
       <div v-if="selectedDocument" class="selected-document-preview">
         <div class="selected-document-toolbar">
           <div><FileText :size="18" /><span><strong>{{ selectedDocument.name }}</strong><small>{{ selectedDocument.documentType }} · Tài liệu bài học</small></span></div>
-          <button @click="$emit('close-document')"><PlayCircle :size="16" /> Quay lại video</button>
+          <div class="selected-document-actions">
+            <button class="download-document-button" @click="$emit('download-document', selectedDocument)"><Download :size="16" /> Tải xuống</button>
+            <button @click="$emit('close-document')"><PlayCircle :size="16" /> Quay lại video</button>
+          </div>
         </div>
         <iframe v-if="selectedDocument.documentType === 'PDF'" :src="resolveDocumentUrl(selectedDocument.fileUrl)" :title="selectedDocument.name"></iframe>
-        <div v-else class="external-document"><FileText :size="42" /><h3>{{ selectedDocument.name }}</h3><p>Tài liệu Word sẽ được mở bằng ứng dụng phù hợp.</p><a :href="resolveDocumentUrl(selectedDocument.fileUrl)" target="_blank" rel="noopener">Mở tài liệu Word</a></div>
+        <WordDocumentPreview v-else :url="resolveDocumentUrl(selectedDocument.fileUrl)" :original-file-name="selectedDocument.originalFileName" />
       </div>
       <VideoPlayer v-else :video-url="lesson.videoUrl" :title="lesson.title" />
     </div>
@@ -20,11 +23,12 @@
 </template>
 
 <script setup lang="ts">
-import { ChevronLeft, ChevronRight, FileText, PlayCircle } from 'lucide-vue-next';
+import { ChevronLeft, ChevronRight, Download, FileText, PlayCircle } from 'lucide-vue-next';
 import type { Lesson, LessonDocument } from '../../types';
 import VideoPlayer from '../VideoPlayer.vue';
+import WordDocumentPreview from './WordDocumentPreview.vue';
 defineProps<{ lesson: Lesson; selectedDocument: LessonDocument | null; currentIndex: number; totalLessons: number }>();
-defineEmits<{ adjacent: [offset: number]; 'close-document': [] }>();
+defineEmits<{ adjacent: [offset: number]; 'close-document': []; 'download-document': [document: LessonDocument] }>();
 const resolveDocumentUrl = (url: string) => {
   if (/^https?:\/\//i.test(url) || url.startsWith('blob:')) return url;
   return `${import.meta.env.VITE_API_URL || 'http://localhost:8080'}${url.startsWith('/') ? url : `/${url}`}`;
