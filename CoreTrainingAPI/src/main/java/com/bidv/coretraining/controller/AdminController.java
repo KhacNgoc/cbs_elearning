@@ -1,12 +1,15 @@
 package com.bidv.coretraining.controller;
 
 import com.bidv.coretraining.dto.LessonDto;
+import com.bidv.coretraining.dto.LessonDocumentDto;
 import com.bidv.coretraining.dto.QuestionDto;
 import com.bidv.coretraining.dto.TopicDto;
 import com.bidv.coretraining.dto.UserDto;
 import com.bidv.coretraining.service.AdminService;
+import com.bidv.coretraining.service.DocumentStorageService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 @RestController
@@ -14,9 +17,11 @@ import java.util.List;
 public class AdminController {
 
     private final AdminService adminService;
+    private final DocumentStorageService documentStorageService;
 
-    public AdminController(AdminService adminService) {
+    public AdminController(AdminService adminService, DocumentStorageService documentStorageService) {
         this.adminService = adminService;
+        this.documentStorageService = documentStorageService;
     }
 
     // Topics CRUD
@@ -37,6 +42,11 @@ public class AdminController {
     }
 
     // Lessons CRUD
+    @PostMapping(value = "/documents/upload", consumes = "multipart/form-data")
+    public ResponseEntity<LessonDocumentDto> uploadDocument(@RequestPart("file") MultipartFile file) {
+        return ResponseEntity.ok(documentStorageService.store(file));
+    }
+
     @PostMapping("/lessons")
     public ResponseEntity<LessonDto> createLesson(@RequestBody LessonDto lessonDto) {
         return ResponseEntity.ok(adminService.createLesson(lessonDto));

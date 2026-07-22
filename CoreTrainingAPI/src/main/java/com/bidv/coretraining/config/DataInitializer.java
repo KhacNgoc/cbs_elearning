@@ -107,11 +107,6 @@ public class DataInitializer implements CommandLineRunner {
                 .topic(cif)
                 .hint("Menu: WebCSR -> Tìm kiếm khách hàng -> Thông tin khách hàng cá nhân")
                 .videoUrl("https://assets.mixkit.co/videos/preview/mixkit-startup-team-working-on-laptops-in-office-41553-large.mp4")
-                .documentSlides(Arrays.asList(
-                        "CIF Khách hàng cá nhân (Retail CIF) dùng để quản lý tất cả các sản phẩm của một khách hàng cá nhân.",
-                        "Yêu cầu giấy tờ: CCCD còn hạn (quét mã QR để tự động trích xuất thông tin), Hộ chiếu (đối với người nước ngoài).",
-                        "Ngăn ngừa trùng lặp dữ liệu: Tìm kiếm kỹ thông tin theo Số giấy tờ tùy thân trước khi tạo mới để tránh trùng CIF."
-                ))
                 .build();
         cif01.setProcedureSteps(Arrays.asList(
                 ProcedureSection.builder()
@@ -135,13 +130,6 @@ public class DataInitializer implements CommandLineRunner {
                 .topic(cif)
                 .hint("Menu: WebCSR -> Tìm kiếm khách hàng -> Thông tin khách hàng / Customer Information -> Tab Tín dụng/Tài chính -> Tab Hạn mức tín dụng khách hàng")
                 .videoUrl("https://assets.mixkit.co/videos/preview/mixkit-business-woman-using-a-tablet-at-the-office-41571-large.mp4")
-                .documentSlides(Arrays.asList(
-                        "Khái niệm CIF Khách hàng tổ chức (Corporate CIF). CIF là mã định danh duy nhất của mỗi khách hàng trên toàn hệ thống Core Banking BIDV.",
-                        "Điều kiện khởi tạo CIF Doanh nghiệp: Phải có Đăng ký kinh doanh hợp pháp, quyết định bổ nhiệm đại diện pháp luật và danh sách ban điều hành.",
-                        "Các trường thông tin bắt buộc: Tên doanh nghiệp (Tiếng Việt và Tiếng Anh), Mã số thuế doanh nghiệp, Địa chỉ trụ sở, Lĩnh vực hoạt động kinh tế (mã ngành kinh tế cấp 4).",
-                        "Vai trò của các bên liên quan: Người đại diện theo pháp luật, Kế toán trưởng, Người được ủy quyền giao dịch.",
-                        "Quy tắc chống rửa tiền (AML/KYC): Đánh giá rủi ro khách hàng tổ chức dựa trên ngành nghề, khu vực địa lý hoạt động và nguồn gốc tài sản."
-                ))
                 .build();
         cif03.setProcedureSteps(Arrays.asList(
                 ProcedureSection.builder()
@@ -197,11 +185,6 @@ public class DataInitializer implements CommandLineRunner {
                 .topic(tienVay)
                 .hint("Menu: WebCSR -> Tín dụng -> Khởi tạo hồ sơ cho vay")
                 .videoUrl("https://assets.mixkit.co/videos/preview/mixkit-startup-team-working-on-laptops-in-office-41553-large.mp4")
-                .documentSlides(Arrays.asList(
-                        "Hồ sơ tín dụng (Credit File) là tập hợp toàn bộ thông tin tài chính, pháp lý của khoản vay.",
-                        "Thẩm quyền phê duyệt: Dựa trên phân cấp hạn mức tín dụng của Chi nhánh và Hội sở chính.",
-                        "Kiểm tra tài sản bảo đảm: Phải được định giá độc lập và đăng ký giao dịch bảo đảm trước khi giải ngân."
-                ))
                 .build();
         ln01.setProcedureSteps(Arrays.asList(
                 ProcedureSection.builder()
@@ -224,11 +207,6 @@ public class DataInitializer implements CommandLineRunner {
                 .topic(tienVay)
                 .hint("Menu: WebCSR -> Tín dụng -> Giải ngân khoản vay")
                 .videoUrl("https://assets.mixkit.co/videos/preview/mixkit-executives-working-on-a-business-plan-41559-large.mp4")
-                .documentSlides(Arrays.asList(
-                        "Giải ngân (Disbursement) là bước chuyển vốn vay từ ngân hàng sang khách hàng.",
-                        "Hạn mức và phân kỳ giải ngân: Giải ngân một lần hoặc nhiều lần theo tiến độ dự án.",
-                        "Hạch toán kế toán: Nợ tài khoản cho vay (LN) / Có tài khoản tiền gửi thanh toán (DEP)."
-                ))
                 .build();
         ln02.setProcedureSteps(Arrays.asList(
                 ProcedureSection.builder()
@@ -252,12 +230,6 @@ public class DataInitializer implements CommandLineRunner {
                 .topic(chuyenTien)
                 .hint("Menu: WebCSR -> Chuyển tiền -> Chuyển tiền nhanh Napas 247")
                 .videoUrl("https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-businessman-working-on-a-laptop-42289-large.mp4")
-                .documentSlides(Arrays.asList(
-                        "Tổng quan về dịch vụ chuyển tiền nhanh NAPAS 247 trên Core Banking.",
-                        "Hạn mức chuyển tiền tối đa cho một giao dịch tại quầy và các quy định về thu phí giao dịch.",
-                        "Cơ chế đối soát tự động giữa BIDV và liên minh NAPAS.",
-                        "Xử lý giao dịch lỗi: Các tình huống giao dịch trừ tiền tài khoản BIDV nhưng tài khoản thụ hưởng chưa nhận được."
-                ))
                 .build();
         tr01.setProcedureSteps(Arrays.asList(
                 ProcedureSection.builder()
@@ -281,12 +253,6 @@ public class DataInitializer implements CommandLineRunner {
                 .topic(tienGui)
                 .hint("Menu: WebCSR -> Tiền gửi -> Mở tài khoản tiết kiệm có kỳ hạn")
                 .videoUrl("https://assets.mixkit.co/videos/preview/mixkit-business-people-meeting-around-a-table-41558-large.mp4")
-                .documentSlides(Arrays.asList(
-                        "Các loại hình tiền gửi tiết kiệm: Tiền gửi không kỳ hạn, Tiền gửi có kỳ hạn, Tiền gửi tích lũy.",
-                        "Quy định về kỳ hạn, phương thức trả lãi (Đầu kỳ, Định kỳ, Cuối kỳ) và biểu lãi suất áp dụng.",
-                        "Quy định pháp lý về người đứng tên sổ tiết kiệm và thủ tục mở sổ cho người nước ngoài.",
-                        "Bảo mật và lưu kho phôi sổ tiết kiệm trắng."
-                ))
                 .build();
         dep01.setProcedureSteps(Arrays.asList(
                 ProcedureSection.builder()
@@ -310,12 +276,6 @@ public class DataInitializer implements CommandLineRunner {
                 .topic(teller)
                 .hint("Menu: WebCSR -> Teller -> Quản lý két tiền mặt")
                 .videoUrl("https://assets.mixkit.co/videos/preview/mixkit-business-team-in-a-meeting-working-41563-large.mp4")
-                .documentSlides(Arrays.asList(
-                        "Giao dịch viên (Teller) chịu trách nhiệm quản lý hạn mức tồn quỹ tiền mặt được giao.",
-                        "Đầu ngày: Nhận bàn giao tiền mặt từ thủ quỹ chi nhánh và kiểm đếm nhập két.",
-                        "Trong ngày: Thực hiện các giao dịch thu chi trong hạn mức. Nếu vượt hạn mức phải làm thủ tục đẩy tiền về quỹ chính.",
-                        "Cuối ngày: Kiểm kê tồn quỹ thực tế tại két, đối chiếu với số dư sổ sách trên Core Banking."
-                ))
                 .build();
         tel01.setProcedureSteps(Arrays.asList(
                 ProcedureSection.builder()
@@ -339,12 +299,6 @@ public class DataInitializer implements CommandLineRunner {
                 .topic(gl)
                 .hint("Menu: WebCSR -> Sổ cái (GL) -> Tạo bút toán thủ công")
                 .videoUrl("https://assets.mixkit.co/videos/preview/mixkit-group-of-businesspeople-discussing-charts-41565-large.mp4")
-                .documentSlides(Arrays.asList(
-                        "Phân hệ Sổ cái (General Ledger - GL) ghi nhận tất cả nghiệp vụ kế toán phát sinh của ngân hàng.",
-                        "Bút toán thủ công (Manual Journal Entry) chỉ được dùng khi xử lý các nghiệp vụ đặc thù hoặc điều chỉnh sai sót kế toán.",
-                        "Quy tắc hạch toán kép: Tổng số tiền phát sinh Nợ phải luôn bằng Tổng số tiền phát sinh Có.",
-                        "Mã tài khoản GL: Hệ thống tài khoản kế toán BIDV tuân thủ quy định của Ngân hàng Nhà nước."
-                ))
                 .build();
         gl01.setProcedureSteps(Arrays.asList(
                 ProcedureSection.builder()
@@ -368,11 +322,6 @@ public class DataInitializer implements CommandLineRunner {
                 .topic(the)
                 .hint("Menu: WebCSR -> Thẻ -> Phát hành thẻ ghi nợ")
                 .videoUrl("https://assets.mixkit.co/videos/preview/mixkit-colleagues-discussing-data-on-a-monitor-41567-large.mp4")
-                .documentSlides(Arrays.asList(
-                        "Thẻ ghi nợ nội địa (BIDV Smart/Harmony) liên kết trực tiếp với tài khoản thanh toán của khách hàng.",
-                        "Điều kiện phát hành: Khách hàng đã có CIF và tài khoản tiền gửi thanh toán hoạt động bình thường.",
-                        "Phân loại phát hành: Phát hành thẻ vật lý (lấy ngay hoặc nhận sau) và phát hành thẻ phi vật lý trên ứng dụng Smart OTP/Smart Banking."
-                ))
                 .build();
         card01.setProcedureSteps(Arrays.asList(
                 ProcedureSection.builder()

@@ -13,12 +13,13 @@ export interface ProcedureSection {
 }
 
 export interface LessonDocument {
-  id: string;
+  id?: number;
   name: string;
-  type: 'slides' | 'pdf' | 'link';
-  slides?: string[];
-  url?: string;
-  size?: string;
+  documentType: 'PDF' | 'WORD';
+  fileUrl: string;
+  originalFileName?: string;
+  fileSize?: number;
+  documentOrder?: number;
 }
 
 export interface Lesson {
@@ -26,8 +27,7 @@ export interface Lesson {
   title: string;
   topicId: string;
   hint: string;
-  documentSlides: string[]; // Content/Text of each slide
-  documents?: LessonDocument[]; // Multiple learning files; documentSlides remains for legacy API compatibility
+  documents: LessonDocument[];
   videoUrl: string;
   procedureSteps: ProcedureSection[];
   comments: Comment[];
