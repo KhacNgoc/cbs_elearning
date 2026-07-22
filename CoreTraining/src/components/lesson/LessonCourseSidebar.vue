@@ -17,9 +17,9 @@
           <FolderOpen :size="14" /><span>Tài liệu</span><span class="resource-count">{{ getDocuments(item).length }}</span><ChevronDown :size="14" />
         </button>
         <div v-if="expandedLessons.has(item.id)" class="lesson-documents">
-          <button v-for="document in getDocuments(item)" :key="document.id" :class="{ selected: selectedDocumentId === document.id }"
+          <button v-for="document in getDocuments(item)" :key="document.id || document.fileUrl" :class="{ selected: selectedDocumentId === document.id }"
             @click="$emit('select-document', item.id, document)">
-            <FileText :size="15" /><span><strong>{{ document.name }}</strong><small>{{ document.size || `${document.slides?.length || 0} trang` }}</small></span>
+            <FileText :size="15" /><span><strong>{{ document.name }}</strong><small>{{ document.documentType }} · {{ formatFileSize(document.fileSize) }}</small></span>
           </button>
         </div>
       </div>
@@ -36,14 +36,13 @@
 import { ref } from 'vue';
 import { ArrowRight, Award, Check, ChevronDown, FileText, FolderOpen, PlayCircle, X } from 'lucide-vue-next';
 import type { Lesson, LessonDocument, Topic } from '../../types';
-const props = defineProps<{ topic: Topic | null | undefined; activeLessonId: string; completedLessons: string[]; completedCount: number; progress: number; open: boolean; selectedDocumentId?: string }>();
+defineProps<{ topic: Topic | null | undefined; activeLessonId: string; completedLessons: string[]; completedCount: number; progress: number; open: boolean; selectedDocumentId?: number }>();
 const emit = defineEmits<{ close: []; select: [lessonId: string]; 'select-document': [lessonId: string, document: LessonDocument]; quiz: [] }>();
 const expandedLessons = ref(new Set<string>());
 const getDocuments = (lesson: Lesson): LessonDocument[] => {
-  if (lesson.documents?.length) return lesson.documents;
-  if (!lesson.documentSlides?.length) return [];
-  return [{ id: `${lesson.id}-document`, name: 'Tài liệu hướng dẫn nghiệp vụ', type: 'slides', slides: lesson.documentSlides, size: `${lesson.documentSlides.length} trang` }];
+  return lesson.documents || [];
 };
+const formatFileSize = (size?: number) => size ? `${(size / 1024 / 1024).toFixed(1)} MB` : 'Tệp đính kèm';
 const toggleDocuments = (lessonId: string) => {
   const next = new Set(expandedLessons.value);
   next.has(lessonId) ? next.delete(lessonId) : next.add(lessonId);

@@ -54,13 +54,18 @@ CREATE TABLE IF NOT EXISTS lessons (
     CONSTRAINT fk_lessons_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
 );
 
--- 7. Create lesson_slides table (ElementCollection)
-CREATE TABLE IF NOT EXISTS lesson_slides (
+-- 7. Create lesson_documents table
+CREATE TABLE IF NOT EXISTS lesson_documents (
+    id BIGSERIAL PRIMARY KEY,
     lesson_id VARCHAR(255) NOT NULL,
-    slide_content TEXT,
-    slide_order INTEGER NOT NULL,
-    PRIMARY KEY (lesson_id, slide_order),
-    CONSTRAINT fk_lesson_slides_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
+    name VARCHAR(255) NOT NULL,
+    document_type VARCHAR(20) NOT NULL,
+    file_url TEXT NOT NULL,
+    original_file_name VARCHAR(255),
+    file_size BIGINT,
+    document_order INTEGER NOT NULL,
+    CONSTRAINT fk_lesson_documents_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE,
+    CONSTRAINT chk_lesson_documents_type CHECK (document_type IN ('PDF', 'WORD'))
 );
 
 -- 8. Create user_completed_lessons join table

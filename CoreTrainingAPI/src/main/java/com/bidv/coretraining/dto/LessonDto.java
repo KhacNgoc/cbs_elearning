@@ -17,7 +17,7 @@ public class LessonDto {
     private String topicId;
     private String hint;
     private String videoUrl;
-    private List<String> documentSlides;
+    private List<LessonDocumentDto> documents;
     private List<ProcedureSectionDto> procedureSteps;
     private List<CommentDto> comments;
 }
