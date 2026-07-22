@@ -3,6 +3,13 @@ import type { Topic, Lesson, LessonDocument, Question } from '../types';
 import { mockDbTopics, setMockDbTopics } from './courseApi';
 import { mockDbQuestions, setMockDbQuestions } from './quizApi';
 
+const getDocumentType = (fileName: string): LessonDocument['documentType'] => {
+  const extension = fileName.split('.').pop()?.toLowerCase();
+  if (extension === 'pdf') return 'PDF';
+  if (extension === 'ppt' || extension === 'pptx') return 'POWERPOINT';
+  return 'WORD';
+};
+
 export interface AdminUser {
   id?: number;
   username: string;
@@ -141,7 +148,7 @@ export const adminApi = {
     if (isMockApi()) {
       return {
         name: file.name.replace(/\.[^.]+$/, ''),
-        documentType: file.name.toLowerCase().endsWith('.pdf') ? 'PDF' : 'WORD',
+        documentType: getDocumentType(file.name),
         fileUrl: URL.createObjectURL(file),
         originalFileName: file.name,
         fileSize: file.size

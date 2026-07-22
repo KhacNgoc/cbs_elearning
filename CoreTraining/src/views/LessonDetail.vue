@@ -361,6 +361,8 @@ const submitFeedback = async () => {
 .selected-document-toolbar .download-document-button:hover { background: #087657; border-color: #e4c760; }
 .selected-document-preview > .slide-viewer { flex: 1; min-height: 0; height: auto; }
 .selected-document-preview > iframe { flex: 1; width: 100%; min-height: 0; border: 0; background: #fff; }
+.selected-document-preview > .word-preview,
+.selected-document-preview > .powerpoint-preview { flex: 1; min-height: 0; }
 
 @media (max-width: 900px) {
   .learning-stage, .learning-stage.sidebar-hidden { height: clamp(480px, calc(100vh - 133px), 680px); }

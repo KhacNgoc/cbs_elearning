@@ -10,6 +10,7 @@
           </div>
         </div>
         <iframe v-if="selectedDocument.documentType === 'PDF'" :src="resolveDocumentUrl(selectedDocument.fileUrl)" :title="selectedDocument.name"></iframe>
+        <PowerPointDocumentPreview v-else-if="selectedDocument.documentType === 'POWERPOINT'" :url="resolveDocumentUrl(selectedDocument.fileUrl)" :original-file-name="selectedDocument.originalFileName" />
         <WordDocumentPreview v-else :url="resolveDocumentUrl(selectedDocument.fileUrl)" :original-file-name="selectedDocument.originalFileName" />
       </div>
       <VideoPlayer v-else :video-url="lesson.videoUrl" :title="lesson.title" />
@@ -26,6 +27,7 @@
 import { ChevronLeft, ChevronRight, Download, FileText, PlayCircle } from 'lucide-vue-next';
 import type { Lesson, LessonDocument } from '../../types';
 import VideoPlayer from '../VideoPlayer.vue';
+import PowerPointDocumentPreview from './PowerPointDocumentPreview.vue';
 import WordDocumentPreview from './WordDocumentPreview.vue';
 defineProps<{ lesson: Lesson; selectedDocument: LessonDocument | null; currentIndex: number; totalLessons: number }>();
 defineEmits<{ adjacent: [offset: number]; 'close-document': []; 'download-document': [document: LessonDocument] }>();

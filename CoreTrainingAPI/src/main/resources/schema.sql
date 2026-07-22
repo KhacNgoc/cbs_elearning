@@ -65,8 +65,13 @@ CREATE TABLE IF NOT EXISTS lesson_documents (
     file_size BIGINT,
     document_order INTEGER NOT NULL,
     CONSTRAINT fk_lesson_documents_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE,
-    CONSTRAINT chk_lesson_documents_type CHECK (document_type IN ('PDF', 'WORD'))
+    CONSTRAINT chk_lesson_documents_type CHECK (document_type IN ('PDF', 'WORD', 'POWERPOINT'))
 );
+
+-- Keep existing databases in sync when POWERPOINT support is introduced.
+ALTER TABLE lesson_documents DROP CONSTRAINT IF EXISTS chk_lesson_documents_type;
+ALTER TABLE lesson_documents ADD CONSTRAINT chk_lesson_documents_type
+    CHECK (document_type IN ('PDF', 'WORD', 'POWERPOINT'));
 
 -- 8. Create user_completed_lessons join table
 CREATE TABLE IF NOT EXISTS user_completed_lessons (

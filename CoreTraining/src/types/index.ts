@@ -15,7 +15,7 @@ export interface ProcedureSection {
 export interface LessonDocument {
   id?: number;
   name: string;
-  documentType: 'PDF' | 'WORD';
+  documentType: 'PDF' | 'WORD' | 'POWERPOINT';
   fileUrl: string;
   originalFileName?: string;
   fileSize?: number;
