@@ -73,9 +73,6 @@ const nextSlide = () => {
   }
 };
 
-const openExternal = () => {
-  alert('Đang mở tài liệu PDF gốc trong tab mới...');
-};
 </script>
 
 <style scoped>

@@ -52,21 +52,53 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) throws Exception {
+        System.out.println("========== ALL USERS IN DB ON STARTUP ==========");
+        userRepository.findAll().forEach(u -> {
+            System.out.println("User: " + u.getUsername() + ", Role: " + u.getRole() + ", Email: " + u.getEmail());
+        });
+        System.out.println("================================================");
+
         // Ensure system user is seeded even if database already has data from previous runs
         if (!userRepository.existsByUsername("system")) {
             UserGroup ksvGroup = userGroupRepository.findById("KSV").orElse(null);
             userRepository.save(User.builder()
                     .username("system")
-                    .password(passwordEncoder.encode("123@qwe"))
+                    .password(passwordEncoder.encode("123456"))
                     .fullName("Hệ Thống")
                     .avatarColor("#8B5CF6")
                     .employeeId("SYSTEM")
                     .email("system@bidv.com.vn")
-                    .role("ROLE_USER")
+                    .role("ROLE_ADMIN")
                     .points(2000)
                     .userGroup(ksvGroup)
                     .build());
+        } else {
+            // Force system user to ADMIN and reset password to 123456 for local testing
+            userRepository.findByUsername("system").ifPresent(user -> {
+                user.setEmail("system@bidv.com.vn");
+                user.setEmployeeId("SYSTEM");
+                user.setRole("ROLE_ADMIN");
+                user.setPassword(passwordEncoder.encode("123456"));
+                userRepository.save(user);
+            });
         }
+
+        // Repair other default users' emails in case they exist from old runs
+        userRepository.findByUsername("admin").ifPresent(user -> {
+            if (user.getEmail() == null || user.getEmail().trim().isEmpty()) {
+                user.setEmail("admin@bidv.com.vn");
+                user.setEmployeeId("ADM001");
+                userRepository.save(user);
+            }
+        });
+
+        userRepository.findByUsername("quantrh").ifPresent(user -> {
+            if (user.getEmail() == null || user.getEmail().trim().isEmpty()) {
+                user.setEmail("quantrh@bidv.com.vn");
+                user.setEmployeeId("QTR001");
+                userRepository.save(user);
+            }
+        });
 
         if (topicRepository.count() > 0) {
             return; // Data already initialized

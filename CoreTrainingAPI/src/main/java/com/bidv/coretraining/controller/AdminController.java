@@ -6,11 +6,13 @@ import com.bidv.coretraining.dto.TopicDto;
 import com.bidv.coretraining.dto.UserDto;
 import com.bidv.coretraining.service.AdminService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin")
+@PreAuthorize("hasRole('ADMIN')")
 public class AdminController {
 
     private final AdminService adminService;
@@ -90,5 +92,20 @@ public class AdminController {
     public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
         adminService.deleteUser(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/users/upload")
+    public ResponseEntity<String> uploadUsersExcel(@RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        adminService.importUsersFromExcel(file);
+        return ResponseEntity.ok("Import thành công dữ liệu học viên!");
+    }
+
+    @GetMapping("/users/template")
+    public ResponseEntity<byte[]> downloadUsersTemplate() {
+        byte[] templateBytes = adminService.generateExcelTemplate();
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=user_import_template.xlsx")
+                .contentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM)
+                .body(templateBytes);
     }
 }

@@ -27,5 +27,7 @@ public interface AdminService {
     UserDto createUser(UserDto userDto);
     UserDto updateUser(Long id, UserDto userDto);
     void deleteUser(Long id);
+    void importUsersFromExcel(org.springframework.web.multipart.MultipartFile file);
+    byte[] generateExcelTemplate();
 }
 

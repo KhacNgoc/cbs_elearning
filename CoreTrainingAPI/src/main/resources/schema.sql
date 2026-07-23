@@ -151,3 +151,12 @@ CREATE TABLE IF NOT EXISTS user_quiz_scores (
     CONSTRAINT fk_user_quiz_scores_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_user_quiz_scores_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
 );
+
+-- 17. Create password_reset_otps table
+CREATE TABLE IF NOT EXISTS password_reset_otps (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL UNIQUE,
+    otp_code VARCHAR(255) NOT NULL,
+    expiry_date TIMESTAMP NOT NULL,
+    CONSTRAINT fk_reset_otp_users FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);

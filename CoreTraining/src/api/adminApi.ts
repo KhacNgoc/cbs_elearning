@@ -11,18 +11,21 @@ export interface AdminUser {
   avatarColor: string;
   role: string;
   points: number;
+  userGroupId?: string;
+  employeeId?: string;
+  email?: string;
 }
 
 // In mock mode, we seed the list of users from the default mock user data
 let mockDbUsers: AdminUser[] = [
-  { id: 1, username: 'admin', fullName: 'Quản trị hệ thống', avatarColor: '#EF4444', role: 'ROLE_ADMIN', points: 0 },
-  { id: 2, username: 'quantrh', fullName: 'Quản Trị Hệ Thống (Bạn)', avatarColor: '#005B41', role: 'ROLE_USER', points: 1850 },
-  { id: 3, username: 'nguyenvana', fullName: 'Nguyễn Văn An', avatarColor: '#4F46E5', role: 'ROLE_USER', points: 2850 },
-  { id: 4, username: 'tranb', fullName: 'Trần Thị Bình', avatarColor: '#10B981', role: 'ROLE_USER', points: 2600 },
-  { id: 5, username: 'lephuc', fullName: 'Lê Hoàng Phúc', avatarColor: '#F59E0B', role: 'ROLE_USER', points: 2450 },
-  { id: 6, username: 'phamduc', fullName: 'Phạm Minh Đức', avatarColor: '#EF4444', role: 'ROLE_USER', points: 2100 },
-  { id: 7, username: 'hoangyen', fullName: 'Hoàng Kim Yến', avatarColor: '#EC4899', role: 'ROLE_USER', points: 1500 },
-  { id: 8, username: 'vuongminh', fullName: 'Vương Tuấn Minh', avatarColor: '#8B5CF6', role: 'ROLE_USER', points: 1200 }
+  { id: 1, username: 'admin', fullName: 'Quản trị hệ thống', avatarColor: '#EF4444', role: 'ROLE_ADMIN', points: 0, userGroupId: '', employeeId: 'ADM001', email: 'admin@bidv.com.vn' },
+  { id: 2, username: 'quantrh', fullName: 'Quản Trị Hệ Thống (Bạn)', avatarColor: '#005B41', role: 'ROLE_USER', points: 1850, userGroupId: 'GDV', employeeId: 'QTR001', email: 'quantrh@bidv.com.vn' },
+  { id: 3, username: 'nguyenvana', fullName: 'Nguyễn Văn An', avatarColor: '#4F46E5', role: 'ROLE_USER', points: 2850, userGroupId: 'GDV', employeeId: 'NV001', email: 'nguyenvana@bidv.com.vn' },
+  { id: 4, username: 'tranb', fullName: 'Trần Thị Bình', avatarColor: '#10B981', role: 'ROLE_USER', points: 2600, userGroupId: 'GDV', employeeId: 'NV002', email: 'tranb@bidv.com.vn' },
+  { id: 5, username: 'lephuc', fullName: 'Lê Hoàng Phúc', avatarColor: '#F59E0B', role: 'ROLE_USER', points: 2450, userGroupId: 'QHKH', employeeId: 'NV003', email: 'lephuc@bidv.com.vn' },
+  { id: 6, username: 'phamduc', fullName: 'Phạm Minh Đức', avatarColor: '#EF4444', role: 'ROLE_USER', points: 2100, userGroupId: 'QHKH', employeeId: 'NV004', email: 'phamduc@bidv.com.vn' },
+  { id: 7, username: 'hoangyen', fullName: 'Hoàng Kim Yến', avatarColor: '#EC4899', role: 'ROLE_USER', points: 1500, userGroupId: 'KSV', employeeId: 'NV005', email: 'hoangyen@bidv.com.vn' },
+  { id: 8, username: 'vuongminh', fullName: 'Vương Tuấn Minh', avatarColor: '#8B5CF6', role: 'ROLE_USER', points: 1200, userGroupId: 'KSV', employeeId: 'NV006', email: 'vuongminh@bidv.com.vn' }
 ];
 
 export const adminApi = {
@@ -64,7 +67,10 @@ export const adminApi = {
         fullName: user.fullName,
         avatarColor: user.avatarColor,
         role: user.role,
-        points: user.points
+        points: user.points,
+        userGroupId: user.userGroupId,
+        employeeId: user.employeeId,
+        email: user.email
       };
       if (user.password) {
         updatedUser.password = user.password;
@@ -261,5 +267,31 @@ export const adminApi = {
       return;
     }
     await axiosClient.delete(`/api/admin/questions/${id}`);
+  },
+
+  async importUsersExcel(file: File): Promise<string> {
+    if (isMockApi()) {
+      await mockDelay(300);
+      return 'Mock Excel upload successful!';
+    }
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await axiosClient.post<string>('/api/admin/users/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data;
+  },
+
+  async downloadUserTemplate(): Promise<Blob> {
+    if (isMockApi()) {
+      await mockDelay(300);
+      return new Blob(['Mock Excel Content'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    }
+    const response = await axiosClient.get<Blob>('/api/admin/users/template', {
+      responseType: 'blob'
+    });
+    return response.data;
   }
 };

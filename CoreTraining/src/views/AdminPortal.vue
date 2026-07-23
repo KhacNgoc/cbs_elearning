@@ -200,9 +200,24 @@
                 <h3 class="card-title">DANH SÁCH THÀNH VIÊN HỆ THỐNG</h3>
                 <p class="card-subtitle">Quản lý tài khoản đăng nhập, phân quyền, và điểm tích lũy học tập.</p>
               </div>
-              <button class="btn btn-primary" @click="openUserModal()">
-                <Plus class="btn-icon" /> THÊM HỌC VIÊN
-              </button>
+              <div class="header-actions">
+                <button class="btn btn-secondary" @click="handleDownloadTemplate" :disabled="loading">
+                  <Download class="btn-icon" /> TẢI EXCEL MẪU
+                </button>
+                <button class="btn btn-secondary" @click="triggerExcelUpload" :disabled="loading">
+                  <Upload class="btn-icon" /> NHẬP TỪ EXCEL
+                </button>
+                <input 
+                  type="file" 
+                  ref="excelFileInput" 
+                  style="display: none" 
+                  accept=".xlsx, .xls"
+                  @change="handleExcelUpload"
+                />
+                <button class="btn btn-primary" @click="openUserModal()">
+                  <Plus class="btn-icon" /> THÊM HỌC VIÊN
+                </button>
+              </div>
             </div>
 
             <!-- Filter Search -->
@@ -215,13 +230,16 @@
               />
             </div>
 
-            <table class="admin-table">
+             <table class="admin-table">
               <thead>
                 <tr>
                   <th>Học viên</th>
                   <th>Tên đăng nhập</th>
+                  <th>Mã NV</th>
+                  <th>Email</th>
+                  <th>Nhóm nghiệp vụ</th>
                   <th>Vai trò</th>
-                  <th>Điểm số tích lũy</th>
+                  <th>Điểm số</th>
                   <th class="actions-col">Thao tác</th>
                 </tr>
               </thead>
@@ -238,9 +256,17 @@
                     </div>
                   </td>
                   <td><span class="code-badge">{{ u.username }}</span></td>
+                  <td>{{ u.employeeId || '-' }}</td>
+                  <td>{{ u.email || '-' }}</td>
+                  <td>
+                    <span v-if="u.userGroupId" class="code-badge">
+                      {{ u.userGroupId === 'GDV' ? 'Giao dịch viên' : u.userGroupId === 'QHKH' ? 'Quan hệ khách hàng' : 'Kiểm soát viên' }}
+                    </span>
+                    <span v-else>-</span>
+                  </td>
                   <td>
                     <span class="role-tag" :class="u.role === 'ROLE_ADMIN' ? 'admin' : 'user'">
-                      {{ u.role === 'ROLE_ADMIN' ? 'Quản trị viên' : 'Học viên' }}
+                      {{ u.role === 'ROLE_ADMIN' ? 'Quản trị' : 'Học viên' }}
                     </span>
                   </td>
                   <td><strong>{{ u.points }} PTS</strong></td>
@@ -259,7 +285,7 @@
                   </td>
                 </tr>
                 <tr v-if="filteredUsers.length === 0">
-                  <td colspan="5" class="empty-row">Không tìm thấy thành viên phù hợp.</td>
+                  <td colspan="8" class="empty-row">Không tìm thấy thành viên phù hợp.</td>
                 </tr>
               </tbody>
             </table>
@@ -467,6 +493,35 @@
             />
           </div>
           <div class="form-group">
+            <label>Mã nhân viên (Employee ID)</label>
+            <input 
+              v-model="userForm.employeeId" 
+              type="text" 
+              class="form-control" 
+              placeholder="Ví dụ: NV001"
+              required 
+            />
+          </div>
+          <div class="form-group">
+            <label>Email công vụ (Nhận OTP)</label>
+            <input 
+              v-model="userForm.email" 
+              type="email" 
+              class="form-control" 
+              placeholder="Ví dụ: name@bidv.com.vn"
+              required 
+            />
+          </div>
+          <div class="form-group" v-if="userForm.role === 'ROLE_USER'">
+            <label>Nhóm nghiệp vụ bắt buộc</label>
+            <select v-model="userForm.userGroupId" class="form-control">
+              <option value="">Không phân nhóm</option>
+              <option value="GDV">Giao dịch viên (GDV)</option>
+              <option value="QHKH">Quan hệ khách hàng (QHKH)</option>
+              <option value="KSV">Kiểm soát viên (KSV)</option>
+            </select>
+          </div>
+          <div class="form-group">
             <label>Màu đại diện Avatar Color (Hex code)</label>
             <div class="color-picker-row">
               <input v-model="userForm.avatarColor" type="color" class="color-picker" />
@@ -651,7 +706,9 @@ import {
   Plus, 
   Edit, 
   Trash2, 
-  CheckCircle2
+  CheckCircle2,
+  Download,
+  Upload
 } from 'lucide-vue-next';
 
 // Chart.js imports & registrations
@@ -715,7 +772,7 @@ const topicModal = ref({ show: false, isEdit: false });
 const topicForm = ref({ id: '', name: '', iconName: '' });
 
 const userModal = ref({ show: false, isEdit: false, editId: null as number | null });
-const userForm = ref({ username: '', password: '', fullName: '', avatarColor: '#005B41', role: 'ROLE_USER', points: 0 });
+const userForm = ref({ username: '', password: '', fullName: '', avatarColor: '#005B41', role: 'ROLE_USER', points: 0, userGroupId: '', employeeId: '', email: '' });
 
 const lessonModal = ref({ show: false, isEdit: false });
 const lessonForm = ref({ id: '', title: '', topicId: '', hint: '', videoUrl: '', documentSlides: [] as string[] });
@@ -1022,7 +1079,10 @@ const openUserModal = (user?: AdminUser) => {
       fullName: user.fullName,
       avatarColor: user.avatarColor || '#005B41',
       role: user.role,
-      points: user.points
+      points: user.points,
+      userGroupId: user.userGroupId || '',
+      employeeId: user.employeeId || '',
+      email: user.email || ''
     };
   } else {
     userModal.value = { show: true, isEdit: false, editId: null };
@@ -1032,8 +1092,64 @@ const openUserModal = (user?: AdminUser) => {
       fullName: '',
       avatarColor: '#005B41',
       role: 'ROLE_USER',
-      points: 0
+      points: 0,
+      userGroupId: '',
+      employeeId: '',
+      email: ''
     };
+  }
+};
+
+const excelFileInput = ref<HTMLInputElement | null>(null);
+
+const triggerExcelUpload = () => {
+  if (excelFileInput.value) {
+    excelFileInput.value.click();
+  }
+};
+
+const handleDownloadTemplate = async () => {
+  loading.value = true;
+  try {
+    const blob = await adminApi.downloadUserTemplate();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'user_import_template.xlsx');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    alert('Không thể tải file mẫu Excel. Vui lòng thử lại!');
+    console.error(err);
+  } finally {
+    loading.value = false;
+  }
+};
+
+const handleExcelUpload = async (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  if (target.files && target.files.length > 0) {
+    const file = target.files[0];
+    loading.value = true;
+    try {
+      const responseMessage = await adminApi.importUsersExcel(file);
+      alert(responseMessage || 'Nhập danh sách học viên thành công!');
+      await loadAllData();
+    } catch (err: any) {
+      if (err.response && err.response.data && err.response.data.message) {
+        alert(err.response.data.message);
+      } else {
+        alert('Nhập danh sách học viên thất bại. Vui lòng kiểm tra lại định dạng file!');
+      }
+      console.error(err);
+    } finally {
+      loading.value = false;
+      if (excelFileInput.value) {
+        excelFileInput.value.value = '';
+      }
+    }
   }
 };
 
@@ -1786,5 +1902,11 @@ const handleDeleteQuestion = async (id: number) => {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
 }
 </style>
