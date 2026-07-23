@@ -55,5 +55,23 @@ export const authApi = {
     }
     const response = await axiosClient.post<string>('/api/auth/register', data);
     return response.data;
+  },
+
+  async sendResetOtp(username: string, email: string): Promise<string> {
+    if (isMockApi()) {
+      await mockDelay(300);
+      return 'OTP sent successfully';
+    }
+    const response = await axiosClient.post<string>('/api/auth/forgot-password-otp', { username, email });
+    return response.data;
+  },
+
+  async resetPasswordWithOtp(username: string, otp: string, newPassword: string): Promise<string> {
+    if (isMockApi()) {
+      await mockDelay(300);
+      return 'Password reset successfully';
+    }
+    const response = await axiosClient.post<string>('/api/auth/reset-password-otp', { username, otp, newPassword });
+    return response.data;
   }
 };

@@ -10,9 +10,15 @@ import com.bidv.coretraining.service.NotificationService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.multipart.MultipartFile;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.Iterator;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,13 +33,15 @@ public class AdminServiceImpl implements AdminService {
     private final PasswordEncoder passwordEncoder;
     private final TopicEnrollmentRequestRepository enrollmentRequestRepository;
     private final NotificationService notificationService;
+    private final UserGroupRepository userGroupRepository;
 
     public AdminServiceImpl(TopicRepository topicRepository, LessonRepository lessonRepository,
                             QuestionRepository questionRepository, CourseMapper courseMapper,
                             QuizMapper quizMapper, UserRepository userRepository,
                             PasswordEncoder passwordEncoder,
                             TopicEnrollmentRequestRepository enrollmentRequestRepository,
-                            NotificationService notificationService) {
+                            NotificationService notificationService,
+                            UserGroupRepository userGroupRepository) {
         this.topicRepository = topicRepository;
         this.lessonRepository = lessonRepository;
         this.questionRepository = questionRepository;
@@ -43,6 +51,7 @@ public class AdminServiceImpl implements AdminService {
         this.passwordEncoder = passwordEncoder;
         this.enrollmentRequestRepository = enrollmentRequestRepository;
         this.notificationService = notificationService;
+        this.userGroupRepository = userGroupRepository;
     }
 
 
@@ -418,6 +427,9 @@ public class AdminServiceImpl implements AdminService {
                 .avatarColor(user.getAvatarColor())
                 .role(user.getRole())
                 .points(user.getPoints())
+                .userGroupId(user.getUserGroup() != null ? user.getUserGroup().getId() : null)
+                .employeeId(user.getEmployeeId())
+                .email(user.getEmail())
                 .build();
     }
 
@@ -432,6 +444,8 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional
     public UserDto createUser(UserDto userDto) {
+        UserGroup userGroup = userDto.getUserGroupId() == null || userDto.getUserGroupId().isBlank()
+                ? null : userGroupRepository.findById(userDto.getUserGroupId()).orElse(null);
         User user = User.builder()
                 .username(userDto.getUsername())
                 .password(passwordEncoder.encode(userDto.getPassword() != null ? userDto.getPassword() : "123456"))
@@ -439,6 +453,9 @@ public class AdminServiceImpl implements AdminService {
                 .avatarColor(userDto.getAvatarColor() != null ? userDto.getAvatarColor() : "#005B41")
                 .role(userDto.getRole() != null ? userDto.getRole() : "ROLE_USER")
                 .points(userDto.getPoints() != null ? userDto.getPoints() : 0)
+                .userGroup(userGroup)
+                .employeeId(userDto.getEmployeeId())
+                .email(userDto.getEmail())
                 .build();
         User saved = userRepository.save(user);
         return mapToUserDto(saved);
@@ -453,6 +470,11 @@ public class AdminServiceImpl implements AdminService {
         user.setAvatarColor(userDto.getAvatarColor());
         user.setRole(userDto.getRole());
         user.setPoints(userDto.getPoints());
+        UserGroup userGroup = userDto.getUserGroupId() == null || userDto.getUserGroupId().isBlank()
+                ? null : userGroupRepository.findById(userDto.getUserGroupId()).orElse(null);
+        user.setUserGroup(userGroup);
+        user.setEmployeeId(userDto.getEmployeeId());
+        user.setEmail(userDto.getEmail());
         if (userDto.getPassword() != null && !userDto.getPassword().trim().isEmpty()) {
             user.setPassword(passwordEncoder.encode(userDto.getPassword()));
         }
@@ -466,5 +488,67 @@ public class AdminServiceImpl implements AdminService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", id.toString()));
         userRepository.delete(user);
+    }
+
+    @Override
+    @Transactional
+    public void importUsersFromExcel(MultipartFile file) {
+        try (InputStream input = file.getInputStream(); Workbook workbook = new XSSFWorkbook(input)) {
+            Iterator<Row> rows = workbook.getSheetAt(0).iterator();
+            if (rows.hasNext()) rows.next();
+            while (rows.hasNext()) {
+                Row row = rows.next();
+                String employeeId = cellValue(row.getCell(1)).trim();
+                String email = cellValue(row.getCell(2)).trim();
+                String fullName = cellValue(row.getCell(3)).trim();
+                String groupText = cellValue(row.getCell(4)).trim().toUpperCase();
+                if (employeeId.isEmpty() || email.isEmpty() || fullName.isEmpty()
+                        || userRepository.existsByUsername(email)) continue;
+
+                String groupId = groupText.contains("GDV") || groupText.contains("GIAO DỊCH") ? "GDV"
+                        : groupText.contains("QHKH") || groupText.contains("QUAN HỆ") ? "QHKH"
+                        : groupText.contains("KSV") || groupText.contains("KIỂM SOÁT") ? "KSV" : null;
+                UserGroup group = groupId == null ? null : userGroupRepository.findById(groupId).orElse(null);
+                String[] colors = {"#005B41", "#4F46E5", "#10B981", "#F59E0B", "#EF4444"};
+                userRepository.save(User.builder()
+                        .username(email).email(email).employeeId(employeeId).fullName(fullName)
+                        .password(passwordEncoder.encode("Bidv@" + employeeId.toUpperCase()))
+                        .role("ROLE_USER").points(0).userGroup(group)
+                        .avatarColor(colors[Math.abs(employeeId.hashCode()) % colors.length])
+                        .build());
+            }
+        } catch (Exception exception) {
+            throw new RuntimeException("Lỗi khi import dữ liệu Excel: " + exception.getMessage(), exception);
+        }
+    }
+
+    private String cellValue(Cell cell) {
+        if (cell == null) return "";
+        if (cell.getCellType() == CellType.NUMERIC) {
+            double value = cell.getNumericCellValue();
+            return value == (long) value ? String.valueOf((long) value) : String.valueOf(value);
+        }
+        return cell.getCellType() == CellType.STRING ? cell.getStringCellValue() : cell.toString();
+    }
+
+    @Override
+    public byte[] generateExcelTemplate() {
+        try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            Sheet sheet = workbook.createSheet("Import Template");
+            Row header = sheet.createRow(0);
+            String[] labels = {"STT", "Mã nhân viên (*)", "User email (*)", "Tên nhân viên (*)", "Nhóm (GDV / QHKH / KSV)"};
+            for (int i = 0; i < labels.length; i++) header.createCell(i).setCellValue(labels[i]);
+            Row sample = sheet.createRow(1);
+            sample.createCell(0).setCellValue(1);
+            sample.createCell(1).setCellValue("NV0982");
+            sample.createCell(2).setCellValue("nguyenvanan@bidv.com.vn");
+            sample.createCell(3).setCellValue("Nguyễn Văn An");
+            sample.createCell(4).setCellValue("GDV");
+            for (int i = 0; i < labels.length; i++) sheet.autoSizeColumn(i);
+            workbook.write(output);
+            return output.toByteArray();
+        } catch (Exception exception) {
+            throw new RuntimeException("Lỗi khi tạo file Excel mẫu: " + exception.getMessage(), exception);
+        }
     }
 }

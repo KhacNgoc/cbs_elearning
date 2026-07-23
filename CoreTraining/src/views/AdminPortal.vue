@@ -220,9 +220,18 @@
                   tập.
                 </p>
               </div>
-              <button class="btn btn-primary" @click="openUserModal()">
-                <Plus class="btn-icon" /> THÊM HỌC VIÊN
-              </button>
+              <div class="header-actions">
+                <button class="btn btn-secondary" @click="handleDownloadTemplate">
+                  <Download class="btn-icon" /> TẢI EXCEL MẪU
+                </button>
+                <button class="btn btn-secondary" @click="excelFileInput?.click()">
+                  <Upload class="btn-icon" /> NHẬP TỪ EXCEL
+                </button>
+                <input ref="excelFileInput" type="file" hidden accept=".xlsx,.xls" @change="handleExcelUpload" />
+                <button class="btn btn-primary" @click="openUserModal()">
+                  <Plus class="btn-icon" /> THÊM HỌC VIÊN
+                </button>
+              </div>
             </div>
 
             <!-- Filter Search -->
@@ -240,6 +249,9 @@
                 <tr>
                   <th>Học viên</th>
                   <th>Tên đăng nhập</th>
+                  <th>Mã NV</th>
+                  <th>Email</th>
+                  <th>Nhóm nghiệp vụ</th>
                   <th>Vai trò</th>
                   <th>Điểm số tích lũy</th>
                   <th class="actions-col">Thao tác</th>
@@ -263,6 +275,9 @@
                   <td>
                     <span class="code-badge">{{ u.username }}</span>
                   </td>
+                  <td>{{ u.employeeId || "-" }}</td>
+                  <td>{{ u.email || "-" }}</td>
+                  <td>{{ u.userGroupId || "-" }}</td>
                   <td>
                     <span
                       class="role-tag"
@@ -295,7 +310,7 @@
                   </td>
                 </tr>
                 <tr v-if="filteredUsers.length === 0">
-                  <td colspan="5" class="empty-row">
+                  <td colspan="8" class="empty-row">
                     Không tìm thấy thành viên phù hợp.
                   </td>
                 </tr>
@@ -800,6 +815,23 @@
             />
           </div>
           <div class="form-group">
+            <label>Mã nhân viên</label>
+            <input v-model="userForm.employeeId" type="text" class="form-control" required />
+          </div>
+          <div class="form-group">
+            <label>Email công vụ</label>
+            <input v-model="userForm.email" type="email" class="form-control" required />
+          </div>
+          <div class="form-group">
+            <label>Nhóm nghiệp vụ</label>
+            <select v-model="userForm.userGroupId" class="form-control">
+              <option value="">Không phân nhóm</option>
+              <option value="GDV">Giao dịch viên</option>
+              <option value="QHKH">Quan hệ khách hàng</option>
+              <option value="KSV">Kiểm soát viên</option>
+            </select>
+          </div>
+          <div class="form-group">
             <label>Màu đại diện Avatar Color (Hex code)</label>
             <div class="color-picker-row">
               <input
@@ -1247,6 +1279,7 @@ import {
   Trash2,
   FileText,
   Upload,
+  Download,
   Link2,
   X,
   Search,
@@ -1397,6 +1430,9 @@ const userForm = ref({
   avatarColor: "#005B41",
   role: "ROLE_USER",
   points: 0,
+  userGroupId: "",
+  employeeId: "",
+  email: "",
 });
 
 const lessonModal = ref({ show: false, isEdit: false });
@@ -2054,6 +2090,9 @@ const openUserModal = (user?: AdminUser) => {
       avatarColor: user.avatarColor || "#005B41",
       role: user.role,
       points: user.points,
+      userGroupId: user.userGroupId || "",
+      employeeId: user.employeeId || "",
+      email: user.email || "",
     };
   } else {
     userModal.value = { show: true, isEdit: false, editId: null };
@@ -2064,7 +2103,45 @@ const openUserModal = (user?: AdminUser) => {
       avatarColor: "#005B41",
       role: "ROLE_USER",
       points: 0,
+      userGroupId: "",
+      employeeId: "",
+      email: "",
     };
+  }
+};
+
+const excelFileInput = ref<HTMLInputElement | null>(null);
+
+const handleDownloadTemplate = async () => {
+  try {
+    const blob = await adminApi.downloadUserTemplate();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "mau-import-hoc-vien.xlsx";
+    link.click();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error(error);
+    alert("Không thể tải file Excel mẫu.");
+  }
+};
+
+const handleExcelUpload = async (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  loading.value = true;
+  try {
+    await adminApi.importUsersExcel(file);
+    await loadAllData();
+    alert("Nhập danh sách học viên thành công.");
+  } catch (error) {
+    console.error(error);
+    alert("Không thể nhập danh sách học viên.");
+  } finally {
+    loading.value = false;
+    input.value = "";
   }
 };
 

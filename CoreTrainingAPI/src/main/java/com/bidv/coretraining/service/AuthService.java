@@ -7,4 +7,6 @@ import com.bidv.coretraining.dto.RegisterRequest;
 public interface AuthService {
     JwtAuthenticationResponse authenticateUser(LoginRequest loginRequest);
     void registerUser(RegisterRequest registerRequest);
+    void sendPasswordResetOtp(com.bidv.coretraining.dto.ForgotPasswordRequest request);
+    void resetPasswordWithOtp(com.bidv.coretraining.dto.ResetPasswordOtpRequest request);
 }

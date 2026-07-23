@@ -17,4 +17,7 @@ public class UserDto {
     private String avatarColor;
     private String role; // e.g., "ROLE_USER", "ROLE_ADMIN"
     private Integer points;
+    private String userGroupId;
+    private String employeeId;
+    private String email;
 }
