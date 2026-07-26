@@ -3,9 +3,11 @@
     <LessonLearningHeader :topic-name="topic?.name" :lesson-title="lesson.title" :completed-count="completedCount"
       :total-lessons="topic?.lessons.length || 0" :completed="isCompleted" @complete="markAsCompleted" @open-content="sidebarOpen = true" />
     <div class="learning-stage" :class="{ 'sidebar-hidden': !sidebarOpen }">
-      <LessonMediaStage :lesson="lesson" :selected-document="selectedDocument" :current-index="currentLessonIndex"
-        :total-lessons="topic?.lessons.length || 0" @adjacent="goToAdjacentLesson" @close-document="selectedDocument = null"
-        @download-document="downloadDocument" />
+      <LessonMediaStage ref="mediaStage" :lesson="lesson" :selected-document="selectedDocument"
+        :current-index="currentLessonIndex" :total-lessons="topic?.lessons.length || 0"
+        @adjacent="goToAdjacentLesson" @close-document="selectedDocument = null"
+        @download-document="downloadDocument" @time-update="currentVideoTime = $event"
+        @add-note="openNoteComposer" />
       <LessonCourseSidebar :topic="topic" :active-lesson-id="lesson.id" :completed-lessons="userStore.completedLessons"
         :completed-count="completedCount" :progress="courseProgress" :open="sidebarOpen" :selected-document-id="selectedDocument?.id"
         @close="sidebarOpen = false" @select="switchLesson" @select-document="showDocument" @quiz="startQuiz" />
@@ -15,6 +17,9 @@
 
     <section class="lesson-information">
       <LessonOverview :lesson="lesson" :topic-name="topic?.name" :completed="isCompleted">
+        <LessonVideoNotes ref="videoNotesPanel" :notes="videoNotes" :current-time="currentVideoTime" :loading="notesLoading"
+          :saving="noteSaving" @create="createVideoNote" @update="updateVideoNote"
+          @delete="deleteVideoNote" @seek="seekToNote" />
         <LessonDiscussion :comments="lesson.comments" v-model:rating="userRating" v-model:comment="commentText" @submit="submitFeedback" />
       </LessonOverview>
     </section>
@@ -23,27 +28,36 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, nextTick, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ChevronLeft } from 'lucide-vue-next';
 import { useCourseStore } from '../stores/courseStore';
 import { useUserStore } from '../stores/userStore';
 import { axiosClient } from '../api/axiosClient';
+import { courseApi } from '../api/courseApi';
+import type { LessonDocument, VideoNote } from '../types';
 import LessonLearningHeader from '../components/lesson/LessonLearningHeader.vue';
 import LessonCourseSidebar from '../components/lesson/LessonCourseSidebar.vue';
 import LessonMediaStage from '../components/lesson/LessonMediaStage.vue';
 import LessonOverview from '../components/lesson/LessonOverview.vue';
 import LessonDiscussion from '../components/lesson/LessonDiscussion.vue';
+import LessonVideoNotes from '../components/lesson/LessonVideoNotes.vue';
 
 const props = defineProps<{ id: string }>();
 const router = useRouter();
 const courseStore = useCourseStore();
 const userStore = useUserStore();
-const selectedDocument = ref<import('../types').LessonDocument | null>(null);
-const pendingDocument = ref<import('../types').LessonDocument | null>(null);
+const mediaStage = ref<InstanceType<typeof LessonMediaStage> | null>(null);
+const videoNotesPanel = ref<InstanceType<typeof LessonVideoNotes> | null>(null);
+const selectedDocument = ref<LessonDocument | null>(null);
+const pendingDocument = ref<LessonDocument | null>(null);
 const userRating = ref(5);
 const commentText = ref('');
 const sidebarOpen = ref(true);
+const currentVideoTime = ref(0);
+const videoNotes = ref<VideoNote[]>([]);
+const notesLoading = ref(false);
+const noteSaving = ref(false);
 
 const lesson = computed(() => courseStore.currentLesson);
 const topic = computed(() => courseStore.currentTopic);
@@ -53,6 +67,8 @@ const courseProgress = computed(() => topic.value?.lessons.length ? Math.round(c
 const currentLessonIndex = computed(() => topic.value?.lessons.findIndex(item => item.id === lesson.value?.id) ?? -1);
 
 const loadLessonData = async (lessonId: string) => {
+  currentVideoTime.value = 0;
+  videoNotes.value = [];
   await courseStore.fetchLessonDetail(lessonId);
   
   // Guard check: topic accessibility
@@ -65,6 +81,19 @@ const loadLessonData = async (lessonId: string) => {
   // Auto complete lesson when viewed
   if (lesson.value) {
     await userStore.completeLesson(lesson.value.id);
+    await loadVideoNotes(lesson.value.id);
+  }
+};
+
+const loadVideoNotes = async (lessonId: string) => {
+  notesLoading.value = true;
+  try {
+    videoNotes.value = await courseApi.getVideoNotes(lessonId);
+  } catch (error) {
+    console.error('Failed to load video notes:', error);
+    videoNotes.value = [];
+  } finally {
+    notesLoading.value = false;
   }
 };
 
@@ -90,7 +119,7 @@ watch(() => props.id, async newId => {
 });
 
 const switchLesson = (lessonId: string) => router.push(`/lesson/${lessonId}`);
-const showDocument = (lessonId: string, document: import('../types').LessonDocument) => {
+const showDocument = (lessonId: string, document: LessonDocument) => {
   if (lessonId !== lesson.value?.id) {
     pendingDocument.value = document;
     router.push(`/lesson/${lessonId}`);
@@ -124,6 +153,65 @@ const goToAdjacentLesson = (offset: number) => {
 };
 const markAsCompleted = async () => { if (lesson.value) await userStore.completeLesson(lesson.value.id); };
 const startQuiz = () => { if (topic.value) router.push(`/quiz/${topic.value.id}`); };
+const sortVideoNotes = () => {
+  videoNotes.value.sort((a, b) =>
+    a.timestampSeconds - b.timestampSeconds || a.createdAt.localeCompare(b.createdAt)
+  );
+};
+const createVideoNote = async (content: string, timestampSeconds: number) => {
+  if (!lesson.value) return;
+  noteSaving.value = true;
+  try {
+    videoNotes.value.push(await courseApi.createVideoNote(lesson.value.id, timestampSeconds, content));
+    sortVideoNotes();
+  } catch (error) {
+    console.error('Failed to create video note:', error);
+    alert('Không thể lưu ghi chú. Vui lòng thử lại.');
+  } finally {
+    noteSaving.value = false;
+  }
+};
+const updateVideoNote = async (note: VideoNote, content: string) => {
+  if (!lesson.value) return;
+  noteSaving.value = true;
+  try {
+    const updated = await courseApi.updateVideoNote(
+      lesson.value.id, note.id, note.timestampSeconds, content
+    );
+    const index = videoNotes.value.findIndex(item => item.id === note.id);
+    if (index >= 0) videoNotes.value[index] = updated;
+    sortVideoNotes();
+  } catch (error) {
+    console.error('Failed to update video note:', error);
+    alert('Không thể cập nhật ghi chú. Vui lòng thử lại.');
+  } finally {
+    noteSaving.value = false;
+  }
+};
+const deleteVideoNote = async (note: VideoNote) => {
+  if (!lesson.value) return;
+  noteSaving.value = true;
+  try {
+    await courseApi.deleteVideoNote(lesson.value.id, note.id);
+    videoNotes.value = videoNotes.value.filter(item => item.id !== note.id);
+  } catch (error) {
+    console.error('Failed to delete video note:', error);
+    alert('Không thể xóa ghi chú. Vui lòng thử lại.');
+  } finally {
+    noteSaving.value = false;
+  }
+};
+const seekToNote = async (seconds: number) => {
+  if (selectedDocument.value) {
+    selectedDocument.value = null;
+    await nextTick();
+  }
+  mediaStage.value?.seekTo(seconds);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+const openNoteComposer = (seconds: number) => {
+  videoNotesPanel.value?.openAt(seconds);
+};
 const submitFeedback = async () => {
   if (!commentText.value.trim() || !lesson.value) return;
   await courseStore.addComment(lesson.value.id, userRating.value, commentText.value);

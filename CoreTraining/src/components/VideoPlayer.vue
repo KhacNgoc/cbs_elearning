@@ -16,6 +16,8 @@
         @timeupdate="onTimeUpdate"
         @loadedmetadata="onLoadedMetadata"
         @ended="onVideoEnded"
+        @play="isPlaying = true"
+        @pause="isPlaying = false"
         preload="metadata"
       ></video>
       
@@ -41,6 +43,16 @@
               <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="icon-svg"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             </button>
             <span class="time-display">{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</span>
+            <button data-testid="video-add-note" class="ctrl-btn note-control" title="Thêm ghi chú tại thời điểm hiện tại"
+              aria-label="Thêm ghi chú" @click.stop="requestNote">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" class="icon-svg">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+              <span>Thêm ghi chú</span>
+            </button>
           </div>
           
           <div class="right-ctrls">
@@ -66,6 +78,11 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+
+const emit = defineEmits<{
+  'time-update': [seconds: number];
+  'add-note': [seconds: number];
+}>();
 
 const props = defineProps({
   videoUrl: {
@@ -119,6 +136,7 @@ const toggleFullscreen = () => {
 const onTimeUpdate = () => {
   if (videoElement.value) {
     currentTime.value = videoElement.value.currentTime;
+    emit('time-update', currentTime.value);
   }
 };
 
@@ -130,7 +148,6 @@ const onLoadedMetadata = () => {
 
 const onVideoEnded = () => {
   isPlaying.value = false;
-  currentTime.value = 0;
 };
 
 const seek = (event: MouseEvent) => {
@@ -140,6 +157,26 @@ const seek = (event: MouseEvent) => {
   const percent = clickX / rect.width;
   videoElement.value.currentTime = percent * duration.value;
 };
+
+const seekTo = (seconds: number) => {
+  if (!videoElement.value) return;
+  const upperBound = Number.isFinite(videoElement.value.duration)
+    ? videoElement.value.duration
+    : seconds;
+  videoElement.value.currentTime = Math.max(0, Math.min(seconds, upperBound));
+  currentTime.value = videoElement.value.currentTime;
+  emit('time-update', currentTime.value);
+};
+
+const requestNote = () => {
+  if (!videoElement.value) return;
+  videoElement.value.pause();
+  currentTime.value = videoElement.value.currentTime;
+  emit('time-update', currentTime.value);
+  emit('add-note', Math.floor(currentTime.value));
+};
+
+defineExpose({ seekTo });
 
 const formatTime = (timeInSeconds: number) => {
   if (isNaN(timeInSeconds)) return '00:00';
@@ -347,6 +384,26 @@ const openExternal = () => {
   font-size: 0.8rem;
   color: #ccc;
   font-weight: 500;
+}
+
+.note-control {
+  width: auto;
+  gap: .4rem;
+  padding: 5px 8px;
+  border: 1px solid rgba(255,255,255,.42);
+  border-radius: 4px;
+  font-size: .75rem;
+  font-weight: 600;
+}
+
+.note-control:hover {
+  color: #fff;
+  border-color: #fff;
+  background: rgba(255,255,255,.12);
+}
+
+@media (max-width: 600px) {
+  .note-control span { display: none; }
 }
 
 .video-footer-info {

@@ -1,5 +1,5 @@
 import { axiosClient, isMockApi, mockDelay } from './axiosClient';
-import type { Topic, Lesson, Comment, UserProgress } from '../types';
+import type { Topic, Lesson, Comment, UserProgress, VideoNote } from '../types';
 import { mockTopics } from '../data/mockData';
 
 // We maintain an in-memory database in mock mode so updates are reflected dynamically!
@@ -9,6 +9,8 @@ export const setMockDbTopics = (newTopics: Topic[]) => {
 };
 let mockDbCompleted: string[] = [];
 let mockDbPoints = 1000;
+const mockVideoNotes: Record<string, VideoNote[]> = {};
+let mockVideoNoteId = 1;
 
 export const courseApi = {
   async getAllTopics(): Promise<Topic[]> {
@@ -68,6 +70,74 @@ export const courseApi = {
       content
     });
     return response.data;
+  },
+
+  async getVideoNotes(lessonId: string): Promise<VideoNote[]> {
+    if (isMockApi()) {
+      await mockDelay(150);
+      return [...(mockVideoNotes[lessonId] || [])];
+    }
+    const response = await axiosClient.get<VideoNote[]>(`/api/lessons/${lessonId}/notes`);
+    return response.data;
+  },
+
+  async createVideoNote(
+    lessonId: string,
+    timestampSeconds: number,
+    content: string
+  ): Promise<VideoNote> {
+    if (isMockApi()) {
+      await mockDelay(200);
+      const now = new Date().toISOString();
+      const note: VideoNote = {
+        id: mockVideoNoteId++,
+        lessonId,
+        timestampSeconds,
+        content,
+        createdAt: now,
+        updatedAt: now
+      };
+      mockVideoNotes[lessonId] = [...(mockVideoNotes[lessonId] || []), note]
+        .sort((a, b) => a.timestampSeconds - b.timestampSeconds);
+      return note;
+    }
+    const response = await axiosClient.post<VideoNote>(`/api/lessons/${lessonId}/notes`, {
+      timestampSeconds,
+      content
+    });
+    return response.data;
+  },
+
+  async updateVideoNote(
+    lessonId: string,
+    noteId: number,
+    timestampSeconds: number,
+    content: string
+  ): Promise<VideoNote> {
+    if (isMockApi()) {
+      await mockDelay(200);
+      const note = (mockVideoNotes[lessonId] || []).find(item => item.id === noteId);
+      if (!note) throw new Error(`Video note not found with id: ${noteId}`);
+      note.timestampSeconds = timestampSeconds;
+      note.content = content;
+      note.updatedAt = new Date().toISOString();
+      return { ...note };
+    }
+    const response = await axiosClient.put<VideoNote>(
+      `/api/lessons/${lessonId}/notes/${noteId}`,
+      { timestampSeconds, content }
+    );
+    return response.data;
+  },
+
+  async deleteVideoNote(lessonId: string, noteId: number): Promise<void> {
+    if (isMockApi()) {
+      await mockDelay(150);
+      mockVideoNotes[lessonId] = (mockVideoNotes[lessonId] || [])
+        .filter(item => item.id !== noteId);
+      return;
+    }
+    await axiosClient.delete(`/api/lessons/${lessonId}/notes/${noteId}`);
   },
 
   async getMyProgress(): Promise<UserProgress> {
