@@ -80,6 +80,19 @@ export interface UserProgress {
   mustChangePassword?: boolean;
 }
 
+export interface UserProfile {
+  id?: number;
+  username: string;
+  fullName: string;
+  email?: string;
+  employeeId?: string;
+  avatarColor?: string;
+  role: string;
+  points: number;
+  groupId?: string;
+  groupName?: string;
+}
+
 export interface LeaderboardUser {
   rank: number;
   username: string;

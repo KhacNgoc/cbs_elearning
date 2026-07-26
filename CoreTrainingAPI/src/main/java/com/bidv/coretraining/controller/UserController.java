@@ -1,6 +1,7 @@
 package com.bidv.coretraining.controller;
 
 import com.bidv.coretraining.dto.UserProgressDto;
+import com.bidv.coretraining.dto.UserProfileDto;
 import com.bidv.coretraining.security.CustomUserDetails;
 import com.bidv.coretraining.service.UserService;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +16,12 @@ public class UserController {
 
     public UserController(UserService userService) {
         this.userService = userService;
+    }
+
+    @GetMapping("/me/profile")
+    public ResponseEntity<UserProfileDto> getUserProfile(
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(userService.getUserProfile(userDetails.getUsername()));
     }
 
     @GetMapping("/me")

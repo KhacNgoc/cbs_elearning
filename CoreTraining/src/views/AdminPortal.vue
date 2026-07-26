@@ -1,15 +1,7 @@
 <template>
   <div class="admin-portal-layout">
     <!-- Left Navigation Sidebar -->
-    <aside class="admin-sidebar">
-      <div class="sidebar-header">
-        <div class="nav-logo">B</div>
-        <div class="sidebar-title">
-          <h2>BIDV WebCSR</h2>
-          <span>Quản trị Hệ thống</span>
-        </div>
-      </div>
-
+    <aside class="admin-sidebar" aria-label="Điều hướng quản trị">
       <nav class="sidebar-menu">
         <button
           v-for="tab in tabs"
@@ -1705,31 +1697,8 @@ const handleDeleteQuestion = async (id: number) => {
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.05);
 }
 
-.sidebar-header {
-  padding: 2rem 1.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.sidebar-title h2 {
-  font-size: 1.15rem;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  line-height: 1.2;
-}
-
-.sidebar-title span {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  color: var(--accent-color); /* Gold */
-  letter-spacing: 1px;
-  font-weight: 700;
-}
-
 .sidebar-menu {
-  padding: 1.5rem 1rem;
+  padding: 2rem 1rem 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -2060,6 +2029,52 @@ const handleDeleteQuestion = async (id: number) => {
 }
 
 /* Tables & CRUD styling */
+.card-header-row {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 2rem;
+  margin-bottom: 1.25rem;
+}
+
+.card-header-row .header-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.card-header-row .card-title {
+  margin: 0;
+  line-height: 1.35;
+}
+
+.card-header-row .card-subtitle {
+  margin: 0.4rem 0 0;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.card-header-row > .btn {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.topic-selector-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.topic-selector-row label {
+  flex: 0 0 auto;
+  font-weight: 500;
+}
+
+.topic-selector-row .select-control {
+  width: 170px;
+}
+
 .topics-summary,
 .users-manager,
 .lessons-manager,
@@ -2381,6 +2396,27 @@ const handleDeleteQuestion = async (id: number) => {
 }
 
 @media (max-width: 700px) {
+  .card-header-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .card-header-row > .btn {
+    width: 100%;
+    justify-content: center;
+    margin-left: 0;
+  }
+
+  .topic-selector-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .topic-selector-row .select-control {
+    width: 100%;
+  }
+
   .modal-overlay {
     padding: 0.5rem;
   }

@@ -1,6 +1,7 @@
 package com.bidv.coretraining.service.impl;
 
 import com.bidv.coretraining.dto.UserMapper;
+import com.bidv.coretraining.dto.UserProfileDto;
 import com.bidv.coretraining.dto.UserProgressDto;
 import com.bidv.coretraining.entity.Lesson;
 import com.bidv.coretraining.entity.User;
@@ -34,6 +35,26 @@ public class UserServiceImpl implements UserService {
         this.topicRepository = topicRepository;
         this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserProfileDto getUserProfile(String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
+
+        return UserProfileDto.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .fullName(user.getFullName())
+                .email(user.getEmail())
+                .employeeId(user.getEmployeeId())
+                .avatarColor(user.getAvatarColor())
+                .role(user.getRole())
+                .points(user.getPoints())
+                .groupId(user.getUserGroup() != null ? user.getUserGroup().getId() : null)
+                .groupName(user.getUserGroup() != null ? user.getUserGroup().getName() : null)
+                .build();
     }
 
     @Override

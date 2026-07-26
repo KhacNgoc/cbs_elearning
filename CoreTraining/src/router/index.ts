@@ -6,6 +6,7 @@ import QuizView from '../views/QuizView.vue';
 import Leaderboard from '../views/Leaderboard.vue';
 import Login from '../views/Login.vue';
 import AdminPortal from '../views/AdminPortal.vue';
+import Profile from '../views/Profile.vue';
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -37,6 +38,12 @@ const routes: Array<RouteRecordRaw> = [
     path: '/leaderboard',
     name: 'Leaderboard',
     component: Leaderboard,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/profile',
+    name: 'Profile',
+    component: Profile,
     meta: { requiresAuth: true }
   },
   {
