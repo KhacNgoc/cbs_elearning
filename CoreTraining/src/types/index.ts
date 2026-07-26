@@ -7,6 +7,15 @@ export interface Comment {
   date: string;
 }
 
+export interface VideoNote {
+  id: number;
+  lessonId: string;
+  timestampSeconds: number;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ProcedureSection {
   title: string;
   steps: string[];

@@ -112,7 +112,23 @@ CREATE TABLE IF NOT EXISTS comments (
     CONSTRAINT fk_comments_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
 );
 
--- 12. Create questions table
+-- 12. Create private timestamped video notes
+CREATE TABLE IF NOT EXISTS video_notes (
+    id BIGSERIAL PRIMARY KEY,
+    timestamp_seconds INTEGER NOT NULL CHECK (timestamp_seconds >= 0),
+    content TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    lesson_id VARCHAR(255) NOT NULL,
+    user_id BIGINT NOT NULL,
+    CONSTRAINT fk_video_notes_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE,
+    CONSTRAINT fk_video_notes_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_video_notes_lesson_user_time
+    ON video_notes (lesson_id, user_id, timestamp_seconds);
+
+-- 13. Create questions table
 CREATE TABLE IF NOT EXISTS questions (
     id BIGSERIAL PRIMARY KEY,
     text TEXT NOT NULL,
@@ -121,7 +137,7 @@ CREATE TABLE IF NOT EXISTS questions (
     CONSTRAINT fk_questions_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
 );
 
--- 13. Create question_options table (ElementCollection)
+-- 14. Create question_options table (ElementCollection)
 CREATE TABLE IF NOT EXISTS question_options (
     question_id BIGINT NOT NULL,
     option_text TEXT,
@@ -130,7 +146,7 @@ CREATE TABLE IF NOT EXISTS question_options (
     CONSTRAINT fk_question_options_question FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
 );
 
--- 14. Create badges table
+-- 15. Create badges table
 CREATE TABLE IF NOT EXISTS badges (
     id VARCHAR(255) PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
@@ -140,7 +156,7 @@ CREATE TABLE IF NOT EXISTS badges (
     CONSTRAINT fk_badges_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
 );
 
--- 15. Create user_badges table
+-- 16. Create user_badges table
 CREATE TABLE IF NOT EXISTS user_badges (
     id BIGSERIAL PRIMARY KEY,
     unlocked_at DATE NOT NULL,
@@ -150,7 +166,7 @@ CREATE TABLE IF NOT EXISTS user_badges (
     CONSTRAINT fk_user_badges_badge FOREIGN KEY (badge_id) REFERENCES badges(id) ON DELETE CASCADE
 );
 
--- 16. Create user_quiz_scores table
+-- 17. Create user_quiz_scores table
 CREATE TABLE IF NOT EXISTS user_quiz_scores (
     id BIGSERIAL PRIMARY KEY,
     score INTEGER NOT NULL,
