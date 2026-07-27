@@ -7,10 +7,12 @@ import com.bidv.coretraining.dto.TopicDto;
 import com.bidv.coretraining.dto.UserDto;
 import com.bidv.coretraining.service.AdminService;
 import com.bidv.coretraining.service.DocumentStorageService;
+import com.bidv.coretraining.service.VideoStorageService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -18,10 +20,13 @@ public class AdminController {
 
     private final AdminService adminService;
     private final DocumentStorageService documentStorageService;
+    private final VideoStorageService videoStorageService;
 
-    public AdminController(AdminService adminService, DocumentStorageService documentStorageService) {
+    public AdminController(AdminService adminService, DocumentStorageService documentStorageService,
+                           VideoStorageService videoStorageService) {
         this.adminService = adminService;
         this.documentStorageService = documentStorageService;
+        this.videoStorageService = videoStorageService;
     }
 
     // Topics CRUD
@@ -45,6 +50,11 @@ public class AdminController {
     @PostMapping(value = "/documents/upload", consumes = "multipart/form-data")
     public ResponseEntity<LessonDocumentDto> uploadDocument(@RequestPart("file") MultipartFile file) {
         return ResponseEntity.ok(documentStorageService.store(file));
+    }
+
+    @PostMapping(value = "/videos/upload", consumes = "multipart/form-data")
+    public ResponseEntity<Map<String, String>> uploadVideo(@RequestPart("file") MultipartFile file) {
+        return ResponseEntity.ok(Map.of("videoUrl", videoStorageService.store(file)));
     }
 
     @PostMapping("/lessons")
