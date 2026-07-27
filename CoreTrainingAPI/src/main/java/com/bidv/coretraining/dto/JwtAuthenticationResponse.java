@@ -18,4 +18,5 @@ public class JwtAuthenticationResponse {
     private String role;
     private String username;
     private String fullName;
+    private boolean mustChangePassword;
 }

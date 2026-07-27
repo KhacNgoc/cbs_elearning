@@ -21,6 +21,7 @@ export interface LoginResponse {
   role: string;
   username: string;
   fullName: string;
+  mustChangePassword: boolean;
 }
 
 export const authApi = {
@@ -32,7 +33,8 @@ export const authApi = {
         tokenType: 'Bearer',
         role: 'ROLE_USER',
         username: data.username,
-        fullName: data.username === 'quantrh' ? 'Quản Trị Hệ Thống (Bạn)' : data.username
+        fullName: data.username === 'quantrh' ? 'Quản Trị Hệ Thống (Bạn)' : data.username,
+        mustChangePassword: false
       };
     }
     const response = await axiosClient.post<LoginResponse>('/api/auth/login', data);
@@ -72,6 +74,15 @@ export const authApi = {
       return 'Password reset successfully';
     }
     const response = await axiosClient.post<string>('/api/auth/reset-password-otp', { username, otp, newPassword });
+    return response.data;
+  },
+
+  async resetPasswordDirect(username: string, email: string, employeeId: string, newPassword: string): Promise<string> {
+    if (isMockApi()) {
+      await mockDelay(300);
+      return 'Đặt lại mật khẩu thành công!';
+    }
+    const response = await axiosClient.post<string>('/api/auth/reset-password-direct', { username, email, employeeId, newPassword });
     return response.data;
   }
 };

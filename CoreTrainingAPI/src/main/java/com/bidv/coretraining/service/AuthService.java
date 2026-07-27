@@ -9,4 +9,5 @@ public interface AuthService {
     void registerUser(RegisterRequest registerRequest);
     void sendPasswordResetOtp(com.bidv.coretraining.dto.ForgotPasswordRequest request);
     void resetPasswordWithOtp(com.bidv.coretraining.dto.ResetPasswordOtpRequest request);
+    void resetPasswordDirect(com.bidv.coretraining.dto.ResetPasswordDirectRequest request);
 }

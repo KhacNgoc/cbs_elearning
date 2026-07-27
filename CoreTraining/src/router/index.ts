@@ -52,6 +52,12 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true, pageKey: 'profile' }
   },
   {
+    path: '/change-password',
+    name: 'ChangePassword',
+    component: () => import('../views/ChangePassword.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/admin',
     component: AdminLayout,
     meta: { requiresAuth: true, requiresAdmin: true, pageKey: 'admin.overview' },
@@ -101,6 +107,7 @@ router.beforeEach(async (to, _, next) => {
     ? !!localStorage.getItem('accessToken')
     : false;
   let role = localStorage.getItem('userRole') || '';
+  let mustChangePassword = localStorage.getItem('mustChangePassword') === 'true';
 
   if (!isMock && (requiresAuth || to.name === 'Login')) {
     try {
@@ -108,7 +115,9 @@ router.beforeEach(async (to, _, next) => {
       localStorage.setItem('userRole', session.role);
       localStorage.setItem('username', session.username);
       localStorage.setItem('fullName', session.fullName);
+      localStorage.setItem('mustChangePassword', session.mustChangePassword ? 'true' : 'false');
       role = session.role;
+      mustChangePassword = session.mustChangePassword;
       isAuthenticated = true;
     } catch {
       clearAuthSession();
@@ -117,10 +126,12 @@ router.beforeEach(async (to, _, next) => {
 
   if (requiresAuth && !isAuthenticated) {
     next('/login');
+  } else if (isAuthenticated && mustChangePassword && to.name !== 'ChangePassword') {
+    next('/change-password');
   } else if (requiresAdmin && role !== 'ROLE_ADMIN') {
     next('/');
   } else if (to.name === 'Login' && isAuthenticated) {
-    next('/');
+    next(mustChangePassword ? '/change-password' : '/');
   } else {
     if (requiresAuth) {
       try {

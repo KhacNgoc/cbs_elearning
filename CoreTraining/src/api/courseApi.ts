@@ -261,5 +261,14 @@ export const courseApi = {
     }
     const response = await axiosClient.post<UserProgress>(`/api/users/me/register-topic/${topicId}`);
     return response.data;
+  },
+
+  async changePassword(newPassword: string): Promise<string> {
+    if (isMockApi()) {
+      await mockDelay(300);
+      return 'Đổi mật khẩu thành công!';
+    }
+    const response = await axiosClient.post<string>('/api/users/me/change-password', { newPassword });
+    return response.data;
   }
 };

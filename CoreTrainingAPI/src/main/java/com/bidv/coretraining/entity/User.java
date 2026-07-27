@@ -40,6 +40,10 @@ public class User {
     @Column(nullable = false)
     private String role; // e.g. "ROLE_USER", "ROLE_ADMIN"
 
+    @Column(name = "must_change_password", nullable = false, columnDefinition = "boolean default true")
+    @Builder.Default
+    private boolean mustChangePassword = true;
+
     @Column(nullable = false)
     @Builder.Default
     private Integer points = 0;

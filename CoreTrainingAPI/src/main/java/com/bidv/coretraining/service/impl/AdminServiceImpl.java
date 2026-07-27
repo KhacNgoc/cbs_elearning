@@ -456,6 +456,7 @@ public class AdminServiceImpl implements AdminService {
                 .userGroup(userGroup)
                 .employeeId(userDto.getEmployeeId())
                 .email(userDto.getEmail())
+                .mustChangePassword(true)
                 .build();
         User saved = userRepository.save(user);
         return mapToUserDto(saved);
@@ -515,6 +516,7 @@ public class AdminServiceImpl implements AdminService {
                         .password(passwordEncoder.encode("Bidv@" + employeeId.toUpperCase()))
                         .role("ROLE_USER").points(0).userGroup(group)
                         .avatarColor(colors[Math.abs(employeeId.hashCode()) % colors.length])
+                        .mustChangePassword(true)
                         .build());
             }
         } catch (Exception exception) {

@@ -160,4 +160,9 @@ public class AdminController {
                 .contentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM)
                 .body(adminService.generateExcelTemplate());
     }
+
+    @GetMapping("/groups")
+    public ResponseEntity<List<com.bidv.coretraining.entity.UserGroup>> getAllUserGroups() {
+        return ResponseEntity.ok(adminService.getAllUserGroups());
+    }
 }
