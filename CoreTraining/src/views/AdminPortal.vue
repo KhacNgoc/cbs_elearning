@@ -718,12 +718,26 @@
           </div>
 
           <div class="form-group">
-            <label>Link Video đính kèm (URL mp4 hoặc Youtube)</label>
+            <label>Video bài học (YouTube hoặc file video)</label>
             <input
               v-model="lessonForm.videoUrl"
-              type="text"
+              type="url"
               class="form-control"
+              placeholder="Dán link YouTube hoặc URL video trực tiếp"
             />
+            <div class="video-source-separator"><span>hoặc</span></div>
+            <label class="file-picker">
+              <Upload :size="18" />
+              <span>{{ lessonForm.videoFile?.name || "Chọn file video từ máy" }}</span>
+              <input
+                type="file"
+                accept="video/mp4,video/webm,video/ogg,video/quicktime,.m4v"
+                @change="handleVideoFileChange"
+              />
+            </label>
+            <small v-if="lessonForm.videoFile" class="selected-video-note">
+              File đã chọn sẽ được tải lên và thay thế đường link hiện tại khi lưu.
+            </small>
           </div>
 
           <!-- Lesson documents -->
@@ -1042,6 +1056,7 @@ const lessonForm = ref({
   topicId: "",
   hint: "",
   videoUrl: "",
+  videoFile: undefined as File | undefined,
   documents: [] as LessonDocumentForm[],
 });
 
@@ -1462,6 +1477,7 @@ const openLessonModal = (lesson?: Lesson) => {
       topicId: lesson.topicId,
       hint: lesson.hint,
       videoUrl: lesson.videoUrl || "",
+      videoFile: undefined,
       documents: (lesson.documents || []).map((document) => ({ ...document })),
     };
   } else {
@@ -1472,12 +1488,27 @@ const openLessonModal = (lesson?: Lesson) => {
       topicId: selectedTopicId.value,
       hint: "",
       videoUrl: "",
+      videoFile: undefined,
       documents: [],
     };
   }
 };
 
 const lessonModalBodyRef = ref<HTMLElement | null>(null);
+
+const handleVideoFileChange = (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  if (!["mp4", "webm", "ogg", "mov", "m4v"].includes(extension || "")) {
+    alert("Chỉ hỗ trợ file MP4, WebM, OGG, MOV hoặc M4V.");
+    input.value = "";
+    return;
+  }
+  lessonForm.value.videoFile = file;
+};
 
 const addLessonDocument = async () => {
   lessonForm.value.documents.push({
@@ -1540,6 +1571,9 @@ const removeLessonDocument = (index: number) => {
 const saveLesson = async () => {
   loading.value = true;
   try {
+    const videoUrl = lessonForm.value.videoFile
+      ? await adminApi.uploadVideo(lessonForm.value.videoFile)
+      : lessonForm.value.videoUrl.trim();
     const documents = await Promise.all(
       lessonForm.value.documents.map(async (document, index) => {
         const uploaded = document.file
@@ -1559,9 +1593,11 @@ const saveLesson = async () => {
 
     const payload = {
       ...lessonForm.value,
+      videoUrl,
       documents,
       procedureSteps: [],
     };
+    delete (payload as Partial<typeof lessonForm.value>).videoFile;
 
     if (lessonModal.value.isEdit) {
       await adminApi.updateLesson(lessonForm.value.id, payload);
@@ -2379,6 +2415,29 @@ const handleDeleteQuestion = async (id: number) => {
   height: 1px;
   opacity: 0;
   pointer-events: none;
+}
+
+.video-source-separator {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  margin: .75rem 0;
+  color: var(--text-muted);
+  font-size: .78rem;
+}
+
+.video-source-separator::before,
+.video-source-separator::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-color);
+}
+
+.selected-video-note {
+  display: block;
+  margin-top: .5rem;
+  color: var(--primary-color);
 }
 
 .selected-file-meta {

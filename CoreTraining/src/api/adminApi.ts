@@ -169,6 +169,20 @@ export const adminApi = {
     };
   },
 
+  async uploadVideo(file: File): Promise<string> {
+    if (isMockApi()) return URL.createObjectURL(file);
+
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await axiosClient.post<{ videoUrl: string }>('/api/admin/videos/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+    return response.data.videoUrl.startsWith('http')
+      ? response.data.videoUrl
+      : `${apiBaseUrl}${response.data.videoUrl}`;
+  },
+
   async createLesson(lesson: Omit<Lesson, 'comments'> & { topicId: string }): Promise<Lesson> {
     if (isMockApi()) {
       await mockDelay(300);

@@ -10,8 +10,8 @@ spring:
     active: postgres
   servlet:
     multipart:
-      max-file-size: 20MB
-      max-request-size: 20MB
+      max-file-size: ${MAX_UPLOAD_SIZE:500MB}
+      max-request-size: ${MAX_UPLOAD_SIZE:500MB}
 
 app:
   jwt:
@@ -23,4 +23,5 @@ app:
     enabled: false
   storage:
     documents-directory: ${DOCUMENT_STORAGE_PATH:uploads/documents}
+    videos-directory: ${VIDEO_STORAGE_PATH:uploads/videos}
 
