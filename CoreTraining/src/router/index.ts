@@ -46,6 +46,12 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   {
+    path: '/change-password',
+    name: 'ChangePassword',
+    component: () => import('../views/ChangePassword.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     redirect: '/'
   }
@@ -60,15 +66,22 @@ const router = createRouter({
 router.beforeEach((to, _, next) => {
   const token = localStorage.getItem('accessToken');
   const role = localStorage.getItem('userRole') || '';
+  const mustChangePassword = localStorage.getItem('mustChangePassword') === 'true';
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
   const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin);
 
   if (requiresAuth && !token) {
     next('/login');
+  } else if (token && mustChangePassword && to.name !== 'ChangePassword') {
+    next('/change-password');
   } else if (requiresAdmin && role !== 'ROLE_ADMIN') {
     next('/');
   } else if (to.name === 'Login' && token) {
-    next('/');
+    if (mustChangePassword) {
+      next('/change-password');
+    } else {
+      next('/');
+    }
   } else {
     next();
   }

@@ -62,7 +62,7 @@
       <!-- VIEW STATE 2: FORGOT PASSWORD REQUEST -->
       <form v-else-if="viewState === 'forgot'" @submit.prevent="handleForgotPassword" class="login-form animate-fade-in">
         <div class="form-instruction">
-          Nhập Tên tài khoản và Email công vụ của bạn. Hệ thống sẽ sinh mã xác thực OTP 6 số để bạn tiến hành đặt lại mật khẩu.
+          Nhập thông tin định danh chính xác (Tên tài khoản, Email công vụ và Mã nhân viên) để thiết lập lại mật khẩu.
         </div>
 
         <div class="form-group">
@@ -73,7 +73,7 @@
               type="text" 
               id="forgot-username" 
               v-model="forgotUsername" 
-              placeholder="Ví dụ: system" 
+              placeholder="Ví dụ: quantrh" 
               required
               :disabled="isLoading"
             />
@@ -88,67 +88,35 @@
               type="email" 
               id="forgot-email" 
               v-model="forgotEmail" 
-              placeholder="Ví dụ: system@bidv.com.vn" 
+              placeholder="Ví dụ: quantrh@bidv.com.vn" 
               required
               :disabled="isLoading"
             />
           </div>
         </div>
 
-        <button type="submit" class="btn btn-primary w-100 btn-submit" :disabled="isLoading">
-          <span v-if="isLoading" class="spinner"></span>
-          <span v-else>GỬI MÃ XÁC THỰC</span>
-        </button>
-
-        <div class="back-to-login">
-          <a href="#" @click.prevent="setViewState('login')">Quay lại Đăng nhập</a>
-        </div>
-      </form>
-
-      <!-- VIEW STATE 3: RESET PASSWORD WITH OTP -->
-      <form v-else-if="viewState === 'reset-otp'" @submit.prevent="handleResetPassword" class="login-form animate-fade-in">
-        <div class="form-instruction">
-          Mã OTP đã được gửi đến email (hoặc logs). Vui lòng nhập mã và mật khẩu mới để cập nhật.
-        </div>
-
         <div class="form-group">
-          <label for="reset-username">Tên tài khoản</label>
+          <label for="forgot-employee-id">Mã nhân viên (Employee ID)</label>
           <div class="input-wrapper">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="input-icon"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="input-icon"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             <input 
               type="text" 
-              id="reset-username" 
-              v-model="username" 
-              disabled
-              class="disabled-input"
-            />
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="reset-otp">Mã xác thực OTP (6 chữ số)</label>
-          <div class="input-wrapper">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="input-icon"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            <input 
-              type="text" 
-              id="reset-otp" 
-              v-model="otpCode" 
-              placeholder="Nhập 6 chữ số (hoặc 999999)" 
+              id="forgot-employee-id" 
+              v-model="forgotEmployeeId" 
+              placeholder="Ví dụ: BIDV001" 
               required
-              maxlength="6"
-              pattern="[0-9]*"
               :disabled="isLoading"
             />
           </div>
         </div>
 
         <div class="form-group">
-          <label for="new-password">Mật khẩu mới</label>
+          <label for="forgot-new-password">Mật khẩu mới</label>
           <div class="input-wrapper">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="input-icon"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             <input 
               type="password" 
-              id="new-password" 
+              id="forgot-new-password" 
               v-model="newPassword" 
               placeholder="Tối thiểu 6 ký tự" 
               required
@@ -158,12 +126,12 @@
         </div>
 
         <div class="form-group">
-          <label for="confirm-password">Xác nhận mật khẩu mới</label>
+          <label for="forgot-confirm-password">Xác nhận mật khẩu mới</label>
           <div class="input-wrapper">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="input-icon"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             <input 
               type="password" 
-              id="confirm-password" 
+              id="forgot-confirm-password" 
               v-model="confirmPassword" 
               placeholder="Nhập lại mật khẩu mới" 
               required
@@ -196,8 +164,8 @@ import { authApi } from '../api/authApi';
 
 const userStore = useUserStore();
 
-// Navigation states: 'login' | 'forgot' | 'reset-otp'
-const viewState = ref<'login' | 'forgot' | 'reset-otp'>('login');
+// Navigation states: 'login' | 'forgot'
+const viewState = ref<'login' | 'forgot'>('login');
 const errorMessage = ref('');
 const successMessage = ref('');
 const isLoading = ref(false);
@@ -209,20 +177,20 @@ const password = ref('');
 // Forgot password fields
 const forgotUsername = ref('');
 const forgotEmail = ref('');
+const forgotEmployeeId = ref('');
 
 // Reset fields
-const otpCode = ref('');
 const newPassword = ref('');
 const confirmPassword = ref('');
 
-const setViewState = (state: 'login' | 'forgot' | 'reset-otp') => {
+const setViewState = (state: 'login' | 'forgot') => {
   viewState.value = state;
   errorMessage.value = '';
   successMessage.value = '';
   password.value = '';
-  otpCode.value = '';
   newPassword.value = '';
   confirmPassword.value = '';
+  forgotEmployeeId.value = '';
 };
 
 const handleLogin = async () => {
@@ -243,27 +211,6 @@ const handleLogin = async () => {
 };
 
 const handleForgotPassword = async () => {
-  isLoading.value = true;
-  errorMessage.value = '';
-  successMessage.value = '';
-  try {
-    await authApi.sendResetOtp(forgotUsername.value, forgotEmail.value);
-    successMessage.value = 'Mã xác thực OTP đã được gửi thành công! Hãy kiểm tra Email (hoặc Docker logs).';
-    username.value = forgotUsername.value; // prefill username for the next screen
-    viewState.value = 'reset-otp';
-  } catch (err: any) {
-    if (err.response && err.response.data && err.response.data.message) {
-      errorMessage.value = err.response.data.message;
-    } else {
-      errorMessage.value = 'Tài khoản hoặc email không khớp trên hệ thống!';
-    }
-    console.error(err);
-  } finally {
-    isLoading.value = false;
-  }
-};
-
-const handleResetPassword = async () => {
   if (newPassword.value !== confirmPassword.value) {
     errorMessage.value = 'Mật khẩu xác nhận không khớp!';
     return;
@@ -272,19 +219,26 @@ const handleResetPassword = async () => {
     errorMessage.value = 'Mật khẩu mới phải có tối thiểu 6 ký tự!';
     return;
   }
-  
+
   isLoading.value = true;
   errorMessage.value = '';
   successMessage.value = '';
   try {
-    await authApi.resetPasswordWithOtp(username.value, otpCode.value, newPassword.value);
-    successMessage.value = 'Đổi mật khẩu thành công! Hãy dùng mật khẩu mới để đăng nhập.';
-    setViewState('login');
+    await authApi.resetPasswordDirect(
+      forgotUsername.value,
+      forgotEmail.value,
+      forgotEmployeeId.value,
+      newPassword.value
+    );
+    successMessage.value = 'Đặt lại mật khẩu thành công! Hãy dùng mật khẩu mới để đăng nhập.';
+    setTimeout(() => {
+      setViewState('login');
+    }, 1500);
   } catch (err: any) {
     if (err.response && err.response.data && err.response.data.message) {
       errorMessage.value = err.response.data.message;
     } else {
-      errorMessage.value = 'Đặt lại mật khẩu thất bại. Vui lòng thử lại!';
+      errorMessage.value = 'Thông tin xác thực không khớp trên hệ thống!';
     }
     console.error(err);
   } finally {

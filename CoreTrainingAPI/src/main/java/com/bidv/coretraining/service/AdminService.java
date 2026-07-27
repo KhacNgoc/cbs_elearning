@@ -29,5 +29,6 @@ public interface AdminService {
     void deleteUser(Long id);
     void importUsersFromExcel(org.springframework.web.multipart.MultipartFile file);
     byte[] generateExcelTemplate();
+    List<com.bidv.coretraining.entity.UserGroup> getAllUserGroups();
 }
 

@@ -46,4 +46,10 @@ public class AuthController {
         authService.resetPasswordWithOtp(resetRequest);
         return ResponseEntity.ok("Đặt lại mật khẩu thành công!");
     }
+
+    @PostMapping("/reset-password-direct")
+    public ResponseEntity<String> resetPasswordDirect(@Valid @RequestBody com.bidv.coretraining.dto.ResetPasswordDirectRequest resetRequest) {
+        authService.resetPasswordDirect(resetRequest);
+        return ResponseEntity.ok("Đặt lại mật khẩu thành công!");
+    }
 }

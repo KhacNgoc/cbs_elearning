@@ -62,6 +62,7 @@ public class AuthServiceImpl implements AuthService {
                 .role(user.getRole())
                 .username(user.getUsername())
                 .fullName(user.getFullName())
+                .mustChangePassword(user.isMustChangePassword())
                 .build();
     }
 
@@ -74,7 +75,7 @@ public class AuthServiceImpl implements AuthService {
 
         String groupId = registerRequest.getUserGroupId();
         if (groupId == null || groupId.trim().isEmpty()) {
-            groupId = "GDV"; // default group
+            groupId = "CIF"; // default group
         }
         UserGroup userGroup = userGroupRepository.findById(groupId)
                 .orElseThrow(() -> new BadRequestException("User group not found with id: " + registerRequest.getUserGroupId()));
@@ -154,6 +155,29 @@ public class AuthServiceImpl implements AuthService {
         userRepository.save(user);
 
         // Clean up OTP
+        passwordResetOtpRepository.deleteByUser(user);
+    }
+
+    @Override
+    @Transactional
+    public void resetPasswordDirect(com.bidv.coretraining.dto.ResetPasswordDirectRequest request) {
+        User user = userRepository.findByUsername(request.getUsername())
+                .orElseThrow(() -> new com.bidv.coretraining.exception.BadRequestException("Tên tài khoản hoặc email không hợp lệ!"));
+
+        if (user.getEmail() == null || !user.getEmail().equalsIgnoreCase(request.getEmail())) {
+            throw new com.bidv.coretraining.exception.BadRequestException("Tên tài khoản hoặc email không hợp lệ!");
+        }
+
+        if (user.getEmployeeId() == null || !user.getEmployeeId().equalsIgnoreCase(request.getEmployeeId())) {
+            throw new com.bidv.coretraining.exception.BadRequestException("Mã nhân viên không khớp!");
+        }
+
+        // Update password and reset mustChangePassword to false
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setMustChangePassword(false);
+        userRepository.save(user);
+
+        // Clean up any lingering OTPs
         passwordResetOtpRepository.deleteByUser(user);
     }
 }

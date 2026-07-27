@@ -7,7 +7,7 @@ import { courseApi } from '../api/courseApi';
 import router from '../router';
 
 export const useUserStore = defineStore('user', {
-  state: (): UserProgress & { isAuthenticated: boolean; role: string; username: string; fullName: string } => ({
+  state: (): UserProgress & { isAuthenticated: boolean; role: string; username: string; fullName: string; mustChangePassword: boolean } => ({
     completedLessons: [],
     quizScores: {},
     quizTotals: {},
@@ -20,7 +20,8 @@ export const useUserStore = defineStore('user', {
     isAuthenticated: !!localStorage.getItem('accessToken'),
     role: localStorage.getItem('userRole') || '',
     username: localStorage.getItem('username') || '',
-    fullName: localStorage.getItem('fullName') || ''
+    fullName: localStorage.getItem('fullName') || '',
+    mustChangePassword: localStorage.getItem('mustChangePassword') === 'true'
   }),
 
   getters: {
@@ -69,14 +70,20 @@ export const useUserStore = defineStore('user', {
         localStorage.setItem('userRole', res.role);
         localStorage.setItem('username', res.username);
         localStorage.setItem('fullName', res.fullName);
+        localStorage.setItem('mustChangePassword', res.mustChangePassword ? 'true' : 'false');
         
         this.isAuthenticated = true;
         this.role = res.role;
         this.username = res.username;
         this.fullName = res.fullName;
+        this.mustChangePassword = res.mustChangePassword;
         
         await this.fetchProgress();
-        router.push('/');
+        if (this.mustChangePassword) {
+          router.push('/change-password');
+        } else {
+          router.push('/');
+        }
       } catch (error) {
         console.error('Login failed:', error);
         throw error;
@@ -88,11 +95,13 @@ export const useUserStore = defineStore('user', {
       localStorage.removeItem('userRole');
       localStorage.removeItem('username');
       localStorage.removeItem('fullName');
+      localStorage.removeItem('mustChangePassword');
       
       this.isAuthenticated = false;
       this.role = '';
       this.username = '';
       this.fullName = '';
+      this.mustChangePassword = false;
       this.completedLessons = [];
       this.quizScores = {};
       this.quizTotals = {};
@@ -119,6 +128,8 @@ export const useUserStore = defineStore('user', {
         this.groupName = progress.groupName || '';
         this.mandatoryTopics = progress.mandatoryTopics || [];
         this.registeredTopics = progress.registeredTopics || [];
+        this.mustChangePassword = progress.mustChangePassword || false;
+        localStorage.setItem('mustChangePassword', this.mustChangePassword ? 'true' : 'false');
 
         // Save progress to localstorage for mock caching if active
         localStorage.setItem('mockCompletedLessons', JSON.stringify(this.completedLessons));

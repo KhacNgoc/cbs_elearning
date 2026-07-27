@@ -240,6 +240,7 @@ public class AdminServiceImpl implements AdminService {
                 .userGroup(userGroup)
                 .employeeId(userDto.getEmployeeId())
                 .email(userDto.getEmail())
+                .mustChangePassword(true)
                 .build();
         User saved = userRepository.save(user);
         return mapToUserDto(saved);
@@ -320,14 +321,21 @@ public class AdminServiceImpl implements AdminService {
                 // Resolve UserGroup
                 UserGroup userGroup = null;
                 if (!groupText.isEmpty()) {
-                    // Try GDV, QHKH, KSV mappings
-                    String groupCode = groupText.toUpperCase();
-                    if (groupCode.contains("GIAO DICH VIEN") || groupCode.contains("GDV") || groupCode.contains("GIAO DỊCH VIÊN")) {
-                        userGroup = userGroupRepository.findById("GDV").orElse(null);
-                    } else if (groupCode.contains("QUAN HE KHAC HANG") || groupCode.contains("QHKH") || groupCode.contains("QUAN HỆ KHÁCH HÀNG")) {
-                        userGroup = userGroupRepository.findById("QHKH").orElse(null);
-                    } else if (groupCode.contains("KIEM SOAT VIEN") || groupCode.contains("KSV") || groupCode.contains("KIỂM SOÁT VIÊN")) {
-                        userGroup = userGroupRepository.findById("KSV").orElse(null);
+                    String groupCode = groupText.toUpperCase().trim();
+                    userGroup = userGroupRepository.findById(groupCode).orElse(null);
+                    if (userGroup == null) {
+                        List<UserGroup> allGroups = userGroupRepository.findAll();
+                        for (UserGroup g : allGroups) {
+                            String gId = g.getId().toUpperCase();
+                            String gName = g.getName().toUpperCase();
+                            if (groupCode.equals(gId) || groupCode.equals(gName) || 
+                                gName.contains(groupCode) || groupCode.contains(gName) ||
+                                gId.replace("_", "").contains(groupCode.replace("_", "")) ||
+                                groupCode.replace("_", "").contains(gId.replace("_", ""))) {
+                                userGroup = g;
+                                break;
+                            }
+                        }
                     }
                 }
 
@@ -349,6 +357,7 @@ public class AdminServiceImpl implements AdminService {
                         .points(0)
                         .userGroup(userGroup)
                         .avatarColor(avatarColor)
+                        .mustChangePassword(true)
                         .build();
 
                 userRepository.save(newUser);
@@ -399,7 +408,7 @@ public class AdminServiceImpl implements AdminService {
 
             // Create headers
             Row headerRow = sheet.createRow(0);
-            String[] headers = {"STT", "Mã nhân viên (*)", "User email (*)", "Tên nhân viên (*)", "Nhóm (GDV / QHKH / KSV)"};
+            String[] headers = {"STT", "Mã nhân viên (*)", "User email (*)", "Tên nhân viên (*)", "Nhóm (Ví dụ: CIF, TIEN_VAY...)"};
             for (int i = 0; i < headers.length; i++) {
                 Cell cell = headerRow.createCell(i);
                 cell.setCellValue(headers[i]);
@@ -412,7 +421,7 @@ public class AdminServiceImpl implements AdminService {
             sampleRow.createCell(1).setCellValue("NV0982");
             sampleRow.createCell(2).setCellValue("nguyenvanan@bidv.com.vn");
             sampleRow.createCell(3).setCellValue("Nguyễn Văn An");
-            sampleRow.createCell(4).setCellValue("Giao dịch viên");
+            sampleRow.createCell(4).setCellValue("CIF");
 
             // Auto-size columns
             for (int i = 0; i < headers.length; i++) {
@@ -424,5 +433,10 @@ public class AdminServiceImpl implements AdminService {
         } catch (Exception e) {
             throw new RuntimeException("Lỗi khi tạo file Excel mẫu: " + e.getMessage(), e);
         }
+    }
+
+    @Override
+    public List<UserGroup> getAllUserGroups() {
+        return userGroupRepository.findAll();
     }
 }

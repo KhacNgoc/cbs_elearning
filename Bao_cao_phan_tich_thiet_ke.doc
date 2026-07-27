@@ -1,0 +1,535 @@
+<html xmlns:o='urn:schemas-microsoft-com:office:office' 
+      xmlns:w='urn:schemas-microsoft-com:office:word' 
+      xmlns='http://www.w3.org/TR/REC-html40'>
+<head>
+  <meta charset="utf-8">
+  <title>Báo cáo Phân tích Thiết kế Chi tiết - BIDV Core Training</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      line-height: 1.6;
+      color: #333;
+      padding: 20px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .header h1 {
+      color: #005b41;
+      font-size: 24pt;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    .header h2 {
+      color: #555;
+      font-size: 16pt;
+      font-weight: normal;
+      margin-top: 5px;
+    }
+    .section-title {
+      color: #005b41;
+      font-size: 16pt;
+      border-bottom: 2px solid #005b41;
+      padding-bottom: 5px;
+      margin-top: 40px;
+      font-weight: bold;
+    }
+    .subsection-title {
+      color: #111;
+      font-size: 13pt;
+      margin-top: 25px;
+      font-weight: bold;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+      margin-bottom: 15px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 10px;
+      text-align: left;
+      font-size: 10pt;
+    }
+    th {
+      background-color: #005b41;
+      color: white;
+      font-weight: bold;
+    }
+    pre {
+      background-color: #f8f9fa;
+      border: 1px solid #ddd;
+      padding: 15px;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 9.5pt;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      margin-top: 10px;
+      margin-bottom: 10px;
+    }
+    .badge {
+      background-color: #e0f2fe;
+      color: #0369a1;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 9pt;
+      font-family: monospace;
+    }
+    .list-item {
+      margin-bottom: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>BÁO CÁO PHÂN TÍCH VÀ THIẾT KẾ CHI TIẾT HỆ THỐNG</h1>
+    <h2>HỆ THỐNG ĐÀO TẠO NỘI BỘ - BIDV CORE TRAINING (WEBCSR)</h2>
+    <p><i>Tài liệu đặc tả kiến trúc phần mềm, cấu trúc dữ liệu và sơ đồ luồng nghiệp vụ</i></p>
+  </div>
+
+  <!-- SECTION 1 -->
+  <div class="section-title">1. Thiết kế Use-Case (Use-Case Diagram)</div>
+  <p>Hệ thống Đào tạo Nội bộ BIDV phục vụ hai nhóm đối tượng tác nhân (Actors) chính bao gồm <b>Học viên (Learner)</b> và <b>Quản trị viên (Admin)</b>.</p>
+  
+  <div class="subsection-title">1.1 Bảng đặc tả Use-Case</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 20%;">Tác nhân (Actor)</th>
+        <th style="width: 30%;">Chức năng (Use Case)</th>
+        <th>Mô tả chi tiết</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td rowspan="5"><b>Học viên (Learner)</b></td>
+        <td>Đăng nhập</td>
+        <td>Đăng nhập hệ thống bằng email công vụ và mật khẩu cá nhân.</td>
+      </tr>
+      <tr>
+        <td>Quên mật khẩu qua OTP</td>
+        <td>Yêu cầu khôi phục mật khẩu thông qua mã xác thực OTP gửi về email công vụ.</td>
+      </tr>
+      <tr>
+        <td>Xem bài giảng & Video</td>
+        <td>Xem các slide lý thuyết và video bài giảng hướng dẫn nghiệp vụ ngân hàng.</td>
+      </tr>
+      <tr>
+        <td>Làm bài thi trắc nghiệm</td>
+        <td>Làm bài thi để đánh giá năng lực theo từng chủ đề nghiệp vụ đã học.</td>
+      </tr>
+      <tr>
+        <td>Nhận Huy hiệu & Điểm số</td>
+        <td>Tích lũy điểm (PTS) và nhận các huy hiệu thi đua tương ứng với kết quả bài thi.</td>
+      </tr>
+      <tr>
+        <td rowspan="4"><b>Quản trị viên (Admin)</b></td>
+        <td>Đăng nhập quản trị</td>
+        <td>Đăng nhập tài khoản Admin để truy cập khu vực quản lý hệ thống.</td>
+      </tr>
+      <tr>
+        <td>Tải mẫu Excel mẫu</td>
+        <td>Tải tệp tin Excel mẫu chứa định dạng chuẩn để soạn danh sách học viên.</td>
+      </tr>
+      <tr>
+        <td>Nhập học viên từ Excel</td>
+        <td>Tải tệp Excel chứa hàng loạt thông tin học viên để tự động tạo tài khoản.</td>
+      </tr>
+      <tr>
+        <td>Quản lý học viên / bài giảng</td>
+        <td>Thực hiện các thao tác thêm, sửa, xóa học viên, bài học và câu hỏi trắc nghiệm.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="subsection-title">1.2 Hình ảnh sơ đồ Use-Case</div>
+  <div style="text-align: center; margin: 20px 0;">
+    <img src="use_case.png" alt="Use-case Diagram" style="max-width: 100%; border: 1px solid #ddd; padding: 5px; background: white;" />
+  </div>
+
+  <div class="subsection-title">1.3 Mã đặc tả sơ đồ Use-Case (Định dạng Mermaid)</div>
+  <pre>
+graph TD
+    classDef actor fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef uc fill:#bbf,stroke:#333,stroke-width:1px;
+
+    Learner((Học viên)):::actor
+    Admin((Quản trị viên)):::actor
+
+    subgraph "Hệ thống Đào tạo Nội bộ BIDV"
+        UC_Login["Đăng nhập"]:::uc
+        UC_ForgotPass["Quên mật khẩu qua OTP"]:::uc
+        UC_ViewCourse["Xem bài giảng & Video"]:::uc
+        UC_Quiz["Làm bài thi trắc nghiệm"]:::uc
+        UC_Badge["Nhận Huy hiệu & Điểm thưởng"]:::uc
+        
+        UC_ImportExcel["Nhập học viên từ Excel"]:::uc
+        UC_DownloadTemplate["Tải mẫu Excel mẫu"]:::uc
+        UC_ManageUser["Quản lý học viên CRUD"]:::uc
+        UC_ManageLesson["Quản lý bài giảng CRUD"]:::uc
+    end
+
+    Learner --> UC_Login
+    Learner --> UC_ForgotPass
+    Learner --> UC_ViewCourse
+    Learner --> UC_Quiz
+    Learner --> UC_Badge
+
+    Admin --> UC_Login
+    Admin --> UC_ImportExcel
+    Admin --> UC_DownloadTemplate
+    Admin --> UC_ManageUser
+    Admin --> UC_ManageLesson
+  </pre>
+
+  <!-- SECTION 2 -->
+  <div class="section-title">2. Thiết kế Lớp Thực thể dữ liệu (Class Diagram)</div>
+  <p>Cơ sở dữ liệu của hệ thống được ánh xạ từ các lớp đối tượng thực thể (JPA Entities) trong tầng mã nguồn Spring Boot.</p>
+
+  <div class="subsection-title">2.1 Các thuộc tính và quan hệ giữa các lớp</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 25%;">Lớp đối tượng (Class)</th>
+        <th style="width: 35%;">Các thuộc tính chính (Fields)</th>
+        <th>Mối quan hệ (Relationships)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>User</b> (Người dùng)</td>
+        <td>id, username, password, fullName, employeeId, email, role, points, avatarColor</td>
+        <td>Many-to-One với <b>UserGroup</b><br>Many-to-Many với <b>Topic</b> (registeredTopics)<br>Many-to-Many với <b>Lesson</b> (completedLessons)</td>
+      </tr>
+      <tr>
+        <td><b>UserGroup</b> (Nhóm nghiệp vụ)</td>
+        <td>id (e.g. CIF, TIEN_VAY), name (e.g. Nhóm nghiệp vụ CIF)</td>
+        <td>One-to-Many với <b>User</b><br>Many-to-Many với <b>Topic</b> (mandatoryTopics)</td>
+      </tr>
+      <tr>
+        <td><b>Topic</b> (Chủ đề học)</td>
+        <td>id (e.g. CIF, DEP, LN), name, iconName</td>
+        <td>One-to-Many với <b>Lesson</b></td>
+      </tr>
+      <tr>
+        <td><b>Lesson</b> (Bài học chi tiết)</td>
+        <td>id, title, hint, videoUrl, documentSlides (danh sách slide)</td>
+        <td>Many-to-One với <b>Topic</b><br>One-to-Many với <b>ProcedureSection</b> (các bước thực hiện)</td>
+      </tr>
+      <tr>
+        <td><b>PasswordResetOtp</b> (Mã OTP)</td>
+        <td>id, username, email, otpCode, expiryTime</td>
+        <td>Lớp lưu trữ tạm thời dùng cho quy trình quên mật khẩu.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="subsection-title">2.2 Hình ảnh sơ đồ lớp</div>
+  <div style="text-align: center; margin: 20px 0;">
+    <img src="class_diagram.png" alt="Class Diagram" style="max-width: 100%; border: 1px solid #ddd; padding: 5px; background: white;" />
+  </div>
+
+  <div class="subsection-title">2.3 Mã đặc tả sơ đồ lớp (Định dạng Mermaid)</div>
+  <pre>
+classDiagram
+    direction TB
+    class User {
+        +Long id
+        +String username
+        +String password
+        +String fullName
+        +String avatarColor
+        +String employeeId
+        +String email
+        +String role
+        +Integer points
+        +UserGroup userGroup
+        +Set~Topic~ registeredTopics
+        +Set~Lesson~ completedLessons
+    }
+    class UserGroup {
+        +String id
+        +String name
+        +Set~Topic~ mandatoryTopics
+    }
+    class Topic {
+        +String id
+        +String name
+        +String iconName
+    }
+    class Lesson {
+        +String id
+        +String title
+        +String hint
+        +String videoUrl
+        +Topic topic
+        +List~String~ documentSlides
+        +List~ProcedureSection~ procedureSteps
+    }
+    class PasswordResetOtp {
+        +Long id
+        +String username
+        +String email
+        +String otpCode
+        +LocalDateTime expiryTime
+    }
+
+    User "0..*" --> "0..1" UserGroup : belongs to
+    UserGroup "0..*" --> "0..*" Topic : has mandatory
+    User "0..*" --> "0..*" Topic : registers optional
+    User "0..*" --> "0..*" Lesson : completes
+    Lesson "0..*" --> "1" Topic : belongs to
+  </pre>
+
+  <!-- SECTION 3 -->
+  <div class="section-title">3. Sơ đồ Kiến trúc Thành phần (Component Diagram)</div>
+  <p>Kiến trúc hệ thống tuân theo mô hình 3-tier kết hợp giữa Single Page Application (Client) và Microservices/REST API (Server).</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 30%;">Phân vùng kiến trúc</th>
+        <th>Thành phần chính và nhiệm vụ</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>Client (Frontend - Vue.js 3)</b></td>
+        <td>
+          - <b>Vue Views/Components</b>: Màn hình Dashboard, LessonDetail, AdminPortal, Login.<br>
+          - <b>Pinia Stores</b>: `userStore.ts` (quản lý trạng thái đăng nhập, phân quyền), `courseStore.ts`.<br>
+          - <b>API Clients</b>: axiosClient cấu hình interceptor đính kèm JWT Token, gọi REST API.
+        </td>
+      </tr>
+      <tr>
+        <td><b>Server (Backend - Spring Boot)</b></td>
+        <td>
+          - <b>Security Filters</b>: `JwtAuthenticationFilter` phân tích Header Auth và thiết lập Security Context.<br>
+          - <b>Controllers</b>: `AuthController` (xác thực), `AdminController` (quản trị, excel).<br>
+          - <b>Services</b>: `AuthServiceImpl`, `AdminServiceImpl` xử lý nghiệp vụ đọc/ghi.<br>
+          - <b>Repositories</b>: Spring Data JPA giao tiếp với database.
+        </td>
+      </tr>
+      <tr>
+        <td><b>Database</b></td>
+        <td>Cơ sở dữ liệu quan hệ PostgreSQL lưu trữ toàn bộ dữ liệu cấu trúc thực thể.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="subsection-title">3.1 Hình ảnh sơ đồ thành phần</div>
+  <div style="text-align: center; margin: 20px 0;">
+    <img src="component.png" alt="Component Diagram" style="max-width: 100%; border: 1px solid #ddd; padding: 5px; background: white;" />
+  </div>
+
+  <div class="subsection-title">3.2 Mã đặc tả sơ đồ thành phần (Định dạng Mermaid)</div>
+  <pre>
+graph LR
+    subgraph "Trình duyệt (Client - Frontend)"
+        V_UI["Vue.js Components / Views"]
+        V_Store["Pinia State Store"]
+        V_Api["API Clients"]
+        V_UI --> V_Store
+        V_Store --> V_Api
+    end
+
+    subgraph "Máy chủ (Server - Backend REST API)"
+        B_Controller["REST Controllers"]
+        B_Filter["JwtAuthenticationFilter"]
+        B_Service["Service Implementations"]
+        B_Repo["Spring Data JPA Repositories"]
+        
+        B_Filter --> B_Controller
+        B_Controller --> B_Service
+        B_Service --> B_Repo
+    end
+
+    subgraph "Cơ sở dữ liệu (Database)"
+        DB_Postgres[("PostgreSQL Database")]
+    end
+
+    V_Api --> B_Filter
+    B_Repo --> DB_Postgres
+  </pre>
+
+  <!-- SECTION 4 -->
+  <div class="section-title">4. Thiết kế sơ đồ Hoạt động (Activity Diagram)</div>
+
+  <div class="subsection-title">4.1 Sơ đồ luồng xử lý Nhập học viên hàng loạt từ Excel</div>
+  <p>Luồng xử lý tuần tự khi Quản trị viên tải file danh sách nhân viên lên hệ thống:</p>
+  <div style="text-align: center; margin: 20px 0;">
+    <img src="activity_import.png" alt="Activity Diagram - Excel Import" style="max-width: 100%; border: 1px solid #ddd; padding: 5px; background: white;" />
+  </div>
+
+  <pre>
+stateDiagram-v2
+    [*] --> UploadExcel : Admin click "Nhập từ Excel"
+    UploadExcel --> ParseFile : Backend đọc sheet 0 (Apache POI)
+    ParseFile --> RowLoop : Duyệt từng hàng dữ liệu (bỏ qua dòng đầu)
+    
+    state RowLoop {
+        [*] --> ReadFields : Đọc Mã NV, Email, Họ tên, Tên Nhóm
+        ReadFields --> ValidateFields : Kiểm tra hợp lệ
+        ReadFields --> MatchGroup : So khớp động Nhóm
+        MatchGroup --> HashPassword : Tạo mật khẩu & Mã hóa BCrypt
+        HashPassword --> CheckExist : Kiểm tra trùng lặp
+        CheckExist --> CreateUser : Chưa tồn tại -> Tạo & Lưu
+        CheckExist --> SkipRow : Đã tồn tại -> Bỏ qua
+        CreateUser --> [*]
+        SkipRow --> [*]
+    }
+    
+    RowLoop --> ReturnSummary : Hoàn thành duyệt
+    ReturnSummary --> [*] : Trả về kết quả
+  </pre>
+
+  <div class="subsection-title">4.2 Sơ đồ luồng xử lý Quên mật khẩu qua mã xác thực OTP</div>
+  <p>Luồng kiểm tra và thay đổi mật khẩu bằng email khôi phục:</p>
+  <div style="text-align: center; margin: 20px 0;">
+    <img src="activity_otp.png" alt="Activity Diagram - OTP Forget Password" style="max-width: 100%; border: 1px solid #ddd; padding: 5px; background: white;" />
+  </div>
+
+  <pre>
+stateDiagram-v2
+    [*] --> RequestOTP : Nhập Username + Email công vụ
+    RequestOTP --> CheckUserEmail : Backend truy vấn khớp
+    CheckUserEmail --> GenerateOTP : Khớp -> Sinh mã OTP
+    CheckUserEmail --> ReturnError : Không khớp -> Báo lỗi
+    GenerateOTP --> SaveOTP : Lưu OTP vào DB
+    SaveOTP --> SendLog : In mã OTP ra Console log
+    SendLog --> EnterOTPForm : Chuyển giao diện nhập OTP
+    EnterOTPForm --> VerifyOTP : Nhập OTP + Mật khẩu mới -> Gửi API reset
+    VerifyOTP --> CheckValidity : Kiểm tra OTP
+    CheckValidity --> UpdatePassword : Hợp lệ -> Mã hóa & Lưu mật khẩu mới
+    CheckValidity --> InvalidOTP : Không hợp lệ -> Báo lỗi
+    UpdatePassword --> [*] : Thành công
+    ReturnError --> [*]
+    InvalidOTP --> EnterOTPForm
+  </pre>
+
+  <!-- SECTION 5 -->
+  <div class="section-title">5. Đặc tả Chi tiết Đầu vào và Đầu ra của các Hàm nghiệp vụ chính</div>
+
+  <!-- HÀM 1 -->
+  <div class="subsection-title">5.1 Hàm nhập học viên từ file Excel (importUsersFromExcel)</div>
+  <ul>
+    <li class="list-item"><b>Tên phương thức:</b> <span class="badge">importUsersFromExcel(MultipartFile file)</span></li>
+    <li class="list-item"><b>Lớp triển khai:</b> `AdminServiceImpl.java`</li>
+    <li class="list-item"><b>Nhiệm vụ:</b> Phân tích tệp tin nhị phân Excel truyền lên, trích xuất dữ liệu dòng, băm mật khẩu và lưu người dùng mới.</li>
+    <li class="list-item"><b>Dữ liệu đầu vào (Input):</b> Tệp tin Multipart từ HTTP request. Cấu trúc dữ liệu bên trong tệp mẫu Excel:</li>
+  </ul>
+  
+  <table>
+    <thead>
+      <tr>
+        <th>Cột A (STT)</th>
+        <th>Cột B (Mã nhân viên)</th>
+        <th>Cột C (User email)</th>
+        <th>Cột D (Tên nhân viên)</th>
+        <th>Cột E (Nhóm nghiệp vụ)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td>NV0982</td>
+        <td>nguyenvanan@bidv.com.vn</td>
+        <td>Nguyễn Văn An</td>
+        <td>CIF</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>NV1234</td>
+        <td>tranbinh@bidv.com.vn</td>
+        <td>Trần Thị Bình</td>
+        <td>TIEN_VAY</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <ul>
+    <li class="list-item"><b>Dữ liệu đầu ra (Output):</b> Không trả về dữ liệu (Kiểu `void`). Bắn lỗi `RuntimeException` nếu tệp sai định dạng.</li>
+  </ul>
+
+  <!-- HÀM 2 -->
+  <div class="subsection-title">5.2 Hàm sinh File Excel mẫu (generateExcelTemplate)</div>
+  <ul>
+    <li class="list-item"><b>Tên phương thức:</b> <span class="badge">generateExcelTemplate()</span></li>
+    <li class="list-item"><b>Lớp triển khai:</b> `AdminServiceImpl.java`</li>
+    <li class="list-item"><b>Nhiệm vụ:</b> Tạo động tệp Excel mẫu `.xlsx` chứa hàng tiêu đề cột được định dạng chuyên nghiệp để người dùng tải về.</li>
+    <li class="list-item"><b>Dữ liệu đầu vào (Input):</b> Không có.</li>
+    <li class="list-item"><b>Dữ liệu đầu ra (Output):</b> Mảng nhị phân bytes của tệp Excel (`byte[]`). Trình duyệt ở phía client sẽ nhận luồng byte này và kích hoạt tải về tệp tin `user_import_template.xlsx`.</li>
+  </ul>
+
+  <!-- HÀM 3 -->
+  <div class="subsection-title">5.3 Hàm tạo mã OTP Quên mật khẩu (sendPasswordResetOtp)</div>
+  <ul>
+    <li class="list-item"><b>Tên phương thức:</b> <span class="badge">sendPasswordResetOtp(ForgotPasswordRequest request)</span></li>
+    <li class="list-item"><b>Lớp triển khai:</b> `AuthServiceImpl.java`</li>
+    <li class="list-item"><b>Dữ liệu đầu vào (Input JSON):</b></li>
+  </ul>
+  <pre>
+{
+  "username": "quantrh",
+  "email": "quantrh@bidv.com.vn"
+}
+  </pre>
+  <ul>
+    <li class="list-item"><b>Dữ liệu đầu ra (Output HTTP Response):</b> Trả về mã trạng thái 200 OK kèm thông điệp văn bản:</li>
+  </ul>
+  <pre>
+"Mã xác thực OTP đã được gửi!"
+  </pre>
+
+  <!-- HÀM 4 -->
+  <div class="subsection-title">5.4 Hàm đặt lại mật khẩu bằng mã OTP (resetPasswordWithOtp)</div>
+  <ul>
+    <li class="list-item"><b>Tên phương thức:</b> <span class="badge">resetPasswordWithOtp(ResetPasswordOtpRequest request)</span></li>
+    <li class="list-item"><b>Lớp triển khai:</b> `AuthServiceImpl.java`</li>
+    <li class="list-item"><b>Dữ liệu đầu vào (Input JSON):</b></li>
+  </ul>
+  <pre>
+{
+  "username": "quantrh",
+  "otpCode": "999999",
+  "newPassword": "Bidv@newpassword123"
+}
+  </pre>
+  <ul>
+    <li class="list-item"><b>Dữ liệu đầu ra (Output HTTP Response):</b> Trả về mã trạng thái 200 OK kèm thông điệp văn bản thành công:</li>
+  </ul>
+  <pre>
+"Đặt lại mật khẩu thành công!"
+  </pre>
+
+  <!-- HÀM 5 -->
+  <div class="subsection-title">5.5 Hàm lấy toàn bộ nhóm nghiệp vụ động (getAllUserGroups)</div>
+  <ul>
+    <li class="list-item"><b>Tên phương thức:</b> <span class="badge">getAllUserGroups()</span></li>
+    <li class="list-item"><b>Lớp triển khai:</b> `AdminController.java` & `AdminServiceImpl.java`</li>
+    <li class="list-item"><b>Nhiệm vụ:</b> Trả về danh sách tất cả các nhóm nghiệp vụ đang lưu trữ trong Database nhằm hiển thị lên Dropdown ở màn hình tạo học viên.</li>
+    <li class="list-item"><b>Dữ liệu đầu vào (Input):</b> Không có.</li>
+    <li class="list-item"><b>Dữ liệu đầu ra (Output JSON Response):</b></li>
+  </ul>
+  <pre>
+[
+  {
+    "id": "CIF",
+    "name": "Nhóm nghiệp vụ CIF"
+  },
+  {
+    "id": "TIEN_VAY",
+    "name": "Nhóm nghiệp vụ Tiền vay"
+  },
+  {
+    "id": "CHUYEN_TIEN",
+    "name": "Nhóm nghiệp vụ Chuyển tiền"
+  }
+]
+  </pre>
+
+</body>
+</html>

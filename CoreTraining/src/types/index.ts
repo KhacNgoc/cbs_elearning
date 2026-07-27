@@ -68,6 +68,7 @@ export interface UserProgress {
   groupName?: string;
   mandatoryTopics: string[];
   registeredTopics: string[];
+  mustChangePassword?: boolean;
 }
 
 export interface LeaderboardUser {

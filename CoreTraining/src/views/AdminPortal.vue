@@ -260,7 +260,7 @@
                   <td>{{ u.email || '-' }}</td>
                   <td>
                     <span v-if="u.userGroupId" class="code-badge">
-                      {{ u.userGroupId === 'GDV' ? 'Giao dịch viên' : u.userGroupId === 'QHKH' ? 'Quan hệ khách hàng' : 'Kiểm soát viên' }}
+                      {{ getGroupName(u.userGroupId) }}
                     </span>
                     <span v-else>-</span>
                   </td>
@@ -516,17 +516,8 @@
             <label>Nhóm nghiệp vụ bắt buộc</label>
             <select v-model="userForm.userGroupId" class="form-control">
               <option value="">Không phân nhóm</option>
-              <option value="GDV">Giao dịch viên (GDV)</option>
-              <option value="QHKH">Quan hệ khách hàng (QHKH)</option>
-              <option value="KSV">Kiểm soát viên (KSV)</option>
+              <option v-for="g in userGroups" :key="g.id" :value="g.id">{{ g.name }} ({{ g.id }})</option>
             </select>
-          </div>
-          <div class="form-group">
-            <label>Màu đại diện Avatar Color (Hex code)</label>
-            <div class="color-picker-row">
-              <input v-model="userForm.avatarColor" type="color" class="color-picker" />
-              <input v-model="userForm.avatarColor" type="text" class="form-control color-text" required />
-            </div>
           </div>
           <div class="form-group">
             <label>Vai trò hệ thống</label>
@@ -534,16 +525,6 @@
               <option value="ROLE_USER">Học viên (ROLE_USER)</option>
               <option value="ROLE_ADMIN">Quản trị viên (ROLE_ADMIN)</option>
             </select>
-          </div>
-          <div class="form-group">
-            <label>Điểm số tích lũy (PTS)</label>
-            <input 
-              v-model.number="userForm.points" 
-              type="number" 
-              min="0" 
-              class="form-control" 
-              required 
-            />
           </div>
           <div class="modal-buttons">
             <button type="button" class="btn btn-secondary" @click="userModal.show = false">Hủy</button>
@@ -763,6 +744,7 @@ const activeSessions = ref([
 // Reactive states
 const loading = ref(false);
 const users = ref<AdminUser[]>([]);
+const userGroups = ref<{ id: string, name: string }[]>([]);
 const questions = ref<Question[]>([]);
 const selectedTopicId = ref('');
 const userSearchQuery = ref('');
@@ -988,6 +970,11 @@ const topicScoreChartOptions = {
   }
 };
 
+const getGroupName = (id: string) => {
+  const g = userGroups.value.find(item => item.id === id);
+  return g ? g.name : id;
+};
+
 // ==========================================
 // LOAD ALL DATA
 // ==========================================
@@ -996,6 +983,7 @@ const loadAllData = async () => {
   try {
     await courseStore.fetchTopics();
     users.value = await adminApi.getAllUsers();
+    userGroups.value = await adminApi.getAllUserGroups();
     
     const questionsList: Question[] = [];
     for (const topic of courseStore.topics) {
@@ -1818,9 +1806,11 @@ const handleDeleteQuestion = async (id: number) => {
   background-color: rgba(15, 23, 42, 0.4);
   backdrop-filter: blur(4px);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   z-index: 1000;
+  overflow-y: auto;
+  padding: 2rem 1rem;
 }
 
 .modal-content {
@@ -1830,6 +1820,18 @@ const handleDeleteQuestion = async (id: number) => {
   background: white;
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
+  margin: auto 0; /* center vertically if screen is tall enough */
+}
+
+.modal-overlay::-webkit-scrollbar {
+  width: 6px;
+}
+.modal-overlay::-webkit-scrollbar-track {
+  background: transparent;
+}
+.modal-overlay::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.5);
+  border-radius: 3px;
 }
 
 .modal-large {

@@ -24,13 +24,16 @@ public class UserServiceImpl implements UserService {
     private final LessonRepository lessonRepository;
     private final com.bidv.coretraining.repository.TopicRepository topicRepository;
     private final UserMapper userMapper;
+    private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
     public UserServiceImpl(UserRepository userRepository, LessonRepository lessonRepository,
-                           com.bidv.coretraining.repository.TopicRepository topicRepository, UserMapper userMapper) {
+                           com.bidv.coretraining.repository.TopicRepository topicRepository, UserMapper userMapper,
+                           org.springframework.security.crypto.password.PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.lessonRepository = lessonRepository;
         this.topicRepository = topicRepository;
         this.userMapper = userMapper;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -114,6 +117,17 @@ public class UserServiceImpl implements UserService {
                 .groupName(groupName)
                 .mandatoryTopics(mandatoryTopics)
                 .registeredTopics(registeredTopics)
+                .mustChangePassword(user.isMustChangePassword())
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public void changePassword(String username, String newPassword) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
+        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setMustChangePassword(false);
+        userRepository.save(user);
     }
 }

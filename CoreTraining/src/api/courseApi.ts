@@ -81,9 +81,9 @@ export const courseApi = {
         quizTotals: JSON.parse(localStorage.getItem('mockQuizTotals') || '{}'),
         points: mockDbPoints,
         unlockedBadges: JSON.parse(localStorage.getItem('mockUnlockedBadges') || '[]'),
-        groupId: 'GDV',
-        groupName: 'Giao dịch viên',
-        mandatoryTopics: ['CIF', 'TIEN_GUI', 'TELLER', 'THE'],
+        groupId: 'CIF',
+        groupName: 'Nhóm nghiệp vụ CIF',
+        mandatoryTopics: ['CIF'],
         registeredTopics: mockRegistered
       };
     }
@@ -115,6 +115,15 @@ export const courseApi = {
       return this.getMyProgress();
     }
     const response = await axiosClient.post<UserProgress>(`/api/users/me/register-topic/${topicId}`);
+    return response.data;
+  },
+
+  async changePassword(newPassword: string): Promise<string> {
+    if (isMockApi()) {
+      await mockDelay(300);
+      return 'Đổi mật khẩu thành công!';
+    }
+    const response = await axiosClient.post<string>('/api/users/me/change-password', { newPassword });
     return response.data;
   }
 };

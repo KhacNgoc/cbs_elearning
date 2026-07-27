@@ -52,15 +52,67 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) throws Exception {
+        // Ensure new topic-based groups exist in the database
+        if (!userGroupRepository.existsById("CIF")) {
+            // Find topics in database or create them if not present
+            Topic cif = topicRepository.findById("CIF").orElseGet(() -> topicRepository.save(Topic.builder().id("CIF").name("CIF").iconName("Users").build()));
+            Topic tienVay = topicRepository.findById("TIEN_VAY").orElseGet(() -> topicRepository.save(Topic.builder().id("TIEN_VAY").name("TIỀN VAY").iconName("Coins").build()));
+            Topic chuyenTien = topicRepository.findById("CHUYEN_TIEN").orElseGet(() -> topicRepository.save(Topic.builder().id("CHUYEN_TIEN").name("CHUYỂN TIỀN").iconName("ArrowLeftRight").build()));
+            Topic tienGui = topicRepository.findById("TIEN_GUI").orElseGet(() -> topicRepository.save(Topic.builder().id("TIEN_GUI").name("TIỀN GỬI").iconName("PiggyBank").build()));
+            Topic teller = topicRepository.findById("TELLER").orElseGet(() -> topicRepository.save(Topic.builder().id("TELLER").name("TELLER").iconName("Wallet").build()));
+            Topic gl = topicRepository.findById("GL").orElseGet(() -> topicRepository.save(Topic.builder().id("GL").name("GL").iconName("BookOpen").build()));
+            Topic the = topicRepository.findById("THE").orElseGet(() -> topicRepository.save(Topic.builder().id("THE").name("THẺ").iconName("CreditCard").build()));
+
+            // Transition users away from old GDV, QHKH, KSV groups
+            userRepository.findAll().forEach(u -> {
+                if (u.getUserGroup() != null) {
+                    String oldGroupId = u.getUserGroup().getId();
+                    if ("GDV".equals(oldGroupId) || "QHKH".equals(oldGroupId) || "KSV".equals(oldGroupId)) {
+                        u.setUserGroup(null);
+                        userRepository.save(u);
+                    }
+                }
+            });
+
+            // Delete old groups
+            if (userGroupRepository.existsById("GDV")) userGroupRepository.deleteById("GDV");
+            if (userGroupRepository.existsById("QHKH")) userGroupRepository.deleteById("QHKH");
+            if (userGroupRepository.existsById("KSV")) userGroupRepository.deleteById("KSV");
+
+            // Seed new groups
+            UserGroup cifGroup = userGroupRepository.save(UserGroup.builder().id("CIF").name("Nhóm nghiệp vụ CIF").mandatoryTopics(new HashSet<>(Arrays.asList(cif))).build());
+            UserGroup tienVayGroup = userGroupRepository.save(UserGroup.builder().id("TIEN_VAY").name("Nhóm nghiệp vụ Tiền vay").mandatoryTopics(new HashSet<>(Arrays.asList(tienVay))).build());
+            UserGroup chuyenTienGroup = userGroupRepository.save(UserGroup.builder().id("CHUYEN_TIEN").name("Nhóm nghiệp vụ Chuyển tiền").mandatoryTopics(new HashSet<>(Arrays.asList(chuyenTien))).build());
+            UserGroup tienGuiGroup = userGroupRepository.save(UserGroup.builder().id("TIEN_GUI").name("Nhóm nghiệp vụ Tiền gửi").mandatoryTopics(new HashSet<>(Arrays.asList(tienGui))).build());
+            UserGroup tellerGroup = userGroupRepository.save(UserGroup.builder().id("TELLER").name("Nhóm nghiệp vụ Teller").mandatoryTopics(new HashSet<>(Arrays.asList(teller))).build());
+            UserGroup glGroup = userGroupRepository.save(UserGroup.builder().id("GL").name("Nhóm nghiệp vụ GL").mandatoryTopics(new HashSet<>(Arrays.asList(gl))).build());
+            UserGroup theGroup = userGroupRepository.save(UserGroup.builder().id("THE").name("Nhóm nghiệp vụ Thẻ").mandatoryTopics(new HashSet<>(Arrays.asList(the))).build());
+
+            // Re-assign default users to new groups
+            userRepository.findByUsername("system").ifPresent(u -> { u.setUserGroup(glGroup); userRepository.save(u); });
+            userRepository.findByUsername("quantrh").ifPresent(u -> { u.setUserGroup(cifGroup); userRepository.save(u); });
+            userRepository.findByUsername("nguyenvana").ifPresent(u -> { u.setUserGroup(cifGroup); userRepository.save(u); });
+            userRepository.findByUsername("tranb").ifPresent(u -> { u.setUserGroup(tienVayGroup); userRepository.save(u); });
+            userRepository.findByUsername("lephuc").ifPresent(u -> { u.setUserGroup(chuyenTienGroup); userRepository.save(u); });
+            userRepository.findByUsername("phamduc").ifPresent(u -> { u.setUserGroup(tienGuiGroup); userRepository.save(u); });
+            userRepository.findByUsername("hoangyen").ifPresent(u -> { u.setUserGroup(tellerGroup); userRepository.save(u); });
+            userRepository.findByUsername("vuongminh").ifPresent(u -> { u.setUserGroup(theGroup); userRepository.save(u); });
+        }
+
         System.out.println("========== ALL USERS IN DB ON STARTUP ==========");
         userRepository.findAll().forEach(u -> {
             System.out.println("User: " + u.getUsername() + ", Role: " + u.getRole() + ", Email: " + u.getEmail());
         });
         System.out.println("================================================");
 
-        // Ensure system user is seeded even if database already has data from previous runs
+        System.out.println("========== ALL USER GROUPS IN DB ==========");
+        userGroupRepository.findAll().forEach(g -> {
+            System.out.println("Group ID: " + g.getId() + ", Name: " + g.getName());
+        });
+        System.out.println("===========================================");
+
         if (!userRepository.existsByUsername("system")) {
-            UserGroup ksvGroup = userGroupRepository.findById("KSV").orElse(null);
+            UserGroup systemGroup = userGroupRepository.findById("GL").orElse(null);
             userRepository.save(User.builder()
                     .username("system")
                     .password(passwordEncoder.encode("123456"))
@@ -70,7 +122,8 @@ public class DataInitializer implements CommandLineRunner {
                     .email("system@bidv.com.vn")
                     .role("ROLE_ADMIN")
                     .points(2000)
-                    .userGroup(ksvGroup)
+                    .userGroup(systemGroup)
+                    .mustChangePassword(false)
                     .build());
         } else {
             // Force system user to ADMIN and reset password to 123456 for local testing
@@ -79,25 +132,32 @@ public class DataInitializer implements CommandLineRunner {
                 user.setEmployeeId("SYSTEM");
                 user.setRole("ROLE_ADMIN");
                 user.setPassword(passwordEncoder.encode("123456"));
+                user.setMustChangePassword(false);
+                if (user.getUserGroup() == null) {
+                    UserGroup systemGroup = userGroupRepository.findById("GL").orElse(null);
+                    user.setUserGroup(systemGroup);
+                }
                 userRepository.save(user);
             });
         }
 
         // Repair other default users' emails in case they exist from old runs
         userRepository.findByUsername("admin").ifPresent(user -> {
+            user.setMustChangePassword(false);
             if (user.getEmail() == null || user.getEmail().trim().isEmpty()) {
                 user.setEmail("admin@bidv.com.vn");
                 user.setEmployeeId("ADM001");
-                userRepository.save(user);
             }
+            userRepository.save(user);
         });
 
         userRepository.findByUsername("quantrh").ifPresent(user -> {
+            user.setMustChangePassword(false);
             if (user.getEmail() == null || user.getEmail().trim().isEmpty()) {
                 user.setEmail("quantrh@bidv.com.vn");
                 user.setEmployeeId("QTR001");
-                userRepository.save(user);
             }
+            userRepository.save(user);
         });
 
         if (topicRepository.count() > 0) {
@@ -114,23 +174,13 @@ public class DataInitializer implements CommandLineRunner {
         Topic the = topicRepository.save(Topic.builder().id("THE").name("THẺ").iconName("CreditCard").build());
 
         // 1b. Create User Groups
-        UserGroup gdvGroup = userGroupRepository.save(UserGroup.builder()
-                .id("GDV")
-                .name("Giao dịch viên")
-                .mandatoryTopics(new HashSet<>(Arrays.asList(cif, tienGui, teller, the)))
-                .build());
-
-        UserGroup qkhGroup = userGroupRepository.save(UserGroup.builder()
-                .id("QHKH")
-                .name("Quan hệ khách hàng")
-                .mandatoryTopics(new HashSet<>(Arrays.asList(cif, tienVay, chuyenTien)))
-                .build());
-
-        UserGroup ksvGroup = userGroupRepository.save(UserGroup.builder()
-                .id("KSV")
-                .name("Kiểm soát viên")
-                .mandatoryTopics(new HashSet<>(Arrays.asList(cif, gl)))
-                .build());
+        UserGroup cifGroup = userGroupRepository.save(UserGroup.builder().id("CIF").name("Nhóm nghiệp vụ CIF").mandatoryTopics(new HashSet<>(Arrays.asList(cif))).build());
+        UserGroup tienVayGroup = userGroupRepository.save(UserGroup.builder().id("TIEN_VAY").name("Nhóm nghiệp vụ Tiền vay").mandatoryTopics(new HashSet<>(Arrays.asList(tienVay))).build());
+        UserGroup chuyenTienGroup = userGroupRepository.save(UserGroup.builder().id("CHUYEN_TIEN").name("Nhóm nghiệp vụ Chuyển tiền").mandatoryTopics(new HashSet<>(Arrays.asList(chuyenTien))).build());
+        UserGroup tienGuiGroup = userGroupRepository.save(UserGroup.builder().id("TIEN_GUI").name("Nhóm nghiệp vụ Tiền gửi").mandatoryTopics(new HashSet<>(Arrays.asList(tienGui))).build());
+        UserGroup tellerGroup = userGroupRepository.save(UserGroup.builder().id("TELLER").name("Nhóm nghiệp vụ Teller").mandatoryTopics(new HashSet<>(Arrays.asList(teller))).build());
+        UserGroup glGroup = userGroupRepository.save(UserGroup.builder().id("GL").name("Nhóm nghiệp vụ GL").mandatoryTopics(new HashSet<>(Arrays.asList(gl))).build());
+        UserGroup theGroup = userGroupRepository.save(UserGroup.builder().id("THE").name("Nhóm nghiệp vụ Thẻ").mandatoryTopics(new HashSet<>(Arrays.asList(the))).build());
 
         // 2. Create Lessons for CIF
         Lesson cif01 = Lesson.builder()
@@ -549,7 +599,7 @@ public class DataInitializer implements CommandLineRunner {
                 .email("system@bidv.com.vn")
                 .role("ROLE_USER")
                 .points(2000)
-                .userGroup(ksvGroup)
+                .userGroup(glGroup)
                 .build());
 
         User quantrh = userRepository.save(User.builder()
@@ -561,7 +611,7 @@ public class DataInitializer implements CommandLineRunner {
                 .email("quantrh@bidv.com.vn")
                 .role("ROLE_USER")
                 .points(1850)
-                .userGroup(gdvGroup)
+                .userGroup(cifGroup)
                 .build());
 
         User userA = userRepository.save(User.builder()
@@ -573,7 +623,7 @@ public class DataInitializer implements CommandLineRunner {
                 .email("nguyenvana@bidv.com.vn")
                 .role("ROLE_USER")
                 .points(2850)
-                .userGroup(gdvGroup)
+                .userGroup(cifGroup)
                 .build());
 
         User userB = userRepository.save(User.builder()
@@ -585,7 +635,7 @@ public class DataInitializer implements CommandLineRunner {
                 .email("tranb@bidv.com.vn")
                 .role("ROLE_USER")
                 .points(2600)
-                .userGroup(qkhGroup)
+                .userGroup(tienVayGroup)
                 .build());
 
         User userC = userRepository.save(User.builder()
@@ -597,7 +647,7 @@ public class DataInitializer implements CommandLineRunner {
                 .email("lephuc@bidv.com.vn")
                 .role("ROLE_USER")
                 .points(2450)
-                .userGroup(ksvGroup)
+                .userGroup(chuyenTienGroup)
                 .build());
 
         User userD = userRepository.save(User.builder()
@@ -609,7 +659,7 @@ public class DataInitializer implements CommandLineRunner {
                 .email("phamduc@bidv.com.vn")
                 .role("ROLE_USER")
                 .points(2100)
-                .userGroup(gdvGroup)
+                .userGroup(tienGuiGroup)
                 .build());
 
         User userE = userRepository.save(User.builder()
@@ -621,7 +671,7 @@ public class DataInitializer implements CommandLineRunner {
                 .email("hoangyen@bidv.com.vn")
                 .role("ROLE_USER")
                 .points(1500)
-                .userGroup(qkhGroup)
+                .userGroup(tellerGroup)
                 .build());
 
         User userF = userRepository.save(User.builder()
@@ -633,7 +683,7 @@ public class DataInitializer implements CommandLineRunner {
                 .email("vuongminh@bidv.com.vn")
                 .role("ROLE_USER")
                 .points(1200)
-                .userGroup(ksvGroup)
+                .userGroup(theGroup)
                 .build());
 
 
@@ -684,6 +734,12 @@ public class DataInitializer implements CommandLineRunner {
         setupMockUserProgress(userF, Arrays.asList(cif01, dep01), Arrays.asList(
                 "CIF_bronze"
         ));
+
+        // Force all initially seeded database users to have mustChangePassword = false
+        userRepository.findAll().forEach(u -> {
+            u.setMustChangePassword(false);
+            userRepository.save(u);
+        });
     }
 
     private void createQuestion(Topic topic, String text, List<String> options, int correctIndex) {

@@ -38,4 +38,16 @@ public class UserController {
         UserProgressDto response = userService.registerTopic(userDetails.getUsername(), topicId);
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/me/change-password")
+    public ResponseEntity<String> changePassword(
+            @RequestBody java.util.Map<String, String> request,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        String newPassword = request.get("newPassword");
+        if (newPassword == null || newPassword.trim().isEmpty()) {
+            throw new com.bidv.coretraining.exception.BadRequestException("Mật khẩu mới không được để trống!");
+        }
+        userService.changePassword(userDetails.getUsername(), newPassword);
+        return ResponseEntity.ok("Đổi mật khẩu thành công!");
+    }
 }
