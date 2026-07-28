@@ -38,6 +38,7 @@ export interface Lesson {
   hint: string;
   documents: LessonDocument[];
   videoUrl: string;
+  videoSource?: 'UPLOAD' | 'URL';
   procedureSteps: ProcedureSection[];
   comments: Comment[];
 }

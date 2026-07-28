@@ -31,6 +31,11 @@ public class Lesson {
     @Column(name = "video_url")
     private String videoUrl;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "video_source", length = 20)
+    @Builder.Default
+    private VideoSource videoSource = VideoSource.URL;
+
     @OneToMany(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("documentOrder ASC")
     @Builder.Default
