@@ -4,6 +4,7 @@ import { mockTopics } from '../data/mockData';
 import { authApi } from '../api/authApi';
 import type { LoginRequest } from '../api/authApi';
 import { courseApi } from '../api/courseApi';
+import { userApi } from '../api/userApi';
 import router from '../router';
 
 export const useUserStore = defineStore('user', {
@@ -118,7 +119,11 @@ export const useUserStore = defineStore('user', {
     async fetchProgress() {
       if (!this.isAuthenticated) return;
       try {
-        const progress = await courseApi.getMyProgress();
+        const [progress, profile] = await Promise.all([
+          courseApi.getMyProgress(),
+          userApi.getMyProfile()
+        ]);
+        
         this.completedLessons = progress.completedLessons || [];
         this.quizScores = progress.quizScores || {};
         this.quizTotals = progress.quizTotals || {};
@@ -129,6 +134,9 @@ export const useUserStore = defineStore('user', {
         this.mandatoryTopics = progress.mandatoryTopics || [];
         this.registeredTopics = progress.registeredTopics || [];
         this.mustChangePassword = progress.mustChangePassword || false;
+        
+        this.fullName = profile.fullName || '';
+        localStorage.setItem('fullName', this.fullName);
         localStorage.setItem('mustChangePassword', this.mustChangePassword ? 'true' : 'false');
 
         // Save progress to localstorage for mock caching if active

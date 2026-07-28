@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.multipart.MultipartFile;
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddressList;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -285,12 +286,15 @@ public class AdminServiceImpl implements AdminService {
         if (userDto.getUserGroupId() != null && !userDto.getUserGroupId().trim().isEmpty()) {
             userGroup = userGroupRepository.findById(userDto.getUserGroupId()).orElse(null);
         }
+        String rawPassword = (userDto.getPassword() != null && !userDto.getPassword().trim().isEmpty())
+                ? userDto.getPassword()
+                : "123456";
         User user = User.builder()
                 .username(userDto.getUsername())
-                .password(passwordEncoder.encode(userDto.getPassword() != null ? userDto.getPassword() : "123456"))
+                .password(passwordEncoder.encode(rawPassword))
                 .fullName(userDto.getFullName())
-                .avatarColor(userDto.getAvatarColor() != null ? userDto.getAvatarColor() : "#005B41")
-                .role(userDto.getRole() != null ? userDto.getRole() : "ROLE_USER")
+                .avatarColor(userDto.getAvatarColor() != null && !userDto.getAvatarColor().trim().isEmpty() ? userDto.getAvatarColor() : "#005B41")
+                .role(userDto.getRole() != null && !userDto.getRole().trim().isEmpty() ? userDto.getRole() : "ROLE_USER")
                 .points(userDto.getPoints() != null ? userDto.getPoints() : 0)
                 .userGroup(userGroup)
                 .employeeId(userDto.getEmployeeId())
@@ -451,7 +455,7 @@ public class AdminServiceImpl implements AdminService {
         try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
             Sheet sheet = workbook.createSheet("Import Template");
 
-            // Header style
+            // Header style for core template (Teal)
             CellStyle headerStyle = workbook.createCellStyle();
             Font font = workbook.createFont();
             font.setBold(true);
@@ -461,27 +465,119 @@ public class AdminServiceImpl implements AdminService {
             headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
             headerStyle.setAlignment(HorizontalAlignment.CENTER);
 
+            // Header style for side reference table (Grey)
+            CellStyle refHeaderStyle = workbook.createCellStyle();
+            Font refFont = workbook.createFont();
+            refFont.setBold(true);
+            refFont.setColor(IndexedColors.WHITE.getIndex());
+            refHeaderStyle.setFont(refFont);
+            refHeaderStyle.setFillForegroundColor(IndexedColors.GREY_50_PERCENT.getIndex());
+            refHeaderStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            refHeaderStyle.setAlignment(HorizontalAlignment.CENTER);
+
             // Create headers
             Row headerRow = sheet.createRow(0);
-            String[] headers = {"STT", "Mã nhân viên (*)", "User email (*)", "Tên nhân viên (*)", "Nhóm (Ví dụ: CIF, TIEN_VAY...)"};
+            String[] headers = {"STT", "Mã nhân viên (*)", "User email (*)", "Tên nhân viên (*)", "Nhóm nghiệp vụ (Chọn từ danh sách)"};
             for (int i = 0; i < headers.length; i++) {
                 Cell cell = headerRow.createCell(i);
                 cell.setCellValue(headers[i]);
                 cell.setCellStyle(headerStyle);
             }
 
+            // Create side reference headers
+            Cell cellRefId = headerRow.createCell(6); // Column G (index 6)
+            cellRefId.setCellValue("Mã Nhóm");
+            cellRefId.setCellStyle(refHeaderStyle);
+
+            Cell cellRefName = headerRow.createCell(7); // Column H (index 7)
+            cellRefName.setCellValue("Tên Nhóm Nghiệp Vụ");
+            cellRefName.setCellStyle(refHeaderStyle);
+
+            // Get groups from repository
+            List<UserGroup> groups = userGroupRepository.findAll();
+            String[] groupIds;
+            java.util.Set<String> uniqueIds = new java.util.LinkedHashSet<>();
+            
+            if (groups != null && !groups.isEmpty()) {
+                for (UserGroup group : groups) {
+                    uniqueIds.add(group.getId());
+                }
+                groupIds = uniqueIds.toArray(new String[0]);
+            } else {
+                groupIds = new String[]{"CIF", "TIEN_VAY", "CHUYEN_TIEN", "TIEN_GUI", "TELLER", "GL", "THE"};
+            }
+
+            // Populate side reference data
+            int refRowIdx = 1;
+            CellStyle borderStyle = workbook.createCellStyle();
+            borderStyle.setBorderBottom(BorderStyle.THIN);
+            borderStyle.setBorderTop(BorderStyle.THIN);
+            borderStyle.setBorderLeft(BorderStyle.THIN);
+            borderStyle.setBorderRight(BorderStyle.THIN);
+
+            if (groups != null && !groups.isEmpty()) {
+                for (UserGroup group : groups) {
+                    Row refRow = sheet.getRow(refRowIdx);
+                    if (refRow == null) {
+                        refRow = sheet.createRow(refRowIdx);
+                    }
+                    Cell idCell = refRow.createCell(6);
+                    idCell.setCellValue(group.getId());
+                    idCell.setCellStyle(borderStyle);
+
+                    Cell nameCell = refRow.createCell(7);
+                    nameCell.setCellValue(group.getName());
+                    nameCell.setCellStyle(borderStyle);
+                    refRowIdx++;
+                }
+            } else {
+                String[] fallbackNames = {
+                    "Nhóm nghiệp vụ CIF", "Nhóm nghiệp vụ Tiền vay", "Nhóm nghiệp vụ Chuyển tiền",
+                    "Nhóm nghiệp vụ Tiền gửi", "Nhóm nghiệp vụ Teller", "Nhóm nghiệp vụ GL", "Nhóm nghiệp vụ Thẻ"
+                };
+                for (int i = 0; i < groupIds.length; i++) {
+                    Row refRow = sheet.getRow(refRowIdx);
+                    if (refRow == null) {
+                        refRow = sheet.createRow(refRowIdx);
+                    }
+                    Cell idCell = refRow.createCell(6);
+                    idCell.setCellValue(groupIds[i]);
+                    idCell.setCellStyle(borderStyle);
+
+                    Cell nameCell = refRow.createCell(7);
+                    nameCell.setCellValue(fallbackNames[i]);
+                    nameCell.setCellStyle(borderStyle);
+                    refRowIdx++;
+                }
+            }
+
             // Create sample row
-            Row sampleRow = sheet.createRow(1);
+            Row sampleRow = sheet.getRow(1);
+            if (sampleRow == null) {
+                sampleRow = sheet.createRow(1);
+            }
             sampleRow.createCell(0).setCellValue(1);
-            sampleRow.createCell(1).setCellValue("NV0982");
-            sampleRow.createCell(2).setCellValue("nguyenvanan@bidv.com.vn");
-            sampleRow.createCell(3).setCellValue("Nguyễn Văn An");
+            sampleRow.createCell(1).setCellValue("121212");
+            sampleRow.createCell(2).setCellValue("nguyenvanannabel@bidv.com.vn");
+            sampleRow.createCell(3).setCellValue("Nguyễn Văn Anna Bel");
             sampleRow.createCell(4).setCellValue("CIF");
 
-            // Auto-size columns
+            // Setup Data Validation Dropdown for Column E (index 4) from Row 1 to 1000
+            DataValidationHelper validationHelper = sheet.getDataValidationHelper();
+            CellRangeAddressList addressList = new CellRangeAddressList(1, 1000, 4, 4);
+            DataValidationConstraint constraint = validationHelper.createExplicitListConstraint(groupIds);
+            DataValidation validation = validationHelper.createValidation(constraint, addressList);
+            validation.setShowErrorBox(true);
+            validation.setErrorStyle(DataValidation.ErrorStyle.STOP);
+            validation.createErrorBox("Lỗi chọn nhóm", "Vui lòng chọn mã nhóm nghiệp vụ chính xác từ danh sách gợi ý!");
+            sheet.addValidationData(validation);
+
+            // Auto-size columns A to E, G and H
             for (int i = 0; i < headers.length; i++) {
                 sheet.autoSizeColumn(i);
             }
+            sheet.autoSizeColumn(6);
+            sheet.autoSizeColumn(7);
 
             workbook.write(bos);
             return bos.toByteArray();

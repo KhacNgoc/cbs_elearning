@@ -1,25 +1,36 @@
 <template>
-  <div class="change-password-container">
-    <div class="glass-card">
-      <div class="logo-section">
-        <div class="logo-badge">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lock-icon"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-        </div>
+  <div class="change-password-container animate-fade-in">
+    <div class="login-card card">
+      <div class="login-header">
+        <div class="logo-box-large">B</div>
         <h2>Yêu cầu đổi mật khẩu</h2>
-        <p class="subtitle">Tài khoản của bạn được khởi tạo với mật khẩu mặc định. Vui lòng đổi mật khẩu mới để tiếp tục sử dụng hệ thống.</p>
+        <p>Tài khoản của bạn được khởi tạo với mật khẩu mặc định. Vui lòng đổi mật khẩu mới để tiếp tục sử dụng hệ thống.</p>
       </div>
 
-      <form @submit.prevent="handleChangePassword" class="form-section">
+      <!-- Error and Success Banners -->
+      <div v-if="errorMessage" class="error-banner card animate-fade-in">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="error-icon"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span>{{ errorMessage }}</span>
+      </div>
+
+      <div v-if="successMessage" class="success-banner card animate-fade-in">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="success-icon"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <span>{{ successMessage }}</span>
+      </div>
+
+      <form @submit.prevent="handleChangePassword" class="login-form">
         <div class="form-group">
           <label for="new-password">Mật khẩu mới</label>
           <div class="input-wrapper">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="input-icon"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             <input 
               :type="showPassword ? 'text' : 'password'" 
               id="new-password" 
               v-model="newPassword" 
               placeholder="Nhập mật khẩu mới của bạn" 
               required
-              class="form-control"
+              :disabled="loading"
+              class="password-input"
             />
             <button type="button" @click="showPassword = !showPassword" class="toggle-btn">
               <span v-if="showPassword">Ẩn</span>
@@ -31,13 +42,15 @@
         <div class="form-group">
           <label for="confirm-password">Xác nhận mật khẩu mới</label>
           <div class="input-wrapper">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="input-icon"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             <input 
               :type="showConfirmPassword ? 'text' : 'password'" 
               id="confirm-password" 
               v-model="confirmPassword" 
               placeholder="Nhập lại mật khẩu mới" 
               required
-              class="form-control"
+              :disabled="loading"
+              class="password-input"
             />
             <button type="button" @click="showConfirmPassword = !showConfirmPassword" class="toggle-btn">
               <span v-if="showConfirmPassword">Ẩn</span>
@@ -46,22 +59,14 @@
           </div>
         </div>
 
-        <div v-if="errorMessage" class="error-alert">
-          {{ errorMessage }}
-        </div>
-
-        <div v-if="successMessage" class="success-alert">
-          {{ successMessage }}
-        </div>
-
-        <button type="submit" class="submit-btn" :disabled="loading">
-          <span v-if="loading">Đang cập nhật...</span>
-          <span v-else>Xác nhận Đổi mật khẩu</span>
+        <button type="submit" class="btn btn-primary w-100 btn-submit" :disabled="loading">
+          <span v-if="loading" class="spinner"></span>
+          <span v-else>XÁC NHẬN ĐỔI MẬT KHẨU</span>
         </button>
 
-        <button type="button" @click="handleLogout" class="logout-btn">
-          Đăng xuất quay lại
-        </button>
+        <div class="back-to-login">
+          <a href="#" @click.prevent="handleLogout">Đăng xuất quay lại</a>
+        </div>
       </form>
     </div>
   </div>
@@ -126,82 +131,116 @@ const handleLogout = () => {
 
 <style scoped>
 .change-password-container {
-  min-height: 100vh;
   display: flex;
-  align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #003B2B 0%, #005B41 50%, #008F68 100%);
-  padding: 2rem 1rem;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  align-items: center;
+  min-height: calc(100vh - 160px);
+  background-color: var(--bg-main);
+  padding: 1rem;
 }
 
-.glass-card {
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 20px;
+.login-card {
   width: 100%;
-  max-width: 460px;
-  padding: 3rem 2.5rem;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-  box-sizing: border-box;
+  max-width: 450px;
+  padding: 2.5rem;
+  background-color: var(--bg-card);
+  box-shadow: var(--shadow-lg);
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-lg);
 }
 
-.logo-section {
+.login-header {
   text-align: center;
-  margin-bottom: 2.5rem;
-}
-
-.logo-badge {
-  width: 60px;
-  height: 60px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 1.5rem;
-}
-
-.lock-icon {
-  width: 28px;
-  height: 28px;
-  color: #10B981;
-}
-
-.logo-section h2 {
-  color: #ffffff;
-  font-size: 1.6rem;
-  margin: 0 0 0.75rem;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-}
-
-.subtitle {
-  color: rgba(255, 255, 255, 0.65);
-  font-size: 0.9rem;
-  line-height: 1.5;
-  margin: 0;
-}
-
-.form-section {
+  margin-bottom: 2rem;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.logo-box-large {
+  width: 60px;
+  height: 60px;
+  background: radial-gradient(circle, var(--accent-secondary) 20%, var(--primary-color) 80%);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 800;
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  box-shadow: 0 4px 15px rgba(0, 91, 65, 0.25);
+}
+
+.login-header h2 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+.login-header p {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.error-banner {
+  background-color: #fee2e2;
+  color: #b91c1c;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid #fca5a5;
+  margin-bottom: 1.25rem;
+}
+
+.error-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.success-banner {
+  background-color: #ecfdf5;
+  color: #047857;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid #a7f3d0;
+  margin-bottom: 1.25rem;
+}
+
+.success-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .form-group label {
-  color: rgba(255, 255, 255, 0.85);
   font-size: 0.85rem;
-  font-weight: 500;
+  font-weight: 700;
+  color: var(--text-main);
 }
 
 .input-wrapper {
@@ -210,24 +249,29 @@ const handleLogout = () => {
   align-items: center;
 }
 
-.form-control {
+.input-icon {
+  position: absolute;
+  left: 1rem;
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.input-wrapper input {
   width: 100%;
-  padding: 0.85rem 1rem;
-  padding-right: 3.5rem;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  color: #ffffff;
+  padding: 0.8rem 1rem 0.8rem 2.5rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
   font-size: 0.95rem;
-  transition: all 0.3s ease;
+  outline: none;
+  transition: var(--transition);
   box-sizing: border-box;
 }
 
-.form-control:focus {
-  outline: none;
-  border-color: #10B981;
-  background: rgba(0, 0, 0, 0.35);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+.input-wrapper input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px var(--primary-light);
 }
 
 .toggle-btn {
@@ -235,72 +279,58 @@ const handleLogout = () => {
   right: 1rem;
   background: none;
   border: none;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
   font-size: 0.8rem;
+  font-weight: 600;
   cursor: pointer;
   padding: 0;
-  transition: color 0.3s ease;
+  transition: var(--transition);
 }
 
 .toggle-btn:hover {
-  color: #ffffff;
+  color: var(--primary-color);
 }
 
-.error-alert {
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  border-radius: 8px;
-  padding: 0.75rem 1rem;
-  color: #FCA5A5;
-  font-size: 0.85rem;
-}
-
-.success-alert {
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(16, 185, 129, 0.25);
-  border-radius: 8px;
-  padding: 0.75rem 1rem;
-  color: #A7F3D0;
-  font-size: 0.85rem;
-}
-
-.submit-btn {
-  background: #10B981;
-  border: none;
-  border-radius: 10px;
-  color: #ffffff;
+.btn-submit {
   padding: 0.9rem;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
+  font-size: 1rem;
+  letter-spacing: 0.5px;
   margin-top: 0.5rem;
 }
 
-.submit-btn:hover:not(:disabled) {
-  background: #059669;
-  transform: translateY(-1px);
+.w-100 {
+  width: 100%;
 }
 
-.submit-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.back-to-login {
+  text-align: center;
+  margin-top: 0.5rem;
 }
 
-.logout-btn {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 10px;
-  color: rgba(255, 255, 255, 0.7);
-  padding: 0.85rem;
+.back-to-login a {
   font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-weight: 600;
+  transition: var(--transition);
 }
 
-.logout-btn:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #ffffff;
+.back-to-login a:hover {
+  color: var(--primary-color);
+  text-decoration: underline;
+}
+
+.spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 </style>

@@ -631,37 +631,11 @@
             </select>
           </div>
           <div class="form-group">
-            <label>Màu đại diện Avatar Color (Hex code)</label>
-            <div class="color-picker-row">
-              <input
-                v-model="userForm.avatarColor"
-                type="color"
-                class="color-picker"
-              />
-              <input
-                v-model="userForm.avatarColor"
-                type="text"
-                class="form-control color-text"
-                required
-              />
-            </div>
-          </div>
-          <div class="form-group">
             <label>Vai trò hệ thống</label>
             <select v-model="userForm.role" class="form-control">
               <option value="ROLE_USER">Học viên (ROLE_USER)</option>
               <option value="ROLE_ADMIN">Quản trị viên (ROLE_ADMIN)</option>
             </select>
-          </div>
-          <div class="form-group">
-            <label>Điểm số tích lũy (PTS)</label>
-            <input
-              v-model.number="userForm.points"
-              type="number"
-              min="0"
-              class="form-control"
-              required
-            />
           </div>
           <div class="modal-buttons">
             <button
@@ -2671,11 +2645,14 @@ void handleDeleteQuestion;
   justify-content: center;
   z-index: 1000;
   padding: 1.25rem;
+  overflow-y: auto;
 }
 
 .modal-content {
   width: 100%;
   max-width: 480px;
+  max-height: calc(100vh - 2.5rem);
+  overflow-y: auto;
   padding: 2rem;
   background: white;
   border-radius: var(--radius-md);
