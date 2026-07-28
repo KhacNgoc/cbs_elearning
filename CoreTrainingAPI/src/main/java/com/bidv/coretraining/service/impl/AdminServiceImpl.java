@@ -446,12 +446,16 @@ public class AdminServiceImpl implements AdminService {
     public UserDto createUser(UserDto userDto) {
         UserGroup userGroup = userDto.getUserGroupId() == null || userDto.getUserGroupId().isBlank()
                 ? null : userGroupRepository.findById(userDto.getUserGroupId()).orElse(null);
+        String rawPassword = userDto.getPassword() != null && !userDto.getPassword().isBlank()
+                ? userDto.getPassword() : "123456";
         User user = User.builder()
                 .username(userDto.getUsername())
-                .password(passwordEncoder.encode(userDto.getPassword() != null ? userDto.getPassword() : "123456"))
+                .password(passwordEncoder.encode(rawPassword))
                 .fullName(userDto.getFullName())
-                .avatarColor(userDto.getAvatarColor() != null ? userDto.getAvatarColor() : "#005B41")
-                .role(userDto.getRole() != null ? userDto.getRole() : "ROLE_USER")
+                .avatarColor(userDto.getAvatarColor() != null && !userDto.getAvatarColor().isBlank()
+                        ? userDto.getAvatarColor() : "#005B41")
+                .role(userDto.getRole() != null && !userDto.getRole().isBlank()
+                        ? userDto.getRole() : "ROLE_USER")
                 .points(userDto.getPoints() != null ? userDto.getPoints() : 0)
                 .userGroup(userGroup)
                 .employeeId(userDto.getEmployeeId())

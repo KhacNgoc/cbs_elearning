@@ -1,7 +1,7 @@
 <template>
   <div class="app-container">
-    <!-- Navbar Header (only when logged in) -->
-    <nav class="navbar" v-if="userStore.isAuthenticated">
+    <!-- Navbar Header (only when logged in and not on change-password page) -->
+    <nav class="navbar" v-if="userStore.isAuthenticated && route.name !== 'ChangePassword'">
       <router-link to="/" class="nav-brand">
         <div class="nav-logo">B</div>
         <span>BIDV Core Training</span>
@@ -39,12 +39,14 @@
 
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import { useUserStore } from './stores/userStore';
 import { useCourseStore } from './stores/courseStore';
 import { useNavigationStore } from './stores/navigationStore';
 import NotificationCenter from './components/NotificationCenter.vue';
 import { BookOpen, ClipboardCheck, HelpCircle, Home, LogOut, Settings, Trophy, UserCircle, Users } from 'lucide-vue-next';
 
+const route = useRoute();
 const userStore = useUserStore();
 const courseStore = useCourseStore();
 const navigationStore = useNavigationStore();
