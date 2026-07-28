@@ -26,7 +26,7 @@
     <!-- Right Main Content Area -->
     <div class="admin-main-content">
       <!-- Loading State -->
-      <div v-if="loading" class="loading-overlay card">
+      <div v-if="loading" class="loading-overlay">
         <div class="spinner"></div>
         <p>Đang tải dữ liệu cấu hình...</p>
       </div>
@@ -351,6 +351,7 @@
                 v-model="selectedTopicId"
                 class="form-control select-control"
               >
+                <option :value="ALL_TOPICS">Tất cả chủ đề</option>
                 <option
                   v-for="t in courseStore.topics"
                   :key="t.id"
@@ -365,6 +366,7 @@
               <thead>
                 <tr>
                   <th>Mã bài học</th>
+                  <th v-if="selectedTopicId === ALL_TOPICS">Chủ đề</th>
                   <th>Tiêu đề bài học</th>
                   <th>Gợi ý nghiệp vụ (Hint)</th>
                   <th>Video đính kèm</th>
@@ -376,6 +378,9 @@
                 <tr v-for="lesson in currentTopicLessons" :key="lesson.id">
                   <td>
                     <span class="code-badge">{{ lesson.id }}</span>
+                  </td>
+                  <td v-if="selectedTopicId === ALL_TOPICS">
+                    {{ getTopicName(lesson.topicId) }}
                   </td>
                   <td>
                     <strong>{{ lesson.title }}</strong>
@@ -443,6 +448,7 @@
                 v-model="selectedTopicId"
                 class="form-control select-control"
               >
+                <option :value="ALL_TOPICS">Tất cả chủ đề</option>
                 <option
                   v-for="t in courseStore.topics"
                   :key="t.id"
@@ -1118,7 +1124,8 @@ const activeSessions = ref([
 const loading = ref(false);
 const users = ref<AdminUser[]>([]);
 const questions = ref<Question[]>([]);
-const selectedTopicId = ref("");
+const ALL_TOPICS = "__ALL__";
+const selectedTopicId = ref(ALL_TOPICS);
 const userSearchQuery = ref("");
 const quizSearchQuery = ref("");
 
@@ -1187,12 +1194,11 @@ const filteredUsers = computed(() => {
 });
 
 const currentTopicLessons = computed(() => {
+  if (selectedTopicId.value === ALL_TOPICS) {
+    return courseStore.topics.flatMap((topic) => topic.lessons);
+  }
   const topic = courseStore.topics.find((t) => t.id === selectedTopicId.value);
   return topic ? topic.lessons : [];
-});
-
-const currentTopicQuestions = computed(() => {
-  return questions.value.filter((q) => q.topicId === selectedTopicId.value);
 });
 
 type QuizDefinition = {
@@ -1204,30 +1210,39 @@ type QuizDefinition = {
 };
 
 const quizDefinitions = computed<QuizDefinition[]>(() => {
-  const topic = courseStore.topics.find((item) => item.id === selectedTopicId.value);
-  if (!topic) return [];
-  const topicQuestions = currentTopicQuestions.value.filter((question) => !question.lessonId);
   const definitions: QuizDefinition[] = [];
-  if (topicQuestions.length) {
-    definitions.push({
-      key: `topic:${topic.id}`,
-      topicId: topic.id,
-      title: `Bài kiểm tra tổng hợp — ${topic.name}`,
-      questionCount: topicQuestions.length,
-    });
-  }
-  for (const lesson of topic.lessons) {
-    const count = currentTopicQuestions.value.filter(
-      (question) => question.lessonId === lesson.id,
-    ).length;
-    if (count) {
+  const topics =
+    selectedTopicId.value === ALL_TOPICS
+      ? courseStore.topics
+      : courseStore.topics.filter((topic) => topic.id === selectedTopicId.value);
+  for (const topic of topics) {
+    const topicQuestions = questions.value.filter(
+      (question) => question.topicId === topic.id && !question.lessonId,
+    );
+    if (topicQuestions.length) {
       definitions.push({
-        key: `lesson:${lesson.id}`,
+        key: `topic:${topic.id}`,
         topicId: topic.id,
-        lessonId: lesson.id,
-        title: lesson.title,
-        questionCount: count,
+        title: `Bài kiểm tra tổng hợp — ${topic.name}`,
+        questionCount: topicQuestions.length,
       });
+    }
+    for (const lesson of topic.lessons) {
+      const count = questions.value.filter(
+        (question) => question.lessonId === lesson.id,
+      ).length;
+      if (count) {
+        definitions.push({
+          key: `lesson:${lesson.id}`,
+          topicId: topic.id,
+          lessonId: lesson.id,
+          title:
+            selectedTopicId.value === ALL_TOPICS
+              ? `${lesson.title} — ${topic.name}`
+              : lesson.title,
+          questionCount: count,
+        });
+      }
     }
   }
   return definitions;
@@ -1241,8 +1256,11 @@ const filteredQuizDefinitions = computed(() => {
   );
 });
 
-const createQuiz = () =>
-  router.push({ path: "/admin/quizzes/new", query: { topicId: selectedTopicId.value } });
+const createQuiz = () => {
+  const topicId =
+    selectedTopicId.value === ALL_TOPICS ? undefined : selectedTopicId.value;
+  router.push({ path: "/admin/quizzes/new", query: topicId ? { topicId } : {} });
+};
 
 const openQuizDefinition = (quiz: QuizDefinition) =>
   router.push(
@@ -1306,6 +1324,9 @@ const getAvatarColor = (username: string) => {
 const getQuestionCountForTopic = (topicId: string) => {
   return questions.value.filter((q) => q.topicId === topicId).length;
 };
+
+const getTopicName = (topicId: string) =>
+  courseStore.topics.find((topic) => topic.id === topicId)?.name || topicId;
 
 // ==========================================
 // ADVANCED CHARTS DATA & OPTIONS
@@ -1671,7 +1692,10 @@ const openLessonModal = (lesson?: Lesson) => {
     lessonForm.value = {
       id: "",
       title: "",
-      topicId: selectedTopicId.value,
+      topicId:
+        selectedTopicId.value === ALL_TOPICS
+          ? courseStore.topics[0]?.id || ""
+          : selectedTopicId.value,
       hint: "",
       videoSource: "UPLOAD",
       videoUrl: "",
@@ -1877,7 +1901,10 @@ const openQuestionModal = (question?: Question) => {
     questionModal.value = { show: true, isEdit: false, editId: null };
     questionForm.value = {
       text: "",
-      topicId: selectedTopicId.value,
+      topicId:
+        selectedTopicId.value === ALL_TOPICS
+          ? courseStore.topics[0]?.id || ""
+          : selectedTopicId.value,
       lessonId: "",
       correctAnswer: 0,
       options: [],
@@ -1926,7 +1953,10 @@ const saveQuestion = async () => {
 const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
 
 const downloadQuestionTemplate = () => {
-  const topicId = selectedTopicId.value || courseStore.topics[0]?.id || "CIF";
+  const topicId =
+    selectedTopicId.value === ALL_TOPICS
+      ? courseStore.topics[0]?.id || "CIF"
+      : selectedTopicId.value || courseStore.topics[0]?.id || "CIF";
   const lessonId =
     courseStore.topics.find((topic) => topic.id === topicId)?.lessons[0]?.id || "";
   const rows = [
@@ -3032,12 +3062,21 @@ void handleDeleteQuestion;
 }
 
 .loading-overlay {
+  width: 100%;
+  min-height: 100%;
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4rem;
   gap: 1rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  text-align: center;
 }
 
 .spinner {
