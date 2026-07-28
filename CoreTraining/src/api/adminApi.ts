@@ -290,7 +290,8 @@ export const adminApi = {
         text: question.text,
         options: question.options,
         correctAnswer: question.correctAnswer,
-        topicId: question.topicId
+        topicId: question.topicId,
+        lessonId: question.lessonId
       };
       setMockDbQuestions([...mockDbQuestions]);
       return mockDbQuestions[index];

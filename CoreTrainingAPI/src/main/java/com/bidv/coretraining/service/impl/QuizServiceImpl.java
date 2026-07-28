@@ -21,6 +21,7 @@ public class QuizServiceImpl implements QuizService {
 
     private final QuestionRepository questionRepository;
     private final TopicRepository topicRepository;
+    private final LessonRepository lessonRepository;
     private final UserRepository userRepository;
     private final UserQuizScoreRepository userQuizScoreRepository;
     private final BadgeRepository badgeRepository;
@@ -28,11 +29,13 @@ public class QuizServiceImpl implements QuizService {
     private final QuizMapper quizMapper;
 
     public QuizServiceImpl(QuestionRepository questionRepository, TopicRepository topicRepository,
+                           LessonRepository lessonRepository,
                            UserRepository userRepository, UserQuizScoreRepository userQuizScoreRepository,
                            BadgeRepository badgeRepository, UserBadgeRepository userBadgeRepository,
                            QuizMapper quizMapper) {
         this.questionRepository = questionRepository;
         this.topicRepository = topicRepository;
+        this.lessonRepository = lessonRepository;
         this.userRepository = userRepository;
         this.userQuizScoreRepository = userQuizScoreRepository;
         this.badgeRepository = badgeRepository;
@@ -46,7 +49,7 @@ public class QuizServiceImpl implements QuizService {
         if (!topicRepository.existsById(topicId)) {
             throw new ResourceNotFoundException("Topic", "id", topicId);
         }
-        List<Question> questions = questionRepository.findByTopicId(topicId);
+        List<Question> questions = questionRepository.findByTopicIdAndLessonIsNull(topicId);
         return quizMapper.toQuestionDtoList(questions);
     }
 
@@ -58,7 +61,7 @@ public class QuizServiceImpl implements QuizService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
 
-        List<Question> questions = questionRepository.findByTopicId(topicId);
+        List<Question> questions = questionRepository.findByTopicIdAndLessonIsNull(topicId);
         int totalQuestions = questions.size();
         if (totalQuestions == 0) {
             return QuizResultDto.builder().score(0).total(0).percent(0).build();
@@ -115,6 +118,38 @@ public class QuizServiceImpl implements QuizService {
                 .total(totalQuestions)
                 .percent(percent)
                 .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<QuestionDto> getQuestionsForLesson(String lessonId) {
+        if (!lessonRepository.existsById(lessonId)) {
+            throw new ResourceNotFoundException("Lesson", "id", lessonId);
+        }
+        return quizMapper.toQuestionDtoList(questionRepository.findByLessonId(lessonId));
+    }
+
+    @Override
+    @Transactional
+    public QuizResultDto submitLessonQuiz(String lessonId, QuizSubmitRequest request, String username) {
+        Lesson lesson = lessonRepository.findById(lessonId)
+                .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
+        List<Question> questions = questionRepository.findByLessonId(lessonId);
+        int total = questions.size();
+        int score = 0;
+        for (Question question : questions) {
+            Integer selected = request.getSelectedAnswers().get(question.getId());
+            if (selected != null && selected.equals(question.getCorrectAnswer())) score++;
+        }
+        int percent = total == 0 ? 0 : Math.round((float) score / total * 100);
+        if (total > 0 && percent >= 80 && !user.getCompletedLessons().contains(lesson)) {
+            user.getCompletedLessons().add(lesson);
+            user.setPoints(user.getPoints() + 100);
+            userRepository.save(user);
+        }
+        return QuizResultDto.builder().score(score).total(total).percent(percent).build();
     }
 
     private void checkAndUnlockBadges(User user, Topic topic, int score, int total) {

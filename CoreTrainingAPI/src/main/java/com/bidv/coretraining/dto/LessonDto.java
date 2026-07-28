@@ -19,6 +19,7 @@ public class LessonDto {
     private String hint;
     private String videoUrl;
     private VideoSource videoSource;
+    private Boolean hasQuiz;
     private List<LessonDocumentDto> documents;
     private List<ProcedureSectionDto> procedureSteps;
     private List<CommentDto> comments;

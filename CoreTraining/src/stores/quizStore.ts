@@ -6,6 +6,7 @@ import { useUserStore } from './userStore';
 export const useQuizStore = defineStore('quiz', {
   state: () => ({
     currentTopicId: null as string | null,
+    currentLessonId: null as string | null,
     currentQuestionIndex: 0,
     questions: [] as Omit<Question, 'correctAnswer'>[],
     selectedAnswers: {} as Record<number, number>, // questionId -> optionIndex
@@ -36,9 +37,10 @@ export const useQuizStore = defineStore('quiz', {
   },
 
   actions: {
-    async startQuiz(topicId: string) {
+    async startQuiz(topicId: string, lessonId?: string) {
       this.isLoading = true;
       this.currentTopicId = topicId;
+      this.currentLessonId = lessonId || null;
       this.currentQuestionIndex = 0;
       this.selectedAnswers = {};
       this.correctAnswers = {};
@@ -49,7 +51,7 @@ export const useQuizStore = defineStore('quiz', {
       this.stopTimer();
       
       try {
-        this.questions = await quizApi.getQuizQuestions(topicId);
+        this.questions = await quizApi.getQuizQuestions(topicId, lessonId);
         this.startTimer();
       } catch (error) {
         console.error(`Failed to load quiz questions for ${topicId}:`, error);
@@ -93,7 +95,7 @@ export const useQuizStore = defineStore('quiz', {
         const res = await quizApi.submitQuiz(this.currentTopicId, {
           selectedAnswers: this.selectedAnswers,
           timeElapsed: this.timeElapsed
-        });
+        }, this.currentLessonId || undefined);
 
         this.quizResult = {
           score: res.score,

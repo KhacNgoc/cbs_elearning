@@ -10,6 +10,7 @@ import java.util.List;
 public interface QuizMapper {
 
     @Mapping(source = "topic.id", target = "topicId")
+    @Mapping(source = "lesson.id", target = "lessonId")
     QuestionDto toQuestionDto(Question question);
 
     List<QuestionDto> toQuestionDtoList(List<Question> questions);

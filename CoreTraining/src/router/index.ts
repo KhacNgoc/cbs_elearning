@@ -6,6 +6,8 @@ import QuizView from '../views/QuizView.vue';
 import Leaderboard from '../views/Leaderboard.vue';
 import Login from '../views/Login.vue';
 import AdminPortal from '../views/AdminPortal.vue';
+import AdminQuizDetail from '../views/AdminQuizDetail.vue';
+import AdminLayout from '../views/AdminLayout.vue';
 import Profile from '../views/Profile.vue';
 
 const routes: Array<RouteRecordRaw> = [
@@ -48,9 +50,25 @@ const routes: Array<RouteRecordRaw> = [
   },
   {
     path: '/admin',
-    name: 'AdminPortal',
-    component: AdminPortal,
-    meta: { requiresAuth: true, requiresAdmin: true }
+    component: AdminLayout,
+    meta: { requiresAuth: true, requiresAdmin: true },
+    children: [
+      {
+        path: '',
+        name: 'AdminPortal',
+        component: AdminPortal
+      },
+      {
+        path: 'quizzes/new',
+        name: 'AdminQuizCreate',
+        component: AdminQuizDetail
+      },
+      {
+        path: 'quizzes/:scopeType(topic|lesson)/:scopeId',
+        name: 'AdminQuizDetail',
+        component: AdminQuizDetail
+      }
+    ]
   },
   {
     path: '/:pathMatch(.*)*',

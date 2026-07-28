@@ -78,9 +78,8 @@ const loadLessonData = async (lessonId: string) => {
     return;
   }
 
-  // Auto complete lesson when viewed
   if (lesson.value) {
-    await userStore.completeLesson(lesson.value.id);
+    if (!lesson.value.hasQuiz) await userStore.completeLesson(lesson.value.id);
     await loadVideoNotes(lesson.value.id);
   }
 };
@@ -151,8 +150,21 @@ const goToAdjacentLesson = (offset: number) => {
   const nextLesson = topic.value?.lessons[currentLessonIndex.value + offset];
   if (nextLesson) switchLesson(nextLesson.id);
 };
-const markAsCompleted = async () => { if (lesson.value) await userStore.completeLesson(lesson.value.id); };
-const startQuiz = () => { if (topic.value) router.push(`/quiz/${topic.value.id}`); };
+const markAsCompleted = async () => {
+  if (!lesson.value) return;
+  if (lesson.value.hasQuiz && !isCompleted.value) {
+    startQuiz();
+    return;
+  }
+  await userStore.completeLesson(lesson.value.id);
+};
+const startQuiz = () => {
+  if (topic.value && lesson.value?.hasQuiz) {
+    router.push({ path: `/quiz/${topic.value.id}`, query: { lessonId: lesson.value.id } });
+  } else if (topic.value) {
+    router.push(`/quiz/${topic.value.id}`);
+  }
+};
 const sortVideoNotes = () => {
   videoNotes.value.sort((a, b) =>
     a.timestampSeconds - b.timestampSeconds || a.createdAt.localeCompare(b.createdAt)

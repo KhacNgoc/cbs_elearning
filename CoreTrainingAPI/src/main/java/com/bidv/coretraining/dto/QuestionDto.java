@@ -14,6 +14,7 @@ import java.util.List;
 public class QuestionDto {
     private Long id;
     private String topicId;
+    private String lessonId;
     private String text;
     private List<String> options;
     private Integer correctAnswer;
