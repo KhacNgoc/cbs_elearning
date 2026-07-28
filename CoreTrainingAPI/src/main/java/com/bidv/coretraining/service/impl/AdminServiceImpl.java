@@ -89,7 +89,8 @@ public class AdminServiceImpl implements AdminService {
                 .title(lessonDto.getTitle())
                 .topic(topic)
                 .hint(lessonDto.getHint())
-                .videoUrl(lessonDto.getVideoUrl())
+                .videoUrl(normalizeUploadedPath(lessonDto.getVideoUrl()))
+                .videoSource(resolveVideoSource(lessonDto))
                 .build();
 
         lesson.setDocuments(buildDocuments(lessonDto.getDocuments(), lesson));
@@ -126,7 +127,8 @@ public class AdminServiceImpl implements AdminService {
 
         lesson.setTitle(lessonDto.getTitle());
         lesson.setHint(lessonDto.getHint());
-        lesson.setVideoUrl(lessonDto.getVideoUrl());
+        lesson.setVideoUrl(normalizeUploadedPath(lessonDto.getVideoUrl()));
+        lesson.setVideoSource(resolveVideoSource(lessonDto));
         lesson.getDocuments().clear();
         lesson.getDocuments().addAll(buildDocuments(lessonDto.getDocuments(), lesson));
 
@@ -148,6 +150,22 @@ public class AdminServiceImpl implements AdminService {
         return courseMapper.toLessonDto(saved);
     }
 
+    private VideoSource resolveVideoSource(LessonDto lessonDto) {
+        if (lessonDto.getVideoSource() != null) {
+            return lessonDto.getVideoSource();
+        }
+        String videoUrl = lessonDto.getVideoUrl();
+        return videoUrl != null && videoUrl.contains("/uploads/")
+                ? VideoSource.UPLOAD
+                : VideoSource.URL;
+    }
+
+    private String normalizeUploadedPath(String value) {
+        if (value == null) return null;
+        int uploadsIndex = value.indexOf("/uploads/");
+        return uploadsIndex > 0 ? value.substring(uploadsIndex) : value;
+    }
+
     @Override
     @Transactional
     public void deleteLesson(String id) {
@@ -167,7 +185,7 @@ public class AdminServiceImpl implements AdminService {
             documents.add(LessonDocument.builder()
                     .name(documentDto.getName())
                     .documentType(documentDto.getDocumentType())
-                    .fileUrl(documentDto.getFileUrl())
+                    .fileUrl(normalizeUploadedPath(documentDto.getFileUrl()))
                     .originalFileName(documentDto.getOriginalFileName())
                     .fileSize(documentDto.getFileSize())
                     .documentOrder(i)

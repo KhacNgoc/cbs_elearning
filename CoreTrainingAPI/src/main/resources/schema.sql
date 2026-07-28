@@ -50,9 +50,18 @@ CREATE TABLE IF NOT EXISTS lessons (
     title VARCHAR(255) NOT NULL,
     hint TEXT,
     video_url VARCHAR(255),
+    video_source VARCHAR(20),
     topic_id VARCHAR(255) NOT NULL,
     CONSTRAINT fk_lessons_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
 );
+
+ALTER TABLE lessons ADD COLUMN IF NOT EXISTS video_source VARCHAR(20);
+UPDATE lessons
+SET video_source = CASE
+    WHEN video_url LIKE '%/uploads/%' THEN 'UPLOAD'
+    ELSE 'URL'
+END
+WHERE video_source IS NULL;
 
 -- 7. Create lesson_documents table
 CREATE TABLE IF NOT EXISTS lesson_documents (
