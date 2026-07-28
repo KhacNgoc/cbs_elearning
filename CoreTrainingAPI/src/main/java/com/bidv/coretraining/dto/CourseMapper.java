@@ -25,11 +25,13 @@ public interface CourseMapper {
 
     @AfterMapping
     default void inferLegacyVideoSource(Lesson lesson, @MappingTarget LessonDto dto) {
-        if (dto.getVideoSource() != null) return;
-        String videoUrl = lesson.getVideoUrl();
-        dto.setVideoSource(videoUrl != null && videoUrl.contains("/uploads/")
-                ? VideoSource.UPLOAD
-                : VideoSource.URL);
+        if (dto.getVideoSource() == null) {
+            String videoUrl = lesson.getVideoUrl();
+            dto.setVideoSource(videoUrl != null && videoUrl.contains("/uploads/")
+                    ? VideoSource.UPLOAD
+                    : VideoSource.URL);
+        }
+        dto.setHasQuiz(lesson.getQuizQuestions() != null && !lesson.getQuizQuestions().isEmpty());
     }
 
     List<LessonDto> toLessonDtoList(List<Lesson> lessons);

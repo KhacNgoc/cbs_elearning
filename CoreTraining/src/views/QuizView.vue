@@ -127,7 +127,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useCourseStore } from '../stores/courseStore';
 import { useQuizStore } from '../stores/quizStore';
 import { useUserStore } from '../stores/userStore';
@@ -140,6 +140,7 @@ const props = defineProps({
   }
 });
 const router = useRouter();
+const route = useRoute();
 const courseStore = useCourseStore();
 const quizStore = useQuizStore();
 const userStore = useUserStore();
@@ -152,6 +153,7 @@ const totalQuestions = computed(() => quizStore.quizQuestions.length);
 const currentQuestion = computed(() => quizStore.currentQuestion);
 const selectedAnswers = computed(() => quizStore.selectedAnswers);
 const quizResult = computed(() => quizStore.quizResult);
+const lessonId = computed(() => typeof route.query.lessonId === 'string' ? route.query.lessonId : undefined);
 
 const highScore = computed(() => {
   return userStore.quizScores[props.topicId] || null;
@@ -178,7 +180,7 @@ const startNewQuiz = () => {
     return;
   }
   unlockedBadge.value = null;
-  quizStore.startQuiz(props.topicId);
+  quizStore.startQuiz(props.topicId, lessonId.value);
 };
 
 const selectOption = (questionId: number, optionIdx: number) => {

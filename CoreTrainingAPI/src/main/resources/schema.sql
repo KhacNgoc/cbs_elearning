@@ -143,8 +143,12 @@ CREATE TABLE IF NOT EXISTS questions (
     text TEXT NOT NULL,
     correct_answer INTEGER NOT NULL,
     topic_id VARCHAR(255) NOT NULL,
-    CONSTRAINT fk_questions_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
+    lesson_id VARCHAR(255),
+    CONSTRAINT fk_questions_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE,
+    CONSTRAINT fk_questions_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
 );
+
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS lesson_id VARCHAR(255);
 
 -- 14. Create question_options table (ElementCollection)
 CREATE TABLE IF NOT EXISTS question_options (

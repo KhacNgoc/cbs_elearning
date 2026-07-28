@@ -8,6 +8,7 @@ import com.bidv.coretraining.entity.User;
 import com.bidv.coretraining.entity.UserQuizScore;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
 import com.bidv.coretraining.repository.LessonRepository;
+import com.bidv.coretraining.repository.QuestionRepository;
 import com.bidv.coretraining.repository.UserRepository;
 import com.bidv.coretraining.service.UserService;
 import org.springframework.stereotype.Service;
@@ -23,15 +24,19 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final LessonRepository lessonRepository;
+    private final QuestionRepository questionRepository;
     private final com.bidv.coretraining.repository.TopicRepository topicRepository;
     private final UserMapper userMapper;
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
     public UserServiceImpl(UserRepository userRepository, LessonRepository lessonRepository,
-                           com.bidv.coretraining.repository.TopicRepository topicRepository, UserMapper userMapper,
+                           QuestionRepository questionRepository,
+                           com.bidv.coretraining.repository.TopicRepository topicRepository,
+                           UserMapper userMapper,
                            org.springframework.security.crypto.password.PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.lessonRepository = lessonRepository;
+        this.questionRepository = questionRepository;
         this.topicRepository = topicRepository;
         this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
@@ -72,6 +77,11 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
         Lesson lesson = lessonRepository.findById(lessonId)
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
+
+        if (questionRepository.existsByLessonId(lessonId)
+                && !user.getCompletedLessons().contains(lesson)) {
+            throw new IllegalStateException("Bạn cần đạt tối thiểu 80% bài kiểm tra của bài học");
+        }
 
         if (!user.getCompletedLessons().contains(lesson)) {
             user.getCompletedLessons().add(lesson);

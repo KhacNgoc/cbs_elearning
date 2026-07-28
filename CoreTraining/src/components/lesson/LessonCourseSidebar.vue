@@ -25,20 +25,21 @@
       </div>
     </div>
     <div class="quiz-box">
-      <div><Award :size="22" /><strong>Đánh giá năng lực</strong></div>
-      <p>Kiểm tra và củng cố kiến thức sau khi hoàn thành chủ đề.</p>
-      <button @click="$emit('quiz')">Làm bài kiểm tra <ArrowRight :size="16" /></button>
+      <div><Award :size="22" /><strong>{{ activeLesson?.hasQuiz ? 'Kiểm tra bài học' : 'Đánh giá năng lực' }}</strong></div>
+      <p>{{ activeLesson?.hasQuiz ? 'Đạt tối thiểu 80% để hoàn thành bài học này.' : 'Kiểm tra và củng cố kiến thức sau khi hoàn thành chủ đề.' }}</p>
+      <button @click="$emit('quiz')">{{ activeLesson?.hasQuiz ? 'Làm bài kiểm tra bài học' : 'Làm bài kiểm tra' }} <ArrowRight :size="16" /></button>
     </div>
   </aside>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { ArrowRight, Award, Check, ChevronDown, FileText, FolderOpen, PlayCircle, X } from 'lucide-vue-next';
 import type { Lesson, LessonDocument, Topic } from '../../types';
-defineProps<{ topic: Topic | null | undefined; activeLessonId: string; completedLessons: string[]; completedCount: number; progress: number; open: boolean; selectedDocumentId?: number }>();
+const props = defineProps<{ topic: Topic | null | undefined; activeLessonId: string; completedLessons: string[]; completedCount: number; progress: number; open: boolean; selectedDocumentId?: number }>();
 const emit = defineEmits<{ close: []; select: [lessonId: string]; 'select-document': [lessonId: string, document: LessonDocument]; quiz: [] }>();
 const expandedLessons = ref(new Set<string>());
+const activeLesson = computed(() => props.topic?.lessons.find(item => item.id === props.activeLessonId));
 const getDocuments = (lesson: Lesson): LessonDocument[] => {
   return lesson.documents || [];
 };

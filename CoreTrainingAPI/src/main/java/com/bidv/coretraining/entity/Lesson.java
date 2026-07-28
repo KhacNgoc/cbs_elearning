@@ -37,6 +37,10 @@ public class Lesson {
     private VideoSource videoSource = VideoSource.URL;
 
     @OneToMany(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<Question> quizQuestions = new ArrayList<>();
+
+    @OneToMany(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("documentOrder ASC")
     @Builder.Default
     private List<LessonDocument> documents = new ArrayList<>();

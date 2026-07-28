@@ -204,6 +204,7 @@ public class AdminServiceImpl implements AdminService {
 
         Question question = Question.builder()
                 .topic(topic)
+                .lesson(resolveQuestionLesson(questionDto, topic))
                 .text(questionDto.getText())
                 .options(questionDto.getOptions() != null ? questionDto.getOptions() : new ArrayList<>())
                 .correctAnswer(questionDto.getCorrectAnswer())
@@ -226,11 +227,24 @@ public class AdminServiceImpl implements AdminService {
         }
 
         question.setText(questionDto.getText());
+        question.setLesson(resolveQuestionLesson(questionDto, question.getTopic()));
         question.setOptions(questionDto.getOptions() != null ? questionDto.getOptions() : new ArrayList<>());
         question.setCorrectAnswer(questionDto.getCorrectAnswer());
 
         Question saved = questionRepository.save(question);
         return quizMapper.toQuestionDto(saved);
+    }
+
+    private Lesson resolveQuestionLesson(QuestionDto questionDto, Topic topic) {
+        if (questionDto.getLessonId() == null || questionDto.getLessonId().isBlank()) {
+            return null;
+        }
+        Lesson lesson = lessonRepository.findById(questionDto.getLessonId())
+                .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", questionDto.getLessonId()));
+        if (!lesson.getTopic().getId().equals(topic.getId())) {
+            throw new IllegalArgumentException("Bài học không thuộc chủ đề đã chọn");
+        }
+        return lesson;
     }
 
     @Override
