@@ -63,6 +63,7 @@
           <input v-model="searchQuery" type="search" placeholder="Tìm theo nội dung câu hỏi hoặc đáp án..." />
         </div>
 
+        <Transition name="editor-expand">
         <div v-if="showQuestionForm" class="question-editor">
           <div class="question-editor-title">
             <div><strong>{{ editingId ? "Chỉnh sửa câu hỏi" : "Câu hỏi mới" }}</strong><small>Nhập đủ 4 đáp án và chọn một đáp án đúng.</small></div>
@@ -87,8 +88,14 @@
             </button>
           </div>
         </div>
+        </Transition>
 
-        <div class="question-list" v-if="filteredQuestions.length">
+        <TransitionGroup
+          v-if="filteredQuestions.length"
+          name="question-item"
+          tag="div"
+          class="question-list"
+        >
           <article v-for="(question, index) in filteredQuestions" :key="question.id" class="question-card">
             <div class="question-number">{{ index + 1 }}</div>
             <div class="question-content">
@@ -106,7 +113,7 @@
               <button class="danger" title="Xóa câu hỏi" @click="deleteQuestion(question)"><Trash2 :size="17" /></button>
             </div>
           </article>
-        </div>
+        </TransitionGroup>
         <div v-else class="empty-box">
           {{ searchQuery ? "Không tìm thấy câu hỏi phù hợp." : "Bài kiểm tra chưa có câu hỏi. Hãy thêm thủ công hoặc import CSV." }}
         </div>
@@ -302,6 +309,8 @@ select, textarea, .question-text-field input { width: 100%; padding: .7rem; bord
 .search-box { display: flex; align-items: center; gap: .5rem; max-width: 560px; margin-bottom: 1rem; padding: 0 .75rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-muted); }
 .search-box input { width: 100%; height: 42px; border: 0; outline: 0; }
 .question-editor { margin-bottom: 1rem; padding: 1rem; border: 1px solid var(--primary-color); border-radius: var(--radius-md); background: var(--primary-light); }
+.editor-expand-enter-active, .editor-expand-leave-active { transition: opacity .22s ease, transform .22s ease; transform-origin: top center; }
+.editor-expand-enter-from, .editor-expand-leave-to { opacity: 0; transform: translateY(-10px) scale(.985); }
 .question-editor-title { display: flex; justify-content: space-between; margin-bottom: .8rem; }
 .question-editor-title div { display: flex; flex-direction: column; }
 .question-editor-title small { color: var(--text-muted); }
@@ -311,7 +320,12 @@ select, textarea, .question-text-field input { width: 100%; padding: .7rem; bord
 .answer-editor label.correct { border-color: var(--primary-color); }
 .answer-editor label > input[type="text"] { width: 100%; border: 0; outline: 0; }
 .form-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .8rem; }
-.question-list { display: grid; gap: .65rem; }
+.question-list { position: relative; display: grid; gap: .65rem; }
+.question-item-enter-active { transition: opacity .28s ease, transform .28s ease, background-color .5s ease; }
+.question-item-leave-active { position: absolute; transition: opacity .2s ease, transform .2s ease; }
+.question-item-enter-from { opacity: 0; transform: translateY(-12px) scale(.99); background: var(--primary-light); }
+.question-item-leave-to { opacity: 0; transform: translateX(12px); }
+.question-item-move { transition: transform .28s ease; }
 .question-card { display: grid; grid-template-columns: 34px 1fr auto; gap: .75rem; padding: .9rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); }
 .question-number { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: var(--primary-light); color: var(--primary-color); font-weight: 800; }
 .question-content h3 { margin: .2rem 0 .7rem; font-size: var(--admin-text-body); line-height: 1.45; }
@@ -328,5 +342,10 @@ select, textarea, .question-text-field input { width: 100%; padding: .7rem; bord
   .question-tools { width: 100%; margin-left: 0; flex-wrap: wrap; }
   .question-card { grid-template-columns: 30px 1fr; }
   .question-actions { grid-column: 2; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .editor-expand-enter-active, .editor-expand-leave-active,
+  .question-item-enter-active, .question-item-leave-active,
+  .question-item-move { transition: none; }
 }
 </style>
