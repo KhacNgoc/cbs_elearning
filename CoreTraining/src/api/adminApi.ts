@@ -3,6 +3,11 @@ import type { Topic, Lesson, LessonDocument, Question } from '../types';
 import { mockDbTopics, setMockDbTopics } from './courseApi';
 import { mockDbQuestions, setMockDbQuestions } from './quizApi';
 
+const normalizeUploadedPath = (value: string): string => {
+  const uploadsIndex = value.indexOf('/uploads/');
+  return uploadsIndex > 0 ? value.slice(uploadsIndex) : value;
+};
+
 const getDocumentType = (fileName: string): LessonDocument['documentType'] => {
   const extension = fileName.split('.').pop()?.toLowerCase();
   if (extension === 'pdf') return 'PDF';
@@ -154,12 +159,9 @@ export const adminApi = {
     const response = await axiosClient.post<LessonDocument>('/api/admin/documents/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
-    const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
     return {
       ...response.data,
-      fileUrl: response.data.fileUrl.startsWith('http')
-        ? response.data.fileUrl
-        : `${apiBaseUrl}${response.data.fileUrl}`
+      fileUrl: normalizeUploadedPath(response.data.fileUrl)
     };
   },
 
@@ -171,10 +173,7 @@ export const adminApi = {
     const response = await axiosClient.post<{ videoUrl: string }>('/api/admin/videos/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
-    const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
-    return response.data.videoUrl.startsWith('http')
-      ? response.data.videoUrl
-      : `${apiBaseUrl}${response.data.videoUrl}`;
+    return normalizeUploadedPath(response.data.videoUrl);
   },
 
   async createLesson(lesson: Omit<Lesson, 'comments'> & { topicId: string }): Promise<Lesson> {
@@ -223,6 +222,7 @@ export const adminApi = {
         topicId: lesson.topicId,
         hint: lesson.hint,
         videoUrl: lesson.videoUrl,
+        videoSource: lesson.videoSource,
         documents: lesson.documents || [],
         procedureSteps: lesson.procedureSteps || []
       };

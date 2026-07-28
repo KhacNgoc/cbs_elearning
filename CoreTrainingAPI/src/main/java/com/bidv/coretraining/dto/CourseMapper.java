@@ -5,8 +5,11 @@ import com.bidv.coretraining.entity.Lesson;
 import com.bidv.coretraining.entity.LessonDocument;
 import com.bidv.coretraining.entity.ProcedureSection;
 import com.bidv.coretraining.entity.Topic;
+import com.bidv.coretraining.entity.VideoSource;
+import org.mapstruct.AfterMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 
 import java.util.List;
 
@@ -19,6 +22,15 @@ public interface CourseMapper {
 
     @Mapping(source = "topic.id", target = "topicId")
     LessonDto toLessonDto(Lesson lesson);
+
+    @AfterMapping
+    default void inferLegacyVideoSource(Lesson lesson, @MappingTarget LessonDto dto) {
+        if (dto.getVideoSource() != null) return;
+        String videoUrl = lesson.getVideoUrl();
+        dto.setVideoSource(videoUrl != null && videoUrl.contains("/uploads/")
+                ? VideoSource.UPLOAD
+                : VideoSource.URL);
+    }
 
     List<LessonDto> toLessonDtoList(List<Lesson> lessons);
 

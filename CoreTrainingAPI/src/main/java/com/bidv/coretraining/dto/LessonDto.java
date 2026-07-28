@@ -1,5 +1,6 @@
 package com.bidv.coretraining.dto;
 
+import com.bidv.coretraining.entity.VideoSource;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,6 +18,7 @@ public class LessonDto {
     private String topicId;
     private String hint;
     private String videoUrl;
+    private VideoSource videoSource;
     private List<LessonDocumentDto> documents;
     private List<ProcedureSectionDto> procedureSteps;
     private List<CommentDto> comments;
