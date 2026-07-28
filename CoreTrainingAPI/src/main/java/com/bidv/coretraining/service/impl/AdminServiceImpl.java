@@ -82,8 +82,9 @@ public class AdminServiceImpl implements AdminService {
                 .topic(topic)
                 .hint(lessonDto.getHint())
                 .videoUrl(lessonDto.getVideoUrl())
-                .documentSlides(lessonDto.getDocumentSlides() != null ? lessonDto.getDocumentSlides() : new ArrayList<>())
                 .build();
+
+        lesson.setDocuments(buildDocuments(lessonDto.getDocuments(), lesson));
 
         if (lessonDto.getProcedureSteps() != null) {
             List<ProcedureSection> sections = new ArrayList<>();
@@ -118,7 +119,8 @@ public class AdminServiceImpl implements AdminService {
         lesson.setTitle(lessonDto.getTitle());
         lesson.setHint(lessonDto.getHint());
         lesson.setVideoUrl(lessonDto.getVideoUrl());
-        lesson.setDocumentSlides(lessonDto.getDocumentSlides() != null ? lessonDto.getDocumentSlides() : new ArrayList<>());
+        lesson.getDocuments().clear();
+        lesson.getDocuments().addAll(buildDocuments(lessonDto.getDocuments(), lesson));
 
         // Rebuild procedure steps to avoid merge errors
         lesson.getProcedureSteps().clear();
@@ -144,6 +146,27 @@ public class AdminServiceImpl implements AdminService {
         Lesson lesson = lessonRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", id));
         lessonRepository.delete(lesson);
+    }
+
+    private List<LessonDocument> buildDocuments(List<LessonDocumentDto> documentDtos, Lesson lesson) {
+        if (documentDtos == null) {
+            return new ArrayList<>();
+        }
+
+        List<LessonDocument> documents = new ArrayList<>();
+        for (int i = 0; i < documentDtos.size(); i++) {
+            LessonDocumentDto documentDto = documentDtos.get(i);
+            documents.add(LessonDocument.builder()
+                    .name(documentDto.getName())
+                    .documentType(documentDto.getDocumentType())
+                    .fileUrl(documentDto.getFileUrl())
+                    .originalFileName(documentDto.getOriginalFileName())
+                    .fileSize(documentDto.getFileSize())
+                    .documentOrder(i)
+                    .lesson(lesson)
+                    .build());
+        }
+        return documents;
     }
 
     // Question CRUD

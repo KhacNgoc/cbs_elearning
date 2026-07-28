@@ -27,10 +27,10 @@
       </div>
 
       <div class="nav-user-menu">
-        <div class="nav-user">
+        <router-link to="/profile" class="nav-user" title="Xem hồ sơ cá nhân">
           <div class="nav-user-avatar">{{ userAvatarLetter }}</div>
           <span>{{ userStore.fullName || 'quantrh' }}</span>
-        </div>
+        </router-link>
         <button class="btn-logout" @click="handleLogout" title="Đăng xuất">
           <LogOut class="logout-icon" />
         </button>
@@ -101,6 +101,16 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+}
+
+.nav-user {
+  transition: var(--transition);
+}
+
+.nav-user:hover,
+.nav-user.router-link-active {
+  background: #d7e9e3;
+  box-shadow: inset 0 0 0 1px rgba(0, 91, 65, 0.16);
 }
 
 .btn-logout {

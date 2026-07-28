@@ -9,25 +9,38 @@
     </div>
     
     <div class="video-player-wrapper">
+      <iframe
+        v-if="youtubeEmbedUrl"
+        :src="youtubeEmbedUrl"
+        class="video-element youtube-player"
+        :title="title || 'Video bài học'"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowfullscreen
+      ></iframe>
       <video
+        v-else
         ref="videoElement"
-        :src="videoUrl"
+        :src="resolvedVideoUrl"
         class="video-element"
         @timeupdate="onTimeUpdate"
         @loadedmetadata="onLoadedMetadata"
+        @durationchange="syncDuration"
+        @loadeddata="syncDuration"
         @ended="onVideoEnded"
+        @play="isPlaying = true"
+        @pause="isPlaying = false"
         preload="metadata"
       ></video>
       
       <!-- Big Play Button Overlay -->
-      <div v-if="!isPlaying" class="play-overlay" @click="togglePlay">
+      <div v-if="!youtubeEmbedUrl && !isPlaying" class="play-overlay" @click="togglePlay">
         <div class="big-play-btn">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="play-svg"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         </div>
       </div>
       
       <!-- Custom Controls Bar -->
-      <div class="custom-controls">
+      <div v-if="!youtubeEmbedUrl" class="custom-controls">
         <div class="progress-container" @click="seek">
           <div class="progress-bar">
             <div class="progress-current" :style="{ width: `${progressPercent}%` }"></div>
@@ -41,6 +54,16 @@
               <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="icon-svg"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             </button>
             <span class="time-display">{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</span>
+            <button data-testid="video-add-note" class="ctrl-btn note-control" title="Thêm ghi chú tại thời điểm hiện tại"
+              aria-label="Thêm ghi chú" @click.stop="requestNote">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" class="icon-svg">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+              <span>Thêm ghi chú</span>
+            </button>
           </div>
           
           <div class="right-ctrls">
@@ -67,6 +90,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 
+const emit = defineEmits<{
+  'time-update': [seconds: number];
+  'add-note': [seconds: number];
+}>();
+
 const props = defineProps({
   videoUrl: {
     type: String,
@@ -84,10 +112,55 @@ const currentTime = ref(0);
 const duration = ref(0);
 const isMuted = ref(false);
 
-const progressPercent = computed(() => {
-  if (duration.value === 0) return 0;
-  return (currentTime.value / duration.value) * 100;
+const youtubeVideoId = computed(() => {
+  const value = props.videoUrl.trim();
+  if (!value) return '';
+  try {
+    const url = new URL(value);
+    const host = url.hostname.replace(/^www\./, '').toLowerCase();
+    if (host === 'youtu.be') return url.pathname.split('/').filter(Boolean)[0] || '';
+    if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'youtube-nocookie.com') {
+      if (url.pathname === '/watch') return url.searchParams.get('v') || '';
+      const parts = url.pathname.split('/').filter(Boolean);
+      if (['embed', 'shorts', 'live'].includes(parts[0])) return parts[1] || '';
+    }
+  } catch {
+    return '';
+  }
+  return '';
 });
+
+const youtubeEmbedUrl = computed(() =>
+  youtubeVideoId.value
+    ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(youtubeVideoId.value)}?rel=0`
+    : ''
+);
+
+const resolvedVideoUrl = computed(() => {
+  if (/^(https?:|blob:|data:)/i.test(props.videoUrl)) return props.videoUrl;
+  const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+  return `${apiBaseUrl}${props.videoUrl.startsWith('/') ? '' : '/'}${props.videoUrl}`;
+});
+
+const progressPercent = computed(() => {
+  if (duration.value <= 0) return 0;
+  return Math.min(100, (currentTime.value / duration.value) * 100);
+});
+
+const syncDuration = () => {
+  const video = videoElement.value;
+  if (!video) return;
+
+  const candidates = [video.duration];
+  if (video.seekable.length > 0) {
+    candidates.push(video.seekable.end(video.seekable.length - 1));
+  }
+  const detectedDuration = Math.max(
+    ...candidates.filter(value => Number.isFinite(value) && value > 0),
+    0
+  );
+  if (detectedDuration > 0) duration.value = detectedDuration;
+};
 
 const togglePlay = () => {
   if (!videoElement.value) return;
@@ -119,18 +192,17 @@ const toggleFullscreen = () => {
 const onTimeUpdate = () => {
   if (videoElement.value) {
     currentTime.value = videoElement.value.currentTime;
+    syncDuration();
+    emit('time-update', currentTime.value);
   }
 };
 
 const onLoadedMetadata = () => {
-  if (videoElement.value) {
-    duration.value = videoElement.value.duration;
-  }
+  syncDuration();
 };
 
 const onVideoEnded = () => {
   isPlaying.value = false;
-  currentTime.value = 0;
 };
 
 const seek = (event: MouseEvent) => {
@@ -140,6 +212,26 @@ const seek = (event: MouseEvent) => {
   const percent = clickX / rect.width;
   videoElement.value.currentTime = percent * duration.value;
 };
+
+const seekTo = (seconds: number) => {
+  if (!videoElement.value) return;
+  const upperBound = Number.isFinite(videoElement.value.duration)
+    ? videoElement.value.duration
+    : seconds;
+  videoElement.value.currentTime = Math.max(0, Math.min(seconds, upperBound));
+  currentTime.value = videoElement.value.currentTime;
+  emit('time-update', currentTime.value);
+};
+
+const requestNote = () => {
+  if (!videoElement.value) return;
+  videoElement.value.pause();
+  currentTime.value = videoElement.value.currentTime;
+  emit('time-update', currentTime.value);
+  emit('add-note', Math.floor(currentTime.value));
+};
+
+defineExpose({ seekTo });
 
 const formatTime = (timeInSeconds: number) => {
   if (isNaN(timeInSeconds)) return '00:00';
@@ -225,6 +317,10 @@ const openExternal = () => {
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+.youtube-player {
+  border: 0;
 }
 
 .play-overlay {
@@ -347,6 +443,26 @@ const openExternal = () => {
   font-size: 0.8rem;
   color: #ccc;
   font-weight: 500;
+}
+
+.note-control {
+  width: auto;
+  gap: .4rem;
+  padding: 5px 8px;
+  border: 1px solid rgba(255,255,255,.42);
+  border-radius: 4px;
+  font-size: .75rem;
+  font-weight: 600;
+}
+
+.note-control:hover {
+  color: #fff;
+  border-color: #fff;
+  background: rgba(255,255,255,.12);
+}
+
+@media (max-width: 600px) {
+  .note-control span { display: none; }
 }
 
 .video-footer-info {

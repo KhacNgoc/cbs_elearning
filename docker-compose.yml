@@ -13,6 +13,10 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://ep-icy-haze-az1ohp84-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
       - SPRING_DATASOURCE_USERNAME=neondb_owner
       - SPRING_DATASOURCE_PASSWORD=npg_gr0ZeANCOmK2
+      - DOCUMENT_STORAGE_PATH=/app/uploads/documents
+      - VIDEO_STORAGE_PATH=/app/uploads/videos
+    volumes:
+      - training_uploads:/app/uploads
     restart: always
 
   frontend:
@@ -25,3 +29,6 @@ services:
     depends_on:
       - backend
     restart: always
+
+volumes:
+  training_uploads:

@@ -8,6 +8,10 @@ spring:
     name: coretraining
   profiles:
     active: postgres
+  servlet:
+    multipart:
+      max-file-size: ${MAX_UPLOAD_SIZE:500MB}
+      max-request-size: ${MAX_UPLOAD_SIZE:500MB}
 
 app:
   jwt:
@@ -17,4 +21,7 @@ app:
     allowed-origins: http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173
   data-initializer:
     enabled: false
+  storage:
+    documents-directory: ${DOCUMENT_STORAGE_PATH:uploads/documents}
+    videos-directory: ${VIDEO_STORAGE_PATH:uploads/videos}
 

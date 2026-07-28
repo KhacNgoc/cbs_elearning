@@ -4,6 +4,8 @@ import com.bidv.coretraining.dto.CommentDto;
 import com.bidv.coretraining.dto.CommentRequest;
 import com.bidv.coretraining.dto.LessonDto;
 import com.bidv.coretraining.dto.TopicDto;
+import com.bidv.coretraining.dto.VideoNoteDto;
+import com.bidv.coretraining.dto.VideoNoteRequest;
 import com.bidv.coretraining.security.CustomUserDetails;
 import com.bidv.coretraining.service.CourseService;
 import jakarta.validation.Valid;
@@ -45,5 +47,39 @@ public class CourseController {
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         CommentDto response = courseService.addCommentToLesson(id, commentRequest, userDetails.getUsername());
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/lessons/{id}/notes")
+    public ResponseEntity<List<VideoNoteDto>> getVideoNotes(
+            @PathVariable String id,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(courseService.getVideoNotes(id, userDetails.getUsername()));
+    }
+
+    @PostMapping("/lessons/{id}/notes")
+    public ResponseEntity<VideoNoteDto> createVideoNote(
+            @PathVariable String id,
+            @Valid @RequestBody VideoNoteRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(courseService.createVideoNote(id, request, userDetails.getUsername()));
+    }
+
+    @PutMapping("/lessons/{lessonId}/notes/{noteId}")
+    public ResponseEntity<VideoNoteDto> updateVideoNote(
+            @PathVariable String lessonId,
+            @PathVariable Long noteId,
+            @Valid @RequestBody VideoNoteRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(courseService.updateVideoNote(
+                lessonId, noteId, request, userDetails.getUsername()));
+    }
+
+    @DeleteMapping("/lessons/{lessonId}/notes/{noteId}")
+    public ResponseEntity<Void> deleteVideoNote(
+            @PathVariable String lessonId,
+            @PathVariable Long noteId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        courseService.deleteVideoNote(lessonId, noteId, userDetails.getUsername());
+        return ResponseEntity.noContent().build();
     }
 }

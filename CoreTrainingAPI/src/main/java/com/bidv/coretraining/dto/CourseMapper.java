@@ -2,6 +2,7 @@ package com.bidv.coretraining.dto;
 
 import com.bidv.coretraining.entity.Comment;
 import com.bidv.coretraining.entity.Lesson;
+import com.bidv.coretraining.entity.LessonDocument;
 import com.bidv.coretraining.entity.ProcedureSection;
 import com.bidv.coretraining.entity.Topic;
 import org.mapstruct.Mapper;
@@ -20,6 +21,10 @@ public interface CourseMapper {
     LessonDto toLessonDto(Lesson lesson);
 
     List<LessonDto> toLessonDtoList(List<Lesson> lessons);
+
+    LessonDocumentDto toLessonDocumentDto(LessonDocument document);
+
+    List<LessonDocumentDto> toLessonDocumentDtoList(List<LessonDocument> documents);
 
     ProcedureSectionDto toProcedureSectionDto(ProcedureSection section);
 

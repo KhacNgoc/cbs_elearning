@@ -1,7 +1,14 @@
 import { axiosClient, isMockApi, mockDelay } from './axiosClient';
-import type { Topic, Lesson, Question } from '../types';
+import type { Topic, Lesson, LessonDocument, Question } from '../types';
 import { mockDbTopics, setMockDbTopics } from './courseApi';
 import { mockDbQuestions, setMockDbQuestions } from './quizApi';
+
+const getDocumentType = (fileName: string): LessonDocument['documentType'] => {
+  const extension = fileName.split('.').pop()?.toLowerCase();
+  if (extension === 'pdf') return 'PDF';
+  if (extension === 'ppt' || extension === 'pptx') return 'POWERPOINT';
+  return 'WORD';
+};
 
 export interface AdminUser {
   id?: number;
@@ -131,6 +138,45 @@ export const adminApi = {
   // ==========================================
   // Lesson Management
   // ==========================================
+  async uploadDocument(file: File): Promise<LessonDocument> {
+    if (isMockApi()) {
+      return {
+        name: file.name.replace(/\.[^.]+$/, ''),
+        documentType: getDocumentType(file.name),
+        fileUrl: URL.createObjectURL(file),
+        originalFileName: file.name,
+        fileSize: file.size
+      };
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await axiosClient.post<LessonDocument>('/api/admin/documents/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+    return {
+      ...response.data,
+      fileUrl: response.data.fileUrl.startsWith('http')
+        ? response.data.fileUrl
+        : `${apiBaseUrl}${response.data.fileUrl}`
+    };
+  },
+
+  async uploadVideo(file: File): Promise<string> {
+    if (isMockApi()) return URL.createObjectURL(file);
+
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await axiosClient.post<{ videoUrl: string }>('/api/admin/videos/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+    return response.data.videoUrl.startsWith('http')
+      ? response.data.videoUrl
+      : `${apiBaseUrl}${response.data.videoUrl}`;
+  },
+
   async createLesson(lesson: Omit<Lesson, 'comments'> & { topicId: string }): Promise<Lesson> {
     if (isMockApi()) {
       await mockDelay(300);
@@ -177,7 +223,7 @@ export const adminApi = {
         topicId: lesson.topicId,
         hint: lesson.hint,
         videoUrl: lesson.videoUrl,
-        documentSlides: lesson.documentSlides,
+        documents: lesson.documents || [],
         procedureSteps: lesson.procedureSteps || []
       };
 

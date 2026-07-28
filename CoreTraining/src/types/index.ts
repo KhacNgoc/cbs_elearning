@@ -7,18 +7,28 @@ export interface Comment {
   date: string;
 }
 
+export interface VideoNote {
+  id: number;
+  lessonId: string;
+  timestampSeconds: number;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ProcedureSection {
   title: string;
   steps: string[];
 }
 
 export interface LessonDocument {
-  id: string;
+  id?: number;
   name: string;
-  type: 'slides' | 'pdf' | 'link';
-  slides?: string[];
-  url?: string;
-  size?: string;
+  documentType: 'PDF' | 'WORD' | 'POWERPOINT';
+  fileUrl: string;
+  originalFileName?: string;
+  fileSize?: number;
+  documentOrder?: number;
 }
 
 export interface Lesson {
@@ -26,8 +36,7 @@ export interface Lesson {
   title: string;
   topicId: string;
   hint: string;
-  documentSlides: string[]; // Content/Text of each slide
-  documents?: LessonDocument[]; // Multiple learning files; documentSlides remains for legacy API compatibility
+  documents: LessonDocument[];
   videoUrl: string;
   procedureSteps: ProcedureSection[];
   comments: Comment[];
@@ -68,6 +77,19 @@ export interface UserProgress {
   groupName?: string;
   mandatoryTopics: string[];
   registeredTopics: string[];
+}
+
+export interface UserProfile {
+  id?: number;
+  username: string;
+  fullName: string;
+  email?: string;
+  employeeId?: string;
+  avatarColor?: string;
+  role: string;
+  points: number;
+  groupId?: string;
+  groupName?: string;
 }
 
 export interface LeaderboardUser {

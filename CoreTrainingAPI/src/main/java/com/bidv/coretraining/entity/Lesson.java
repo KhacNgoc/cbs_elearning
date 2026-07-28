@@ -31,12 +31,10 @@ public class Lesson {
     @Column(name = "video_url")
     private String videoUrl;
 
-    @ElementCollection
-    @CollectionTable(name = "lesson_slides", joinColumns = @JoinColumn(name = "lesson_id"))
-    @Column(name = "slide_content", columnDefinition = "TEXT")
-    @OrderColumn(name = "slide_order")
+    @OneToMany(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("documentOrder ASC")
     @Builder.Default
-    private List<String> documentSlides = new ArrayList<>();
+    private List<LessonDocument> documents = new ArrayList<>();
 
     @OneToMany(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("sectionOrder ASC")
