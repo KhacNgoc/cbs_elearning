@@ -39,6 +39,7 @@ export interface Lesson {
   documents: LessonDocument[];
   videoUrl: string;
   videoSource?: 'UPLOAD' | 'URL';
+  hasQuiz?: boolean;
   procedureSteps: ProcedureSection[];
   comments: Comment[];
 }
@@ -53,6 +54,7 @@ export interface Topic {
 export interface Question {
   id: number;
   topicId: string;
+  lessonId?: string;
   text: string;
   options: string[];
   correctAnswer: number; // 0-indexed index of options

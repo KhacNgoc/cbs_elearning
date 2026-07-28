@@ -23,6 +23,10 @@ public class Question {
     @JoinColumn(name = "topic_id", nullable = false)
     private Topic topic;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "lesson_id")
+    private Lesson lesson;
+
     @Column(nullable = false, columnDefinition = "TEXT")
     private String text;
 

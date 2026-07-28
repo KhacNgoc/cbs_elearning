@@ -26,7 +26,7 @@
     <!-- Right Main Content Area -->
     <div class="admin-main-content">
       <!-- Loading State -->
-      <div v-if="loading" class="loading-overlay card">
+      <div v-if="loading" class="loading-overlay">
         <div class="spinner"></div>
         <p>Đang tải dữ liệu cấu hình...</p>
       </div>
@@ -34,7 +34,10 @@
       <!-- Main Content Panel -->
       <div v-else class="admin-tab-content">
         <!-- 1. OVERVIEW / DASHBOARD TAB -->
-        <div v-if="activeTab === 'overview'" class="tab-pane animate-fade-in">
+        <div
+          v-if="activeTab === 'overview'"
+          class="tab-pane overview-pane animate-fade-in"
+        >
           <!-- Statistics Cards Grid -->
           <div class="stats-grid">
             <div class="stat-card card">
@@ -348,6 +351,7 @@
                 v-model="selectedTopicId"
                 class="form-control select-control"
               >
+                <option :value="ALL_TOPICS">Tất cả chủ đề</option>
                 <option
                   v-for="t in courseStore.topics"
                   :key="t.id"
@@ -362,6 +366,7 @@
               <thead>
                 <tr>
                   <th>Mã bài học</th>
+                  <th v-if="selectedTopicId === ALL_TOPICS">Chủ đề</th>
                   <th>Tiêu đề bài học</th>
                   <th>Gợi ý nghiệp vụ (Hint)</th>
                   <th>Video đính kèm</th>
@@ -373,6 +378,9 @@
                 <tr v-for="lesson in currentTopicLessons" :key="lesson.id">
                   <td>
                     <span class="code-badge">{{ lesson.id }}</span>
+                  </td>
+                  <td v-if="selectedTopicId === ALL_TOPICS">
+                    {{ getTopicName(lesson.topicId) }}
                   </td>
                   <td>
                     <strong>{{ lesson.title }}</strong>
@@ -420,14 +428,16 @@
           <div class="exams-manager card">
             <div class="card-header-row">
               <div class="header-left">
-                <h3 class="card-title">NGÂN HÀNG CÂU HỎI TRẮC NGHIỆM</h3>
+                <h3 class="card-title">QUẢN LÝ BÀI KIỂM TRA</h3>
                 <p class="card-subtitle">
-                  Thiết lập các câu hỏi thi thử và lựa chọn đáp án chính xác.
+                  Chọn một bài kiểm tra để xem và quản lý câu hỏi bên trong.
                 </p>
               </div>
-              <button class="btn btn-primary" @click="openQuestionModal()">
-                <Plus class="btn-icon" /> THÊM CÂU HỎI
-              </button>
+              <div class="exam-header-actions">
+                <button class="btn btn-primary" @click="createQuiz">
+                  <Plus class="btn-icon" /> THÊM BÀI KIỂM TRA
+                </button>
+              </div>
             </div>
 
             <!-- Select Topic Filter -->
@@ -438,6 +448,7 @@
                 v-model="selectedTopicId"
                 class="form-control select-control"
               >
+                <option :value="ALL_TOPICS">Tất cả chủ đề</option>
                 <option
                   v-for="t in courseStore.topics"
                   :key="t.id"
@@ -448,58 +459,38 @@
               </select>
             </div>
 
-            <div class="questions-list" v-if="currentTopicQuestions.length > 0">
-              <div
-                v-for="(q, idx) in currentTopicQuestions"
-                :key="q.id"
-                class="question-admin-card"
-              >
-                <div class="q-card-header">
-                  <h4>
-                    Câu hỏi {{ idx + 1 }}
-                    <span class="q-id-tag">ID: {{ q.id }}</span>
-                  </h4>
-                  <div class="q-actions">
-                    <button
-                      class="action-btn edit"
-                      @click="openQuestionModal(q)"
-                    >
-                      <Edit />
-                    </button>
-                    <button
-                      class="action-btn delete"
-                      @click="handleDeleteQuestion(q.id)"
-                    >
-                      <Trash2 />
-                    </button>
-                  </div>
-                </div>
-                <p class="q-text">{{ q.text }}</p>
+            <div class="quiz-list-toolbar">
+              <Search :size="18" />
+              <input
+                v-model="quizSearchQuery"
+                type="search"
+                placeholder="Tìm theo tên bài kiểm tra hoặc bài học..."
+              />
+            </div>
 
-                <div class="options-preview">
-                  <div
-                    v-for="(opt, oIdx) in q.options"
-                    :key="oIdx"
-                    class="option-item-preview"
-                    :class="{ correct: oIdx === q.correctAnswer }"
-                  >
-                    <span class="opt-letter">{{
-                      String.fromCharCode(65 + oIdx)
-                    }}</span>
-                    <span class="opt-text">{{ opt }}</span>
-                    <CheckCircle2
-                      class="correct-badge"
-                      v-if="oIdx === q.correctAnswer"
-                    />
-                  </div>
+            <div class="quiz-definition-grid" v-if="filteredQuizDefinitions.length">
+              <button
+                v-for="quiz in filteredQuizDefinitions"
+                :key="quiz.key"
+                class="quiz-definition-card"
+                @click="openQuizDefinition(quiz)"
+              >
+                <div class="quiz-definition-icon"><HelpCircle :size="22" /></div>
+                <div class="quiz-definition-copy">
+                  <span class="q-scope-tag">{{ quiz.lessonId ? "Bài học" : "Toàn chủ đề" }}</span>
+                  <h4>{{ quiz.title }}</h4>
+                  <p>{{ quiz.questionCount }} câu hỏi · Đạt tối thiểu 80%</p>
                 </div>
-              </div>
+                <ArrowRight :size="20" />
+              </button>
             </div>
             <div class="empty-state-box" v-else>
               <p>
-                Chủ đề này chưa có câu hỏi thi thử nào. Bấm nút "Thêm câu hỏi"
-                để bắt đầu.
+                {{ quizSearchQuery ? "Không tìm thấy bài kiểm tra phù hợp." : "Chủ đề này chưa có bài kiểm tra." }}
               </p>
+              <button v-if="!quizSearchQuery" class="btn btn-primary" @click="createQuiz">
+                <Plus :size="16" /> Tạo bài kiểm tra đầu tiên
+              </button>
             </div>
           </div>
         </div>
@@ -932,7 +923,7 @@
         <form @submit.prevent="saveQuestion">
           <div class="form-row">
             <div class="form-group col">
-              <label>Chủ đề thi thử</label>
+              <label>1. Chọn chủ đề</label>
               <select
                 v-model="questionForm.topicId"
                 class="form-control"
@@ -947,10 +938,26 @@
                 </option>
               </select>
             </div>
+            <div class="form-group col">
+              <label>2. Phạm vi bài kiểm tra</label>
+              <select v-model="questionForm.lessonId" class="form-control">
+                <option value="">Bài kiểm tra chung của chủ đề</option>
+                <option
+                  v-for="lesson in questionTopicLessons"
+                  :key="lesson.id"
+                  :value="lesson.id"
+                >
+                  Bài học: {{ lesson.title }}
+                </option>
+              </select>
+              <small class="field-help">
+                Không bắt buộc chọn bài học. Nếu chọn, học viên phải đạt 80% để hoàn thành bài đó.
+              </small>
+            </div>
           </div>
 
           <div class="form-group">
-            <label>Nội dung câu hỏi nghiệp vụ</label>
+            <label>3. Nhập nội dung câu hỏi</label>
             <textarea
               v-model="questionForm.text"
               rows="3"
@@ -960,7 +967,7 @@
           </div>
 
           <div class="form-group-options">
-            <label class="options-label">Danh sách các đáp án lựa chọn:</label>
+            <label class="options-label">4. Nhập đáp án và chọn đáp án đúng</label>
             <div
               v-for="idx in [0, 1, 2, 3]"
               :key="idx"
@@ -985,8 +992,7 @@
               />
             </div>
             <span class="helper-text-opt"
-              >* Tích chọn nút tròn bên trái để đánh dấu đó là đáp án chính
-              xác.</span
+              >Chọn nút tròn bên trái đáp án chính xác. Cần nhập đủ 4 đáp án.</span
             >
           </div>
 
@@ -1008,6 +1014,7 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { useCourseStore } from "../stores/courseStore";
 import { adminApi } from "../api/adminApi";
 import type { AdminUser } from "../api/adminApi";
@@ -1021,11 +1028,12 @@ import {
   Plus,
   Edit,
   Trash2,
-  CheckCircle2,
   FileText,
   Upload,
   Link2,
   X,
+  Search,
+  ArrowRight,
 } from "lucide-vue-next";
 
 // Chart.js imports & registrations
@@ -1059,9 +1067,16 @@ ChartJS.register(
 
 // Stores
 const courseStore = useCourseStore();
+const router = useRouter();
+const route = useRoute();
 
 // Sidebar tab definitions
-const activeTab = ref("overview");
+const requestedAdminTab =
+  typeof route.query.tab === "string" &&
+  ["overview", "users", "lessons", "exams"].includes(route.query.tab)
+    ? route.query.tab
+    : "overview";
+const activeTab = ref(requestedAdminTab);
 const tabs = [
   { id: "overview", name: "Tổng quan", icon: Settings },
   { id: "users", name: "Thành viên", icon: Users },
@@ -1109,8 +1124,10 @@ const activeSessions = ref([
 const loading = ref(false);
 const users = ref<AdminUser[]>([]);
 const questions = ref<Question[]>([]);
-const selectedTopicId = ref("");
+const ALL_TOPICS = "__ALL__";
+const selectedTopicId = ref(ALL_TOPICS);
 const userSearchQuery = ref("");
+const quizSearchQuery = ref("");
 
 // Forms & Modals states
 const topicModal = ref({ show: false, isEdit: false });
@@ -1151,6 +1168,7 @@ const questionModal = ref({
 const questionForm = ref({
   text: "",
   topicId: "",
+  lessonId: "",
   correctAnswer: 0,
   options: [] as string[],
 });
@@ -1176,13 +1194,98 @@ const filteredUsers = computed(() => {
 });
 
 const currentTopicLessons = computed(() => {
+  if (selectedTopicId.value === ALL_TOPICS) {
+    return courseStore.topics.flatMap((topic) => topic.lessons);
+  }
   const topic = courseStore.topics.find((t) => t.id === selectedTopicId.value);
   return topic ? topic.lessons : [];
 });
 
-const currentTopicQuestions = computed(() => {
-  return questions.value.filter((q) => q.topicId === selectedTopicId.value);
+type QuizDefinition = {
+  key: string;
+  topicId: string;
+  lessonId?: string;
+  title: string;
+  questionCount: number;
+};
+
+const quizDefinitions = computed<QuizDefinition[]>(() => {
+  const definitions: QuizDefinition[] = [];
+  const topics =
+    selectedTopicId.value === ALL_TOPICS
+      ? courseStore.topics
+      : courseStore.topics.filter((topic) => topic.id === selectedTopicId.value);
+  for (const topic of topics) {
+    const topicQuestions = questions.value.filter(
+      (question) => question.topicId === topic.id && !question.lessonId,
+    );
+    if (topicQuestions.length) {
+      definitions.push({
+        key: `topic:${topic.id}`,
+        topicId: topic.id,
+        title: `Bài kiểm tra tổng hợp — ${topic.name}`,
+        questionCount: topicQuestions.length,
+      });
+    }
+    for (const lesson of topic.lessons) {
+      const count = questions.value.filter(
+        (question) => question.lessonId === lesson.id,
+      ).length;
+      if (count) {
+        definitions.push({
+          key: `lesson:${lesson.id}`,
+          topicId: topic.id,
+          lessonId: lesson.id,
+          title:
+            selectedTopicId.value === ALL_TOPICS
+              ? `${lesson.title} — ${topic.name}`
+              : lesson.title,
+          questionCount: count,
+        });
+      }
+    }
+  }
+  return definitions;
 });
+
+const filteredQuizDefinitions = computed(() => {
+  const query = quizSearchQuery.value.trim().toLocaleLowerCase("vi");
+  if (!query) return quizDefinitions.value;
+  return quizDefinitions.value.filter((quiz) =>
+    `${quiz.title} ${quiz.lessonId || ""}`.toLocaleLowerCase("vi").includes(query),
+  );
+});
+
+const createQuiz = () => {
+  const topicId =
+    selectedTopicId.value === ALL_TOPICS ? undefined : selectedTopicId.value;
+  router.push({ path: "/admin/quizzes/new", query: topicId ? { topicId } : {} });
+};
+
+const openQuizDefinition = (quiz: QuizDefinition) =>
+  router.push(
+    quiz.lessonId
+      ? `/admin/quizzes/lesson/${encodeURIComponent(quiz.lessonId)}`
+      : `/admin/quizzes/topic/${encodeURIComponent(quiz.topicId)}`,
+  );
+
+const questionTopicLessons = computed(() =>
+  courseStore.topics.find((topic) => topic.id === questionForm.value.topicId)?.lessons || [],
+);
+
+watch(
+  () => questionForm.value.topicId,
+  () => {
+    if (
+      questionForm.value.lessonId &&
+      !questionTopicLessons.value.some(
+        (lesson) => lesson.id === questionForm.value.lessonId,
+      )
+    ) {
+      questionForm.value.lessonId = "";
+    }
+  },
+);
 
 // Watch topic changes to adjust selectedTopicId if it gets empty
 watch(
@@ -1200,6 +1303,17 @@ const switchTab = (tabId: string) => {
   activeTab.value = tabId;
 };
 
+watch(
+  () => route.query.tab,
+  (tab) => {
+    activeTab.value =
+      typeof tab === "string" &&
+      ["overview", "users", "lessons", "exams"].includes(tab)
+        ? tab
+        : "overview";
+  },
+);
+
 // Helper for user avatar color fallback
 const getAvatarColor = (username: string) => {
   const user = users.value.find((u) => u.username === username);
@@ -1210,6 +1324,9 @@ const getAvatarColor = (username: string) => {
 const getQuestionCountForTopic = (topicId: string) => {
   return questions.value.filter((q) => q.topicId === topicId).length;
 };
+
+const getTopicName = (topicId: string) =>
+  courseStore.topics.find((topic) => topic.id === topicId)?.name || topicId;
 
 // ==========================================
 // ADVANCED CHARTS DATA & OPTIONS
@@ -1403,6 +1520,10 @@ const loadAllData = async () => {
       try {
         const qList = await quizApi.getQuizQuestions(topic.id);
         questionsList.push(...(qList as unknown as Question[]));
+        for (const lesson of topic.lessons) {
+          const lessonQuestions = await quizApi.getQuizQuestions(topic.id, lesson.id);
+          questionsList.push(...(lessonQuestions as unknown as Question[]));
+        }
       } catch (err) {
         console.error(`Failed to load questions for ${topic.id}:`, err);
       }
@@ -1571,7 +1692,10 @@ const openLessonModal = (lesson?: Lesson) => {
     lessonForm.value = {
       id: "",
       title: "",
-      topicId: selectedTopicId.value,
+      topicId:
+        selectedTopicId.value === ALL_TOPICS
+          ? courseStore.topics[0]?.id || ""
+          : selectedTopicId.value,
       hint: "",
       videoSource: "UPLOAD",
       videoUrl: "",
@@ -1763,6 +1887,7 @@ const openQuestionModal = (question?: Question) => {
     questionForm.value = {
       text: question.text,
       topicId: question.topicId,
+      lessonId: question.lessonId || "",
       correctAnswer: question.correctAnswer,
       options: [],
     };
@@ -1776,7 +1901,11 @@ const openQuestionModal = (question?: Question) => {
     questionModal.value = { show: true, isEdit: false, editId: null };
     questionForm.value = {
       text: "",
-      topicId: selectedTopicId.value,
+      topicId:
+        selectedTopicId.value === ALL_TOPICS
+          ? courseStore.topics[0]?.id || ""
+          : selectedTopicId.value,
+      lessonId: "",
       correctAnswer: 0,
       options: [],
     };
@@ -1790,8 +1919,8 @@ const saveQuestion = async () => {
     const opts = optionsInputs.value
       .map((o) => o.trim())
       .filter((o) => o.length > 0);
-    if (opts.length < 2) {
-      alert("Vui lòng điền tối thiểu 2 đáp án lựa chọn!");
+    if (opts.length !== 4) {
+      alert("Vui lòng nhập đầy đủ 4 đáp án trước khi lưu.");
       loading.value = false;
       return;
     }
@@ -1821,6 +1950,103 @@ const saveQuestion = async () => {
   }
 };
 
+const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
+
+const downloadQuestionTemplate = () => {
+  const topicId =
+    selectedTopicId.value === ALL_TOPICS
+      ? courseStore.topics[0]?.id || "CIF"
+      : selectedTopicId.value || courseStore.topics[0]?.id || "CIF";
+  const lessonId =
+    courseStore.topics.find((topic) => topic.id === topicId)?.lessons[0]?.id || "";
+  const rows = [
+    ["topicId", "lessonId", "question", "optionA", "optionB", "optionC", "optionD", "correctAnswer"],
+    [topicId, "", "Câu hỏi mẫu cho chủ đề?", "Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D", "A"],
+    [topicId, lessonId, "Câu hỏi mẫu cho bài học?", "Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D", "B"],
+  ];
+  const content = "\uFEFF" + rows.map((row) => row.map(escapeCsv).join(",")).join("\r\n");
+  const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
+  const link = window.document.createElement("a");
+  link.href = url;
+  link.download = "mau-import-cau-hoi.csv";
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
+const parseCsv = (content: string): string[][] => {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let value = "";
+  let quoted = false;
+  for (let index = 0; index < content.length; index++) {
+    const char = content[index];
+    if (char === '"') {
+      if (quoted && content[index + 1] === '"') {
+        value += '"';
+        index++;
+      } else quoted = !quoted;
+    } else if (char === "," && !quoted) {
+      row.push(value.trim());
+      value = "";
+    } else if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && content[index + 1] === "\n") index++;
+      row.push(value.trim());
+      if (row.some(Boolean)) rows.push(row);
+      row = [];
+      value = "";
+    } else value += char;
+  }
+  row.push(value.trim());
+  if (row.some(Boolean)) rows.push(row);
+  return rows;
+};
+
+const importQuestionsFromCsv = async (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  try {
+    const rows = parseCsv((await file.text()).replace(/^\uFEFF/, ""));
+    const expected = ["topicId", "lessonId", "question", "optionA", "optionB", "optionC", "optionD", "correctAnswer"];
+    if (!rows.length || expected.some((name, index) => rows[0]?.[index] !== name)) {
+      throw new Error(`Dòng tiêu đề phải đúng thứ tự: ${expected.join(", ")}`);
+    }
+    const errors: string[] = [];
+    const payloads = rows.slice(1).map((row, index) => {
+      const line = index + 2;
+      const [topicId, lessonId, text, ...rest] = row;
+      const options = rest.slice(0, 4);
+      const answerText = (rest[4] || "").toUpperCase();
+      const correctAnswer = ["A", "B", "C", "D"].indexOf(answerText);
+      const topic = courseStore.topics.find((item) => item.id === topicId);
+      if (!topic) errors.push(`Dòng ${line}: topicId "${topicId}" không tồn tại.`);
+      if (lessonId && !topic?.lessons.some((lesson) => lesson.id === lessonId)) {
+        errors.push(`Dòng ${line}: lessonId "${lessonId}" không thuộc chủ đề.`);
+      }
+      if (!text?.trim()) errors.push(`Dòng ${line}: thiếu nội dung câu hỏi.`);
+      if (options.length !== 4 || options.some((option) => !option?.trim())) {
+        errors.push(`Dòng ${line}: phải có đủ 4 đáp án A, B, C, D.`);
+      }
+      if (correctAnswer < 0) errors.push(`Dòng ${line}: correctAnswer phải là A, B, C hoặc D.`);
+      return { topicId, lessonId: lessonId || undefined, text, options, correctAnswer };
+    });
+    if (!payloads.length) errors.push("File không có dòng dữ liệu.");
+    if (errors.length) {
+      alert(`Không thể import vì file chưa đúng định dạng:\n\n${errors.slice(0, 12).join("\n")}`);
+      return;
+    }
+    loading.value = true;
+    await Promise.all(payloads.map((payload) => adminApi.createQuestion(payload)));
+    await loadAllData();
+    alert(`Đã import thành công ${payloads.length} câu hỏi.`);
+  } catch (error) {
+    alert(error instanceof Error ? error.message : "Không thể đọc file CSV.");
+  } finally {
+    loading.value = false;
+    input.value = "";
+  }
+};
+
 const handleDeleteQuestion = async (id: number) => {
   if (!confirm("Bạn có chắc chắn muốn xóa câu hỏi này?")) return;
   loading.value = true;
@@ -1834,24 +2060,30 @@ const handleDeleteQuestion = async (id: number) => {
     loading.value = false;
   }
 };
+
+// Kept temporarily for compatibility with the existing question modal markup;
+// the active management flow now lives on AdminQuizDetail.
+void openQuestionModal;
+void downloadQuestionTemplate;
+void importQuestionsFromCsv;
+void handleDeleteQuestion;
 </script>
 
 <style scoped>
 /* Redesigned Sidebar Layout */
 .admin-portal-layout {
   display: flex;
-  min-height: calc(100vh - 80px);
-  margin: -2rem; /* Stretch layout to edges to override parent padding */
-  background-color: var(--bg-main);
+  min-height: 100%;
+  background-color: white;
   font-family: var(--font-family);
 }
 
 /* Sidebar styling */
 .admin-sidebar {
+  display: none;
   width: 280px;
   background-color: var(--primary-color); /* Emerald Green */
   color: white;
-  display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border-color);
   flex-shrink: 0;
@@ -2522,6 +2754,120 @@ const handleDeleteQuestion = async (id: number) => {
   cursor: pointer;
 }
 
+.exam-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.55rem;
+}
+
+.import-questions-btn {
+  margin: 0 !important;
+  cursor: pointer;
+}
+
+.import-questions-btn input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.q-scope-tag {
+  display: inline-flex;
+  margin-left: 0.4rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  background: var(--primary-light);
+  color: var(--primary-color);
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.field-help {
+  display: block;
+  margin-top: 0.4rem;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.quiz-list-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: 520px;
+  margin: 1rem 0;
+  padding: 0 0.8rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: white;
+  color: var(--text-muted);
+}
+
+.quiz-list-toolbar input {
+  width: 100%;
+  height: 42px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-color);
+}
+
+.quiz-definition-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 0.8rem;
+}
+
+.quiz-definition-card {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: white;
+  color: var(--text-color);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+
+.quiz-definition-card:hover {
+  border-color: var(--primary-color);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+.quiz-definition-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 12px;
+  background: var(--primary-light);
+  color: var(--primary-color);
+}
+
+.quiz-definition-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.quiz-definition-copy h4 {
+  margin: 0.35rem 0 0.2rem;
+  font-size: 0.9rem;
+}
+
+.quiz-definition-copy p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
 .file-upload-control {
   display: flex;
   align-items: stretch;
@@ -2716,12 +3062,21 @@ const handleDeleteQuestion = async (id: number) => {
 }
 
 .loading-overlay {
+  width: 100%;
+  min-height: 100%;
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4rem;
   gap: 1rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  text-align: center;
 }
 
 .spinner {

@@ -21,6 +21,21 @@ public class QuizController {
         this.quizService = quizService;
     }
 
+    @GetMapping("/lessons/{lessonId}/questions")
+    public ResponseEntity<List<QuestionDto>> getQuestionsForLesson(@PathVariable String lessonId) {
+        return ResponseEntity.ok(quizService.getQuestionsForLesson(lessonId));
+    }
+
+    @PostMapping("/lessons/{lessonId}/submit")
+    public ResponseEntity<QuizResultDto> submitLessonQuiz(
+            @PathVariable String lessonId,
+            @RequestBody QuizSubmitRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(
+                quizService.submitLessonQuiz(lessonId, request, userDetails.getUsername())
+        );
+    }
+
     @GetMapping("/{topicId}/questions")
     public ResponseEntity<List<QuestionDto>> getQuestionsForTopic(@PathVariable String topicId) {
         return ResponseEntity.ok(quizService.getQuestionsForTopic(topicId));

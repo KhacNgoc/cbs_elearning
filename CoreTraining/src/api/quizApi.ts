@@ -20,22 +20,29 @@ export interface QuizSubmitResponse {
 }
 
 export const quizApi = {
-  async getQuizQuestions(topicId: string): Promise<Omit<Question, 'correctAnswer'>[]> {
+  async getQuizQuestions(topicId: string, lessonId?: string): Promise<Omit<Question, 'correctAnswer'>[]> {
     if (isMockApi()) {
       await mockDelay(300);
-      const filtered = mockDbQuestions.filter(q => q.topicId === topicId);
+      const filtered = mockDbQuestions.filter(q =>
+        lessonId ? q.lessonId === lessonId : q.topicId === topicId && !q.lessonId
+      );
       // Hide correctAnswer field from the returned payload to simulate backend anti-cheat logic
       return filtered.map(({ correctAnswer, ...q }) => q);
     }
-    const response = await axiosClient.get<Omit<Question, 'correctAnswer'>[]>(`/api/quizzes/${topicId}/questions`);
+    const url = lessonId
+      ? `/api/quizzes/lessons/${lessonId}/questions`
+      : `/api/quizzes/${topicId}/questions`;
+    const response = await axiosClient.get<Omit<Question, 'correctAnswer'>[]>(url);
     return response.data;
   },
 
-  async submitQuiz(topicId: string, data: QuizSubmitRequest): Promise<QuizSubmitResponse> {
+  async submitQuiz(topicId: string, data: QuizSubmitRequest, lessonId?: string): Promise<QuizSubmitResponse> {
     if (isMockApi()) {
       await mockDelay(400);
       
-      const filteredOriginals = mockDbQuestions.filter(q => q.topicId === topicId);
+      const filteredOriginals = mockDbQuestions.filter(q =>
+        lessonId ? q.lessonId === lessonId : q.topicId === topicId && !q.lessonId
+      );
       let score = 0;
       
       filteredOriginals.forEach(q => {
@@ -64,6 +71,14 @@ export const quizApi = {
         currentTotals[topicId] = total;
         localStorage.setItem('mockQuizScores', JSON.stringify(currentScores));
         localStorage.setItem('mockQuizTotals', JSON.stringify(currentTotals));
+      }
+
+      if (lessonId && percent >= 80) {
+        const completed = JSON.parse(localStorage.getItem('mockCompletedLessons') || '[]') as string[];
+        if (!completed.includes(lessonId)) {
+          completed.push(lessonId);
+          localStorage.setItem('mockCompletedLessons', JSON.stringify(completed));
+        }
       }
 
       // Check badge unlock
@@ -106,7 +121,10 @@ export const quizApi = {
      * includes the `correctAnswers` map: Record<string, number> representing
      * { [questionId]: correctAnswerIndex }.
      */
-    const response = await axiosClient.post<QuizSubmitResponse>(`/api/quizzes/${topicId}/submit`, data);
+    const url = lessonId
+      ? `/api/quizzes/lessons/${lessonId}/submit`
+      : `/api/quizzes/${topicId}/submit`;
+    const response = await axiosClient.post<QuizSubmitResponse>(url, data);
     return response.data;
   }
 };
