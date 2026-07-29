@@ -14,6 +14,7 @@ public interface AdminService {
     LessonDto createLesson(LessonDto lessonDto);
     LessonDto updateLesson(String id, LessonDto lessonDto);
     void deleteLesson(String id);
+    List<LessonDto> reorderLessons(String topicId, List<String> lessonIds);
 
     // Question CRUD
     QuestionDto createQuestion(QuestionDto questionDto);
@@ -27,5 +28,7 @@ public interface AdminService {
     UserDto createUser(UserDto userDto);
     UserDto updateUser(Long id, UserDto userDto);
     void deleteUser(Long id);
+    List<EnrollmentRequestDto> getEnrollmentRequests();
+    EnrollmentRequestDto reviewEnrollmentRequest(Long id, boolean approve, String reviewedBy);
 }
 

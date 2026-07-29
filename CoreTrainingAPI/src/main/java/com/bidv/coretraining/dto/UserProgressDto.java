@@ -24,4 +24,5 @@ public class UserProgressDto {
     private String groupName;
     private List<String> mandatoryTopics;
     private List<String> registeredTopics;
+    private List<String> pendingTopics;
 }

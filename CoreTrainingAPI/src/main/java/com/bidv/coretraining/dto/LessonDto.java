@@ -16,6 +16,7 @@ public class LessonDto {
     private String id;
     private String title;
     private String topicId;
+    private Integer lessonOrder;
     private String hint;
     private String videoUrl;
     private VideoSource videoSource;

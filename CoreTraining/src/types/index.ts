@@ -38,6 +38,7 @@ export interface Lesson {
   id: string;
   title: string;
   topicId: string;
+  lessonOrder?: number;
   hint: string;
   documents: LessonDocument[];
   videoUrl: string;
@@ -88,6 +89,7 @@ export interface UserProgress {
   groupName?: string;
   mandatoryTopics: string[];
   registeredTopics: string[];
+  pendingTopics: string[];
 }
 
 export interface UserProfile {

@@ -54,12 +54,14 @@ CREATE TABLE IF NOT EXISTS lessons (
     video_url VARCHAR(255),
     video_source VARCHAR(20),
     quiz_passing_score INTEGER NOT NULL DEFAULT 80,
+    lesson_order INTEGER NOT NULL DEFAULT 0,
     topic_id VARCHAR(255) NOT NULL,
     CONSTRAINT fk_lessons_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
 );
 
 ALTER TABLE lessons ADD COLUMN IF NOT EXISTS video_source VARCHAR(20);
 ALTER TABLE lessons ADD COLUMN IF NOT EXISTS quiz_passing_score INTEGER NOT NULL DEFAULT 80;
+ALTER TABLE lessons ADD COLUMN IF NOT EXISTS lesson_order INTEGER NOT NULL DEFAULT 0;
 UPDATE lessons
 SET video_source = CASE
     WHEN video_url LIKE '%/uploads/%' THEN 'UPLOAD'
@@ -126,6 +128,35 @@ CREATE TABLE IF NOT EXISTS comments (
     reply_to_username VARCHAR(255),
     CONSTRAINT fk_comments_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE,
     CONSTRAINT fk_comments_parent FOREIGN KEY (parent_comment_id) REFERENCES comments(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS topic_enrollment_requests (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    topic_id VARCHAR(255) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    requested_at TIMESTAMP NOT NULL,
+    reviewed_at TIMESTAMP,
+    reviewed_by VARCHAR(255),
+    CONSTRAINT uk_enrollment_user_topic UNIQUE (user_id, topic_id),
+    CONSTRAINT fk_enrollment_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_enrollment_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS navigation_items (
+    id VARCHAR(255) PRIMARY KEY,
+    label VARCHAR(255) NOT NULL,
+    route VARCHAR(255) NOT NULL,
+    icon VARCHAR(255) NOT NULL,
+    area VARCHAR(20) NOT NULL,
+    sort_order INTEGER NOT NULL,
+    visible BOOLEAN NOT NULL DEFAULT TRUE
+);
+CREATE TABLE IF NOT EXISTS navigation_item_roles (
+    navigation_id VARCHAR(255) NOT NULL,
+    role_name VARCHAR(255) NOT NULL,
+    PRIMARY KEY (navigation_id, role_name),
+    CONSTRAINT fk_navigation_role_item FOREIGN KEY (navigation_id) REFERENCES navigation_items(id) ON DELETE CASCADE
 );
 ALTER TABLE comments ALTER COLUMN rating DROP NOT NULL;
 ALTER TABLE comments ADD COLUMN IF NOT EXISTS parent_comment_id VARCHAR(255);

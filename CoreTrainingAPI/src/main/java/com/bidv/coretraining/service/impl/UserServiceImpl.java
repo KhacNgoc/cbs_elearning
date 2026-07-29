@@ -6,10 +6,13 @@ import com.bidv.coretraining.dto.UserProgressDto;
 import com.bidv.coretraining.entity.Lesson;
 import com.bidv.coretraining.entity.User;
 import com.bidv.coretraining.entity.UserQuizScore;
+import com.bidv.coretraining.entity.EnrollmentStatus;
+import com.bidv.coretraining.entity.TopicEnrollmentRequest;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
 import com.bidv.coretraining.repository.LessonRepository;
 import com.bidv.coretraining.repository.QuestionRepository;
 import com.bidv.coretraining.repository.UserRepository;
+import com.bidv.coretraining.repository.TopicEnrollmentRequestRepository;
 import com.bidv.coretraining.service.UserService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,15 +30,19 @@ public class UserServiceImpl implements UserService {
     private final QuestionRepository questionRepository;
     private final com.bidv.coretraining.repository.TopicRepository topicRepository;
     private final UserMapper userMapper;
+    private final TopicEnrollmentRequestRepository enrollmentRequestRepository;
 
     public UserServiceImpl(UserRepository userRepository, LessonRepository lessonRepository,
                            QuestionRepository questionRepository,
-                           com.bidv.coretraining.repository.TopicRepository topicRepository, UserMapper userMapper) {
+                           com.bidv.coretraining.repository.TopicRepository topicRepository,
+                           UserMapper userMapper,
+                           TopicEnrollmentRequestRepository enrollmentRequestRepository) {
         this.userRepository = userRepository;
         this.lessonRepository = lessonRepository;
         this.questionRepository = questionRepository;
         this.topicRepository = topicRepository;
         this.userMapper = userMapper;
+        this.enrollmentRequestRepository = enrollmentRequestRepository;
     }
 
     @Override
@@ -97,10 +104,22 @@ public class UserServiceImpl implements UserService {
         com.bidv.coretraining.entity.Topic topic = topicRepository.findById(topicId)
                 .orElseThrow(() -> new ResourceNotFoundException("Topic", "id", topicId));
 
-        if (!user.getRegisteredTopics().contains(topic)) {
-            user.getRegisteredTopics().add(topic);
-            user = userRepository.save(user);
+        if (user.getRegisteredTopics().contains(topic)
+                || (user.getUserGroup() != null
+                && user.getUserGroup().getMandatoryTopics().contains(topic))) {
+            return buildUserProgressDto(user);
         }
+        TopicEnrollmentRequest request = enrollmentRequestRepository
+                .findByUserIdAndTopicId(user.getId(), topicId)
+                .orElseGet(() -> TopicEnrollmentRequest.builder()
+                        .user(user)
+                        .topic(topic)
+                        .build());
+        request.setStatus(EnrollmentStatus.PENDING);
+        request.setRequestedAt(java.time.LocalDateTime.now());
+        request.setReviewedAt(null);
+        request.setReviewedBy(null);
+        enrollmentRequestRepository.save(request);
 
         return buildUserProgressDto(user);
     }
@@ -142,6 +161,11 @@ public class UserServiceImpl implements UserService {
         java.util.List<String> registeredTopics = user.getRegisteredTopics().stream()
                 .map(com.bidv.coretraining.entity.Topic::getId)
                 .collect(Collectors.toList());
+        java.util.List<String> pendingTopics = enrollmentRequestRepository
+                .findByUserIdAndStatus(user.getId(), EnrollmentStatus.PENDING)
+                .stream()
+                .map(request -> request.getTopic().getId())
+                .collect(Collectors.toList());
 
         return UserProgressDto.builder()
                 .completedLessons(completedLessons)
@@ -155,6 +179,7 @@ public class UserServiceImpl implements UserService {
                 .groupName(groupName)
                 .mandatoryTopics(mandatoryTopics)
                 .registeredTopics(registeredTopics)
+                .pendingTopics(pendingTopics)
                 .build();
     }
 }

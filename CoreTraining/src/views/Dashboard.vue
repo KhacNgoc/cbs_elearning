@@ -31,7 +31,7 @@
             :key="topic.id" 
             class="topic-card card card-hover"
             :class="{ 'topic-locked': !userStore.isTopicAccessible(topic.id) }"
-            @click="userStore.isTopicAccessible(topic.id) ? goToTopicFirstLesson(topic) : openRegisterConfirm(topic)"
+            @click="handleTopicClick(topic)"
           >
             <div class="topic-icon-box">
               <component :is="getIconComponent(topic.iconName)" class="topic-icon" />
@@ -47,6 +47,10 @@
                   v-else-if="userStore.registeredTopics.includes(topic.id)" 
                   class="badge badge-optional"
                 >Đã đăng ký</span>
+                <span
+                  v-else-if="userStore.pendingTopics.includes(topic.id)"
+                  class="badge badge-pending"
+                >Chờ duyệt</span>
                 <span 
                   v-else 
                   class="badge badge-locked"
@@ -150,13 +154,13 @@
         </div>
         <div class="modal-body">
           <p>Bạn có muốn đăng ký học thêm chủ đề nghiệp vụ <strong>{{ selectedTopicToRegister?.name }}</strong> không?</p>
-          <p class="modal-note">Sau khi đăng ký, tất cả tài liệu bài học và bài thi thử của chủ đề này sẽ được mở khóa.</p>
+          <p class="modal-note">Yêu cầu sẽ được gửi đến quản trị viên. Khóa học được mở sau khi được phê duyệt.</p>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" @click="showRegisterModal = false" :disabled="isRegistering">HỦY BỎ</button>
           <button class="btn btn-primary btn-confirm" @click="handleRegisterTopic" :disabled="isRegistering">
             <span v-if="isRegistering" class="spinner"></span>
-            <span v-else>ĐỒNG Ý ĐĂNG KÝ</span>
+            <span v-else>GỬI YÊU CẦU ĐĂNG KÝ</span>
           </button>
         </div>
       </div>
@@ -237,6 +241,15 @@ const goToLesson = (lessonId: string) => {
 const goToTopicFirstLesson = (topic: any) => {
   if (topic.lessons.length > 0) {
     router.push(`/lesson/${topic.lessons[0].id}`);
+  }
+};
+const handleTopicClick = (topic: any) => {
+  if (userStore.isTopicAccessible(topic.id)) {
+    goToTopicFirstLesson(topic);
+  } else if (userStore.pendingTopics.includes(topic.id)) {
+    alert('Yêu cầu đăng ký khóa học đang chờ quản trị viên phê duyệt.');
+  } else {
+    openRegisterConfirm(topic);
   }
 };
 
@@ -721,6 +734,11 @@ const getBadgeIcon = (icon: string) => {
   background-color: rgba(59, 130, 246, 0.1);
   color: #3b82f6;
   border: 1px solid #3b82f6;
+}
+.badge-pending {
+  background: #fff7d6;
+  color: #8a6b00;
+  border: 1px solid #ead88b;
 }
 
 .badge-locked {

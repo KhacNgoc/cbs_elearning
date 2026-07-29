@@ -1,28 +1,5 @@
 <template>
   <div class="admin-portal-layout">
-    <!-- Left Navigation Sidebar -->
-    <aside class="admin-sidebar" aria-label="Điều hướng quản trị">
-      <nav class="sidebar-menu">
-        <button
-          v-for="tab in tabs"
-          :key="tab.id"
-          class="sidebar-item"
-          :class="{ active: activeTab === tab.id }"
-          @click="switchTab(tab.id)"
-        >
-          <component :is="tab.icon" class="sidebar-icon" />
-          <span>{{ tab.name }}</span>
-        </button>
-      </nav>
-
-      <div class="sidebar-footer">
-        <div class="admin-role-badge">
-          <Settings class="admin-badge-icon spinning" />
-          <span>ROLE_ADMIN</span>
-        </div>
-      </div>
-    </aside>
-
     <!-- Right Main Content Area -->
     <div class="admin-main-content">
       <!-- Loading State -->
@@ -327,46 +304,147 @@
           </div>
         </div>
 
+        <div
+          v-if="activeTab === 'enrollments'"
+          class="tab-pane animate-fade-in"
+        >
+          <div class="lessons-manager card">
+            <div class="card-header-row">
+              <div class="header-left">
+                <h3 class="card-title">DUYỆT ĐĂNG KÝ KHÓA HỌC</h3>
+                <p class="card-subtitle">
+                  Phê duyệt hoặc từ chối yêu cầu đăng ký chủ đề tự chọn.
+                </p>
+              </div>
+              <span class="pending-count"
+                >{{ pendingEnrollmentCount }} yêu cầu chờ duyệt</span
+              >
+            </div>
+            <table class="admin-table enrollment-table">
+              <thead>
+                <tr>
+                  <th>Học viên</th>
+                  <th>Khóa học</th>
+                  <th>Thời gian gửi</th>
+                  <th>Trạng thái</th>
+                  <th>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="request in enrollmentRequests" :key="request.id">
+                  <td>
+                    <strong>{{ request.fullName }}</strong
+                    ><br /><small>{{ request.username }}</small>
+                  </td>
+                  <td>
+                    <strong>{{ request.topicName }}</strong
+                    ><br /><small>{{ request.topicId }}</small>
+                  </td>
+                  <td>{{ formatEnrollmentDate(request.requestedAt) }}</td>
+                  <td>
+                    <span
+                      class="enrollment-status"
+                      :class="request.status.toLowerCase()"
+                      >{{ enrollmentStatusLabel(request.status) }}</span
+                    >
+                  </td>
+                  <td>
+                    <div
+                      v-if="request.status === 'PENDING'"
+                      class="enrollment-actions"
+                    >
+                      <button
+                        class="approve-request"
+                        @click="reviewEnrollment(request.id, true)"
+                      >
+                        <CheckCircle2 :size="16" /> Duyệt
+                      </button>
+                      <button
+                        class="reject-request"
+                        @click="reviewEnrollment(request.id, false)"
+                      >
+                        <XCircle :size="16" /> Từ chối
+                      </button>
+                    </div>
+                    <small v-else>{{
+                      request.reviewedBy
+                        ? `Bởi ${request.reviewedBy}`
+                        : "Đã xử lý"
+                    }}</small>
+                  </td>
+                </tr>
+                <tr v-if="!enrollmentRequests.length">
+                  <td colspan="5" class="empty-row">
+                    Chưa có yêu cầu đăng ký khóa học.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <!-- 3. LESSONS TAB -->
         <div v-if="activeTab === 'lessons'" class="tab-pane animate-fade-in">
           <div class="lessons-manager card">
             <div class="card-header-row">
               <div class="header-left">
-                <h3 class="card-title">CẤU HÌNH BÀI HỌC NGHIỆP VỤ</h3>
+                <button
+                  v-if="lessonTopic"
+                  class="lesson-back-button"
+                  @click="backToLessonTopics"
+                >
+                  <ArrowLeft :size="18" /> Danh sách chủ đề
+                </button>
+                <h3 class="card-title">
+                  {{
+                    lessonTopic
+                      ? `BÀI HỌC — ${lessonTopic.name}`
+                      : "QUẢN LÝ BÀI HỌC THEO CHỦ ĐỀ"
+                  }}
+                </h3>
                 <p class="card-subtitle">
-                  Soạn thảo, cập nhật và sắp xếp các bài đọc nghiệp vụ ngân
-                  hàng.
+                  {{
+                    lessonTopic
+                      ? "Kéo thả bài học để thay đổi thứ tự hiển thị trong chủ đề."
+                      : "Chọn một chủ đề để thêm, cập nhật và sắp xếp bài học."
+                  }}
                 </p>
               </div>
-              <button class="btn btn-primary" @click="openLessonModal()">
+              <button
+                v-if="lessonTopic"
+                class="btn btn-primary"
+                @click="openLessonModal()"
+              >
                 <Plus class="btn-icon" /> THÊM BÀI HỌC
               </button>
             </div>
 
-            <!-- Select Topic Filter -->
-            <div class="topic-selector-row">
-              <label for="lesson-topic-select">Chọn chủ đề cấu hình: </label>
-              <select
-                id="lesson-topic-select"
-                v-model="selectedTopicId"
-                class="form-control select-control"
+            <div v-if="!lessonTopic" class="lesson-topic-grid">
+              <button
+                v-for="topic in courseStore.topics"
+                :key="topic.id"
+                class="lesson-topic-card"
+                @click="openTopicLessons(topic.id)"
               >
-                <option :value="ALL_TOPICS">Tất cả chủ đề</option>
-                <option
-                  v-for="t in courseStore.topics"
-                  :key="t.id"
-                  :value="t.id"
-                >
-                  {{ t.name }}
-                </option>
-              </select>
+                <div class="lesson-topic-icon">
+                  <BookOpen :size="22" />
+                </div>
+                <div class="lesson-topic-copy">
+                  <strong>{{ topic.name }}</strong>
+                  <small>{{ topic.lessons.length }} bài học</small>
+                </div>
+                <ArrowRight :size="20" />
+              </button>
             </div>
 
-            <table class="admin-table" v-if="currentTopicLessons.length > 0">
+            <table
+              v-else-if="currentTopicLessons.length > 0"
+              class="admin-table lesson-order-table"
+            >
               <thead>
                 <tr>
+                  <th class="drag-column">Thứ tự</th>
                   <th>Mã bài học</th>
-                  <th v-if="selectedTopicId === ALL_TOPICS">Chủ đề</th>
                   <th>Tiêu đề bài học</th>
                   <th>Gợi ý nghiệp vụ (Hint)</th>
                   <th>Video đính kèm</th>
@@ -375,12 +453,28 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="lesson in currentTopicLessons" :key="lesson.id">
+                <tr
+                  v-for="(lesson, index) in currentTopicLessons"
+                  :key="lesson.id"
+                  draggable="true"
+                  :class="{
+                    dragging: draggedLessonId === lesson.id,
+                    'drag-over': dragOverLessonId === lesson.id,
+                  }"
+                  @dragstart="startLessonDrag(lesson.id, $event)"
+                  @dragover.prevent="dragOverLessonId = lesson.id"
+                  @dragleave="clearLessonDragOver(lesson.id)"
+                  @drop.prevent="dropLessonAt(lesson.id)"
+                  @dragend="endLessonDrag"
+                >
+                  <td class="drag-column">
+                    <span class="drag-handle" title="Kéo để sắp xếp">
+                      <GripVertical :size="18" />
+                      <strong>{{ index + 1 }}</strong>
+                    </span>
+                  </td>
                   <td>
                     <span class="code-badge">{{ lesson.id }}</span>
-                  </td>
-                  <td v-if="selectedTopicId === ALL_TOPICS">
-                    {{ getTopicName(lesson.topicId) }}
                   </td>
                   <td>
                     <strong>{{ lesson.title }}</strong>
@@ -414,7 +508,7 @@
                 </tr>
               </tbody>
             </table>
-            <div class="empty-state-box" v-else>
+            <div class="empty-state-box" v-else-if="lessonTopic">
               <p>
                 Chủ đề này chưa có bài học nào. Bấm nút "Thêm bài học" ở góc
                 trên để bắt đầu cấu hình.
@@ -468,27 +562,45 @@
               />
             </div>
 
-            <div class="quiz-definition-grid" v-if="filteredQuizDefinitions.length">
+            <div
+              class="quiz-definition-grid"
+              v-if="filteredQuizDefinitions.length"
+            >
               <button
                 v-for="quiz in filteredQuizDefinitions"
                 :key="quiz.key"
                 class="quiz-definition-card"
                 @click="openQuizDefinition(quiz)"
               >
-                <div class="quiz-definition-icon"><HelpCircle :size="22" /></div>
+                <div class="quiz-definition-icon">
+                  <HelpCircle :size="22" />
+                </div>
                 <div class="quiz-definition-copy">
-                  <span class="q-scope-tag">{{ quiz.lessonId ? "Bài học" : "Toàn chủ đề" }}</span>
+                  <span class="q-scope-tag">{{
+                    quiz.lessonId ? "Bài học" : "Toàn chủ đề"
+                  }}</span>
                   <h4>{{ quiz.title }}</h4>
-                  <p>{{ quiz.questionCount }} câu hỏi · Đạt tối thiểu {{ quiz.passingScore }}%</p>
+                  <p>
+                    {{ quiz.questionCount }} câu hỏi · Đạt tối thiểu
+                    {{ quiz.passingScore }}%
+                  </p>
                 </div>
                 <ArrowRight :size="20" />
               </button>
             </div>
             <div class="empty-state-box" v-else>
               <p>
-                {{ quizSearchQuery ? "Không tìm thấy bài kiểm tra phù hợp." : "Chủ đề này chưa có bài kiểm tra." }}
+                {{
+                  quizSearchQuery
+                    ? "Không tìm thấy bài kiểm tra phù hợp."
+                    : "Chủ đề này chưa có bài kiểm tra."
+                }}
               </p>
-              <button v-if="!quizSearchQuery" class="btn btn-primary" @click="createQuiz">
+              <button
+                v-if="!quizSearchQuery"
+                class="btn btn-primary"
+                @click="createQuiz"
+              >
                 <Plus :size="16" /> Tạo bài kiểm tra đầu tiên
               </button>
             </div>
@@ -951,7 +1063,8 @@
                 </option>
               </select>
               <small class="field-help">
-                Không bắt buộc chọn bài học. Nếu chọn, học viên phải đạt 80% để hoàn thành bài đó.
+                Không bắt buộc chọn bài học. Nếu chọn, học viên phải đạt 80% để
+                hoàn thành bài đó.
               </small>
             </div>
           </div>
@@ -967,7 +1080,9 @@
           </div>
 
           <div class="form-group-options">
-            <label class="options-label">4. Nhập đáp án và chọn đáp án đúng</label>
+            <label class="options-label"
+              >4. Nhập đáp án và chọn đáp án đúng</label
+            >
             <div
               v-for="idx in [0, 1, 2, 3]"
               :key="idx"
@@ -992,7 +1107,8 @@
               />
             </div>
             <span class="helper-text-opt"
-              >Chọn nút tròn bên trái đáp án chính xác. Cần nhập đủ 4 đáp án.</span
+              >Chọn nút tròn bên trái đáp án chính xác. Cần nhập đủ 4 đáp
+              án.</span
             >
           </div>
 
@@ -1016,8 +1132,9 @@
 import { ref, computed, nextTick, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useCourseStore } from "../stores/courseStore";
+import { useNavigationStore } from "../stores/navigationStore";
 import { adminApi } from "../api/adminApi";
-import type { AdminUser } from "../api/adminApi";
+import type { AdminUser, EnrollmentRequest } from "../api/adminApi";
 import { quizApi } from "../api/quizApi";
 import type { Topic, Lesson, LessonDocument, Question } from "../types";
 import {
@@ -1033,7 +1150,11 @@ import {
   Link2,
   X,
   Search,
+  ArrowLeft,
   ArrowRight,
+  GripVertical,
+  CheckCircle2,
+  XCircle,
 } from "lucide-vue-next";
 
 // Chart.js imports & registrations
@@ -1067,22 +1188,22 @@ ChartJS.register(
 
 // Stores
 const courseStore = useCourseStore();
+const navigationStore = useNavigationStore();
 const router = useRouter();
 const route = useRoute();
 
-// Sidebar tab definitions
+const allowedAdminTabs = computed(() =>
+  navigationStore.adminItems
+    .map((item) => item.id.replace(/^admin\./, ""))
+    .filter((id) => !id.includes(".")),
+);
 const requestedAdminTab =
-  typeof route.query.tab === "string" &&
-  ["overview", "users", "lessons", "exams"].includes(route.query.tab)
-    ? route.query.tab
-    : "overview";
+  route.name === "AdminTopicLessons"
+    ? "lessons"
+    : typeof route.query.tab === "string"
+      ? route.query.tab
+      : "overview";
 const activeTab = ref(requestedAdminTab);
-const tabs = [
-  { id: "overview", name: "Tổng quan", icon: Settings },
-  { id: "users", name: "Thành viên", icon: Users },
-  { id: "lessons", name: "Bài học", icon: BookOpen },
-  { id: "exams", name: "Đề thi trắc nghiệm", icon: HelpCircle },
-];
 
 // Active sessions simulation
 const activeSessions = ref([
@@ -1123,9 +1244,19 @@ const activeSessions = ref([
 // Reactive states
 const loading = ref(false);
 const users = ref<AdminUser[]>([]);
+const enrollmentRequests = ref<EnrollmentRequest[]>([]);
+const pendingEnrollmentCount = computed(
+  () =>
+    enrollmentRequests.value.filter((request) => request.status === "PENDING")
+      .length,
+);
 const questions = ref<Question[]>([]);
 const ALL_TOPICS = "__ALL__";
-const selectedTopicId = ref(ALL_TOPICS);
+const selectedTopicId = ref(
+  typeof route.params.topicId === "string" ? route.params.topicId : ALL_TOPICS,
+);
+const draggedLessonId = ref<string | null>(null);
+const dragOverLessonId = ref<string | null>(null);
 const userSearchQuery = ref("");
 const quizSearchQuery = ref("");
 
@@ -1200,6 +1331,11 @@ const currentTopicLessons = computed(() => {
   const topic = courseStore.topics.find((t) => t.id === selectedTopicId.value);
   return topic ? topic.lessons : [];
 });
+const lessonTopic = computed(() =>
+  typeof route.params.topicId === "string"
+    ? courseStore.topics.find((topic) => topic.id === route.params.topicId)
+    : undefined,
+);
 
 type QuizDefinition = {
   key: string;
@@ -1215,7 +1351,9 @@ const quizDefinitions = computed<QuizDefinition[]>(() => {
   const topics =
     selectedTopicId.value === ALL_TOPICS
       ? courseStore.topics
-      : courseStore.topics.filter((topic) => topic.id === selectedTopicId.value);
+      : courseStore.topics.filter(
+          (topic) => topic.id === selectedTopicId.value,
+        );
   for (const topic of topics) {
     const topicQuestions = questions.value.filter(
       (question) => question.topicId === topic.id && !question.lessonId,
@@ -1255,25 +1393,99 @@ const filteredQuizDefinitions = computed(() => {
   const query = quizSearchQuery.value.trim().toLocaleLowerCase("vi");
   if (!query) return quizDefinitions.value;
   return quizDefinitions.value.filter((quiz) =>
-    `${quiz.title} ${quiz.lessonId || ""}`.toLocaleLowerCase("vi").includes(query),
+    `${quiz.title} ${quiz.lessonId || ""}`
+      .toLocaleLowerCase("vi")
+      .includes(query),
   );
 });
+
+const navigationRoute = (id: string, params: Record<string, string> = {}) => {
+  const item = navigationStore.items.find((entry) => entry.id === id);
+  if (!item) throw new Error(`Navigation configuration not found: ${id}`);
+  return Object.entries(params).reduce(
+    (resolvedRoute, [key, value]) =>
+      resolvedRoute.replace(`:${key}`, encodeURIComponent(value)),
+    item.route,
+  );
+};
+
+const openTopicLessons = (topicId: string) =>
+  router.push(navigationRoute("admin.lesson.topic", { topicId }));
+
+const backToLessonTopics = () => router.push(navigationRoute("admin.lessons"));
+
+const startLessonDrag = (lessonId: string, event: DragEvent) => {
+  draggedLessonId.value = lessonId;
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", lessonId);
+  }
+};
+
+const clearLessonDragOver = (lessonId: string) => {
+  if (dragOverLessonId.value === lessonId) dragOverLessonId.value = null;
+};
+
+const endLessonDrag = () => {
+  draggedLessonId.value = null;
+  dragOverLessonId.value = null;
+};
+
+const dropLessonAt = async (targetLessonId: string) => {
+  const sourceLessonId = draggedLessonId.value;
+  const topic = lessonTopic.value;
+  endLessonDrag();
+  if (!sourceLessonId || !topic || sourceLessonId === targetLessonId) return;
+
+  const sourceIndex = topic.lessons.findIndex(
+    (lesson) => lesson.id === sourceLessonId,
+  );
+  const targetIndex = topic.lessons.findIndex(
+    (lesson) => lesson.id === targetLessonId,
+  );
+  if (sourceIndex < 0 || targetIndex < 0) return;
+
+  const previousLessons = [...topic.lessons];
+  const reorderedLessons = [...topic.lessons];
+  const [movedLesson] = reorderedLessons.splice(sourceIndex, 1);
+  reorderedLessons.splice(targetIndex, 0, movedLesson);
+  topic.lessons = reorderedLessons.map((lesson, index) => ({
+    ...lesson,
+    lessonOrder: index,
+  }));
+
+  try {
+    topic.lessons = await adminApi.reorderLessons(
+      topic.id,
+      topic.lessons.map((lesson) => lesson.id),
+    );
+  } catch (error) {
+    topic.lessons = previousLessons;
+    console.error("Failed to reorder lessons:", error);
+    alert("Không thể lưu thứ tự bài học. Vui lòng thử lại.");
+  }
+};
 
 const createQuiz = () => {
   const topicId =
     selectedTopicId.value === ALL_TOPICS ? undefined : selectedTopicId.value;
-  router.push({ path: "/admin/quizzes/new", query: topicId ? { topicId } : {} });
+  router.push({
+    path: navigationRoute("admin.quiz.create"),
+    query: topicId ? { topicId } : {},
+  });
 };
 
 const openQuizDefinition = (quiz: QuizDefinition) =>
   router.push(
-    quiz.lessonId
-      ? `/admin/quizzes/lesson/${encodeURIComponent(quiz.lessonId)}`
-      : `/admin/quizzes/topic/${encodeURIComponent(quiz.topicId)}`,
+    navigationRoute(quiz.lessonId ? "admin.quiz.lesson" : "admin.quiz.topic", {
+      scopeId: quiz.lessonId || quiz.topicId,
+    }),
   );
 
-const questionTopicLessons = computed(() =>
-  courseStore.topics.find((topic) => topic.id === questionForm.value.topicId)?.lessons || [],
+const questionTopicLessons = computed(
+  () =>
+    courseStore.topics.find((topic) => topic.id === questionForm.value.topicId)
+      ?.lessons || [],
 );
 
 watch(
@@ -1301,19 +1513,19 @@ watch(
   { immediate: true },
 );
 
-// Switch Tab
-const switchTab = (tabId: string) => {
-  activeTab.value = tabId;
-};
-
 watch(
-  () => route.query.tab,
-  (tab) => {
+  () => [route.name, route.query.tab, route.params.topicId],
+  ([routeName, tab, topicId]) => {
+    if (routeName === "AdminTopicLessons" && typeof topicId === "string") {
+      activeTab.value = "lessons";
+      selectedTopicId.value = topicId;
+      return;
+    }
     activeTab.value =
-      typeof tab === "string" &&
-      ["overview", "users", "lessons", "exams"].includes(tab)
+      typeof tab === "string" && allowedAdminTabs.value.includes(tab)
         ? tab
         : "overview";
+    if (activeTab.value === "lessons") selectedTopicId.value = ALL_TOPICS;
   },
 );
 
@@ -1327,9 +1539,6 @@ const getAvatarColor = (username: string) => {
 const getQuestionCountForTopic = (topicId: string) => {
   return questions.value.filter((q) => q.topicId === topicId).length;
 };
-
-const getTopicName = (topicId: string) =>
-  courseStore.topics.find((topic) => topic.id === topicId)?.name || topicId;
 
 // ==========================================
 // ADVANCED CHARTS DATA & OPTIONS
@@ -1509,6 +1718,30 @@ const topicScoreChartOptions = {
   },
 };
 
+const enrollmentStatusLabel = (status: EnrollmentRequest["status"]) =>
+  ({
+    PENDING: "Chờ duyệt",
+    APPROVED: "Đã duyệt",
+    REJECTED: "Đã từ chối",
+  })[status];
+const formatEnrollmentDate = (value: string) =>
+  new Intl.DateTimeFormat("vi-VN", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(new Date(value));
+const reviewEnrollment = async (id: number, approve: boolean) => {
+  try {
+    const updated = await adminApi.reviewEnrollmentRequest(id, approve);
+    const index = enrollmentRequests.value.findIndex(
+      (request) => request.id === id,
+    );
+    if (index >= 0) enrollmentRequests.value[index] = updated;
+  } catch (error) {
+    console.error("Failed to review enrollment:", error);
+    alert("Không thể xử lý yêu cầu đăng ký. Vui lòng thử lại.");
+  }
+};
+
 // ==========================================
 // LOAD ALL DATA
 // ==========================================
@@ -1517,6 +1750,7 @@ const loadAllData = async () => {
   try {
     await courseStore.fetchTopics();
     users.value = await adminApi.getAllUsers();
+    enrollmentRequests.value = await adminApi.getEnrollmentRequests();
 
     const questionsList: Question[] = [];
     for (const topic of courseStore.topics) {
@@ -1524,7 +1758,10 @@ const loadAllData = async () => {
         const qList = await quizApi.getQuizQuestions(topic.id);
         questionsList.push(...(qList as unknown as Question[]));
         for (const lesson of topic.lessons) {
-          const lessonQuestions = await quizApi.getQuizQuestions(topic.id, lesson.id);
+          const lessonQuestions = await quizApi.getQuizQuestions(
+            topic.id,
+            lesson.id,
+          );
           questionsList.push(...(lessonQuestions as unknown as Question[]));
         }
       } catch (err) {
@@ -1712,10 +1949,7 @@ const lessonModalBodyRef = ref<HTMLElement | null>(null);
 
 const selectedVideoFileName = computed(() => {
   if (lessonForm.value.videoFile) return lessonForm.value.videoFile.name;
-  if (
-    lessonForm.value.videoSource === "UPLOAD" &&
-    lessonForm.value.videoUrl
-  ) {
+  if (lessonForm.value.videoSource === "UPLOAD" && lessonForm.value.videoUrl) {
     return decodeURIComponent(
       lessonForm.value.videoUrl.split("/").pop() || "Video đã tải lên",
     );
@@ -1961,14 +2195,45 @@ const downloadQuestionTemplate = () => {
       ? courseStore.topics[0]?.id || "CIF"
       : selectedTopicId.value || courseStore.topics[0]?.id || "CIF";
   const lessonId =
-    courseStore.topics.find((topic) => topic.id === topicId)?.lessons[0]?.id || "";
+    courseStore.topics.find((topic) => topic.id === topicId)?.lessons[0]?.id ||
+    "";
   const rows = [
-    ["topicId", "lessonId", "question", "optionA", "optionB", "optionC", "optionD", "correctAnswer"],
-    [topicId, "", "Câu hỏi mẫu cho chủ đề?", "Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D", "A"],
-    [topicId, lessonId, "Câu hỏi mẫu cho bài học?", "Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D", "B"],
+    [
+      "topicId",
+      "lessonId",
+      "question",
+      "optionA",
+      "optionB",
+      "optionC",
+      "optionD",
+      "correctAnswer",
+    ],
+    [
+      topicId,
+      "",
+      "Câu hỏi mẫu cho chủ đề?",
+      "Đáp án A",
+      "Đáp án B",
+      "Đáp án C",
+      "Đáp án D",
+      "A",
+    ],
+    [
+      topicId,
+      lessonId,
+      "Câu hỏi mẫu cho bài học?",
+      "Đáp án A",
+      "Đáp án B",
+      "Đáp án C",
+      "Đáp án D",
+      "B",
+    ],
   ];
-  const content = "\uFEFF" + rows.map((row) => row.map(escapeCsv).join(",")).join("\r\n");
-  const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
+  const content =
+    "\uFEFF" + rows.map((row) => row.map(escapeCsv).join(",")).join("\r\n");
+  const url = URL.createObjectURL(
+    new Blob([content], { type: "text/csv;charset=utf-8" }),
+  );
   const link = window.document.createElement("a");
   link.href = url;
   link.download = "mau-import-cau-hoi.csv";
@@ -2010,8 +2275,20 @@ const importQuestionsFromCsv = async (event: Event) => {
   if (!file) return;
   try {
     const rows = parseCsv((await file.text()).replace(/^\uFEFF/, ""));
-    const expected = ["topicId", "lessonId", "question", "optionA", "optionB", "optionC", "optionD", "correctAnswer"];
-    if (!rows.length || expected.some((name, index) => rows[0]?.[index] !== name)) {
+    const expected = [
+      "topicId",
+      "lessonId",
+      "question",
+      "optionA",
+      "optionB",
+      "optionC",
+      "optionD",
+      "correctAnswer",
+    ];
+    if (
+      !rows.length ||
+      expected.some((name, index) => rows[0]?.[index] !== name)
+    ) {
       throw new Error(`Dòng tiêu đề phải đúng thứ tự: ${expected.join(", ")}`);
     }
     const errors: string[] = [];
@@ -2022,24 +2299,39 @@ const importQuestionsFromCsv = async (event: Event) => {
       const answerText = (rest[4] || "").toUpperCase();
       const correctAnswer = ["A", "B", "C", "D"].indexOf(answerText);
       const topic = courseStore.topics.find((item) => item.id === topicId);
-      if (!topic) errors.push(`Dòng ${line}: topicId "${topicId}" không tồn tại.`);
-      if (lessonId && !topic?.lessons.some((lesson) => lesson.id === lessonId)) {
+      if (!topic)
+        errors.push(`Dòng ${line}: topicId "${topicId}" không tồn tại.`);
+      if (
+        lessonId &&
+        !topic?.lessons.some((lesson) => lesson.id === lessonId)
+      ) {
         errors.push(`Dòng ${line}: lessonId "${lessonId}" không thuộc chủ đề.`);
       }
       if (!text?.trim()) errors.push(`Dòng ${line}: thiếu nội dung câu hỏi.`);
       if (options.length !== 4 || options.some((option) => !option?.trim())) {
         errors.push(`Dòng ${line}: phải có đủ 4 đáp án A, B, C, D.`);
       }
-      if (correctAnswer < 0) errors.push(`Dòng ${line}: correctAnswer phải là A, B, C hoặc D.`);
-      return { topicId, lessonId: lessonId || undefined, text, options, correctAnswer };
+      if (correctAnswer < 0)
+        errors.push(`Dòng ${line}: correctAnswer phải là A, B, C hoặc D.`);
+      return {
+        topicId,
+        lessonId: lessonId || undefined,
+        text,
+        options,
+        correctAnswer,
+      };
     });
     if (!payloads.length) errors.push("File không có dòng dữ liệu.");
     if (errors.length) {
-      alert(`Không thể import vì file chưa đúng định dạng:\n\n${errors.slice(0, 12).join("\n")}`);
+      alert(
+        `Không thể import vì file chưa đúng định dạng:\n\n${errors.slice(0, 12).join("\n")}`,
+      );
       return;
     }
     loading.value = true;
-    await Promise.all(payloads.map((payload) => adminApi.createQuestion(payload)));
+    await Promise.all(
+      payloads.map((payload) => adminApi.createQuestion(payload)),
+    );
     await loadAllData();
     alert(`Đã import thành công ${payloads.length} câu hỏi.`);
   } catch (error) {
@@ -2835,7 +3127,10 @@ void handleDeleteQuestion;
   color: var(--text-color);
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    transform 0.2s;
 }
 
 .quiz-definition-card:hover {
@@ -2871,6 +3166,176 @@ void handleDeleteQuestion;
   font-size: 0.75rem;
 }
 
+.pending-count {
+  padding: 0.45rem 0.7rem;
+  border-radius: var(--radius-full);
+  background: #fff7d6;
+  color: #806710;
+  font-weight: 800;
+  font-size: 0.78rem;
+}
+.lesson-back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--primary-color);
+  font-weight: 700;
+  cursor: pointer;
+}
+.lesson-back-button:hover {
+  text-decoration: underline;
+}
+.lesson-topic-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+}
+.lesson-topic-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: white;
+  color: var(--text-color);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+.lesson-topic-card:hover {
+  border-color: var(--primary-color);
+  box-shadow: 0 6px 16px rgb(0 103 79 / 12%);
+  transform: translateY(-2px);
+}
+.lesson-topic-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--primary-light);
+  color: var(--primary-color);
+}
+.lesson-topic-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+.lesson-topic-copy small {
+  color: var(--text-muted);
+}
+.lesson-order-table tbody tr {
+  transition:
+    background-color 0.15s ease,
+    opacity 0.15s ease;
+}
+.lesson-order-table tbody tr.dragging {
+  opacity: 0.45;
+}
+.lesson-order-table tbody tr.drag-over td {
+  border-top: 2px solid var(--primary-color);
+  background: var(--primary-light);
+}
+.drag-column {
+  width: 88px;
+  text-align: center !important;
+}
+.drag-handle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text-muted);
+  cursor: grab;
+  user-select: none;
+}
+.drag-handle:active {
+  cursor: grabbing;
+}
+.enrollment-status {
+  display: inline-flex;
+  padding: 0.3rem 0.55rem;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+.enrollment-status.pending {
+  background: #fff7d6;
+  color: #806710;
+}
+.enrollment-status.approved {
+  background: #e8f5ef;
+  color: var(--primary-color);
+}
+.enrollment-status.rejected {
+  background: #feecec;
+  color: #b42318;
+}
+.enrollment-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+.enrollment-table th,
+.enrollment-table td {
+  text-align: center;
+  vertical-align: middle;
+}
+.enrollment-table .enrollment-actions {
+  justify-content: center;
+}
+.enrollment-actions button {
+  padding: 0.45rem 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 700;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+.approve-request {
+  border: 1px solid var(--primary-color);
+  background: var(--primary-color);
+  color: white;
+}
+.approve-request:hover {
+  background: #005a46;
+  border-color: #005a46;
+  box-shadow: 0 4px 10px rgb(0 103 79 / 22%);
+  transform: translateY(-1px);
+}
+.reject-request {
+  border: 1px solid #ef4444;
+  background: white;
+  color: #b42318;
+}
+.reject-request:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: white;
+  box-shadow: 0 4px 10px rgb(220 38 38 / 20%);
+  transform: translateY(-1px);
+}
+.enrollment-actions button:active {
+  box-shadow: none;
+  transform: translateY(0);
+}
+
 .file-upload-control {
   display: flex;
   align-items: stretch;
@@ -2888,7 +3353,9 @@ void handleDeleteQuestion;
   background: #fff7f7;
   color: #b42318;
   cursor: pointer;
-  transition: border-color 0.2s, background 0.2s;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
 }
 
 .file-clear-btn:hover {

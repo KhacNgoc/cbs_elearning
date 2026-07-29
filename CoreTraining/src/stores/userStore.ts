@@ -19,6 +19,7 @@ export const useUserStore = defineStore('user', {
     groupName: '',
     mandatoryTopics: [],
     registeredTopics: [],
+    pendingTopics: [],
     isAuthenticated: !!localStorage.getItem('accessToken'),
     role: localStorage.getItem('userRole') || '',
     username: localStorage.getItem('username') || '',
@@ -106,6 +107,7 @@ export const useUserStore = defineStore('user', {
       this.groupName = '';
       this.mandatoryTopics = [];
       this.registeredTopics = [];
+      this.pendingTopics = [];
       
       router.push('/login');
     },
@@ -125,6 +127,7 @@ export const useUserStore = defineStore('user', {
         this.groupName = progress.groupName || '';
         this.mandatoryTopics = progress.mandatoryTopics || [];
         this.registeredTopics = progress.registeredTopics || [];
+        this.pendingTopics = progress.pendingTopics || [];
 
         // Save progress to localstorage for mock caching if active
         localStorage.setItem('mockCompletedLessons', JSON.stringify(this.completedLessons));
@@ -152,6 +155,7 @@ export const useUserStore = defineStore('user', {
       try {
         const updatedProgress = await courseApi.registerTopic(topicId);
         this.registeredTopics = updatedProgress.registeredTopics || [];
+        this.pendingTopics = updatedProgress.pendingTopics || [];
         this.mandatoryTopics = updatedProgress.mandatoryTopics || [];
         this.groupId = updatedProgress.groupId || '';
         this.groupName = updatedProgress.groupName || '';

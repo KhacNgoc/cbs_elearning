@@ -29,6 +29,7 @@ public class Topic {
     private Integer quizPassingScore = 80;
 
     @OneToMany(mappedBy = "topic", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("lessonOrder ASC, id ASC")
     @Builder.Default
     private List<Lesson> lessons = new ArrayList<>();
 

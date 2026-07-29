@@ -25,6 +25,19 @@ export interface AdminUser {
   points: number;
 }
 
+export interface EnrollmentRequest {
+  id: number;
+  userId: number;
+  username: string;
+  fullName: string;
+  topicId: string;
+  topicName: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  requestedAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+}
+
 // In mock mode, we seed the list of users from the default mock user data
 let mockDbUsers: AdminUser[] = [
   { id: 1, username: 'admin', fullName: 'Quản trị hệ thống', avatarColor: '#EF4444', role: 'ROLE_ADMIN', points: 0 },
@@ -38,6 +51,43 @@ let mockDbUsers: AdminUser[] = [
 ];
 
 export const adminApi = {
+  async getEnrollmentRequests(): Promise<EnrollmentRequest[]> {
+    if (isMockApi()) {
+      const pending: string[] = JSON.parse(localStorage.getItem('mockPendingTopics') || '[]');
+      return pending.map((topicId, index) => ({
+        id: index + 1,
+        userId: 2,
+        username: localStorage.getItem('username') || 'quantrh',
+        fullName: localStorage.getItem('fullName') || 'Học viên',
+        topicId,
+        topicName: mockDbTopics.find(topic => topic.id === topicId)?.name || topicId,
+        status: 'PENDING',
+        requestedAt: new Date().toISOString()
+      }));
+    }
+    const response = await axiosClient.get<EnrollmentRequest[]>('/api/admin/enrollment-requests');
+    return response.data;
+  },
+
+  async reviewEnrollmentRequest(id: number, approve: boolean): Promise<EnrollmentRequest> {
+    if (isMockApi()) {
+      const requests = await this.getEnrollmentRequests();
+      const request = requests.find(item => item.id === id);
+      if (!request) throw new Error('Enrollment request not found');
+      const pending: string[] = JSON.parse(localStorage.getItem('mockPendingTopics') || '[]');
+      localStorage.setItem('mockPendingTopics', JSON.stringify(pending.filter(item => item !== request.topicId)));
+      if (approve) {
+        const registered: string[] = JSON.parse(localStorage.getItem('mockRegisteredTopics') || '[]');
+        if (!registered.includes(request.topicId)) registered.push(request.topicId);
+        localStorage.setItem('mockRegisteredTopics', JSON.stringify(registered));
+      }
+      return { ...request, status: approve ? 'APPROVED' : 'REJECTED', reviewedAt: new Date().toISOString() };
+    }
+    const response = await axiosClient.put<EnrollmentRequest>(
+      `/api/admin/enrollment-requests/${id}`, null, { params: { approve } }
+    );
+    return response.data;
+  },
   // ==========================================
   // User Management
   // ==========================================
@@ -259,6 +309,26 @@ export const adminApi = {
       return;
     }
     await axiosClient.delete(`/api/admin/lessons/${id}`);
+  },
+
+  async reorderLessons(topicId: string, lessonIds: string[]): Promise<Lesson[]> {
+    if (isMockApi()) {
+      await mockDelay(200);
+      const topic = mockDbTopics.find(item => item.id === topicId);
+      if (!topic) throw new Error(`Topic not found with id: ${topicId}`);
+      const lessonsById = new Map(topic.lessons.map(lesson => [lesson.id, lesson]));
+      topic.lessons = lessonIds.map((id, index) => ({
+        ...lessonsById.get(id)!,
+        lessonOrder: index
+      }));
+      setMockDbTopics([...mockDbTopics]);
+      return topic.lessons;
+    }
+    const response = await axiosClient.put<Lesson[]>(
+      `/api/admin/topics/${encodeURIComponent(topicId)}/lessons/order`,
+      lessonIds
+    );
+    return response.data;
   },
 
   // ==========================================

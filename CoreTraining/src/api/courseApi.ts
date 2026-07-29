@@ -196,7 +196,8 @@ export const courseApi = {
         groupId: 'GDV',
         groupName: 'Giao dịch viên',
         mandatoryTopics: ['CIF', 'TIEN_GUI', 'TELLER', 'THE'],
-        registeredTopics: mockRegistered
+        registeredTopics: mockRegistered,
+        pendingTopics: JSON.parse(localStorage.getItem('mockPendingTopics') || '[]')
       };
     }
     const response = await axiosClient.get<UserProgress>('/api/users/me');
@@ -219,10 +220,10 @@ export const courseApi = {
   async registerTopic(topicId: string): Promise<UserProgress> {
     if (isMockApi()) {
       await mockDelay(300);
-      const mockRegistered: string[] = JSON.parse(localStorage.getItem('mockRegisteredTopics') || '[]');
-      if (!mockRegistered.includes(topicId)) {
-        mockRegistered.push(topicId);
-        localStorage.setItem('mockRegisteredTopics', JSON.stringify(mockRegistered));
+      const pending: string[] = JSON.parse(localStorage.getItem('mockPendingTopics') || '[]');
+      if (!pending.includes(topicId)) {
+        pending.push(topicId);
+        localStorage.setItem('mockPendingTopics', JSON.stringify(pending));
       }
       return this.getMyProgress();
     }

@@ -6,6 +6,9 @@ import com.bidv.coretraining.dto.QuestionDto;
 import com.bidv.coretraining.dto.TopicDto;
 import com.bidv.coretraining.dto.UserDto;
 import com.bidv.coretraining.dto.QuizSettingsDto;
+import com.bidv.coretraining.dto.EnrollmentRequestDto;
+import com.bidv.coretraining.security.CustomUserDetails;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.bidv.coretraining.service.AdminService;
 import com.bidv.coretraining.service.DocumentStorageService;
 import com.bidv.coretraining.service.VideoStorageService;
@@ -74,6 +77,13 @@ public class AdminController {
         return ResponseEntity.noContent().build();
     }
 
+    @PutMapping("/topics/{topicId}/lessons/order")
+    public ResponseEntity<List<LessonDto>> reorderLessons(
+            @PathVariable String topicId,
+            @RequestBody List<String> lessonIds) {
+        return ResponseEntity.ok(adminService.reorderLessons(topicId, lessonIds));
+    }
+
     // Questions CRUD
     @PostMapping("/questions")
     public ResponseEntity<QuestionDto> createQuestion(@RequestBody QuestionDto questionDto) {
@@ -123,5 +133,20 @@ public class AdminController {
     public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
         adminService.deleteUser(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/enrollment-requests")
+    public ResponseEntity<List<EnrollmentRequestDto>> getEnrollmentRequests() {
+        return ResponseEntity.ok(adminService.getEnrollmentRequests());
+    }
+
+    @PutMapping("/enrollment-requests/{id}")
+    public ResponseEntity<EnrollmentRequestDto> reviewEnrollmentRequest(
+            @PathVariable Long id,
+            @RequestParam boolean approve,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(
+                adminService.reviewEnrollmentRequest(id, approve, userDetails.getUsername())
+        );
     }
 }
