@@ -59,7 +59,8 @@ export const courseApi = {
         avatar: username.charAt(0).toUpperCase(),
         rating,
         content,
-        date: new Date().toISOString().split('T')[0]
+        date: new Date().toISOString().split('T')[0],
+        replies: []
       };
       
       lesson.comments.unshift(newComment);
@@ -69,6 +70,41 @@ export const courseApi = {
       rating,
       content
     });
+    return response.data;
+  },
+
+  async replyToComment(
+    lessonId: string,
+    rootCommentId: string,
+    replyToCommentId: string,
+    content: string
+  ): Promise<Comment> {
+    const username = localStorage.getItem('username') || 'quantrh';
+    if (isMockApi()) {
+      await mockDelay(200);
+      const lesson = mockDbTopics.flatMap(topic => topic.lessons).find(item => item.id === lessonId);
+      const root = lesson?.comments.find(comment => comment.id === rootCommentId);
+      if (!root) throw new Error(`Comment not found with id: ${rootCommentId}`);
+      const target = replyToCommentId === rootCommentId
+        ? root
+        : root.replies?.find(reply => reply.id === replyToCommentId);
+      const reply: Comment = {
+        id: `reply_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        user: username,
+        avatar: username.charAt(0).toUpperCase(),
+        content,
+        date: new Date().toISOString().split('T')[0],
+        parentId: rootCommentId,
+        replyToUser: target?.user || root.user,
+        replies: []
+      };
+      root.replies = [...(root.replies || []), reply];
+      return reply;
+    }
+    const response = await axiosClient.post<Comment>(
+      `/api/lessons/${lessonId}/comments/${rootCommentId}/replies`,
+      { content, replyToCommentId }
+    );
     return response.data;
   },
 

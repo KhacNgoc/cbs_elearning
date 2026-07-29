@@ -2,6 +2,7 @@ package com.bidv.coretraining.controller;
 
 import com.bidv.coretraining.dto.CommentDto;
 import com.bidv.coretraining.dto.CommentRequest;
+import com.bidv.coretraining.dto.CommentReplyRequest;
 import com.bidv.coretraining.dto.LessonDto;
 import com.bidv.coretraining.dto.TopicDto;
 import com.bidv.coretraining.dto.VideoNoteDto;
@@ -47,6 +48,17 @@ public class CourseController {
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         CommentDto response = courseService.addCommentToLesson(id, commentRequest, userDetails.getUsername());
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/lessons/{lessonId}/comments/{commentId}/replies")
+    public ResponseEntity<CommentDto> replyToComment(
+            @PathVariable String lessonId,
+            @PathVariable String commentId,
+            @Valid @RequestBody CommentReplyRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(
+                courseService.replyToComment(lessonId, commentId, request, userDetails.getUsername())
+        );
     }
 
     @GetMapping("/lessons/{id}/notes")

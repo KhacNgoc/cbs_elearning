@@ -72,6 +72,23 @@ export const useCourseStore = defineStore('course', {
       } catch (error) {
         console.error('Failed to add comment:', error);
       }
+    },
+
+    async replyToComment(
+      lessonId: string,
+      rootCommentId: string,
+      replyToCommentId: string,
+      content: string
+    ) {
+      const reply = await courseApi.replyToComment(
+        lessonId, rootCommentId, replyToCommentId, content
+      );
+      if (this.currentLessonData?.id === lessonId) {
+        const root = this.currentLessonData.comments.find(comment => comment.id === rootCommentId);
+        if (root && !(root.replies || []).some(item => item.id === reply.id)) {
+          root.replies = [...(root.replies || []), reply];
+        }
+      }
     }
   }
 });

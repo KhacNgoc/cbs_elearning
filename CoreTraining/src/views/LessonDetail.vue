@@ -81,6 +81,7 @@
           v-model:rating="userRating"
           v-model:comment="commentText"
           @submit="submitFeedback"
+          @reply="submitReply"
         />
       </LessonOverview>
     </section>
@@ -381,6 +382,24 @@ const submitFeedback = async () => {
   );
   commentText.value = "";
   userRating.value = 5;
+};
+const submitReply = async (
+  rootCommentId: string,
+  replyToCommentId: string,
+  content: string,
+) => {
+  if (!lesson.value || !content.trim()) return;
+  try {
+    await courseStore.replyToComment(
+      lesson.value.id,
+      rootCommentId,
+      replyToCommentId,
+      content.trim(),
+    );
+  } catch (error) {
+    console.error("Failed to reply to comment:", error);
+    alert("Không thể gửi phản hồi. Vui lòng thử lại.");
+  }
 };
 </script>
 

@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -16,4 +17,7 @@ public class CommentDto {
     private Integer rating;
     private String content;
     private String date; // Format YYYY-MM-DD
+    private String parentId;
+    private String replyToUser;
+    private List<CommentDto> replies;
 }

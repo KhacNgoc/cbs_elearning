@@ -118,12 +118,18 @@ CREATE TABLE IF NOT EXISTS comments (
     id VARCHAR(255) PRIMARY KEY,
     username VARCHAR(255) NOT NULL,
     avatar VARCHAR(255) NOT NULL,
-    rating INTEGER NOT NULL,
+    rating INTEGER,
     content TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL,
     lesson_id VARCHAR(255) NOT NULL,
-    CONSTRAINT fk_comments_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
+    parent_comment_id VARCHAR(255),
+    reply_to_username VARCHAR(255),
+    CONSTRAINT fk_comments_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE,
+    CONSTRAINT fk_comments_parent FOREIGN KEY (parent_comment_id) REFERENCES comments(id) ON DELETE CASCADE
 );
+ALTER TABLE comments ALTER COLUMN rating DROP NOT NULL;
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS parent_comment_id VARCHAR(255);
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS reply_to_username VARCHAR(255);
 
 -- 12. Create private timestamped video notes
 CREATE TABLE IF NOT EXISTS video_notes (

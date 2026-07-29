@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "comments")
@@ -23,7 +25,7 @@ public class Comment {
     @Column(nullable = false)
     private String avatar; // Initial character of username
 
-    @Column(nullable = false)
+    @Column
     private Integer rating; // 1 to 5 stars
 
     @Column(nullable = false, columnDefinition = "TEXT")
@@ -35,4 +37,16 @@ public class Comment {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "lesson_id", nullable = false)
     private Lesson lesson;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_comment_id")
+    private Comment parent;
+
+    @Column(name = "reply_to_username")
+    private String replyToUsername;
+
+    @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("createdAt ASC")
+    @Builder.Default
+    private List<Comment> replies = new ArrayList<>();
 }

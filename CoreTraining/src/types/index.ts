@@ -2,9 +2,12 @@ export interface Comment {
   id: string;
   user: string;
   avatar: string;
-  rating: number;
+  rating?: number;
   content: string;
   date: string;
+  parentId?: string;
+  replyToUser?: string;
+  replies?: Comment[];
 }
 
 export interface VideoNote {

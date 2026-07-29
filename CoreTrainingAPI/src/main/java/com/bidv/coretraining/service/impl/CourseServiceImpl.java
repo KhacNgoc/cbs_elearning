@@ -87,6 +87,45 @@ public class CourseServiceImpl implements CourseService {
     }
 
     @Override
+    @Transactional
+    public CommentDto replyToComment(String lessonId, String commentId,
+                                     CommentReplyRequest request, String username) {
+        Lesson lesson = lessonRepository.findById(lessonId)
+                .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
+        Comment requestedParent = commentRepository.findById(commentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Comment", "id", commentId));
+        if (!requestedParent.getLesson().getId().equals(lessonId)) {
+            throw new IllegalArgumentException("Bình luận không thuộc bài học này");
+        }
+
+        Comment replyTarget = requestedParent;
+        if (request.getReplyToCommentId() != null && !request.getReplyToCommentId().isBlank()) {
+            replyTarget = commentRepository.findById(request.getReplyToCommentId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Comment", "id", request.getReplyToCommentId()));
+            if (!replyTarget.getLesson().getId().equals(lessonId)) {
+                throw new IllegalArgumentException("Phản hồi không thuộc bài học này");
+            }
+        }
+        Comment root = requestedParent.getParent() == null
+                ? requestedParent
+                : requestedParent.getParent();
+
+        Comment reply = Comment.builder()
+                .id("reply_" + System.currentTimeMillis() + "_"
+                        + UUID.randomUUID().toString().substring(0, 4))
+                .username(username)
+                .avatar(String.valueOf(username.charAt(0)).toUpperCase())
+                .content(request.getContent().trim())
+                .createdAt(LocalDateTime.now())
+                .lesson(lesson)
+                .parent(root)
+                .replyToUsername(replyTarget.getUsername())
+                .build();
+        return courseMapper.toCommentDto(commentRepository.save(reply));
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<VideoNoteDto> getVideoNotes(String lessonId, String username) {
         if (!lessonRepository.existsById(lessonId)) {
