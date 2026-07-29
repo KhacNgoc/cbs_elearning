@@ -779,6 +779,7 @@
                 <select
                   v-model="lessonForm.topicId"
                   class="form-control"
+                  disabled
                   required
                 >
                   <option
@@ -3556,6 +3557,14 @@ void handleDeleteQuestion;
   border-top-color: var(--primary-color);
   border-radius: 50%;
   animation: spin 1s linear infinite;
+}
+
+select:disabled {
+  background-color: #f3f4f6;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+  cursor: not-allowed;
+  opacity: 1;
 }
 
 @keyframes spin {
