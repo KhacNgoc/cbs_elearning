@@ -247,6 +247,49 @@ public class AdminServiceImpl implements AdminService {
         questionRepository.delete(question);
     }
 
+    @Override
+    @Transactional
+    public QuizSettingsDto updateQuizSettings(QuizSettingsDto settings) {
+        int passingScore = settings.getPassingScore() == null ? 80 : settings.getPassingScore();
+        if (passingScore < 1 || passingScore > 100) {
+            throw new IllegalArgumentException("Ngưỡng đạt phải nằm trong khoảng từ 1 đến 100");
+        }
+        if (settings.getLessonId() != null && !settings.getLessonId().isBlank()) {
+            Lesson lesson = lessonRepository.findById(settings.getLessonId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", settings.getLessonId()));
+            if (!lesson.getTopic().getId().equals(settings.getTopicId())) {
+                throw new IllegalArgumentException("Bài học không thuộc chủ đề đã chọn");
+            }
+            lesson.setQuizPassingScore(passingScore);
+            lessonRepository.save(lesson);
+        } else {
+            Topic topic = topicRepository.findById(settings.getTopicId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Topic", "id", settings.getTopicId()));
+            topic.setQuizPassingScore(passingScore);
+            topicRepository.save(topic);
+        }
+        settings.setPassingScore(passingScore);
+        return settings;
+    }
+
+    @Override
+    @Transactional
+    public void deleteQuiz(String topicId, String lessonId) {
+        if (lessonId != null && !lessonId.isBlank()) {
+            Lesson lesson = lessonRepository.findById(lessonId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
+            if (!lesson.getTopic().getId().equals(topicId)) {
+                throw new IllegalArgumentException("Bài học không thuộc chủ đề đã chọn");
+            }
+            questionRepository.deleteByLessonId(lessonId);
+        } else {
+            if (!topicRepository.existsById(topicId)) {
+                throw new ResourceNotFoundException("Topic", "id", topicId);
+            }
+            questionRepository.deleteByTopicIdAndLessonIsNull(topicId);
+        }
+    }
+
     // User CRUD implementation
     private UserDto mapToUserDto(User user) {
         return UserDto.builder()

@@ -24,6 +24,10 @@ public class Topic {
     @Column(name = "icon_name")
     private String iconName;
 
+    @Column(name = "quiz_passing_score", nullable = false, columnDefinition = "INTEGER DEFAULT 80")
+    @Builder.Default
+    private Integer quizPassingScore = 80;
+
     @OneToMany(mappedBy = "topic", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<Lesson> lessons = new ArrayList<>();

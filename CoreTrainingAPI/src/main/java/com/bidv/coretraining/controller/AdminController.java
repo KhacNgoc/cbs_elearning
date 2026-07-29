@@ -5,6 +5,7 @@ import com.bidv.coretraining.dto.LessonDocumentDto;
 import com.bidv.coretraining.dto.QuestionDto;
 import com.bidv.coretraining.dto.TopicDto;
 import com.bidv.coretraining.dto.UserDto;
+import com.bidv.coretraining.dto.QuizSettingsDto;
 import com.bidv.coretraining.service.AdminService;
 import com.bidv.coretraining.service.DocumentStorageService;
 import com.bidv.coretraining.service.VideoStorageService;
@@ -87,6 +88,18 @@ public class AdminController {
     @DeleteMapping("/questions/{id}")
     public ResponseEntity<Void> deleteQuestion(@PathVariable Long id) {
         adminService.deleteQuestion(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/quizzes/settings")
+    public ResponseEntity<QuizSettingsDto> updateQuizSettings(@RequestBody QuizSettingsDto settings) {
+        return ResponseEntity.ok(adminService.updateQuizSettings(settings));
+    }
+
+    @DeleteMapping("/quizzes")
+    public ResponseEntity<Void> deleteQuiz(@RequestParam String topicId,
+                                           @RequestParam(required = false) String lessonId) {
+        adminService.deleteQuiz(topicId, lessonId);
         return ResponseEntity.noContent().build();
     }
 

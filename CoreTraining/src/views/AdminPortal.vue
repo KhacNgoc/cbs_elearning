@@ -479,7 +479,7 @@
                 <div class="quiz-definition-copy">
                   <span class="q-scope-tag">{{ quiz.lessonId ? "Bài học" : "Toàn chủ đề" }}</span>
                   <h4>{{ quiz.title }}</h4>
-                  <p>{{ quiz.questionCount }} câu hỏi · Đạt tối thiểu 80%</p>
+                  <p>{{ quiz.questionCount }} câu hỏi · Đạt tối thiểu {{ quiz.passingScore }}%</p>
                 </div>
                 <ArrowRight :size="20" />
               </button>
@@ -1207,6 +1207,7 @@ type QuizDefinition = {
   lessonId?: string;
   title: string;
   questionCount: number;
+  passingScore: number;
 };
 
 const quizDefinitions = computed<QuizDefinition[]>(() => {
@@ -1225,6 +1226,7 @@ const quizDefinitions = computed<QuizDefinition[]>(() => {
         topicId: topic.id,
         title: `Bài kiểm tra tổng hợp — ${topic.name}`,
         questionCount: topicQuestions.length,
+        passingScore: topic.quizPassingScore ?? 80,
       });
     }
     for (const lesson of topic.lessons) {
@@ -1241,6 +1243,7 @@ const quizDefinitions = computed<QuizDefinition[]>(() => {
               ? `${lesson.title} — ${topic.name}`
               : lesson.title,
           questionCount: count,
+          passingScore: lesson.quizPassingScore ?? 80,
         });
       }
     }

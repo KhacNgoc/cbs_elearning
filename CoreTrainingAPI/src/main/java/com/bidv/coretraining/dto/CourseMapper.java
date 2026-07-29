@@ -16,11 +16,19 @@ import java.util.List;
 @Mapper(componentModel = "spring")
 public interface CourseMapper {
 
+    @Mapping(
+            target = "hasQuiz",
+            expression = "java(topic.getQuestions() != null && topic.getQuestions().stream().anyMatch(question -> question.getLesson() == null))"
+    )
     TopicDto toTopicDto(Topic topic);
 
     List<TopicDto> toTopicDtoList(List<Topic> topics);
 
     @Mapping(source = "topic.id", target = "topicId")
+    @Mapping(
+            target = "hasQuiz",
+            expression = "java(lesson.getQuizQuestions() != null && !lesson.getQuizQuestions().isEmpty())"
+    )
     LessonDto toLessonDto(Lesson lesson);
 
     @AfterMapping
@@ -31,7 +39,6 @@ public interface CourseMapper {
                     ? VideoSource.UPLOAD
                     : VideoSource.URL);
         }
-        dto.setHasQuiz(lesson.getQuizQuestions() != null && !lesson.getQuizQuestions().isEmpty());
     }
 
     List<LessonDto> toLessonDtoList(List<Lesson> lessons);

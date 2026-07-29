@@ -31,6 +31,10 @@ public class Lesson {
     @Column(name = "video_url")
     private String videoUrl;
 
+    @Column(name = "quiz_passing_score", nullable = false, columnDefinition = "INTEGER DEFAULT 80")
+    @Builder.Default
+    private Integer quizPassingScore = 80;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "video_source", length = 20)
     @Builder.Default

@@ -91,16 +91,17 @@
                 <span>{{ userStore.getTopicProgressPercent(topic.id) }}%</span>
               </div>
               <ProgressBar :progress="userStore.getTopicProgressPercent(topic.id)" height="6px" />
-              <div class="topic-quiz-info">
-                <span v-if="userStore.getTopicQuizScore(topic.id)">
-                  Thi thử: <strong class="quiz-score-highlight">{{ userStore.getTopicQuizScore(topic.id)?.score }}/{{ userStore.getTopicQuizScore(topic.id)?.total }}</strong>
+              <div
+                class="topic-course-status"
+                :class="{ completed: userStore.getTopicProgressPercent(topic.id) === 100 }"
+              >
+                <CheckCircle2 v-if="userStore.getTopicProgressPercent(topic.id) === 100" :size="15" />
+                <CircleDashed v-else :size="15" />
+                <span>
+                  {{ userStore.getTopicProgressPercent(topic.id) === 100
+                    ? 'Đã hoàn thành khóa học'
+                    : 'Chưa hoàn thành khóa học' }}
                 </span>
-                <span v-else class="quiz-pending">Chưa thi đánh giá</span>
-                <button 
-                  class="btn-go-quiz" 
-                  :disabled="!userStore.isTopicAccessible(topic.id)"
-                  @click.stop="goToQuiz(topic.id)"
-                >Thi thử</button>
               </div>
             </div>
           </div>
@@ -182,7 +183,9 @@ import {
   Award,
   Shield,
   Medal,
-  Lock
+  Lock,
+  CheckCircle2,
+  CircleDashed
 } from 'lucide-vue-next';
 
 const router = useRouter();
@@ -235,10 +238,6 @@ const goToTopicFirstLesson = (topic: any) => {
   if (topic.lessons.length > 0) {
     router.push(`/lesson/${topic.lessons[0].id}`);
   }
-};
-
-const goToQuiz = (topicId: string) => {
-  router.push(`/quiz/${topicId}`);
 };
 
 const openRegisterConfirm = (topic: any) => {
@@ -526,43 +525,24 @@ const getBadgeIcon = (icon: string) => {
   color: var(--text-main);
 }
 
-.topic-quiz-info {
+.topic-course-status {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 0.4rem;
   font-size: 0.8rem;
-  color: var(--text-muted);
+  color: #64748b;
   margin-top: 0.15rem;
   background-color: var(--bg-main);
-  padding: 0.25rem 0.5rem;
+  padding: 0.35rem 0.5rem;
   border-radius: var(--radius-sm);
+  font-weight: 600;
 }
 
-.quiz-score-highlight {
+.topic-course-status.completed {
+  background: #e8f5ef;
   color: var(--primary-color);
-  font-weight: 700;
 }
 
-.quiz-pending {
-  font-style: italic;
-  font-size: 0.75rem;
-}
-
-.btn-go-quiz {
-  background: none;
-  border: none;
-  color: var(--primary-color);
-  font-weight: 700;
-  cursor: pointer;
-  font-size: 0.8rem;
-  text-decoration: underline;
-  padding: 0.1rem 0.4rem;
-  transition: var(--transition);
-}
-
-.btn-go-quiz:hover {
-  color: var(--accent-secondary);
-}
 
 /* Badges section */
 .badges-header {
@@ -776,12 +756,6 @@ const getBadgeIcon = (icon: string) => {
   width: 18px;
   height: 18px;
   transition: var(--transition);
-}
-
-.btn-go-quiz:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  text-decoration: none;
 }
 
 /* Modal styling */

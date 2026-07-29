@@ -1,10 +1,8 @@
 package com.bidv.coretraining.service.impl;
 
-import com.bidv.coretraining.dto.QuestionDto;
-import com.bidv.coretraining.dto.QuizMapper;
-import com.bidv.coretraining.dto.QuizResultDto;
-import com.bidv.coretraining.dto.QuizSubmitRequest;
+import com.bidv.coretraining.dto.*;
 import com.bidv.coretraining.entity.*;
+import com.bidv.coretraining.exception.BadRequestException;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
 import com.bidv.coretraining.repository.*;
 import com.bidv.coretraining.service.QuizService;
@@ -15,6 +13,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.HashMap;
 
 @Service
 public class QuizServiceImpl implements QuizService {
@@ -64,7 +63,8 @@ public class QuizServiceImpl implements QuizService {
         List<Question> questions = questionRepository.findByTopicIdAndLessonIsNull(topicId);
         int totalQuestions = questions.size();
         if (totalQuestions == 0) {
-            return QuizResultDto.builder().score(0).total(0).percent(0).build();
+            return QuizResultDto.builder().score(0).total(0).percent(0)
+                    .passingScore(topic.getQuizPassingScore()).passed(false).build();
         }
 
         int correctCount = 0;
@@ -76,23 +76,28 @@ public class QuizServiceImpl implements QuizService {
         }
 
         int percent = Math.round(((float) correctCount / totalQuestions) * 100);
+        int passingScore = topic.getQuizPassingScore();
 
         // Update high score
-        Optional<UserQuizScore> existingScoreOpt = userQuizScoreRepository.findByUserIdAndTopicId(user.getId(), topicId);
+        Optional<UserQuizScore> existingScoreOpt =
+                userQuizScoreRepository.findByUserIdAndTopicIdAndLessonIsNull(user.getId(), topicId);
         int previousHighScore = 0;
 
         if (existingScoreOpt.isPresent()) {
             UserQuizScore existingScore = existingScoreOpt.get();
             previousHighScore = existingScore.getScore();
-            if (correctCount > previousHighScore) {
+            if (correctCount >= previousHighScore) {
                 existingScore.setScore(correctCount);
                 existingScore.setTotal(totalQuestions);
                 existingScore.setTakenAt(LocalDateTime.now());
+                existingScore.setSelectedAnswers(new HashMap<>(request.getSelectedAnswers()));
                 userQuizScoreRepository.save(existingScore);
 
                 // Add points for score improvement
-                int improvedQuestions = correctCount - previousHighScore;
-                user.setPoints(user.getPoints() + improvedQuestions * 50);
+                if (correctCount > previousHighScore) {
+                    int improvedQuestions = correctCount - previousHighScore;
+                    user.setPoints(user.getPoints() + improvedQuestions * 50);
+                }
             }
         } else {
             UserQuizScore quizScore = UserQuizScore.builder()
@@ -101,6 +106,7 @@ public class QuizServiceImpl implements QuizService {
                     .score(correctCount)
                     .total(totalQuestions)
                     .takenAt(LocalDateTime.now())
+                    .selectedAnswers(new HashMap<>(request.getSelectedAnswers()))
                     .build();
             userQuizScoreRepository.save(quizScore);
 
@@ -111,12 +117,28 @@ public class QuizServiceImpl implements QuizService {
         // Check and unlock badges
         checkAndUnlockBadges(user, topic, correctCount, totalQuestions);
 
+        // Passing the topic-level assessment completes the whole course/topic.
+        // Only newly completed lessons receive the normal completion points.
+        if (percent >= passingScore) {
+            int newlyCompletedLessons = 0;
+            for (Lesson lesson : topic.getLessons()) {
+                if (user.getCompletedLessons().add(lesson)) {
+                    newlyCompletedLessons++;
+                }
+            }
+            if (newlyCompletedLessons > 0) {
+                user.setPoints(user.getPoints() + newlyCompletedLessons * 100);
+            }
+        }
+
         userRepository.save(user);
 
         return QuizResultDto.builder()
                 .score(correctCount)
                 .total(totalQuestions)
                 .percent(percent)
+                .passingScore(passingScore)
+                .passed(percent >= passingScore)
                 .build();
     }
 
@@ -144,12 +166,94 @@ public class QuizServiceImpl implements QuizService {
             if (selected != null && selected.equals(question.getCorrectAnswer())) score++;
         }
         int percent = total == 0 ? 0 : Math.round((float) score / total * 100);
-        if (total > 0 && percent >= 80 && !user.getCompletedLessons().contains(lesson)) {
+        int passingScore = lesson.getQuizPassingScore();
+        Optional<UserQuizScore> existingScore =
+                userQuizScoreRepository.findByUserIdAndLessonId(user.getId(), lessonId);
+        if (existingScore.isPresent()) {
+            UserQuizScore quizScore = existingScore.get();
+            if (score >= quizScore.getScore()) {
+                quizScore.setScore(score);
+                quizScore.setTotal(total);
+                quizScore.setTakenAt(LocalDateTime.now());
+                quizScore.setSelectedAnswers(new HashMap<>(request.getSelectedAnswers()));
+                userQuizScoreRepository.save(quizScore);
+            }
+        } else if (total > 0) {
+            userQuizScoreRepository.save(UserQuizScore.builder()
+                    .user(user)
+                    .topic(lesson.getTopic())
+                    .lesson(lesson)
+                    .score(score)
+                    .total(total)
+                    .takenAt(LocalDateTime.now())
+                    .selectedAnswers(new HashMap<>(request.getSelectedAnswers()))
+                    .build());
+        }
+        if (total > 0 && percent >= passingScore && !user.getCompletedLessons().contains(lesson)) {
             user.getCompletedLessons().add(lesson);
             user.setPoints(user.getPoints() + 100);
             userRepository.save(user);
         }
-        return QuizResultDto.builder().score(score).total(total).percent(percent).build();
+        return QuizResultDto.builder().score(score).total(total).percent(percent)
+                .passingScore(passingScore).passed(total > 0 && percent >= passingScore).build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public QuizReviewDto getTopicQuizReview(String topicId, String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
+        Topic topic = topicRepository.findById(topicId)
+                .orElseThrow(() -> new ResourceNotFoundException("Topic", "id", topicId));
+        UserQuizScore score = userQuizScoreRepository
+                .findByUserIdAndTopicIdAndLessonIsNull(user.getId(), topicId)
+                .orElseThrow(() -> new ResourceNotFoundException("Quiz attempt", "topicId", topicId));
+        return buildReview(score, questionRepository.findByTopicIdAndLessonIsNull(topicId),
+                topic.getQuizPassingScore());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public QuizReviewDto getLessonQuizReview(String lessonId, String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
+        Lesson lesson = lessonRepository.findById(lessonId)
+                .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
+        UserQuizScore score = userQuizScoreRepository.findByUserIdAndLessonId(user.getId(), lessonId)
+                .orElseThrow(() -> new ResourceNotFoundException("Quiz attempt", "lessonId", lessonId));
+        return buildReview(score, questionRepository.findByLessonId(lessonId), lesson.getQuizPassingScore());
+    }
+
+    private QuizReviewDto buildReview(UserQuizScore score, List<Question> questions, int passingScore) {
+        int percent = score.getTotal() == 0 ? 0
+                : Math.round((float) score.getScore() / score.getTotal() * 100);
+        if (percent < passingScore) {
+            throw new BadRequestException("Chỉ có thể xem lại bài kiểm tra đã đạt");
+        }
+        if (score.getSelectedAnswers() == null || score.getSelectedAnswers().isEmpty()) {
+            throw new BadRequestException("Lần làm bài cũ chưa có dữ liệu đáp án để xem lại");
+        }
+        List<QuizReviewQuestionDto> reviewQuestions = questions.stream()
+                .map(question -> {
+                    Integer selected = score.getSelectedAnswers().get(question.getId());
+                    return QuizReviewQuestionDto.builder()
+                            .id(question.getId())
+                            .text(question.getText())
+                            .options(question.getOptions())
+                            .selectedAnswer(selected)
+                            .correctAnswer(question.getCorrectAnswer())
+                            .correct(selected != null && selected.equals(question.getCorrectAnswer()))
+                            .build();
+                })
+                .toList();
+        return QuizReviewDto.builder()
+                .score(score.getScore())
+                .total(score.getTotal())
+                .percent(percent)
+                .passingScore(passingScore)
+                .passed(true)
+                .questions(reviewQuestions)
+                .build();
     }
 
     private void checkAndUnlockBadges(User user, Topic topic, int score, int total) {

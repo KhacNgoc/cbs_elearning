@@ -145,10 +145,16 @@ export const courseApi = {
       await mockDelay(200);
       // Construct in-memory progress
       const mockRegistered: string[] = JSON.parse(localStorage.getItem('mockRegisteredTopics') || '[]');
+      const storedCompleted: string[] = JSON.parse(localStorage.getItem('mockCompletedLessons') || '[]');
+      for (const lessonId of storedCompleted) {
+        if (!mockDbCompleted.includes(lessonId)) mockDbCompleted.push(lessonId);
+      }
       return {
         completedLessons: mockDbCompleted,
         quizScores: JSON.parse(localStorage.getItem('mockQuizScores') || '{}'),
         quizTotals: JSON.parse(localStorage.getItem('mockQuizTotals') || '{}'),
+        lessonQuizScores: JSON.parse(localStorage.getItem('mockLessonQuizScores') || '{}'),
+        lessonQuizTotals: JSON.parse(localStorage.getItem('mockLessonQuizTotals') || '{}'),
         points: mockDbPoints,
         unlockedBadges: JSON.parse(localStorage.getItem('mockUnlockedBadges') || '[]'),
         groupId: 'GDV',

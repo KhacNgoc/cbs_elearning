@@ -34,11 +34,25 @@
             </option>
           </select>
         </label>
+        <label>
+          <span>Ngưỡng điểm đạt</span>
+          <div class="score-input">
+            <input v-model.number="passingScore" type="number" min="1" max="100" />
+            <strong>%</strong>
+          </div>
+          <small>Học viên cần đạt tối thiểu mức này để hoàn thành bài kiểm tra.</small>
+        </label>
       </div>
       <div v-if="isNew" class="settings-action">
         <p>Phạm vi sẽ tự động áp dụng cho mọi câu hỏi được thêm hoặc import.</p>
         <button class="primary-button" :disabled="!topicId" @click="confirmScope">
           Tiếp tục soạn câu hỏi <ArrowRight :size="17" />
+        </button>
+      </div>
+      <div v-else class="settings-action">
+        <p>Thay đổi ngưỡng đạt sẽ áp dụng cho những lượt làm bài tiếp theo.</p>
+        <button class="primary-button" :disabled="savingSettings" @click="saveSettings">
+          {{ savingSettings ? "Đang lưu..." : "Lưu ngưỡng đạt" }}
         </button>
       </div>
     </section>
@@ -118,6 +132,15 @@
           {{ searchQuery ? "Không tìm thấy câu hỏi phù hợp." : "Bài kiểm tra chưa có câu hỏi. Hãy thêm thủ công hoặc import CSV." }}
         </div>
       </section>
+      <section class="danger-zone">
+        <div>
+          <strong>Xóa bài kiểm tra</strong>
+          <p>Xóa toàn bộ {{ questions.length }} câu hỏi của bài kiểm tra này. Thao tác không thể hoàn tác.</p>
+        </div>
+        <button :disabled="deletingQuiz" @click="deleteQuiz">
+          <Trash2 :size="17" /> {{ deletingQuiz ? "Đang xóa..." : "Xóa bài kiểm tra" }}
+        </button>
+      </section>
     </template>
   </main>
 </template>
@@ -142,6 +165,9 @@ const searchQuery = ref("");
 const showQuestionForm = ref(false);
 const editingId = ref<number | null>(null);
 const saving = ref(false);
+const savingSettings = ref(false);
+const deletingQuiz = ref(false);
+const passingScore = ref(80);
 const form = reactive({ text: "", options: ["", "", "", ""], correctAnswer: 0 });
 
 const availableLessons = computed(() => courseStore.topics.find((topic) => topic.id === topicId.value)?.lessons || []);
@@ -168,6 +194,9 @@ onMounted(async () => {
       lessonId.value = scopeId;
       topicId.value = courseStore.topics.find((topic) => topic.lessons.some((lesson) => lesson.id === scopeId))?.id || "";
     } else topicId.value = scopeId;
+    const topic = courseStore.topics.find((item) => item.id === topicId.value);
+    const lesson = topic?.lessons.find((item) => item.id === lessonId.value);
+    passingScore.value = lesson?.quizPassingScore ?? topic?.quizPassingScore ?? 80;
     await loadQuestions();
   }
 });
@@ -184,6 +213,31 @@ const confirmScope = () => router.replace(
     ? `/admin/quizzes/lesson/${encodeURIComponent(lessonId.value)}`
     : `/admin/quizzes/topic/${encodeURIComponent(topicId.value)}`,
 );
+const saveSettings = async () => {
+  if (!Number.isInteger(passingScore.value) || passingScore.value < 1 || passingScore.value > 100) {
+    alert("Ngưỡng đạt phải là số nguyên từ 1 đến 100.");
+    return;
+  }
+  savingSettings.value = true;
+  try {
+    await adminApi.updateQuizSettings(topicId.value, lessonId.value || undefined, passingScore.value);
+    await courseStore.fetchTopics();
+    alert("Đã lưu ngưỡng điểm đạt.");
+  } finally {
+    savingSettings.value = false;
+  }
+};
+const deleteQuiz = async () => {
+  if (!confirm(`Xóa toàn bộ ${questions.value.length} câu hỏi và bài kiểm tra này?`)) return;
+  deletingQuiz.value = true;
+  try {
+    await adminApi.deleteQuiz(topicId.value, lessonId.value || undefined);
+    await courseStore.fetchTopics();
+    router.push("/admin?tab=exams");
+  } finally {
+    deletingQuiz.value = false;
+  }
+};
 const resetForm = () => {
   form.text = "";
   form.options.splice(0, 4, "", "", "", "");
@@ -213,6 +267,7 @@ const saveQuestion = async () => {
     if (editingId.value) await adminApi.updateQuestion(editingId.value, { ...payload, id: editingId.value });
     else await adminApi.createQuestion(payload);
     await loadQuestions();
+    await courseStore.fetchTopics();
     closeQuestionForm();
   } finally {
     saving.value = false;
@@ -222,6 +277,7 @@ const deleteQuestion = async (question: Question) => {
   if (!confirm("Xóa câu hỏi này khỏi bài kiểm tra?")) return;
   await adminApi.deleteQuestion(question.id);
   await loadQuestions();
+  await courseStore.fetchTopics();
 };
 
 const csvEscape = (value: string) => `"${value.replace(/"/g, '""')}"`;
@@ -271,6 +327,7 @@ const importCsv = async (event: Event) => {
     if (errors.length) throw new Error(errors.slice(0, 12).join("\n"));
     await Promise.all(payloads.map((payload) => adminApi.createQuestion(payload)));
     await loadQuestions();
+    await courseStore.fetchTopics();
     alert(`Đã import ${payloads.length} câu hỏi.`);
   } catch (error) {
     alert(error instanceof Error ? `File chưa đúng định dạng:\n${error.message}` : "Không thể đọc file.");
@@ -293,8 +350,13 @@ const importCsv = async (event: Event) => {
 .section-heading { display: flex; align-items: center; gap: .7rem; margin-bottom: 1rem; }
 .section-heading > span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--primary-color); color: white; font-weight: 800; }
 .section-heading h2 { margin: 0 0 .15rem; font-size: var(--admin-heading-section); line-height: 1.3; }
-.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.settings-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
 .settings-grid label > span, .question-text-field > span { display: block; margin-bottom: .35rem; font-size: var(--admin-text-label); font-weight: 700; }
+.settings-grid label > small { display: block; margin-top: .35rem; color: var(--text-muted); line-height: 1.35; }
+select, .score-input input, textarea, .question-text-field input { width: 100%; padding: .7rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: white; }
+.score-input { position: relative; }
+.score-input input { padding-right: 2.5rem; }
+.score-input strong { position: absolute; right: .8rem; top: 50%; transform: translateY(-50%); color: var(--primary-color); }
 select, textarea, .question-text-field input { width: 100%; padding: .7rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: white; }
 .settings-action { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color); }
 .settings-action p { margin: 0; color: var(--text-muted); font-size: var(--admin-text-body); }
@@ -302,6 +364,10 @@ select, textarea, .question-text-field input { width: 100%; padding: .7rem; bord
 .primary-button { border: 1px solid var(--primary-color); background: var(--primary-color); color: white; }
 .secondary-button { border: 1px solid var(--border-color); background: white; color: var(--primary-color); }
 .primary-button:disabled { opacity: .5; cursor: not-allowed; }
+.danger-zone { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-top: 2rem; padding: 1rem; border: 1px solid #fecaca; border-radius: var(--radius-md); background: #fff7f7; }
+.danger-zone p { margin: .25rem 0 0; color: #7f1d1d; font-size: var(--admin-text-body); }
+.danger-zone button { display: inline-flex; align-items: center; gap: .4rem; flex: 0 0 auto; padding: .65rem .85rem; border: 1px solid #dc2626; border-radius: var(--radius-sm); background: white; color: #b91c1c; cursor: pointer; font-weight: 700; }
+.danger-zone button:disabled { opacity: .55; cursor: wait; }
 .question-section-heading { flex-wrap: wrap; }
 .question-tools { display: flex; gap: .45rem; margin-left: auto; }
 .import-button { position: relative; }
@@ -339,6 +405,7 @@ select, textarea, .question-text-field input { width: 100%; padding: .7rem; bord
   .quiz-editor-page { width: 100%; padding: 1rem; }
   .quiz-editor-header { grid-template-columns: 1fr; }
   .settings-grid, .answer-editor, .answer-grid { grid-template-columns: 1fr; }
+  .danger-zone { align-items: flex-start; flex-direction: column; }
   .question-tools { width: 100%; margin-left: 0; flex-wrap: wrap; }
   .question-card { grid-template-columns: 30px 1fr; }
   .question-actions { grid-column: 2; }

@@ -41,6 +41,20 @@ export const useCourseStore = defineStore('course', {
       this.currentLessonId = lessonId;
       try {
         this.currentLessonData = await courseApi.getLessonById(lessonId);
+        // Keep the topic outline in sync with the detailed lesson response.
+        // The sidebar reads from `topics`, while the learning page reads from
+        // `currentLessonData`; without this merge a newly-created quiz can
+        // appear in one place but not the other until a full page refresh.
+        if (this.currentLessonData) {
+          const topic = this.topics.find(item => item.id === this.currentLessonData?.topicId);
+          const lessonIndex = topic?.lessons.findIndex(item => item.id === lessonId) ?? -1;
+          if (topic && lessonIndex >= 0) {
+            topic.lessons[lessonIndex] = {
+              ...topic.lessons[lessonIndex],
+              ...this.currentLessonData
+            };
+          }
+        }
       } catch (error) {
         console.error(`Failed to load lesson detail for ${lessonId}:`, error);
         this.currentLessonData = null;

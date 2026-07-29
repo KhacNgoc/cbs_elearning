@@ -4,8 +4,10 @@
 CREATE TABLE IF NOT EXISTS topics (
     id VARCHAR(255) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    icon_name VARCHAR(255)
+    icon_name VARCHAR(255),
+    quiz_passing_score INTEGER NOT NULL DEFAULT 80
 );
+ALTER TABLE topics ADD COLUMN IF NOT EXISTS quiz_passing_score INTEGER NOT NULL DEFAULT 80;
 
 -- 2. Create user_groups table
 CREATE TABLE IF NOT EXISTS user_groups (
@@ -51,11 +53,13 @@ CREATE TABLE IF NOT EXISTS lessons (
     hint TEXT,
     video_url VARCHAR(255),
     video_source VARCHAR(20),
+    quiz_passing_score INTEGER NOT NULL DEFAULT 80,
     topic_id VARCHAR(255) NOT NULL,
     CONSTRAINT fk_lessons_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
 );
 
 ALTER TABLE lessons ADD COLUMN IF NOT EXISTS video_source VARCHAR(20);
+ALTER TABLE lessons ADD COLUMN IF NOT EXISTS quiz_passing_score INTEGER NOT NULL DEFAULT 80;
 UPDATE lessons
 SET video_source = CASE
     WHEN video_url LIKE '%/uploads/%' THEN 'UPLOAD'
@@ -187,6 +191,18 @@ CREATE TABLE IF NOT EXISTS user_quiz_scores (
     taken_at TIMESTAMP NOT NULL,
     user_id BIGINT NOT NULL,
     topic_id VARCHAR(255) NOT NULL,
+    lesson_id VARCHAR(255),
     CONSTRAINT fk_user_quiz_scores_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_user_quiz_scores_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
+    CONSTRAINT fk_user_quiz_scores_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE,
+    CONSTRAINT fk_user_quiz_scores_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
+);
+ALTER TABLE user_quiz_scores ADD COLUMN IF NOT EXISTS lesson_id VARCHAR(255);
+
+CREATE TABLE IF NOT EXISTS user_quiz_score_answers (
+    quiz_score_id BIGINT NOT NULL,
+    question_id BIGINT NOT NULL,
+    selected_answer INTEGER NOT NULL,
+    PRIMARY KEY (quiz_score_id, question_id),
+    CONSTRAINT fk_quiz_score_answers_score FOREIGN KEY (quiz_score_id) REFERENCES user_quiz_scores(id) ON DELETE CASCADE,
+    CONSTRAINT fk_quiz_score_answers_question FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
 );

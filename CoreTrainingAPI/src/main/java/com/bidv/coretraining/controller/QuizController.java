@@ -3,6 +3,7 @@ package com.bidv.coretraining.controller;
 import com.bidv.coretraining.dto.QuestionDto;
 import com.bidv.coretraining.dto.QuizResultDto;
 import com.bidv.coretraining.dto.QuizSubmitRequest;
+import com.bidv.coretraining.dto.QuizReviewDto;
 import com.bidv.coretraining.security.CustomUserDetails;
 import com.bidv.coretraining.service.QuizService;
 import org.springframework.http.ResponseEntity;
@@ -36,6 +37,13 @@ public class QuizController {
         );
     }
 
+    @GetMapping("/lessons/{lessonId}/review")
+    public ResponseEntity<QuizReviewDto> getLessonQuizReview(
+            @PathVariable String lessonId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(quizService.getLessonQuizReview(lessonId, userDetails.getUsername()));
+    }
+
     @GetMapping("/{topicId}/questions")
     public ResponseEntity<List<QuestionDto>> getQuestionsForTopic(@PathVariable String topicId) {
         return ResponseEntity.ok(quizService.getQuestionsForTopic(topicId));
@@ -48,5 +56,12 @@ public class QuizController {
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         QuizResultDto response = quizService.submitQuiz(topicId, request, userDetails.getUsername());
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{topicId}/review")
+    public ResponseEntity<QuizReviewDto> getTopicQuizReview(
+            @PathVariable String topicId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(quizService.getTopicQuizReview(topicId, userDetails.getUsername()));
     }
 }

@@ -1,9 +1,7 @@
 package com.bidv.coretraining.service;
 
-import com.bidv.coretraining.dto.LessonDto;
-import com.bidv.coretraining.dto.QuestionDto;
-import com.bidv.coretraining.dto.TopicDto;
-import com.bidv.coretraining.dto.UserDto;
+import com.bidv.coretraining.dto.*;
+
 import java.util.List;
 
 public interface AdminService {
@@ -21,6 +19,8 @@ public interface AdminService {
     QuestionDto createQuestion(QuestionDto questionDto);
     QuestionDto updateQuestion(Long id, QuestionDto questionDto);
     void deleteQuestion(Long id);
+    QuizSettingsDto updateQuizSettings(QuizSettingsDto settings);
+    void deleteQuiz(String topicId, String lessonId);
 
     // User CRUD
     List<UserDto> getAllUsers();

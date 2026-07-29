@@ -76,7 +76,8 @@ public class UserServiceImpl implements UserService {
 
         if (questionRepository.existsByLessonId(lessonId)
                 && !user.getCompletedLessons().contains(lesson)) {
-            throw new IllegalStateException("Bạn cần đạt tối thiểu 80% bài kiểm tra của bài học");
+            throw new IllegalStateException("Bạn cần đạt tối thiểu "
+                    + lesson.getQuizPassingScore() + "% bài kiểm tra của bài học");
         }
 
         if (!user.getCompletedLessons().contains(lesson)) {
@@ -113,10 +114,18 @@ public class UserServiceImpl implements UserService {
         // Map quiz scores and totals
         Map<String, Integer> quizScores = new HashMap<>();
         Map<String, Integer> quizTotals = new HashMap<>();
+        Map<String, Integer> lessonQuizScores = new HashMap<>();
+        Map<String, Integer> lessonQuizTotals = new HashMap<>();
         for (UserQuizScore score : user.getQuizScores()) {
-            String topicId = score.getTopic().getId();
-            quizScores.put(topicId, score.getScore());
-            quizTotals.put(topicId, score.getTotal());
+            if (score.getLesson() != null) {
+                String lessonId = score.getLesson().getId();
+                lessonQuizScores.put(lessonId, score.getScore());
+                lessonQuizTotals.put(lessonId, score.getTotal());
+            } else {
+                String topicId = score.getTopic().getId();
+                quizScores.put(topicId, score.getScore());
+                quizTotals.put(topicId, score.getTotal());
+            }
         }
 
         String groupId = null;
@@ -138,6 +147,8 @@ public class UserServiceImpl implements UserService {
                 .completedLessons(completedLessons)
                 .quizScores(quizScores)
                 .quizTotals(quizTotals)
+                .lessonQuizScores(lessonQuizScores)
+                .lessonQuizTotals(lessonQuizTotals)
                 .points(user.getPoints())
                 .unlockedBadges(userMapper.toUserBadgeDtoList(new ArrayList<>(user.getUnlockedBadges())))
                 .groupId(groupId)

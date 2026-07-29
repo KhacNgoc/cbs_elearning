@@ -11,6 +11,8 @@ export const useUserStore = defineStore('user', {
     completedLessons: [],
     quizScores: {},
     quizTotals: {},
+    lessonQuizScores: {},
+    lessonQuizTotals: {},
     points: 0,
     unlockedBadges: [],
     groupId: '',
@@ -96,6 +98,8 @@ export const useUserStore = defineStore('user', {
       this.completedLessons = [];
       this.quizScores = {};
       this.quizTotals = {};
+      this.lessonQuizScores = {};
+      this.lessonQuizTotals = {};
       this.points = 0;
       this.unlockedBadges = [];
       this.groupId = '';
@@ -113,6 +117,8 @@ export const useUserStore = defineStore('user', {
         this.completedLessons = progress.completedLessons || [];
         this.quizScores = progress.quizScores || {};
         this.quizTotals = progress.quizTotals || {};
+        this.lessonQuizScores = progress.lessonQuizScores || {};
+        this.lessonQuizTotals = progress.lessonQuizTotals || {};
         this.points = progress.points || 0;
         this.unlockedBadges = progress.unlockedBadges || [];
         this.groupId = progress.groupId || '';

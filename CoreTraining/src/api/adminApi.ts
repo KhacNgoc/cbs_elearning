@@ -273,6 +273,14 @@ export const adminApi = {
       };
       mockDbQuestions.push(newQuestion);
       setMockDbQuestions([...mockDbQuestions]);
+      if (question.lessonId) {
+        const lesson = mockDbTopics.flatMap(topic => topic.lessons).find(item => item.id === question.lessonId);
+        if (lesson) lesson.hasQuiz = true;
+      } else {
+        const topic = mockDbTopics.find(item => item.id === question.topicId);
+        if (topic) topic.hasQuiz = true;
+      }
+      setMockDbTopics([...mockDbTopics]);
       return newQuestion;
     }
     const response = await axiosClient.post<Question>('/api/admin/questions', question);
@@ -303,10 +311,56 @@ export const adminApi = {
   async deleteQuestion(id: number): Promise<void> {
     if (isMockApi()) {
       await mockDelay(300);
+      const deletedQuestion = mockDbQuestions.find(q => q.id === id);
       const filtered = mockDbQuestions.filter(q => q.id !== id);
       setMockDbQuestions(filtered);
+      if (deletedQuestion?.lessonId) {
+        const lesson = mockDbTopics.flatMap(topic => topic.lessons).find(item => item.id === deletedQuestion.lessonId);
+        if (lesson) lesson.hasQuiz = filtered.some(question => question.lessonId === deletedQuestion.lessonId);
+      } else if (deletedQuestion) {
+        const topic = mockDbTopics.find(item => item.id === deletedQuestion.topicId);
+        if (topic) topic.hasQuiz = filtered.some(question =>
+          question.topicId === deletedQuestion.topicId && !question.lessonId
+        );
+      }
+      setMockDbTopics([...mockDbTopics]);
       return;
     }
     await axiosClient.delete(`/api/admin/questions/${id}`);
+  },
+
+  async updateQuizSettings(topicId: string, lessonId: string | undefined, passingScore: number): Promise<void> {
+    if (isMockApi()) {
+      await mockDelay(200);
+      if (lessonId) {
+        const lesson = mockDbTopics.flatMap(topic => topic.lessons).find(item => item.id === lessonId);
+        if (lesson) lesson.quizPassingScore = passingScore;
+      } else {
+        const topic = mockDbTopics.find(item => item.id === topicId);
+        if (topic) topic.quizPassingScore = passingScore;
+      }
+      setMockDbTopics([...mockDbTopics]);
+      return;
+    }
+    await axiosClient.put('/api/admin/quizzes/settings', { topicId, lessonId, passingScore });
+  },
+
+  async deleteQuiz(topicId: string, lessonId?: string): Promise<void> {
+    if (isMockApi()) {
+      await mockDelay(250);
+      setMockDbQuestions(mockDbQuestions.filter(question =>
+        lessonId ? question.lessonId !== lessonId : !(question.topicId === topicId && !question.lessonId)
+      ));
+      if (lessonId) {
+        const lesson = mockDbTopics.flatMap(topic => topic.lessons).find(item => item.id === lessonId);
+        if (lesson) lesson.hasQuiz = false;
+      } else {
+        const topic = mockDbTopics.find(item => item.id === topicId);
+        if (topic) topic.hasQuiz = false;
+      }
+      setMockDbTopics([...mockDbTopics]);
+      return;
+    }
+    await axiosClient.delete('/api/admin/quizzes', { params: { topicId, lessonId } });
   }
 };

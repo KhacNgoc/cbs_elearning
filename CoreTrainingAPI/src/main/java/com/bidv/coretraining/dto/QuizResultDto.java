@@ -13,4 +13,6 @@ public class QuizResultDto {
     private Integer score;
     private Integer total;
     private Integer percent;
+    private Integer passingScore;
+    private Boolean passed;
 }
