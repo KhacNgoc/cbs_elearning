@@ -7,6 +7,28 @@ import App from './App.vue';
 const app = createApp(App);
 const pinia = createPinia();
 
+app.config.errorHandler = (error, instance, info) => {
+  console.error('Unhandled Vue error', {
+    error,
+    component: instance?.$options?.name || 'anonymous',
+    info,
+  });
+};
+
+window.addEventListener('error', (event) => {
+  console.error('Unhandled browser error', {
+    message: event.message,
+    source: event.filename,
+    line: event.lineno,
+    column: event.colno,
+    error: event.error,
+  });
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('Unhandled promise rejection', event.reason);
+});
+
 app.use(pinia);
 app.use(router);
 app.mount('#app');

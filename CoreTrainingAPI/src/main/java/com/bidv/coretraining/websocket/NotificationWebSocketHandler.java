@@ -1,9 +1,8 @@
 package com.bidv.coretraining.websocket;
 
 import com.bidv.coretraining.dto.NotificationDto;
-import com.bidv.coretraining.security.JwtTokenProvider;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.*;
@@ -11,56 +10,56 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
+@Slf4j
 public class NotificationWebSocketHandler extends TextWebSocketHandler {
-    private static final long AUTH_TIMEOUT_MS = 10_000;
     private static final long IDLE_TIMEOUT_MS = 60_000;
 
-    private final JwtTokenProvider tokenProvider;
     private final ObjectMapper objectMapper;
     private final ConcurrentHashMap<String, Set<WebSocketSession>> sessionsByUser = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, WebSocketSession> pendingSessions = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, WebSocketSession> sessionsById = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Long> lastSeen = new ConcurrentHashMap<>();
 
-    public NotificationWebSocketHandler(JwtTokenProvider tokenProvider, ObjectMapper objectMapper) {
-        this.tokenProvider = tokenProvider;
+    public NotificationWebSocketHandler(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
 
     @Override
-    public void afterConnectionEstablished(WebSocketSession session) {
+    public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         long now = Instant.now().toEpochMilli();
-        session.getAttributes().put("connectedAt", now);
-        pendingSessions.put(session.getId(), session);
+        String username = (String) session.getAttributes()
+                .get(JwtHandshakeInterceptor.USERNAME_ATTRIBUTE);
+        if (username == null) {
+            log.warn("Closing unauthenticated WebSocket sessionId={}", session.getId());
+            session.close(CloseStatus.POLICY_VIOLATION.withReason("Unauthenticated"));
+            return;
+        }
+
+        String payload = objectMapper.writeValueAsString(
+                Map.of("type", "AUTHENTICATED")
+        );
+        sessionsByUser.computeIfAbsent(username, ignored -> ConcurrentHashMap.newKeySet())
+                .add(session);
+        sessionsById.put(session.getId(), session);
         lastSeen.put(session.getId(), now);
+        session.sendMessage(new TextMessage(payload));
+        log.info("WebSocket connected user={} sessionId={} activeConnections={}",
+                username, session.getId(), sessionsById.size());
     }
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         lastSeen.put(session.getId(), Instant.now().toEpochMilli());
-        JsonNode payload = objectMapper.readTree(message.getPayload());
-        String type = payload.path("type").asText();
-        if ("AUTH".equals(type)) {
-            authenticate(session, payload.path("token").asText());
-        } else if ("PING".equals(type) && session.getAttributes().containsKey("username")) {
-            session.sendMessage(new TextMessage("{\"type\":\"PONG\"}"));
+        String payload = objectMapper.writeValueAsString(
+                Map.of("type", "PONG")
+        );
+        if ("PING".equals(objectMapper.readTree(message.getPayload()).path("type").asText())) {
+            session.sendMessage(new TextMessage(payload));
         }
-    }
-
-    private void authenticate(WebSocketSession session, String token) throws IOException {
-        if (!tokenProvider.validateToken(token)) {
-            session.close(CloseStatus.POLICY_VIOLATION.withReason("Invalid token"));
-            return;
-        }
-        String username = tokenProvider.getUsernameFromJWT(token);
-        session.getAttributes().put("username", username);
-        pendingSessions.remove(session.getId());
-        sessionsByUser.computeIfAbsent(username, ignored -> ConcurrentHashMap.newKeySet())
-                .add(session);
-        session.sendMessage(new TextMessage("{\"type\":\"AUTHENTICATED\"}"));
     }
 
     public void sendToUser(String username, NotificationDto notification) {
@@ -69,8 +68,14 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
         try {
             String payload = objectMapper.writeValueAsString(
                     java.util.Map.of("type", "NOTIFICATION", "data", notification));
-            sessions.removeIf(session -> !send(session, payload));
-        } catch (Exception ignored) {
+            sessions.forEach(session -> {
+                if (!send(session, payload)) {
+                    closeQuietly(session, CloseStatus.SESSION_NOT_RELIABLE);
+                }
+            });
+        } catch (Exception exception) {
+            log.error("Could not serialize notification for user={} notificationId={}",
+                    username, notification.getId(), exception);
             // Persistence remains the source of truth if realtime delivery fails.
         }
     }
@@ -83,6 +88,7 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
             }
             return true;
         } catch (IOException exception) {
+            log.debug("WebSocket send failed sessionId={}", session.getId(), exception);
             return false;
         }
     }
@@ -96,29 +102,28 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
                 lastSeen.remove(sessionId);
                 return;
             }
-            boolean authenticated = session.getAttributes().containsKey("username");
-            long timeout = authenticated ? IDLE_TIMEOUT_MS : AUTH_TIMEOUT_MS;
-            if (now - seenAt > timeout) closeQuietly(session, CloseStatus.SESSION_NOT_RELIABLE);
+            if (now - seenAt > IDLE_TIMEOUT_MS) {
+                log.warn("Closing stale WebSocket sessionId={} idleMs={}",
+                        sessionId, now - seenAt);
+                closeQuietly(session, CloseStatus.SESSION_NOT_RELIABLE);
+            }
         });
     }
 
     private WebSocketSession findSession(String id) {
-        WebSocketSession pending = pendingSessions.get(id);
-        if (pending != null) return pending;
-        return sessionsByUser.values().stream()
-                .flatMap(Set::stream)
-                .filter(session -> session.getId().equals(id))
-                .findFirst()
-                .orElse(null);
+        return sessionsById.get(id);
     }
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         removeSession(session);
+        log.info("WebSocket disconnected sessionId={} status={} activeConnections={}",
+                session.getId(), status.getCode(), sessionsById.size());
     }
 
     @Override
     public void handleTransportError(WebSocketSession session, Throwable exception) {
+        log.warn("WebSocket transport error sessionId={}", session.getId(), exception);
         closeQuietly(session, CloseStatus.SERVER_ERROR);
     }
 
@@ -126,21 +131,22 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
         try {
             if (session.isOpen()) session.close(status);
         } catch (IOException ignored) {
+            log.debug("Could not close WebSocket sessionId={}", session.getId(), ignored);
         } finally {
             removeSession(session);
         }
     }
 
     private void removeSession(WebSocketSession session) {
-        lastSeen.remove(session.getId());
-        pendingSessions.remove(session.getId());
-        Object username = session.getAttributes().get("username");
+        String sessionId = session.getId();
+        lastSeen.remove(sessionId);
+        sessionsById.remove(sessionId, session);
+        Object username = session.getAttributes().get(JwtHandshakeInterceptor.USERNAME_ATTRIBUTE);
         if (username != null) {
-            Set<WebSocketSession> sessions = sessionsByUser.get(username.toString());
-            if (sessions != null) {
+            sessionsByUser.computeIfPresent(username.toString(), (key, sessions) -> {
                 sessions.remove(session);
-                if (sessions.isEmpty()) sessionsByUser.remove(username.toString());
-            }
+                return sessions.isEmpty() ? null : sessions;
+            });
         }
     }
 }

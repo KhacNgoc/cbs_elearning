@@ -44,6 +44,7 @@ export class NotificationSocket {
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     url.pathname = '/ws/notifications';
     url.search = '';
+    url.searchParams.set('access_token', token);
 
     const socket = new WebSocket(url.toString());
     this.socket = socket;
@@ -52,7 +53,6 @@ export class NotificationSocket {
     }, 10_000);
     socket.onopen = () => {
       this.clearConnectTimer();
-      socket.send(JSON.stringify({ type: 'AUTH', token }));
     };
     socket.onmessage = event => this.handleMessage(event);
     socket.onerror = () => socket.close();

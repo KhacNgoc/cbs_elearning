@@ -1,6 +1,12 @@
 import axios from 'axios';
 
 const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+const CORRELATION_ID_HEADER = 'X-Correlation-Id';
+
+const createCorrelationId = () =>
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 export const axiosClient = axios.create({
   baseURL,
@@ -17,6 +23,9 @@ axiosClient.interceptors.request.use(
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    if (config.headers) {
+      config.headers[CORRELATION_ID_HEADER] = createCorrelationId();
+    }
     return config;
   },
   (error) => {
@@ -28,6 +37,17 @@ axiosClient.interceptors.request.use(
 axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    const traceId =
+      error.response?.headers?.['x-correlation-id'] ||
+      error.response?.data?.traceId ||
+      error.config?.headers?.[CORRELATION_ID_HEADER];
+    console.error('API request failed', {
+      method: error.config?.method?.toUpperCase(),
+      url: error.config?.url,
+      status: error.response?.status,
+      code: error.code,
+      traceId,
+    });
     if (error.response && error.response.status === 401) {
       const isLoginRequest = error.config && error.config.url && error.config.url.includes('/api/auth/login');
       if (!isLoginRequest) {
