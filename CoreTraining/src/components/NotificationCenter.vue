@@ -51,9 +51,18 @@
       </section>
     </Transition>
     <Transition name="toast">
-      <div v-if="toast" class="system-toast" role="alert">
-        <CircleAlert :size="19" /><span>{{ toast }}</span>
-        <button aria-label="Đóng" @click="toast = ''"><X :size="16" /></button>
+      <div
+        v-if="toast"
+        class="system-toast"
+        :class="`system-toast--${toast.variant}`"
+        :role="toast.variant === 'error' ? 'alert' : 'status'"
+      >
+        <CircleAlert v-if="toast.variant === 'error'" :size="19" />
+        <TriangleAlert v-else-if="toast.variant === 'warning'" :size="19" />
+        <CircleCheck v-else-if="toast.variant === 'success'" :size="19" />
+        <Info v-else :size="19" />
+        <span>{{ toast.message }}</span>
+        <button aria-label="Đóng" @click="toast = null"><X :size="16" /></button>
       </div>
     </Transition>
   </div>
@@ -65,8 +74,11 @@ import { useRouter } from "vue-router";
 import {
   Bell,
   BellOff,
+  CircleCheck,
   CircleAlert,
+  Info,
   MessageCircleReply,
+  TriangleAlert,
   UserRoundCheck,
   X,
 } from "lucide-vue-next";
@@ -80,17 +92,18 @@ const root = ref<HTMLElement | null>(null);
 const open = ref(false);
 const connected = ref(false);
 const notifications = ref<AppNotification[]>([]);
-const toast = ref("");
+type ToastVariant = "info" | "success" | "warning" | "error";
+const toast = ref<{ message: string; variant: ToastVariant } | null>(null);
 let toastTimer: number | undefined;
 let socket: NotificationSocket | undefined;
 const unreadCount = computed(
   () => notifications.value.filter((item) => !item.read).length,
 );
 
-const showToast = (message: string) => {
-  toast.value = message;
+const showToast = (message: string, variant: ToastVariant = "info") => {
+  toast.value = { message, variant };
   if (toastTimer) window.clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => (toast.value = ""), 5000);
+  toastTimer = window.setTimeout(() => (toast.value = null), 5000);
 };
 const receiveNotification = (item: AppNotification) => {
   if (!notifications.value.some((existing) => existing.id === item.id))
@@ -101,7 +114,13 @@ const receiveNotification = (item: AppNotification) => {
   ) {
     void userStore.fetchProgress();
   }
-  showToast(item.title);
+  const variant: ToastVariant =
+    item.type === "ENROLLMENT_APPROVED"
+      ? "success"
+      : item.type === "ENROLLMENT_REJECTED"
+        ? "warning"
+        : "info";
+  showToast(item.title, variant);
 };
 const openNotification = async (item: AppNotification) => {
   if (!item.read) {
@@ -109,7 +128,7 @@ const openNotification = async (item: AppNotification) => {
       await notificationApi.markRead(item.id);
       item.read = true;
     } catch {
-      showToast("Không thể cập nhật thông báo.");
+      showToast("Không thể cập nhật thông báo.", "error");
     }
   }
   open.value = false;
@@ -120,7 +139,7 @@ const markAllRead = async () => {
     await notificationApi.markAllRead();
     notifications.value.forEach((item) => (item.read = true));
   } catch {
-    showToast("Không thể cập nhật thông báo.");
+    showToast("Không thể cập nhật thông báo.", "error");
   }
 };
 const formatTime = (value: string) =>
@@ -135,6 +154,7 @@ const closeOnOutside = (event: MouseEvent) => {
 const handleSystemError = (event: Event) =>
   showToast(
     (event as CustomEvent<string>).detail || "Hệ thống đang gặp sự cố.",
+    "error",
   );
 
 onMounted(async () => {
@@ -143,7 +163,7 @@ onMounted(async () => {
   try {
     notifications.value = await notificationApi.getNotifications();
   } catch {
-    showToast("Không thể tải danh sách thông báo.");
+    showToast("Không thể tải danh sách thông báo.", "error");
   }
   socket = new NotificationSocket(
     receiveNotification,
@@ -319,13 +339,28 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 9px;
-  border: 1px solid #fecaca;
+  border: 1px solid #bfdbfe;
   border-radius: 12px;
-  background: #fff7f7;
-  color: #991b1b;
+  background: #eff6ff;
+  color: #1d4ed8;
   box-shadow: var(--shadow-lg);
   z-index: 500;
   font-size: 0.82rem;
+}
+.system-toast--success {
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+  color: #047857;
+}
+.system-toast--warning {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #a16207;
+}
+.system-toast--error {
+  border-color: #fecaca;
+  background: #fff7f7;
+  color: #991b1b;
 }
 .system-toast button {
   margin-left: auto;

@@ -143,28 +143,30 @@
       
     </div>
 
-    <!-- Registration Confirmation Modal -->
-    <div class="modal-overlay animate-fade-in" v-if="showRegisterModal" @click.self="showRegisterModal = false">
-      <div class="modal-card card animate-scale-up">
-        <div class="modal-header">
-          <div class="modal-icon-box">
-            <BookOpen class="modal-icon" />
+    <Teleport to="body">
+      <!-- Registration Confirmation Modal -->
+      <div class="modal-overlay animate-fade-in" v-if="showRegisterModal" @click.self="showRegisterModal = false">
+        <div class="modal-card card animate-scale-up" role="dialog" aria-modal="true" aria-labelledby="register-course-title">
+          <div class="modal-header">
+            <div class="modal-icon-box">
+              <BookOpen class="modal-icon" />
+            </div>
+            <h2 id="register-course-title">Đăng ký học Nghiệp vụ</h2>
           </div>
-          <h2>Đăng ký học Nghiệp vụ</h2>
-        </div>
-        <div class="modal-body">
-          <p>Bạn có muốn đăng ký học thêm chủ đề nghiệp vụ <strong>{{ selectedTopicToRegister?.name }}</strong> không?</p>
-          <p class="modal-note">Yêu cầu sẽ được gửi đến quản trị viên. Khóa học được mở sau khi được phê duyệt.</p>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="showRegisterModal = false" :disabled="isRegistering">HỦY BỎ</button>
-          <button class="btn btn-primary btn-confirm" @click="handleRegisterTopic" :disabled="isRegistering">
-            <span v-if="isRegistering" class="spinner"></span>
-            <span v-else>GỬI YÊU CẦU ĐĂNG KÝ</span>
-          </button>
+          <div class="modal-body">
+            <p>Bạn có muốn đăng ký học thêm chủ đề nghiệp vụ <strong>{{ selectedTopicToRegister?.name }}</strong> không?</p>
+            <p class="modal-note">Yêu cầu sẽ được gửi đến quản trị viên. Khóa học được mở sau khi được phê duyệt.</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showRegisterModal = false" :disabled="isRegistering">HỦY BỎ</button>
+            <button class="btn btn-primary btn-confirm" @click="handleRegisterTopic" :disabled="isRegistering">
+              <span v-if="isRegistering" class="spinner"></span>
+              <span v-else>GỬI YÊU CẦU ĐĂNG KÝ</span>
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 
