@@ -27,9 +27,14 @@
               <StarRating v-if="item.rating" :model-value="item.rating" readonly />
               <p>{{ item.content }}</p>
             </div>
-            <button class="reply-action" @click="openReply(item.id, item.id, item.user)">
-              <Reply :size="14" /> Trả lời
-            </button>
+            <div class="comment-actions">
+              <button class="reply-action" @click="openReply(item.id, item.id, item.user)">
+                <Reply :size="14" /> Trả lời
+              </button>
+              <button v-if="canDelete(item)" class="delete-action" @click="requestDelete(item.id)">
+                <Trash2 :size="14" /> Gỡ
+              </button>
+            </div>
           </div>
         </div>
 
@@ -41,9 +46,14 @@
                 <div class="comment-meta"><strong>{{ reply.user }}</strong><span>{{ reply.date }}</span></div>
                 <p><strong v-if="reply.replyToUser" class="mention">@{{ reply.replyToUser }}</strong> {{ reply.content }}</p>
               </div>
-              <button class="reply-action" @click="openReply(item.id, reply.id, reply.user)">
-                <Reply :size="14" /> Trả lời
-              </button>
+              <div class="comment-actions">
+                <button class="reply-action" @click="openReply(item.id, reply.id, reply.user)">
+                  <Reply :size="14" /> Trả lời
+                </button>
+                <button v-if="canDelete(reply)" class="delete-action" @click="requestDelete(reply.id)">
+                  <Trash2 :size="14" /> Gỡ
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -71,24 +81,38 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
-import { MessageSquare, Reply, Send, X } from 'lucide-vue-next';
+import { MessageSquare, Reply, Send, Trash2, X } from 'lucide-vue-next';
 import type { Comment } from '../../types';
 import StarRating from '../StarRating.vue';
 
-defineProps<{ comments: Comment[]; rating: number; comment: string }>();
+const props = defineProps<{
+  comments: Comment[];
+  rating: number;
+  comment: string;
+  currentUsername: string;
+  isAdmin: boolean;
+}>();
 const emit = defineEmits<{
   'update:rating': [value: number];
   'update:comment': [value: string];
   submit: [];
-  reply: [rootCommentId: string, replyToCommentId: string, content: string];
+  reply: [rootCommentId: number, replyToCommentId: number, content: string];
+  delete: [commentId: number];
 }>();
 
-const replyingTo = ref<{ rootId: string; targetId: string; user: string } | null>(null);
+const replyingTo = ref<{ rootId: number; targetId: number; user: string } | null>(null);
 const replyContent = ref('');
 const replyInput = ref<HTMLTextAreaElement | null>(null);
 const currentUserInitial = computed(() => (localStorage.getItem('username') || 'U').charAt(0).toUpperCase());
+const canDelete = (comment: Comment) =>
+  props.isAdmin || comment.user === props.currentUsername;
+const requestDelete = (commentId: number) => {
+  if (window.confirm('Bạn có chắc muốn gỡ bình luận này?')) {
+    emit('delete', commentId);
+  }
+};
 
-const openReply = async (rootId: string, targetId: string, user: string) => {
+const openReply = async (rootId: number, targetId: number, user: string) => {
   replyingTo.value = { rootId, targetId, user };
   replyContent.value = '';
   await nextTick();
@@ -111,7 +135,11 @@ const sendReply = () => {
 .comment-body { min-width: 0; }
 .comment-bubble { padding: .7rem .85rem; border-radius: 8px; background: #f2f6f4; }
 .comment-bubble p { margin-top: .35rem; color: #43534d; line-height: 1.5; }
-.reply-action { margin: .3rem 0 0 .55rem; display: inline-flex; align-items: center; gap: .25rem; border: 0; background: transparent; color: var(--primary-color); cursor: pointer; font-size: .75rem; font-weight: 700; }
+.comment-actions { margin: .3rem 0 0 .55rem; display: flex; align-items: center; gap: .8rem; }
+.reply-action, .delete-action { display: inline-flex; align-items: center; gap: .25rem; border: 0; background: transparent; cursor: pointer; font-size: .75rem; font-weight: 700; }
+.reply-action { color: var(--primary-color); }
+.delete-action { color: #b42318; }
+.delete-action:hover { color: #8f1710; }
 .reply-list { margin: .7rem 0 0 3rem; padding-left: .9rem; display: grid; gap: .65rem; border-left: 2px solid #d8e5e0; }
 .reply-comment { grid-template-columns: 32px 1fr; }
 .reply-avatar, .composer-avatar { width: 32px; height: 32px; font-size: .75rem; }

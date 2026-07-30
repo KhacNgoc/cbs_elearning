@@ -1,11 +1,11 @@
 export interface Comment {
-  id: string;
+  id: number;
   user: string;
   avatar: string;
   rating?: number;
   content: string;
   date: string;
-  parentId?: string;
+  parentId?: number;
   replyToUser?: string;
   replies?: Comment[];
 }

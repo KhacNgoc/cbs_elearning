@@ -35,7 +35,7 @@ export const mockTopics: Topic[] = [
         ],
         comments: [
           {
-            id: 'c1',
+            id: 1,
             user: 'nguyenvana',
             avatar: 'A',
             rating: 5,
@@ -153,7 +153,7 @@ export const mockTopics: Topic[] = [
         ],
         comments: [
           {
-            id: 'c2',
+            id: 2,
             user: 'nguyenvanb',
             avatar: 'B',
             rating: 4,
@@ -161,7 +161,7 @@ export const mockTopics: Topic[] = [
             date: '2026-07-15'
           },
           {
-            id: 'c3',
+            id: 3,
             user: 'lethic',
             avatar: 'C',
             rating: 5,

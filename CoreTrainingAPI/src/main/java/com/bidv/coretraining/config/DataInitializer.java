@@ -160,7 +160,6 @@ public class DataInitializer implements CommandLineRunner {
 
         // Add Comments to CIF03
         Comment c2 = Comment.builder()
-                .id("c2")
                 .username("nguyenvanb")
                 .avatar("B")
                 .rating(4)
@@ -169,7 +168,6 @@ public class DataInitializer implements CommandLineRunner {
                 .lesson(cif03)
                 .build();
         Comment c3 = Comment.builder()
-                .id("c3")
                 .username("lethic")
                 .avatar("C")
                 .rating(5)

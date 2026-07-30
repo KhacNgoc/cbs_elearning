@@ -14,11 +14,11 @@ import com.bidv.coretraining.repository.UserRepository;
 import com.bidv.coretraining.repository.VideoNoteRepository;
 import com.bidv.coretraining.service.CourseService;
 import org.springframework.stereotype.Service;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 public class CourseServiceImpl implements CourseService {
@@ -73,7 +73,6 @@ public class CourseServiceImpl implements CourseService {
         String avatar = String.valueOf(username.charAt(0)).toUpperCase();
 
         Comment comment = Comment.builder()
-                .id("comment_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 4))
                 .username(username)
                 .avatar(avatar)
                 .rating(commentRequest.getRating())
@@ -88,7 +87,7 @@ public class CourseServiceImpl implements CourseService {
 
     @Override
     @Transactional
-    public CommentDto replyToComment(String lessonId, String commentId,
+    public CommentDto replyToComment(String lessonId, Long commentId,
                                      CommentReplyRequest request, String username) {
         Lesson lesson = lessonRepository.findById(lessonId)
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
@@ -99,7 +98,7 @@ public class CourseServiceImpl implements CourseService {
         }
 
         Comment replyTarget = requestedParent;
-        if (request.getReplyToCommentId() != null && !request.getReplyToCommentId().isBlank()) {
+        if (request.getReplyToCommentId() != null) {
             replyTarget = commentRepository.findById(request.getReplyToCommentId())
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "Comment", "id", request.getReplyToCommentId()));
@@ -112,8 +111,6 @@ public class CourseServiceImpl implements CourseService {
                 : requestedParent.getParent();
 
         Comment reply = Comment.builder()
-                .id("reply_" + System.currentTimeMillis() + "_"
-                        + UUID.randomUUID().toString().substring(0, 4))
                 .username(username)
                 .avatar(String.valueOf(username.charAt(0)).toUpperCase())
                 .content(request.getContent().trim())
@@ -123,6 +120,21 @@ public class CourseServiceImpl implements CourseService {
                 .replyToUsername(replyTarget.getUsername())
                 .build();
         return courseMapper.toCommentDto(commentRepository.save(reply));
+    }
+
+    @Override
+    @Transactional
+    public void deleteComment(
+            String lessonId, Long commentId, String username, boolean isAdmin) {
+        Comment comment = commentRepository.findById(commentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Comment", "id", commentId));
+        if (!comment.getLesson().getId().equals(lessonId)) {
+            throw new ResourceNotFoundException("Comment", "id", commentId);
+        }
+        if (!isAdmin && !comment.getUsername().equals(username)) {
+            throw new AccessDeniedException("Bạn chỉ có thể gỡ bình luận của chính mình");
+        }
+        commentRepository.delete(comment);
     }
 
     @Override

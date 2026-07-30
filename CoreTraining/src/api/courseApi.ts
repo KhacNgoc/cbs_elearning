@@ -54,7 +54,7 @@ export const courseApi = {
       if (!lesson) throw new Error(`Lesson not found with id: ${lessonId}`);
 
       const newComment: Comment = {
-        id: `comment_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        id: Date.now(),
         user: username,
         avatar: username.charAt(0).toUpperCase(),
         rating,
@@ -75,8 +75,8 @@ export const courseApi = {
 
   async replyToComment(
     lessonId: string,
-    rootCommentId: string,
-    replyToCommentId: string,
+    rootCommentId: number,
+    replyToCommentId: number,
     content: string
   ): Promise<Comment> {
     const username = localStorage.getItem('username') || 'quantrh';
@@ -89,7 +89,7 @@ export const courseApi = {
         ? root
         : root.replies?.find(reply => reply.id === replyToCommentId);
       const reply: Comment = {
-        id: `reply_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        id: Date.now(),
         user: username,
         avatar: username.charAt(0).toUpperCase(),
         content,
@@ -106,6 +106,38 @@ export const courseApi = {
       { content, replyToCommentId }
     );
     return response.data;
+  },
+
+  async deleteComment(lessonId: string, commentId: number): Promise<void> {
+    if (isMockApi()) {
+      await mockDelay(150);
+      const lesson = mockDbTopics
+        .flatMap(topic => topic.lessons)
+        .find(item => item.id === lessonId);
+      if (!lesson) throw new Error(`Lesson not found with id: ${lessonId}`);
+
+      const username = localStorage.getItem('username') || '';
+      const isAdmin = localStorage.getItem('userRole') === 'ROLE_ADMIN';
+      const root = lesson.comments.find(comment => comment.id === commentId);
+      const reply = lesson.comments
+        .flatMap(comment => comment.replies || [])
+        .find(comment => comment.id === commentId);
+      const target = root || reply;
+      if (!target) throw new Error(`Comment not found with id: ${commentId}`);
+      if (!isAdmin && target.user !== username) {
+        throw new Error('You do not have permission to delete this comment');
+      }
+
+      if (root) {
+        lesson.comments = lesson.comments.filter(comment => comment.id !== commentId);
+      } else {
+        lesson.comments.forEach(comment => {
+          comment.replies = (comment.replies || []).filter(item => item.id !== commentId);
+        });
+      }
+      return;
+    }
+    await axiosClient.delete(`/api/lessons/${lessonId}/comments/${commentId}`);
   },
 
   async getVideoNotes(lessonId: string): Promise<VideoNote[]> {

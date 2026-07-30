@@ -17,7 +17,8 @@ import java.util.List;
 public class Comment {
 
     @Id
-    private String id; // e.g. "comment_12345678"
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Column(nullable = false)
     private String username; // We store the username or map to user

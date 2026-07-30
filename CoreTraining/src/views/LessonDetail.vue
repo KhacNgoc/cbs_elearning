@@ -78,10 +78,13 @@
         />
         <LessonDiscussion
           :comments="lesson.comments"
+          :current-username="userStore.username"
+          :is-admin="userStore.role === 'ROLE_ADMIN'"
           v-model:rating="userRating"
           v-model:comment="commentText"
           @submit="submitFeedback"
           @reply="submitReply"
+          @delete="deleteComment"
         />
       </LessonOverview>
     </section>
@@ -155,6 +158,10 @@ const userStore = useUserStore();
 const mediaStage = ref<InstanceType<typeof LessonMediaStage> | null>(null);
 const videoNotesPanel = ref<InstanceType<typeof LessonVideoNotes> | null>(null);
 const selectedDocument = ref<LessonDocument | null>(null);
+const pendingDocument = ref<{
+  lessonId: string;
+  document: LessonDocument;
+} | null>(null);
 const userRating = ref(5);
 const commentText = ref("");
 const sidebarOpen = ref(true);
@@ -201,6 +208,23 @@ const loadLessonData = async (lessonId: string) => {
   if (lesson.value) await loadVideoNotes(lesson.value.id);
 };
 
+const selectInitialContent = (requestedDocument?: LessonDocument) => {
+  if (!lesson.value) return;
+  const documents = lesson.value.documents || [];
+  if (requestedDocument) {
+    selectedDocument.value =
+      documents.find(
+        (document) =>
+          (requestedDocument.id != null && document.id === requestedDocument.id) ||
+          document.fileUrl === requestedDocument.fileUrl,
+      ) || requestedDocument;
+    return;
+  }
+  selectedDocument.value = lesson.value.videoUrl?.trim()
+    ? null
+    : documents[0] || null;
+};
+
 const loadVideoNotes = async (lessonId: string) => {
   notesLoading.value = true;
   try {
@@ -221,6 +245,7 @@ onMounted(async () => {
     await courseStore.fetchTopics();
   }
   await loadLessonData(props.id);
+  selectInitialContent();
   sidebarOpen.value = window.innerWidth > 900;
 });
 
@@ -229,23 +254,33 @@ watch(
   async (newId) => {
     selectedDocument.value = null;
     await loadLessonData(newId);
+    const requestedDocument =
+      pendingDocument.value?.lessonId === newId
+        ? pendingDocument.value.document
+        : undefined;
+    pendingDocument.value = null;
+    selectInitialContent(requestedDocument);
     if (window.innerWidth <= 900) sidebarOpen.value = false;
   },
 );
 
-const switchLesson = async (lessonId: string) => {
-  if (!lesson.value || lessonId === lesson.value.id) return;
+const switchLesson = async (lessonId: string): Promise<boolean> => {
+  if (!lesson.value) return false;
+  if (lessonId === lesson.value.id) return true;
   if (lesson.value.hasQuiz && !isCompleted.value) {
     quizGateOpen.value = true;
-    return;
+    return false;
   }
   if (!lesson.value.hasQuiz && !isCompleted.value)
     await userStore.completeLesson(lesson.value.id);
-  router.push(`/lesson/${lessonId}`);
+  await router.push(`/lesson/${lessonId}`);
+  return true;
 };
-const showDocument = (lessonId: string, document: LessonDocument) => {
+const showDocument = async (lessonId: string, document: LessonDocument) => {
   if (lessonId !== lesson.value?.id) {
-    switchLesson(lessonId);
+    pendingDocument.value = { lessonId, document };
+    const switched = await switchLesson(lessonId);
+    if (!switched) pendingDocument.value = null;
     return;
   }
   selectedDocument.value = document;
@@ -384,8 +419,8 @@ const submitFeedback = async () => {
   userRating.value = 5;
 };
 const submitReply = async (
-  rootCommentId: string,
-  replyToCommentId: string,
+  rootCommentId: number,
+  replyToCommentId: number,
   content: string,
 ) => {
   if (!lesson.value || !content.trim()) return;
@@ -399,6 +434,15 @@ const submitReply = async (
   } catch (error) {
     console.error("Failed to reply to comment:", error);
     alert("Không thể gửi phản hồi. Vui lòng thử lại.");
+  }
+};
+const deleteComment = async (commentId: number) => {
+  if (!lesson.value) return;
+  try {
+    await courseStore.deleteComment(lesson.value.id, commentId);
+  } catch (error) {
+    console.error("Failed to delete comment:", error);
+    alert("Không thể gỡ bình luận. Vui lòng thử lại.");
   }
 };
 </script>

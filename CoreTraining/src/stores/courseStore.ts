@@ -76,8 +76,8 @@ export const useCourseStore = defineStore('course', {
 
     async replyToComment(
       lessonId: string,
-      rootCommentId: string,
-      replyToCommentId: string,
+      rootCommentId: number,
+      replyToCommentId: number,
       content: string
     ) {
       const reply = await courseApi.replyToComment(
@@ -89,6 +89,23 @@ export const useCourseStore = defineStore('course', {
           root.replies = [...(root.replies || []), reply];
         }
       }
+    },
+
+    async deleteComment(lessonId: string, commentId: number) {
+      await courseApi.deleteComment(lessonId, commentId);
+      if (this.currentLessonData?.id !== lessonId) return;
+
+      const isRootComment = this.currentLessonData.comments
+        .some(comment => comment.id === commentId);
+      if (isRootComment) {
+        this.currentLessonData.comments = this.currentLessonData.comments
+          .filter(comment => comment.id !== commentId);
+        return;
+      }
+      this.currentLessonData.comments.forEach(comment => {
+        comment.replies = (comment.replies || [])
+          .filter(reply => reply.id !== commentId);
+      });
     }
   }
 });

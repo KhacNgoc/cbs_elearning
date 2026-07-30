@@ -15,7 +15,8 @@ public interface CourseService {
     TopicDto getTopicById(String id);
     LessonDto getLessonById(String id);
     CommentDto addCommentToLesson(String lessonId, CommentRequest commentRequest, String username);
-    CommentDto replyToComment(String lessonId, String commentId, CommentReplyRequest request, String username);
+    CommentDto replyToComment(String lessonId, Long commentId, CommentReplyRequest request, String username);
+    void deleteComment(String lessonId, Long commentId, String username, boolean isAdmin);
     List<VideoNoteDto> getVideoNotes(String lessonId, String username);
     VideoNoteDto createVideoNote(String lessonId, VideoNoteRequest request, String username);
     VideoNoteDto updateVideoNote(String lessonId, Long noteId, VideoNoteRequest request, String username);

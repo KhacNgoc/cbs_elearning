@@ -9,5 +9,5 @@ public class CommentReplyRequest {
     private String content;
 
     // Can point to the root comment or to another reply in the same thread.
-    private String replyToCommentId;
+    private Long replyToCommentId;
 }
