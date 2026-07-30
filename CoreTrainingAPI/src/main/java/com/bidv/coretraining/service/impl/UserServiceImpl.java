@@ -8,12 +8,14 @@ import com.bidv.coretraining.entity.User;
 import com.bidv.coretraining.entity.UserQuizScore;
 import com.bidv.coretraining.entity.EnrollmentStatus;
 import com.bidv.coretraining.entity.TopicEnrollmentRequest;
+import com.bidv.coretraining.entity.NotificationType;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
 import com.bidv.coretraining.repository.LessonRepository;
 import com.bidv.coretraining.repository.QuestionRepository;
 import com.bidv.coretraining.repository.UserRepository;
 import com.bidv.coretraining.repository.TopicEnrollmentRequestRepository;
 import com.bidv.coretraining.service.UserService;
+import com.bidv.coretraining.service.NotificationService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,18 +33,21 @@ public class UserServiceImpl implements UserService {
     private final com.bidv.coretraining.repository.TopicRepository topicRepository;
     private final UserMapper userMapper;
     private final TopicEnrollmentRequestRepository enrollmentRequestRepository;
+    private final NotificationService notificationService;
 
     public UserServiceImpl(UserRepository userRepository, LessonRepository lessonRepository,
                            QuestionRepository questionRepository,
                            com.bidv.coretraining.repository.TopicRepository topicRepository,
                            UserMapper userMapper,
-                           TopicEnrollmentRequestRepository enrollmentRequestRepository) {
+                           TopicEnrollmentRequestRepository enrollmentRequestRepository,
+                           NotificationService notificationService) {
         this.userRepository = userRepository;
         this.lessonRepository = lessonRepository;
         this.questionRepository = questionRepository;
         this.topicRepository = topicRepository;
         this.userMapper = userMapper;
         this.enrollmentRequestRepository = enrollmentRequestRepository;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -109,17 +114,22 @@ public class UserServiceImpl implements UserService {
                 && user.getUserGroup().getMandatoryTopics().contains(topic))) {
             return buildUserProgressDto(user);
         }
-        TopicEnrollmentRequest request = enrollmentRequestRepository
-                .findByUserIdAndTopicId(user.getId(), topicId)
-                .orElseGet(() -> TopicEnrollmentRequest.builder()
-                        .user(user)
-                        .topic(topic)
-                        .build());
-        request.setStatus(EnrollmentStatus.PENDING);
-        request.setRequestedAt(java.time.LocalDateTime.now());
-        request.setReviewedAt(null);
-        request.setReviewedBy(null);
+        if (enrollmentRequestRepository.existsByUserIdAndTopicIdAndStatus(
+                user.getId(), topicId, EnrollmentStatus.PENDING)) {
+            return buildUserProgressDto(user);
+        }
+        TopicEnrollmentRequest request = TopicEnrollmentRequest.builder()
+                .user(user)
+                .topic(topic)
+                .status(EnrollmentStatus.PENDING)
+                .requestedAt(java.time.LocalDateTime.now())
+                .build();
         enrollmentRequestRepository.save(request);
+        notificationService.createForAdmins(
+                NotificationType.ENROLLMENT_REQUEST,
+                "Yêu cầu đăng ký khóa học mới",
+                user.getFullName() + " đã yêu cầu đăng ký khóa học " + topic.getName(),
+                "/admin?tab=enrollments");
 
         return buildUserProgressDto(user);
     }

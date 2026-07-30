@@ -6,10 +6,7 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(
-        name = "topic_enrollment_requests",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "topic_id"})
-)
+@Table(name = "topic_enrollment_requests")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -40,4 +37,7 @@ public class TopicEnrollmentRequest {
 
     @Column(name = "reviewed_by")
     private String reviewedBy;
+
+    @Column(name = "rejection_reason", columnDefinition = "TEXT")
+    private String rejectionReason;
 }

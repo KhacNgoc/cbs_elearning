@@ -36,6 +36,7 @@ export interface EnrollmentRequest {
   requestedAt: string;
   reviewedAt?: string;
   reviewedBy?: string;
+  rejectionReason?: string;
 }
 
 // In mock mode, we seed the list of users from the default mock user data
@@ -69,7 +70,11 @@ export const adminApi = {
     return response.data;
   },
 
-  async reviewEnrollmentRequest(id: number, approve: boolean): Promise<EnrollmentRequest> {
+  async reviewEnrollmentRequest(
+    id: number,
+    approve: boolean,
+    rejectionReason?: string
+  ): Promise<EnrollmentRequest> {
     if (isMockApi()) {
       const requests = await this.getEnrollmentRequests();
       const request = requests.find(item => item.id === id);
@@ -81,10 +86,16 @@ export const adminApi = {
         if (!registered.includes(request.topicId)) registered.push(request.topicId);
         localStorage.setItem('mockRegisteredTopics', JSON.stringify(registered));
       }
-      return { ...request, status: approve ? 'APPROVED' : 'REJECTED', reviewedAt: new Date().toISOString() };
+      return {
+        ...request,
+        status: approve ? 'APPROVED' : 'REJECTED',
+        reviewedAt: new Date().toISOString(),
+        rejectionReason: approve ? undefined : rejectionReason
+      };
     }
     const response = await axiosClient.put<EnrollmentRequest>(
-      `/api/admin/enrollment-requests/${id}`, null, { params: { approve } }
+      `/api/admin/enrollment-requests/${id}`,
+      { approve, rejectionReason }
     );
     return response.data;
   },
@@ -207,7 +218,8 @@ export const adminApi = {
     const formData = new FormData();
     formData.append('file', file);
     const response = await axiosClient.post<LessonDocument>('/api/admin/documents/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120_000
     });
     return {
       ...response.data,
@@ -221,7 +233,8 @@ export const adminApi = {
     const formData = new FormData();
     formData.append('file', file);
     const response = await axiosClient.post<{ videoUrl: string }>('/api/admin/videos/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120_000
     });
     return normalizeUploadedPath(response.data.videoUrl);
   },

@@ -13,6 +13,8 @@ import com.bidv.coretraining.repository.TopicRepository;
 import com.bidv.coretraining.repository.UserRepository;
 import com.bidv.coretraining.repository.VideoNoteRepository;
 import com.bidv.coretraining.service.CourseService;
+import com.bidv.coretraining.service.NotificationService;
+import com.bidv.coretraining.entity.NotificationType;
 import org.springframework.stereotype.Service;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,16 +31,19 @@ public class CourseServiceImpl implements CourseService {
     private final UserRepository userRepository;
     private final VideoNoteRepository videoNoteRepository;
     private final CourseMapper courseMapper;
+    private final NotificationService notificationService;
 
     public CourseServiceImpl(TopicRepository topicRepository, LessonRepository lessonRepository,
                              CommentRepository commentRepository, UserRepository userRepository,
-                             VideoNoteRepository videoNoteRepository, CourseMapper courseMapper) {
+                             VideoNoteRepository videoNoteRepository, CourseMapper courseMapper,
+                             NotificationService notificationService) {
         this.topicRepository = topicRepository;
         this.lessonRepository = lessonRepository;
         this.commentRepository = commentRepository;
         this.userRepository = userRepository;
         this.videoNoteRepository = videoNoteRepository;
         this.courseMapper = courseMapper;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -119,7 +124,17 @@ public class CourseServiceImpl implements CourseService {
                 .parent(root)
                 .replyToUsername(replyTarget.getUsername())
                 .build();
-        return courseMapper.toCommentDto(commentRepository.save(reply));
+        Comment savedReply = commentRepository.save(reply);
+        if (!replyTarget.getUsername().equals(username)) {
+            notificationService.create(
+                    replyTarget.getUsername(),
+                    NotificationType.COMMENT_REPLY,
+                    "Có phản hồi mới cho bình luận của bạn",
+                    username + " đã phản hồi bình luận của bạn trong bài "
+                            + lesson.getTitle(),
+                    "/lesson/" + lessonId);
+        }
+        return courseMapper.toCommentDto(savedReply);
     }
 
     @Override

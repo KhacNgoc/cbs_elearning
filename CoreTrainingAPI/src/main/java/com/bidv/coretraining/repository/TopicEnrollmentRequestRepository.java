@@ -5,10 +5,9 @@ import com.bidv.coretraining.entity.TopicEnrollmentRequest;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
-import java.util.Optional;
 
 public interface TopicEnrollmentRequestRepository extends JpaRepository<TopicEnrollmentRequest, Long> {
-    Optional<TopicEnrollmentRequest> findByUserIdAndTopicId(Long userId, String topicId);
+    boolean existsByUserIdAndTopicIdAndStatus(Long userId, String topicId, EnrollmentStatus status);
     List<TopicEnrollmentRequest> findByUserIdAndStatus(Long userId, EnrollmentStatus status);
     List<TopicEnrollmentRequest> findAllByOrderByRequestedAtDesc();
 }

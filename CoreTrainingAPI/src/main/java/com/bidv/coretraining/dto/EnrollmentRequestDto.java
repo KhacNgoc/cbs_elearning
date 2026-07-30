@@ -20,4 +20,5 @@ public class EnrollmentRequestDto {
     private LocalDateTime requestedAt;
     private LocalDateTime reviewedAt;
     private String reviewedBy;
+    private String rejectionReason;
 }

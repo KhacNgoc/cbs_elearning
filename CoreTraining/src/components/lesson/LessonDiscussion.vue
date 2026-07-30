@@ -76,6 +76,14 @@
         </div>
       </article>
     </div>
+    <ConfirmModal
+      :open="commentToDelete !== null"
+      title="Gỡ bình luận?"
+      message="Bình luận này và các phản hồi liên quan sẽ bị gỡ. Thao tác này không thể hoàn tác."
+      confirm-label="Gỡ bình luận"
+      @cancel="cancelDelete"
+      @confirm="confirmDelete"
+    />
   </div>
 </template>
 
@@ -83,6 +91,7 @@
 import { computed, nextTick, ref } from 'vue';
 import { MessageSquare, Reply, Send, Trash2, X } from 'lucide-vue-next';
 import type { Comment } from '../../types';
+import ConfirmModal from '../ConfirmModal.vue';
 import StarRating from '../StarRating.vue';
 
 const props = defineProps<{
@@ -103,13 +112,20 @@ const emit = defineEmits<{
 const replyingTo = ref<{ rootId: number; targetId: number; user: string } | null>(null);
 const replyContent = ref('');
 const replyInput = ref<HTMLTextAreaElement | null>(null);
+const commentToDelete = ref<number | null>(null);
 const currentUserInitial = computed(() => (localStorage.getItem('username') || 'U').charAt(0).toUpperCase());
 const canDelete = (comment: Comment) =>
   props.isAdmin || comment.user === props.currentUsername;
 const requestDelete = (commentId: number) => {
-  if (window.confirm('Bạn có chắc muốn gỡ bình luận này?')) {
-    emit('delete', commentId);
-  }
+  commentToDelete.value = commentId;
+};
+const cancelDelete = () => {
+  commentToDelete.value = null;
+};
+const confirmDelete = () => {
+  if (commentToDelete.value === null) return;
+  emit('delete', commentToDelete.value);
+  commentToDelete.value = null;
 };
 
 const openReply = async (rootId: number, targetId: number, user: string) => {

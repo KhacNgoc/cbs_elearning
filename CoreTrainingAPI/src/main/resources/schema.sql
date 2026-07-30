@@ -138,10 +138,24 @@ CREATE TABLE IF NOT EXISTS topic_enrollment_requests (
     requested_at TIMESTAMP NOT NULL,
     reviewed_at TIMESTAMP,
     reviewed_by VARCHAR(255),
-    CONSTRAINT uk_enrollment_user_topic UNIQUE (user_id, topic_id),
+    rejection_reason TEXT,
     CONSTRAINT fk_enrollment_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_enrollment_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id BIGSERIAL PRIMARY KEY,
+    recipient_id BIGINT NOT NULL,
+    type VARCHAR(40) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    target_url VARCHAR(255),
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_notifications_recipient FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_recipient_created
+    ON notifications (recipient_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS navigation_items (
     id VARCHAR(255) PRIMARY KEY,

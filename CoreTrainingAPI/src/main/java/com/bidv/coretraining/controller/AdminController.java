@@ -1,12 +1,6 @@
 package com.bidv.coretraining.controller;
 
-import com.bidv.coretraining.dto.LessonDto;
-import com.bidv.coretraining.dto.LessonDocumentDto;
-import com.bidv.coretraining.dto.QuestionDto;
-import com.bidv.coretraining.dto.TopicDto;
-import com.bidv.coretraining.dto.UserDto;
-import com.bidv.coretraining.dto.QuizSettingsDto;
-import com.bidv.coretraining.dto.EnrollmentRequestDto;
+import com.bidv.coretraining.dto.*;
 import com.bidv.coretraining.security.CustomUserDetails;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.bidv.coretraining.service.AdminService;
@@ -143,10 +137,12 @@ public class AdminController {
     @PutMapping("/enrollment-requests/{id}")
     public ResponseEntity<EnrollmentRequestDto> reviewEnrollmentRequest(
             @PathVariable Long id,
-            @RequestParam boolean approve,
+            @RequestBody ReviewEnrollmentRequest request,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         return ResponseEntity.ok(
-                adminService.reviewEnrollmentRequest(id, approve, userDetails.getUsername())
+                adminService.reviewEnrollmentRequest(
+                        id, request.isApprove(), request.getRejectionReason(),
+                        userDetails.getUsername())
         );
     }
 }

@@ -3,8 +3,10 @@ package com.bidv.coretraining.service.impl;
 import com.bidv.coretraining.dto.*;
 import com.bidv.coretraining.entity.*;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
+import com.bidv.coretraining.exception.BadRequestException;
 import com.bidv.coretraining.repository.*;
 import com.bidv.coretraining.service.AdminService;
+import com.bidv.coretraining.service.NotificationService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -24,12 +26,14 @@ public class AdminServiceImpl implements AdminService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final TopicEnrollmentRequestRepository enrollmentRequestRepository;
+    private final NotificationService notificationService;
 
     public AdminServiceImpl(TopicRepository topicRepository, LessonRepository lessonRepository,
                             QuestionRepository questionRepository, CourseMapper courseMapper,
                             QuizMapper quizMapper, UserRepository userRepository,
                             PasswordEncoder passwordEncoder,
-                            TopicEnrollmentRequestRepository enrollmentRequestRepository) {
+                            TopicEnrollmentRequestRepository enrollmentRequestRepository,
+                            NotificationService notificationService) {
         this.topicRepository = topicRepository;
         this.lessonRepository = lessonRepository;
         this.questionRepository = questionRepository;
@@ -38,6 +42,7 @@ public class AdminServiceImpl implements AdminService {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.enrollmentRequestRepository = enrollmentRequestRepository;
+        this.notificationService = notificationService;
     }
 
 
@@ -314,17 +319,35 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     @Transactional
-    public EnrollmentRequestDto reviewEnrollmentRequest(Long id, boolean approve, String reviewedBy) {
+    public EnrollmentRequestDto reviewEnrollmentRequest(
+            Long id, boolean approve, String rejectionReason, String reviewedBy) {
         TopicEnrollmentRequest request = enrollmentRequestRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Enrollment request", "id", id));
+        if (request.getStatus() != EnrollmentStatus.PENDING) {
+            throw new BadRequestException("Yêu cầu đăng ký này đã được xử lý");
+        }
+        if (!approve && (rejectionReason == null || rejectionReason.isBlank())) {
+            throw new BadRequestException("Quản trị viên phải nêu lý do từ chối");
+        }
         request.setStatus(approve ? EnrollmentStatus.APPROVED : EnrollmentStatus.REJECTED);
         request.setReviewedAt(java.time.LocalDateTime.now());
         request.setReviewedBy(reviewedBy);
+        request.setRejectionReason(approve ? null : rejectionReason.trim());
         if (approve) {
             request.getUser().getRegisteredTopics().add(request.getTopic());
             userRepository.save(request.getUser());
         }
-        return toEnrollmentRequestDto(enrollmentRequestRepository.save(request));
+        EnrollmentRequestDto result = toEnrollmentRequestDto(enrollmentRequestRepository.save(request));
+        notificationService.create(
+                request.getUser().getUsername(),
+                approve ? NotificationType.ENROLLMENT_APPROVED : NotificationType.ENROLLMENT_REJECTED,
+                approve ? "Đăng ký khóa học đã được duyệt" : "Đăng ký khóa học bị từ chối",
+                approve
+                        ? "Bạn đã được ghi danh vào khóa học " + request.getTopic().getName()
+                        : "Khóa học " + request.getTopic().getName()
+                            + " bị từ chối. Lý do: " + request.getRejectionReason(),
+                approve ? "/" : null);
+        return result;
     }
 
     private EnrollmentRequestDto toEnrollmentRequestDto(TopicEnrollmentRequest request) {
@@ -339,6 +362,7 @@ public class AdminServiceImpl implements AdminService {
                 .requestedAt(request.getRequestedAt())
                 .reviewedAt(request.getReviewedAt())
                 .reviewedBy(request.getReviewedBy())
+                .rejectionReason(request.getRejectionReason())
                 .build();
     }
 

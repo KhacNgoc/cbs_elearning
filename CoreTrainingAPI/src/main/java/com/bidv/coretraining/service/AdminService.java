@@ -29,6 +29,7 @@ public interface AdminService {
     UserDto updateUser(Long id, UserDto userDto);
     void deleteUser(Long id);
     List<EnrollmentRequestDto> getEnrollmentRequests();
-    EnrollmentRequestDto reviewEnrollmentRequest(Long id, boolean approve, String reviewedBy);
+    EnrollmentRequestDto reviewEnrollmentRequest(
+            Long id, boolean approve, String rejectionReason, String reviewedBy);
 }
 

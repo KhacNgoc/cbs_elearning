@@ -142,6 +142,15 @@
         </button>
       </section>
     </template>
+    <ConfirmModal
+      :open="confirmationModal.show"
+      :title="confirmationModal.title"
+      :message="confirmationModal.message"
+      :confirm-label="confirmationModal.confirmLabel"
+      :loading="confirmationModal.submitting"
+      @cancel="closeConfirmationModal"
+      @confirm="confirmModalAction"
+    />
   </main>
 </template>
 
@@ -153,6 +162,7 @@ import { useCourseStore } from "../stores/courseStore";
 import { quizApi } from "../api/quizApi";
 import { adminApi } from "../api/adminApi";
 import type { Question } from "../types";
+import ConfirmModal from "../components/ConfirmModal.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -167,6 +177,21 @@ const editingId = ref<number | null>(null);
 const saving = ref(false);
 const savingSettings = ref(false);
 const deletingQuiz = ref(false);
+const confirmationModal = ref<{
+  show: boolean;
+  title: string;
+  message: string;
+  confirmLabel: string;
+  submitting: boolean;
+  action: null | (() => Promise<void>);
+}>({
+  show: false,
+  title: "",
+  message: "",
+  confirmLabel: "Xóa",
+  submitting: false,
+  action: null,
+});
 const passingScore = ref(80);
 const form = reactive({ text: "", options: ["", "", "", ""], correctAnswer: 0 });
 
@@ -227,16 +252,52 @@ const saveSettings = async () => {
     savingSettings.value = false;
   }
 };
-const deleteQuiz = async () => {
-  if (!confirm(`Xóa toàn bộ ${questions.value.length} câu hỏi và bài kiểm tra này?`)) return;
-  deletingQuiz.value = true;
+const openConfirmationModal = (
+  title: string,
+  message: string,
+  action: () => Promise<void>,
+) => {
+  confirmationModal.value = {
+    show: true,
+    title,
+    message,
+    confirmLabel: "Xóa",
+    submitting: false,
+    action,
+  };
+};
+const closeConfirmationModal = () => {
+  if (confirmationModal.value.submitting) return;
+  confirmationModal.value.show = false;
+  confirmationModal.value.action = null;
+};
+const confirmModalAction = async () => {
+  const action = confirmationModal.value.action;
+  if (!action || confirmationModal.value.submitting) return;
+  confirmationModal.value.submitting = true;
   try {
-    await adminApi.deleteQuiz(topicId.value, lessonId.value || undefined);
-    await courseStore.fetchTopics();
-    router.push("/admin?tab=exams");
-  } finally {
-    deletingQuiz.value = false;
+    await action();
+    confirmationModal.value.submitting = false;
+    closeConfirmationModal();
+  } catch {
+    confirmationModal.value.submitting = false;
   }
+};
+const deleteQuiz = () => {
+  openConfirmationModal(
+    "Xóa bài kiểm tra?",
+    `Toàn bộ ${questions.value.length} câu hỏi và bài kiểm tra này sẽ bị xóa. Thao tác không thể hoàn tác.`,
+    async () => {
+      deletingQuiz.value = true;
+      try {
+        await adminApi.deleteQuiz(topicId.value, lessonId.value || undefined);
+        await courseStore.fetchTopics();
+        router.push("/admin?tab=exams");
+      } finally {
+        deletingQuiz.value = false;
+      }
+    },
+  );
 };
 const resetForm = () => {
   form.text = "";
@@ -273,11 +334,16 @@ const saveQuestion = async () => {
     saving.value = false;
   }
 };
-const deleteQuestion = async (question: Question) => {
-  if (!confirm("Xóa câu hỏi này khỏi bài kiểm tra?")) return;
-  await adminApi.deleteQuestion(question.id);
-  await loadQuestions();
-  await courseStore.fetchTopics();
+const deleteQuestion = (question: Question) => {
+  openConfirmationModal(
+    "Xóa câu hỏi?",
+    "Câu hỏi này sẽ bị xóa khỏi bài kiểm tra. Thao tác không thể hoàn tác.",
+    async () => {
+      await adminApi.deleteQuestion(question.id);
+      await loadQuestions();
+      await courseStore.fetchTopics();
+    },
+  );
 };
 
 const csvEscape = (value: string) => `"${value.replace(/"/g, '""')}"`;

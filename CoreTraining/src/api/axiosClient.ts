@@ -4,6 +4,7 @@ const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 export const axiosClient = axios.create({
   baseURL,
+  timeout: 15_000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -37,6 +38,20 @@ axiosClient.interceptors.response.use(
         // Redirect to login if needed
         window.location.href = '/login';
       }
+    }
+    const isTimeout =
+      error.code === 'ECONNABORTED' ||
+      error.code === 'ETIMEDOUT' ||
+      String(error.message || '').toLowerCase().includes('timeout');
+    const isNetworkError = !error.response;
+    const isServerError = error.response?.status >= 500;
+    if (isTimeout || isNetworkError || isServerError) {
+      const message = isTimeout
+        ? 'Yêu cầu đã quá thời gian chờ. Vui lòng thử lại.'
+        : isNetworkError
+          ? 'Không thể kết nối tới hệ thống. Vui lòng kiểm tra mạng.'
+          : 'Hệ thống đang gặp sự cố. Vui lòng thử lại sau.';
+      window.dispatchEvent(new CustomEvent('system-error', { detail: message }));
     }
     return Promise.reject(error);
   }

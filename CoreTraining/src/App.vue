@@ -15,6 +15,7 @@
       </div>
 
       <div class="nav-user-menu">
+        <NotificationCenter />
         <router-link to="/profile" class="nav-user" title="Xem hồ sơ cá nhân">
           <div class="nav-user-avatar">{{ userAvatarLetter }}</div>
           <span>{{ userStore.fullName || 'quantrh' }}</span>
@@ -41,6 +42,7 @@ import { computed, onMounted } from 'vue';
 import { useUserStore } from './stores/userStore';
 import { useCourseStore } from './stores/courseStore';
 import { useNavigationStore } from './stores/navigationStore';
+import NotificationCenter from './components/NotificationCenter.vue';
 import { BookOpen, ClipboardCheck, HelpCircle, Home, LogOut, Settings, Trophy, UserCircle, Users } from 'lucide-vue-next';
 
 const userStore = useUserStore();

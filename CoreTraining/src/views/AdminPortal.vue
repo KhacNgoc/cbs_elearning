@@ -342,11 +342,19 @@
                   </td>
                   <td>{{ formatEnrollmentDate(request.requestedAt) }}</td>
                   <td>
-                    <span
-                      class="enrollment-status"
-                      :class="request.status.toLowerCase()"
-                      >{{ enrollmentStatusLabel(request.status) }}</span
-                    >
+                    <div class="enrollment-status-detail">
+                      <span
+                        class="enrollment-status"
+                        :class="request.status.toLowerCase()"
+                        >{{ enrollmentStatusLabel(request.status) }}</span
+                      >
+                      <small
+                        v-if="request.rejectionReason"
+                        class="rejection-reason"
+                      >
+                        <strong>Lý do:</strong> {{ request.rejectionReason }}
+                      </small>
+                    </div>
                   </td>
                   <td>
                     <div
@@ -361,16 +369,18 @@
                       </button>
                       <button
                         class="reject-request"
-                        @click="reviewEnrollment(request.id, false)"
+                        @click="openRejectEnrollmentModal(request)"
                       >
                         <XCircle :size="16" /> Từ chối
                       </button>
                     </div>
-                    <small v-else>{{
-                      request.reviewedBy
-                        ? `Bởi ${request.reviewedBy}`
-                        : "Đã xử lý"
-                    }}</small>
+                    <template v-else>
+                      <small>{{
+                        request.reviewedBy
+                          ? `Bởi ${request.reviewedBy}`
+                          : "Đã xử lý"
+                      }}</small>
+                    </template>
                   </td>
                 </tr>
                 <tr v-if="!enrollmentRequests.length">
@@ -607,6 +617,85 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- ENROLLMENT REJECTION MODAL -->
+    <div
+      v-if="rejectEnrollmentModal.show"
+      class="modal-overlay"
+      @click.self="closeRejectEnrollmentModal"
+    >
+      <section
+        class="modal-content card reject-enrollment-modal animate-scale-in"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reject-enrollment-title"
+      >
+        <div class="reject-modal-icon"><XCircle :size="26" /></div>
+        <div class="reject-modal-heading">
+          <span>Từ chối đăng ký</span>
+          <h3 id="reject-enrollment-title">Nêu lý do từ chối yêu cầu</h3>
+          <p>
+            Lý do sẽ được gửi trực tiếp tới học viên trong thông báo kết quả.
+          </p>
+        </div>
+        <div v-if="rejectEnrollmentModal.request" class="reject-request-summary">
+          <div>
+            <small>Học viên</small>
+            <strong>{{ rejectEnrollmentModal.request.fullName }}</strong>
+            <span>@{{ rejectEnrollmentModal.request.username }}</span>
+          </div>
+          <div>
+            <small>Khóa học</small>
+            <strong>{{ rejectEnrollmentModal.request.topicName }}</strong>
+            <span>{{ rejectEnrollmentModal.request.topicId }}</span>
+          </div>
+        </div>
+        <form @submit.prevent="confirmRejectEnrollment">
+          <div class="form-group">
+            <label for="enrollment-rejection-reason">
+              Lý do từ chối <span class="required-mark">*</span>
+            </label>
+            <textarea
+              id="enrollment-rejection-reason"
+              v-model="rejectEnrollmentModal.reason"
+              rows="4"
+              maxlength="500"
+              placeholder="Ví dụ: Khóa học chưa phù hợp với vị trí công tác hiện tại..."
+              required
+              autofocus
+            ></textarea>
+            <div class="reason-counter">
+              {{ rejectEnrollmentModal.reason.length }}/500
+            </div>
+          </div>
+          <div class="modal-buttons">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              :disabled="rejectEnrollmentModal.submitting"
+              @click="closeRejectEnrollmentModal"
+            >
+              Hủy
+            </button>
+            <button
+              type="submit"
+              class="btn reject-confirm-button"
+              :disabled="
+                !rejectEnrollmentModal.reason.trim() ||
+                rejectEnrollmentModal.submitting
+              "
+            >
+              <XCircle :size="16" />
+              {{
+                rejectEnrollmentModal.submitting
+                  ? "Đang xử lý..."
+                  : "Xác nhận từ chối"
+              }}
+            </button>
+          </div>
+        </form>
+      </section>
     </div>
 
     <!-- MODAL 1: TOPIC FORM -->
@@ -1126,6 +1215,15 @@
         </form>
       </div>
     </div>
+    <ConfirmModal
+      :open="confirmationModal.show"
+      :title="confirmationModal.title"
+      :message="confirmationModal.message"
+      :confirm-label="confirmationModal.confirmLabel"
+      :loading="confirmationModal.submitting"
+      @cancel="closeConfirmationModal"
+      @confirm="confirmModalAction"
+    />
   </div>
 </template>
 
@@ -1138,6 +1236,7 @@ import { adminApi } from "../api/adminApi";
 import type { AdminUser, EnrollmentRequest } from "../api/adminApi";
 import { quizApi } from "../api/quizApi";
 import type { Topic, Lesson, LessonDocument, Question } from "../types";
+import ConfirmModal from "../components/ConfirmModal.vue";
 import {
   Settings,
   Users,
@@ -1262,6 +1361,27 @@ const userSearchQuery = ref("");
 const quizSearchQuery = ref("");
 
 // Forms & Modals states
+const rejectEnrollmentModal = ref({
+  show: false,
+  request: null as EnrollmentRequest | null,
+  reason: "",
+  submitting: false,
+});
+const confirmationModal = ref<{
+  show: boolean;
+  title: string;
+  message: string;
+  confirmLabel: string;
+  submitting: boolean;
+  action: null | (() => Promise<void>);
+}>({
+  show: false,
+  title: "",
+  message: "",
+  confirmLabel: "Xóa",
+  submitting: false,
+  action: null,
+});
 const topicModal = ref({ show: false, isEdit: false });
 const topicForm = ref({ id: "", name: "", iconName: "" });
 
@@ -1516,7 +1636,7 @@ watch(
 
 watch(
   () => [route.name, route.query.tab, route.params.topicId],
-  ([routeName, tab, topicId]) => {
+  async ([routeName, tab, topicId]) => {
     if (routeName === "AdminTopicLessons" && typeof topicId === "string") {
       activeTab.value = "lessons";
       selectedTopicId.value = topicId;
@@ -1527,6 +1647,13 @@ watch(
         ? tab
         : "overview";
     if (activeTab.value === "lessons") selectedTopicId.value = ALL_TOPICS;
+    if (activeTab.value === "enrollments") {
+      try {
+        enrollmentRequests.value = await adminApi.getEnrollmentRequests();
+      } catch (error) {
+        console.error("Failed to refresh enrollment requests:", error);
+      }
+    }
   },
 );
 
@@ -1730,16 +1857,87 @@ const formatEnrollmentDate = (value: string) =>
     dateStyle: "short",
     timeStyle: "short",
   }).format(new Date(value));
-const reviewEnrollment = async (id: number, approve: boolean) => {
+const reviewEnrollment = async (
+  id: number,
+  approve: boolean,
+  rejectionReason?: string,
+): Promise<boolean> => {
   try {
-    const updated = await adminApi.reviewEnrollmentRequest(id, approve);
+    const updated = await adminApi.reviewEnrollmentRequest(
+      id,
+      approve,
+      rejectionReason,
+    );
     const index = enrollmentRequests.value.findIndex(
       (request) => request.id === id,
     );
     if (index >= 0) enrollmentRequests.value[index] = updated;
+    return true;
   } catch (error) {
     console.error("Failed to review enrollment:", error);
     alert("Không thể xử lý yêu cầu đăng ký. Vui lòng thử lại.");
+    return false;
+  }
+};
+
+const openRejectEnrollmentModal = (request: EnrollmentRequest) => {
+  rejectEnrollmentModal.value = {
+    show: true,
+    request,
+    reason: "",
+    submitting: false,
+  };
+};
+
+const closeRejectEnrollmentModal = () => {
+  if (rejectEnrollmentModal.value.submitting) return;
+  rejectEnrollmentModal.value.show = false;
+  rejectEnrollmentModal.value.request = null;
+  rejectEnrollmentModal.value.reason = "";
+};
+
+const confirmRejectEnrollment = async () => {
+  const request = rejectEnrollmentModal.value.request;
+  const reason = rejectEnrollmentModal.value.reason.trim();
+  if (!request || !reason || rejectEnrollmentModal.value.submitting) return;
+
+  rejectEnrollmentModal.value.submitting = true;
+  const succeeded = await reviewEnrollment(request.id, false, reason);
+  rejectEnrollmentModal.value.submitting = false;
+  if (succeeded) closeRejectEnrollmentModal();
+};
+
+const openConfirmationModal = (
+  title: string,
+  message: string,
+  action: () => Promise<void>,
+) => {
+  confirmationModal.value = {
+    show: true,
+    title,
+    message,
+    confirmLabel: "Xóa",
+    submitting: false,
+    action,
+  };
+};
+
+const closeConfirmationModal = () => {
+  if (confirmationModal.value.submitting) return;
+  confirmationModal.value.show = false;
+  confirmationModal.value.action = null;
+};
+
+const confirmModalAction = async () => {
+  const action = confirmationModal.value.action;
+  if (!action || confirmationModal.value.submitting) return;
+  confirmationModal.value.submitting = true;
+  try {
+    await action();
+    confirmationModal.value.submitting = false;
+    closeConfirmationModal();
+  } catch {
+    confirmationModal.value.submitting = false;
   }
 };
 
@@ -1823,23 +2021,24 @@ const saveTopic = async () => {
   }
 };
 
-const handleDeleteTopic = async (id: string) => {
-  if (
-    !confirm(
-      "Bạn có chắc chắn muốn xóa chủ đề này? Tất cả bài học và câu hỏi trực thuộc cũng sẽ bị xóa.",
-    )
-  )
-    return;
-  loading.value = true;
-  try {
-    await adminApi.deleteTopic(id);
-    await loadAllData();
-  } catch (err) {
-    alert("Xóa chủ đề thất bại!");
-    console.error(err);
-  } finally {
-    loading.value = false;
-  }
+const handleDeleteTopic = (id: string) => {
+  openConfirmationModal(
+    "Xóa chủ đề?",
+    "Tất cả bài học và câu hỏi trực thuộc chủ đề này cũng sẽ bị xóa. Thao tác không thể hoàn tác.",
+    async () => {
+      loading.value = true;
+      try {
+        await adminApi.deleteTopic(id);
+        await loadAllData();
+      } catch (err) {
+        alert("Xóa chủ đề thất bại!");
+        console.error(err);
+        throw err;
+      } finally {
+        loading.value = false;
+      }
+    },
+  );
 };
 
 // ==========================================
@@ -1890,24 +2089,25 @@ const saveUser = async () => {
   }
 };
 
-const handleDeleteUser = async (user: AdminUser) => {
+const handleDeleteUser = (user: AdminUser) => {
   if (!user.id) return;
-  if (
-    !confirm(
-      `Bạn có chắc chắn muốn xóa học viên ${user.fullName} (${user.username})?`,
-    )
-  )
-    return;
-  loading.value = true;
-  try {
-    await adminApi.deleteUser(user.id);
-    await loadAllData();
-  } catch (err) {
-    alert("Xóa học viên thất bại!");
-    console.error(err);
-  } finally {
-    loading.value = false;
-  }
+  openConfirmationModal(
+    "Xóa học viên?",
+    `Học viên ${user.fullName} (${user.username}) sẽ bị xóa khỏi hệ thống.`,
+    async () => {
+      loading.value = true;
+      try {
+        await adminApi.deleteUser(user.id!);
+        await loadAllData();
+      } catch (err) {
+        alert("Xóa học viên thất bại!");
+        console.error(err);
+        throw err;
+      } finally {
+        loading.value = false;
+      }
+    },
+  );
 };
 
 // ==========================================
@@ -2102,18 +2302,24 @@ const saveLesson = async () => {
   }
 };
 
-const handleDeleteLesson = async (id: string) => {
-  if (!confirm("Bạn có chắc chắn muốn xóa bài học này?")) return;
-  loading.value = true;
-  try {
-    await adminApi.deleteLesson(id);
-    await loadAllData();
-  } catch (err) {
-    alert("Xóa bài học thất bại!");
-    console.error(err);
-  } finally {
-    loading.value = false;
-  }
+const handleDeleteLesson = (id: string) => {
+  openConfirmationModal(
+    "Xóa bài học?",
+    "Bài học này sẽ bị xóa khỏi khóa học. Thao tác không thể hoàn tác.",
+    async () => {
+      loading.value = true;
+      try {
+        await adminApi.deleteLesson(id);
+        await loadAllData();
+      } catch (err) {
+        alert("Xóa bài học thất bại!");
+        console.error(err);
+        throw err;
+      } finally {
+        loading.value = false;
+      }
+    },
+  );
 };
 
 // ==========================================
@@ -2343,18 +2549,24 @@ const importQuestionsFromCsv = async (event: Event) => {
   }
 };
 
-const handleDeleteQuestion = async (id: number) => {
-  if (!confirm("Bạn có chắc chắn muốn xóa câu hỏi này?")) return;
-  loading.value = true;
-  try {
-    await adminApi.deleteQuestion(id);
-    await loadAllData();
-  } catch (err) {
-    alert("Xóa câu hỏi thất bại!");
-    console.error(err);
-  } finally {
-    loading.value = false;
-  }
+const handleDeleteQuestion = (id: number) => {
+  openConfirmationModal(
+    "Xóa câu hỏi?",
+    "Câu hỏi này sẽ bị xóa vĩnh viễn. Thao tác không thể hoàn tác.",
+    async () => {
+      loading.value = true;
+      try {
+        await adminApi.deleteQuestion(id);
+        await loadAllData();
+      } catch (err) {
+        alert("Xóa câu hỏi thất bại!");
+        console.error(err);
+        throw err;
+      } finally {
+        loading.value = false;
+      }
+    },
+  );
 };
 
 // Kept temporarily for compatibility with the existing question modal markup;
@@ -3282,6 +3494,12 @@ void handleDeleteQuestion;
   background: #feecec;
   color: #b42318;
 }
+.enrollment-status-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
 .enrollment-actions {
   display: flex;
   gap: 0.4rem;
@@ -3335,6 +3553,120 @@ void handleDeleteQuestion;
 .enrollment-actions button:active {
   box-shadow: none;
   transform: translateY(0);
+}
+
+.rejection-reason {
+  display: inline-flex;
+  max-width: 280px;
+  gap: 0.25rem;
+  color: #b42318;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.reject-enrollment-modal {
+  width: min(520px, calc(100vw - 2rem));
+  padding: 1.75rem;
+}
+
+.reject-modal-icon {
+  width: 52px;
+  height: 52px;
+  margin-bottom: 1rem;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: #feecec;
+  color: #b42318;
+}
+
+.reject-modal-heading > span {
+  color: #b42318;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.reject-modal-heading h3 {
+  margin: 0.3rem 0 0.45rem;
+  color: var(--text-main);
+  font-size: 1.25rem;
+}
+
+.reject-modal-heading p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+.reject-request-summary {
+  margin: 1.25rem 0;
+  padding: 0.9rem 1rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.reject-request-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.reject-request-summary small,
+.reject-request-summary span {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.reject-request-summary strong {
+  color: var(--text-main);
+  font-size: 0.88rem;
+}
+
+.reject-enrollment-modal textarea {
+  width: 100%;
+  padding: 0.75rem 0.85rem;
+  resize: vertical;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  outline: none;
+  color: var(--text-main);
+  line-height: 1.5;
+}
+
+.reject-enrollment-modal textarea:focus {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgb(220 38 38 / 10%);
+}
+
+.required-mark {
+  color: #dc2626;
+}
+
+.reason-counter {
+  margin-top: 0.25rem;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  text-align: right;
+}
+
+.reject-confirm-button {
+  background: #dc2626;
+  color: white;
+}
+
+.reject-confirm-button:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.reject-confirm-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .file-upload-control {
@@ -3481,6 +3813,10 @@ void handleDeleteQuestion;
 }
 
 @media (max-width: 700px) {
+  .reject-request-summary {
+    grid-template-columns: 1fr;
+  }
+
   .video-source-options {
     grid-template-columns: 1fr;
   }
