@@ -1,6 +1,37 @@
-version: '3.8'
-
 services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: coretraining-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: coretraining
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d coretraining"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: coretraining-pgadmin
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+
   backend:
     build:
       context: ./CoreTrainingAPI
@@ -9,14 +40,19 @@ services:
     ports:
       - "8000:8080"
     environment:
-      - SPRING_PROFILES_ACTIVE=postgres
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://ep-icy-haze-az1ohp84-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
-      - SPRING_DATASOURCE_USERNAME=neondb_owner
-      - SPRING_DATASOURCE_PASSWORD=npg_gr0ZeANCOmK2
-      - DOCUMENT_STORAGE_PATH=/app/uploads/documents
-      - VIDEO_STORAGE_PATH=/app/uploads/videos
+      SPRING_PROFILES_ACTIVE: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/coretraining
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      DOCUMENT_STORAGE_PATH: /app/uploads/documents
+      VIDEO_STORAGE_PATH: /app/uploads/videos
+      VIDEO_ACCESS_SECRET: ${VIDEO_ACCESS_SECRET:-change-this-video-signing-secret-before-production-2026}
+      VIDEO_ACCESS_DURATION_SECONDS: ${VIDEO_ACCESS_DURATION_SECONDS:-3600}
     volumes:
       - training_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: always
 
   frontend:
@@ -28,7 +64,11 @@ services:
       - "5173:80"
     depends_on:
       - backend
+    volumes:
+      - training_uploads:/srv/uploads:ro
     restart: always
 
 volumes:
+  postgres_data:
+  pgadmin_data:
   training_uploads:

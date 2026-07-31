@@ -24,4 +24,7 @@ app:
   storage:
     documents-directory: ${DOCUMENT_STORAGE_PATH:uploads/documents}
     videos-directory: ${VIDEO_STORAGE_PATH:uploads/videos}
+  video-access:
+    secret: ${VIDEO_ACCESS_SECRET:${app.jwt.secret}}
+    duration-seconds: ${VIDEO_ACCESS_DURATION_SECONDS:3600}
 
