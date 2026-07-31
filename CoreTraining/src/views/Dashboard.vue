@@ -31,7 +31,7 @@
             :key="topic.id" 
             class="topic-card card card-hover"
             :class="{ 'topic-locked': !userStore.isTopicAccessible(topic.id) }"
-            @click="userStore.isTopicAccessible(topic.id) ? goToTopicFirstLesson(topic) : openRegisterConfirm(topic)"
+            @click="handleTopicClick(topic)"
           >
             <div class="topic-icon-box">
               <component :is="getIconComponent(topic.iconName)" class="topic-icon" />
@@ -47,6 +47,10 @@
                   v-else-if="userStore.registeredTopics.includes(topic.id)" 
                   class="badge badge-optional"
                 >Đã đăng ký</span>
+                <span
+                  v-else-if="userStore.pendingTopics.includes(topic.id)"
+                  class="badge badge-pending"
+                >Chờ duyệt</span>
                 <span 
                   v-else 
                   class="badge badge-locked"
@@ -91,16 +95,17 @@
                 <span>{{ userStore.getTopicProgressPercent(topic.id) }}%</span>
               </div>
               <ProgressBar :progress="userStore.getTopicProgressPercent(topic.id)" height="6px" />
-              <div class="topic-quiz-info">
-                <span v-if="userStore.getTopicQuizScore(topic.id)">
-                  Thi thử: <strong class="quiz-score-highlight">{{ userStore.getTopicQuizScore(topic.id)?.score }}/{{ userStore.getTopicQuizScore(topic.id)?.total }}</strong>
+              <div
+                class="topic-course-status"
+                :class="{ completed: userStore.getTopicProgressPercent(topic.id) === 100 }"
+              >
+                <CheckCircle2 v-if="userStore.getTopicProgressPercent(topic.id) === 100" :size="15" />
+                <CircleDashed v-else :size="15" />
+                <span>
+                  {{ userStore.getTopicProgressPercent(topic.id) === 100
+                    ? 'Đã hoàn thành khóa học'
+                    : 'Chưa hoàn thành khóa học' }}
                 </span>
-                <span v-else class="quiz-pending">Chưa thi đánh giá</span>
-                <button 
-                  class="btn-go-quiz" 
-                  :disabled="!userStore.isTopicAccessible(topic.id)"
-                  @click.stop="goToQuiz(topic.id)"
-                >Thi thử</button>
               </div>
             </div>
           </div>
@@ -138,28 +143,30 @@
       
     </div>
 
-    <!-- Registration Confirmation Modal -->
-    <div class="modal-overlay animate-fade-in" v-if="showRegisterModal" @click.self="showRegisterModal = false">
-      <div class="modal-card card animate-scale-up">
-        <div class="modal-header">
-          <div class="modal-icon-box">
-            <BookOpen class="modal-icon" />
+    <Teleport to="body">
+      <!-- Registration Confirmation Modal -->
+      <div class="modal-overlay animate-fade-in" v-if="showRegisterModal" @click.self="showRegisterModal = false">
+        <div class="modal-card card animate-scale-up" role="dialog" aria-modal="true" aria-labelledby="register-course-title">
+          <div class="modal-header">
+            <div class="modal-icon-box">
+              <BookOpen class="modal-icon" />
+            </div>
+            <h2 id="register-course-title">Đăng ký học Nghiệp vụ</h2>
           </div>
-          <h2>Đăng ký học Nghiệp vụ</h2>
-        </div>
-        <div class="modal-body">
-          <p>Bạn có muốn đăng ký học thêm chủ đề nghiệp vụ <strong>{{ selectedTopicToRegister?.name }}</strong> không?</p>
-          <p class="modal-note">Sau khi đăng ký, tất cả tài liệu bài học và bài thi thử của chủ đề này sẽ được mở khóa.</p>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="showRegisterModal = false" :disabled="isRegistering">HỦY BỎ</button>
-          <button class="btn btn-primary btn-confirm" @click="handleRegisterTopic" :disabled="isRegistering">
-            <span v-if="isRegistering" class="spinner"></span>
-            <span v-else>ĐỒNG Ý ĐĂNG KÝ</span>
-          </button>
+          <div class="modal-body">
+            <p>Bạn có muốn đăng ký học thêm chủ đề nghiệp vụ <strong>{{ selectedTopicToRegister?.name }}</strong> không?</p>
+            <p class="modal-note">Yêu cầu sẽ được gửi đến quản trị viên. Khóa học được mở sau khi được phê duyệt.</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="showRegisterModal = false" :disabled="isRegistering">HỦY BỎ</button>
+            <button class="btn btn-primary btn-confirm" @click="handleRegisterTopic" :disabled="isRegistering">
+              <span v-if="isRegistering" class="spinner"></span>
+              <span v-else>GỬI YÊU CẦU ĐĂNG KÝ</span>
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 
@@ -182,7 +189,9 @@ import {
   Award,
   Shield,
   Medal,
-  Lock
+  Lock,
+  CheckCircle2,
+  CircleDashed
 } from 'lucide-vue-next';
 
 const router = useRouter();
@@ -236,9 +245,14 @@ const goToTopicFirstLesson = (topic: any) => {
     router.push(`/lesson/${topic.lessons[0].id}`);
   }
 };
-
-const goToQuiz = (topicId: string) => {
-  router.push(`/quiz/${topicId}`);
+const handleTopicClick = (topic: any) => {
+  if (userStore.isTopicAccessible(topic.id)) {
+    goToTopicFirstLesson(topic);
+  } else if (userStore.pendingTopics.includes(topic.id)) {
+    alert('Yêu cầu đăng ký khóa học đang chờ quản trị viên phê duyệt.');
+  } else {
+    openRegisterConfirm(topic);
+  }
 };
 
 const openRegisterConfirm = (topic: any) => {
@@ -526,43 +540,24 @@ const getBadgeIcon = (icon: string) => {
   color: var(--text-main);
 }
 
-.topic-quiz-info {
+.topic-course-status {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 0.4rem;
   font-size: 0.8rem;
-  color: var(--text-muted);
+  color: #64748b;
   margin-top: 0.15rem;
   background-color: var(--bg-main);
-  padding: 0.25rem 0.5rem;
+  padding: 0.35rem 0.5rem;
   border-radius: var(--radius-sm);
+  font-weight: 600;
 }
 
-.quiz-score-highlight {
+.topic-course-status.completed {
+  background: #e8f5ef;
   color: var(--primary-color);
-  font-weight: 700;
 }
 
-.quiz-pending {
-  font-style: italic;
-  font-size: 0.75rem;
-}
-
-.btn-go-quiz {
-  background: none;
-  border: none;
-  color: var(--primary-color);
-  font-weight: 700;
-  cursor: pointer;
-  font-size: 0.8rem;
-  text-decoration: underline;
-  padding: 0.1rem 0.4rem;
-  transition: var(--transition);
-}
-
-.btn-go-quiz:hover {
-  color: var(--accent-secondary);
-}
 
 /* Badges section */
 .badges-header {
@@ -742,6 +737,11 @@ const getBadgeIcon = (icon: string) => {
   color: #3b82f6;
   border: 1px solid #3b82f6;
 }
+.badge-pending {
+  background: #fff7d6;
+  color: #8a6b00;
+  border: 1px solid #ead88b;
+}
 
 .badge-locked {
   background-color: var(--bg-main);
@@ -776,12 +776,6 @@ const getBadgeIcon = (icon: string) => {
   width: 18px;
   height: 18px;
   transition: var(--transition);
-}
-
-.btn-go-quiz:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  text-decoration: none;
 }
 
 /* Modal styling */

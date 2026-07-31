@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import type { Question } from '../types';
 import { quizApi } from '../api/quizApi';
+import type { QuizSubmitResponse } from '../api/quizApi';
 import { useUserStore } from './userStore';
 
 export const useQuizStore = defineStore('quiz', {
@@ -10,11 +11,10 @@ export const useQuizStore = defineStore('quiz', {
     currentQuestionIndex: 0,
     questions: [] as Omit<Question, 'correctAnswer'>[],
     selectedAnswers: {} as Record<number, number>, // questionId -> optionIndex
-    correctAnswers: {} as Record<number, number>, // questionId -> correctAnswerIndex (returned after submit)
     timeElapsed: 0, // seconds
     timerIntervalId: null as any | null,
     isQuizFinished: false,
-    quizResult: null as { score: number; total: number; percent: number } | null,
+    quizResult: null as QuizSubmitResponse | null,
     isLoading: false
   }),
 
@@ -43,7 +43,6 @@ export const useQuizStore = defineStore('quiz', {
       this.currentLessonId = lessonId || null;
       this.currentQuestionIndex = 0;
       this.selectedAnswers = {};
-      this.correctAnswers = {};
       this.timeElapsed = 0;
       this.isQuizFinished = false;
       this.quizResult = null;
@@ -100,11 +99,11 @@ export const useQuizStore = defineStore('quiz', {
         this.quizResult = {
           score: res.score,
           total: res.total,
-          percent: res.percent
+          percent: res.percent,
+          passingScore: res.passingScore,
+          passed: res.passed
         };
         
-        // Save the correct answers map to render the review UI
-        this.correctAnswers = res.correctAnswers || {};
         this.isQuizFinished = true;
 
         // Force reload the user's progress from the API to update badges, points, and radar chart!

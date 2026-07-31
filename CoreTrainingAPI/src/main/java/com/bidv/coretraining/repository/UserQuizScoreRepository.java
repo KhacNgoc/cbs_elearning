@@ -10,5 +10,6 @@ import java.util.Optional;
 @Repository
 public interface UserQuizScoreRepository extends JpaRepository<UserQuizScore, Long> {
     List<UserQuizScore> findByUserId(Long userId);
-    Optional<UserQuizScore> findByUserIdAndTopicId(Long userId, String topicId);
+    Optional<UserQuizScore> findByUserIdAndTopicIdAndLessonIsNull(Long userId, String topicId);
+    Optional<UserQuizScore> findByUserIdAndLessonId(Long userId, String lessonId);
 }

@@ -11,4 +11,6 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
     List<Question> findByTopicIdAndLessonIsNull(String topicId);
     List<Question> findByLessonId(String lessonId);
     boolean existsByLessonId(String lessonId);
+    void deleteByLessonId(String lessonId);
+    void deleteByTopicIdAndLessonIsNull(String topicId);
 }

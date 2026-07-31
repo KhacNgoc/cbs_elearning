@@ -54,12 +54,13 @@ export const courseApi = {
       if (!lesson) throw new Error(`Lesson not found with id: ${lessonId}`);
 
       const newComment: Comment = {
-        id: `comment_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        id: Date.now(),
         user: username,
         avatar: username.charAt(0).toUpperCase(),
         rating,
         content,
-        date: new Date().toISOString().split('T')[0]
+        date: new Date().toISOString().split('T')[0],
+        replies: []
       };
       
       lesson.comments.unshift(newComment);
@@ -70,6 +71,73 @@ export const courseApi = {
       content
     });
     return response.data;
+  },
+
+  async replyToComment(
+    lessonId: string,
+    rootCommentId: number,
+    replyToCommentId: number,
+    content: string
+  ): Promise<Comment> {
+    const username = localStorage.getItem('username') || 'quantrh';
+    if (isMockApi()) {
+      await mockDelay(200);
+      const lesson = mockDbTopics.flatMap(topic => topic.lessons).find(item => item.id === lessonId);
+      const root = lesson?.comments.find(comment => comment.id === rootCommentId);
+      if (!root) throw new Error(`Comment not found with id: ${rootCommentId}`);
+      const target = replyToCommentId === rootCommentId
+        ? root
+        : root.replies?.find(reply => reply.id === replyToCommentId);
+      const reply: Comment = {
+        id: Date.now(),
+        user: username,
+        avatar: username.charAt(0).toUpperCase(),
+        content,
+        date: new Date().toISOString().split('T')[0],
+        parentId: rootCommentId,
+        replyToUser: target?.user || root.user,
+        replies: []
+      };
+      root.replies = [...(root.replies || []), reply];
+      return reply;
+    }
+    const response = await axiosClient.post<Comment>(
+      `/api/lessons/${lessonId}/comments/${rootCommentId}/replies`,
+      { content, replyToCommentId }
+    );
+    return response.data;
+  },
+
+  async deleteComment(lessonId: string, commentId: number): Promise<void> {
+    if (isMockApi()) {
+      await mockDelay(150);
+      const lesson = mockDbTopics
+        .flatMap(topic => topic.lessons)
+        .find(item => item.id === lessonId);
+      if (!lesson) throw new Error(`Lesson not found with id: ${lessonId}`);
+
+      const username = localStorage.getItem('username') || '';
+      const isAdmin = localStorage.getItem('userRole') === 'ROLE_ADMIN';
+      const root = lesson.comments.find(comment => comment.id === commentId);
+      const reply = lesson.comments
+        .flatMap(comment => comment.replies || [])
+        .find(comment => comment.id === commentId);
+      const target = root || reply;
+      if (!target) throw new Error(`Comment not found with id: ${commentId}`);
+      if (!isAdmin && target.user !== username) {
+        throw new Error('You do not have permission to delete this comment');
+      }
+
+      if (root) {
+        lesson.comments = lesson.comments.filter(comment => comment.id !== commentId);
+      } else {
+        lesson.comments.forEach(comment => {
+          comment.replies = (comment.replies || []).filter(item => item.id !== commentId);
+        });
+      }
+      return;
+    }
+    await axiosClient.delete(`/api/lessons/${lessonId}/comments/${commentId}`);
   },
 
   async getVideoNotes(lessonId: string): Promise<VideoNote[]> {
@@ -145,16 +213,23 @@ export const courseApi = {
       await mockDelay(200);
       // Construct in-memory progress
       const mockRegistered: string[] = JSON.parse(localStorage.getItem('mockRegisteredTopics') || '[]');
+      const storedCompleted: string[] = JSON.parse(localStorage.getItem('mockCompletedLessons') || '[]');
+      for (const lessonId of storedCompleted) {
+        if (!mockDbCompleted.includes(lessonId)) mockDbCompleted.push(lessonId);
+      }
       return {
         completedLessons: mockDbCompleted,
         quizScores: JSON.parse(localStorage.getItem('mockQuizScores') || '{}'),
         quizTotals: JSON.parse(localStorage.getItem('mockQuizTotals') || '{}'),
+        lessonQuizScores: JSON.parse(localStorage.getItem('mockLessonQuizScores') || '{}'),
+        lessonQuizTotals: JSON.parse(localStorage.getItem('mockLessonQuizTotals') || '{}'),
         points: mockDbPoints,
         unlockedBadges: JSON.parse(localStorage.getItem('mockUnlockedBadges') || '[]'),
         groupId: 'GDV',
         groupName: 'Giao dịch viên',
         mandatoryTopics: ['CIF', 'TIEN_GUI', 'TELLER', 'THE'],
-        registeredTopics: mockRegistered
+        registeredTopics: mockRegistered,
+        pendingTopics: JSON.parse(localStorage.getItem('mockPendingTopics') || '[]')
       };
     }
     const response = await axiosClient.get<UserProgress>('/api/users/me');
@@ -177,10 +252,10 @@ export const courseApi = {
   async registerTopic(topicId: string): Promise<UserProgress> {
     if (isMockApi()) {
       await mockDelay(300);
-      const mockRegistered: string[] = JSON.parse(localStorage.getItem('mockRegisteredTopics') || '[]');
-      if (!mockRegistered.includes(topicId)) {
-        mockRegistered.push(topicId);
-        localStorage.setItem('mockRegisteredTopics', JSON.stringify(mockRegistered));
+      const pending: string[] = JSON.parse(localStorage.getItem('mockPendingTopics') || '[]');
+      if (!pending.includes(topicId)) {
+        pending.push(topicId);
+        localStorage.setItem('mockPendingTopics', JSON.stringify(pending));
       }
       return this.getMyProgress();
     }

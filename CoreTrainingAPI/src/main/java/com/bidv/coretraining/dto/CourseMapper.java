@@ -10,17 +10,28 @@ import org.mapstruct.AfterMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
+import org.mapstruct.Named;
 
 import java.util.List;
+import java.util.Comparator;
 
 @Mapper(componentModel = "spring")
 public interface CourseMapper {
 
+    @Mapping(
+            target = "hasQuiz",
+            expression = "java(topic.getQuestions() != null && topic.getQuestions().stream().anyMatch(question -> question.getLesson() == null))"
+    )
     TopicDto toTopicDto(Topic topic);
 
     List<TopicDto> toTopicDtoList(List<Topic> topics);
 
     @Mapping(source = "topic.id", target = "topicId")
+    @Mapping(
+            target = "hasQuiz",
+            expression = "java(lesson.getQuizQuestions() != null && !lesson.getQuizQuestions().isEmpty())"
+    )
+    @Mapping(target = "comments", qualifiedByName = "rootComments")
     LessonDto toLessonDto(Lesson lesson);
 
     @AfterMapping
@@ -31,7 +42,6 @@ public interface CourseMapper {
                     ? VideoSource.UPLOAD
                     : VideoSource.URL);
         }
-        dto.setHasQuiz(lesson.getQuizQuestions() != null && !lesson.getQuizQuestions().isEmpty());
     }
 
     List<LessonDto> toLessonDtoList(List<Lesson> lessons);
@@ -46,7 +56,21 @@ public interface CourseMapper {
 
     @Mapping(source = "username", target = "user")
     @Mapping(source = "createdAt", target = "date", dateFormat = "yyyy-MM-dd")
+    @Mapping(source = "parent.id", target = "parentId")
+    @Mapping(source = "replyToUsername", target = "replyToUser")
+    @Mapping(target = "replies", qualifiedByName = "allComments")
     CommentDto toCommentDto(Comment comment);
 
+    @Named("allComments")
     List<CommentDto> toCommentDtoList(List<Comment> comments);
+
+    @Named("rootComments")
+    default List<CommentDto> toRootCommentDtoList(List<Comment> comments) {
+        if (comments == null) return List.of();
+        return comments.stream()
+                .filter(comment -> comment.getParent() == null)
+                .sorted(Comparator.comparing(Comment::getCreatedAt).reversed())
+                .map(this::toCommentDto)
+                .toList();
+    }
 }

@@ -21,8 +21,10 @@ public class WebConfig implements WebMvcConfigurer {
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         String storageLocation = documentStorageService.getStorageDirectory().toUri().toString();
         registry.addResourceHandler("/uploads/documents/**")
-                .addResourceLocations(storageLocation);
+                .addResourceLocations(storageLocation)
+                .setCachePeriod(3600);
         registry.addResourceHandler("/uploads/videos/**")
-                .addResourceLocations(videoStorageService.getStorageDirectory().toUri().toString());
+                .addResourceLocations(videoStorageService.getStorageDirectory().toUri().toString())
+                .setCachePeriod(3600);
     }
 }

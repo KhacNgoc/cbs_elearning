@@ -6,11 +6,16 @@ import com.bidv.coretraining.dto.UserProgressDto;
 import com.bidv.coretraining.entity.Lesson;
 import com.bidv.coretraining.entity.User;
 import com.bidv.coretraining.entity.UserQuizScore;
+import com.bidv.coretraining.entity.EnrollmentStatus;
+import com.bidv.coretraining.entity.TopicEnrollmentRequest;
+import com.bidv.coretraining.entity.NotificationType;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
 import com.bidv.coretraining.repository.LessonRepository;
 import com.bidv.coretraining.repository.QuestionRepository;
 import com.bidv.coretraining.repository.UserRepository;
+import com.bidv.coretraining.repository.TopicEnrollmentRequestRepository;
 import com.bidv.coretraining.service.UserService;
+import com.bidv.coretraining.service.NotificationService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,15 +32,22 @@ public class UserServiceImpl implements UserService {
     private final QuestionRepository questionRepository;
     private final com.bidv.coretraining.repository.TopicRepository topicRepository;
     private final UserMapper userMapper;
+    private final TopicEnrollmentRequestRepository enrollmentRequestRepository;
+    private final NotificationService notificationService;
 
     public UserServiceImpl(UserRepository userRepository, LessonRepository lessonRepository,
                            QuestionRepository questionRepository,
-                           com.bidv.coretraining.repository.TopicRepository topicRepository, UserMapper userMapper) {
+                           com.bidv.coretraining.repository.TopicRepository topicRepository,
+                           UserMapper userMapper,
+                           TopicEnrollmentRequestRepository enrollmentRequestRepository,
+                           NotificationService notificationService) {
         this.userRepository = userRepository;
         this.lessonRepository = lessonRepository;
         this.questionRepository = questionRepository;
         this.topicRepository = topicRepository;
         this.userMapper = userMapper;
+        this.enrollmentRequestRepository = enrollmentRequestRepository;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -76,7 +88,8 @@ public class UserServiceImpl implements UserService {
 
         if (questionRepository.existsByLessonId(lessonId)
                 && !user.getCompletedLessons().contains(lesson)) {
-            throw new IllegalStateException("Bạn cần đạt tối thiểu 80% bài kiểm tra của bài học");
+            throw new IllegalStateException("Bạn cần đạt tối thiểu "
+                    + lesson.getQuizPassingScore() + "% bài kiểm tra của bài học");
         }
 
         if (!user.getCompletedLessons().contains(lesson)) {
@@ -96,10 +109,27 @@ public class UserServiceImpl implements UserService {
         com.bidv.coretraining.entity.Topic topic = topicRepository.findById(topicId)
                 .orElseThrow(() -> new ResourceNotFoundException("Topic", "id", topicId));
 
-        if (!user.getRegisteredTopics().contains(topic)) {
-            user.getRegisteredTopics().add(topic);
-            user = userRepository.save(user);
+        if (user.getRegisteredTopics().contains(topic)
+                || (user.getUserGroup() != null
+                && user.getUserGroup().getMandatoryTopics().contains(topic))) {
+            return buildUserProgressDto(user);
         }
+        if (enrollmentRequestRepository.existsByUserIdAndTopicIdAndStatus(
+                user.getId(), topicId, EnrollmentStatus.PENDING)) {
+            return buildUserProgressDto(user);
+        }
+        TopicEnrollmentRequest request = TopicEnrollmentRequest.builder()
+                .user(user)
+                .topic(topic)
+                .status(EnrollmentStatus.PENDING)
+                .requestedAt(java.time.LocalDateTime.now())
+                .build();
+        enrollmentRequestRepository.save(request);
+        notificationService.createForAdmins(
+                NotificationType.ENROLLMENT_REQUEST,
+                "Yêu cầu đăng ký khóa học mới",
+                user.getFullName() + " đã yêu cầu đăng ký khóa học " + topic.getName(),
+                "/admin?tab=enrollments");
 
         return buildUserProgressDto(user);
     }
@@ -113,10 +143,18 @@ public class UserServiceImpl implements UserService {
         // Map quiz scores and totals
         Map<String, Integer> quizScores = new HashMap<>();
         Map<String, Integer> quizTotals = new HashMap<>();
+        Map<String, Integer> lessonQuizScores = new HashMap<>();
+        Map<String, Integer> lessonQuizTotals = new HashMap<>();
         for (UserQuizScore score : user.getQuizScores()) {
-            String topicId = score.getTopic().getId();
-            quizScores.put(topicId, score.getScore());
-            quizTotals.put(topicId, score.getTotal());
+            if (score.getLesson() != null) {
+                String lessonId = score.getLesson().getId();
+                lessonQuizScores.put(lessonId, score.getScore());
+                lessonQuizTotals.put(lessonId, score.getTotal());
+            } else {
+                String topicId = score.getTopic().getId();
+                quizScores.put(topicId, score.getScore());
+                quizTotals.put(topicId, score.getTotal());
+            }
         }
 
         String groupId = null;
@@ -133,17 +171,25 @@ public class UserServiceImpl implements UserService {
         java.util.List<String> registeredTopics = user.getRegisteredTopics().stream()
                 .map(com.bidv.coretraining.entity.Topic::getId)
                 .collect(Collectors.toList());
+        java.util.List<String> pendingTopics = enrollmentRequestRepository
+                .findByUserIdAndStatus(user.getId(), EnrollmentStatus.PENDING)
+                .stream()
+                .map(request -> request.getTopic().getId())
+                .collect(Collectors.toList());
 
         return UserProgressDto.builder()
                 .completedLessons(completedLessons)
                 .quizScores(quizScores)
                 .quizTotals(quizTotals)
+                .lessonQuizScores(lessonQuizScores)
+                .lessonQuizTotals(lessonQuizTotals)
                 .points(user.getPoints())
                 .unlockedBadges(userMapper.toUserBadgeDtoList(new ArrayList<>(user.getUnlockedBadges())))
                 .groupId(groupId)
                 .groupName(groupName)
                 .mandatoryTopics(mandatoryTopics)
                 .registeredTopics(registeredTopics)
+                .pendingTopics(pendingTopics)
                 .build();
     }
 }

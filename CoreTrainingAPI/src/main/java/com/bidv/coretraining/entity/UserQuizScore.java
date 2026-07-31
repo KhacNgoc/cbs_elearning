@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
 
 @Entity
 @Table(name = "user_quiz_scores")
@@ -26,6 +28,10 @@ public class UserQuizScore {
     @JoinColumn(name = "topic_id", nullable = false)
     private Topic topic;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "lesson_id")
+    private Lesson lesson;
+
     @Column(nullable = false)
     private Integer score;
 
@@ -34,4 +40,14 @@ public class UserQuizScore {
 
     @Column(name = "taken_at", nullable = false)
     private LocalDateTime takenAt;
+
+    @ElementCollection
+    @CollectionTable(
+            name = "user_quiz_score_answers",
+            joinColumns = @JoinColumn(name = "quiz_score_id")
+    )
+    @MapKeyColumn(name = "question_id")
+    @Column(name = "selected_answer", nullable = false)
+    @Builder.Default
+    private Map<Long, Integer> selectedAnswers = new HashMap<>();
 }

@@ -41,6 +41,20 @@ export const useCourseStore = defineStore('course', {
       this.currentLessonId = lessonId;
       try {
         this.currentLessonData = await courseApi.getLessonById(lessonId);
+        // Keep the topic outline in sync with the detailed lesson response.
+        // The sidebar reads from `topics`, while the learning page reads from
+        // `currentLessonData`; without this merge a newly-created quiz can
+        // appear in one place but not the other until a full page refresh.
+        if (this.currentLessonData) {
+          const topic = this.topics.find(item => item.id === this.currentLessonData?.topicId);
+          const lessonIndex = topic?.lessons.findIndex(item => item.id === lessonId) ?? -1;
+          if (topic && lessonIndex >= 0) {
+            topic.lessons[lessonIndex] = {
+              ...topic.lessons[lessonIndex],
+              ...this.currentLessonData
+            };
+          }
+        }
       } catch (error) {
         console.error(`Failed to load lesson detail for ${lessonId}:`, error);
         this.currentLessonData = null;
@@ -58,6 +72,40 @@ export const useCourseStore = defineStore('course', {
       } catch (error) {
         console.error('Failed to add comment:', error);
       }
+    },
+
+    async replyToComment(
+      lessonId: string,
+      rootCommentId: number,
+      replyToCommentId: number,
+      content: string
+    ) {
+      const reply = await courseApi.replyToComment(
+        lessonId, rootCommentId, replyToCommentId, content
+      );
+      if (this.currentLessonData?.id === lessonId) {
+        const root = this.currentLessonData.comments.find(comment => comment.id === rootCommentId);
+        if (root && !(root.replies || []).some(item => item.id === reply.id)) {
+          root.replies = [...(root.replies || []), reply];
+        }
+      }
+    },
+
+    async deleteComment(lessonId: string, commentId: number) {
+      await courseApi.deleteComment(lessonId, commentId);
+      if (this.currentLessonData?.id !== lessonId) return;
+
+      const isRootComment = this.currentLessonData.comments
+        .some(comment => comment.id === commentId);
+      if (isRootComment) {
+        this.currentLessonData.comments = this.currentLessonData.comments
+          .filter(comment => comment.id !== commentId);
+        return;
+      }
+      this.currentLessonData.comments.forEach(comment => {
+        comment.replies = (comment.replies || [])
+          .filter(reply => reply.id !== commentId);
+      });
     }
   }
 });

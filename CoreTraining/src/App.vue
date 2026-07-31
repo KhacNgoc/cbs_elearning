@@ -8,25 +8,14 @@
       </router-link>
       
       <div class="nav-links">
-        <router-link to="/" class="nav-link">
-          <Home class="nav-icon" />
-          <span>Tổng quan</span>
-        </router-link>
-        
-        <router-link to="/leaderboard" class="nav-link">
-          <Trophy class="nav-icon" />
-          <span>Bảng vinh danh</span>
-        </router-link>
-        
-        <router-link v-slot="{ href, navigate, isActive }" v-if="userStore.role === 'ROLE_ADMIN'" to="/admin" custom>
-          <a :href="href" @click="navigate" class="nav-link" :class="{ 'router-link-active': isActive }">
-            <Settings class="nav-icon" />
-            <span>Quản trị</span>
-          </a>
+        <router-link v-for="item in navigationStore.mainItems" :key="item.id" :to="item.route" class="nav-link">
+          <component :is="navigationIcon(item.icon)" class="nav-icon" />
+          <span>{{ item.label }}</span>
         </router-link>
       </div>
 
       <div class="nav-user-menu">
+        <NotificationCenter />
         <router-link to="/profile" class="nav-user" title="Xem hồ sơ cá nhân">
           <div class="nav-user-avatar">{{ userAvatarLetter }}</div>
           <span>{{ userStore.fullName || 'quantrh' }}</span>
@@ -52,16 +41,22 @@
 import { computed, onMounted } from 'vue';
 import { useUserStore } from './stores/userStore';
 import { useCourseStore } from './stores/courseStore';
-import { Home, Trophy, LogOut, Settings } from 'lucide-vue-next';
+import { useNavigationStore } from './stores/navigationStore';
+import NotificationCenter from './components/NotificationCenter.vue';
+import { BookOpen, ClipboardCheck, HelpCircle, Home, LogOut, Settings, Trophy, UserCircle, Users } from 'lucide-vue-next';
 
 const userStore = useUserStore();
 const courseStore = useCourseStore();
+const navigationStore = useNavigationStore();
+const iconRegistry = { BookOpen, ClipboardCheck, HelpCircle, Home, Settings, Trophy, UserCircle, Users };
+const navigationIcon = (name: string) => iconRegistry[name as keyof typeof iconRegistry] || Home;
 
 const userAvatarLetter = computed(() => {
   return (userStore.fullName || userStore.username || 'Q').charAt(0).toUpperCase();
 });
 
 const handleLogout = () => {
+  navigationStore.clear();
   userStore.logout();
 };
 
@@ -69,7 +64,8 @@ onMounted(async () => {
   if (userStore.isAuthenticated) {
     await Promise.all([
       userStore.fetchProgress(),
-      courseStore.fetchTopics()
+      courseStore.fetchTopics(),
+      navigationStore.load()
     ]);
   }
 });

@@ -8,7 +8,7 @@
           :class="{ active: activeSection === item.id }"
           @click="openSection(item.id)"
         >
-          <component :is="item.icon" :size="18" />
+          <component :is="navigationIcon(item.icon)" :size="18" />
           <span>{{ item.label }}</span>
         </button>
       </nav>
@@ -26,27 +26,30 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { BookOpen, HelpCircle, Settings, Users } from "lucide-vue-next";
+import { onMounted } from "vue";
+import { useNavigationStore } from "../stores/navigationStore";
+import { BookOpen, ClipboardCheck, HelpCircle, Settings, Users } from "lucide-vue-next";
 
 const route = useRoute();
 const router = useRouter();
-const navigation = [
-  { id: "overview", label: "Tổng quan", icon: Settings },
-  { id: "users", label: "Thành viên", icon: Users },
-  { id: "lessons", label: "Bài học", icon: BookOpen },
-  { id: "exams", label: "Đề thi trắc nghiệm", icon: HelpCircle },
-];
+const navigationStore = useNavigationStore();
+const navigation = computed(() => navigationStore.adminItems);
+const iconRegistry = { BookOpen, ClipboardCheck, HelpCircle, Settings, Users };
+const navigationIcon = (name: string) => iconRegistry[name as keyof typeof iconRegistry] || Settings;
 
 const activeSection = computed(() =>
   route.path.includes("/admin/quizzes")
-    ? "exams"
+    ? "admin.exams"
     : typeof route.query.tab === "string"
-      ? route.query.tab
-      : "overview",
+      ? `admin.${route.query.tab}`
+      : "admin.overview",
 );
 
-const openSection = (tab: string) =>
-  router.push({ path: "/admin", query: tab === "overview" ? {} : { tab } });
+const openSection = (id: string) => {
+  const item = navigationStore.adminItems.find(entry => entry.id === id);
+  if (item) router.push(item.route);
+};
+onMounted(() => navigationStore.load());
 </script>
 
 <style scoped>

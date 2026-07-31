@@ -13,12 +13,14 @@ import com.bidv.coretraining.repository.TopicRepository;
 import com.bidv.coretraining.repository.UserRepository;
 import com.bidv.coretraining.repository.VideoNoteRepository;
 import com.bidv.coretraining.service.CourseService;
+import com.bidv.coretraining.service.NotificationService;
+import com.bidv.coretraining.entity.NotificationType;
 import org.springframework.stereotype.Service;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 public class CourseServiceImpl implements CourseService {
@@ -29,16 +31,19 @@ public class CourseServiceImpl implements CourseService {
     private final UserRepository userRepository;
     private final VideoNoteRepository videoNoteRepository;
     private final CourseMapper courseMapper;
+    private final NotificationService notificationService;
 
     public CourseServiceImpl(TopicRepository topicRepository, LessonRepository lessonRepository,
                              CommentRepository commentRepository, UserRepository userRepository,
-                             VideoNoteRepository videoNoteRepository, CourseMapper courseMapper) {
+                             VideoNoteRepository videoNoteRepository, CourseMapper courseMapper,
+                             NotificationService notificationService) {
         this.topicRepository = topicRepository;
         this.lessonRepository = lessonRepository;
         this.commentRepository = commentRepository;
         this.userRepository = userRepository;
         this.videoNoteRepository = videoNoteRepository;
         this.courseMapper = courseMapper;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -73,7 +78,6 @@ public class CourseServiceImpl implements CourseService {
         String avatar = String.valueOf(username.charAt(0)).toUpperCase();
 
         Comment comment = Comment.builder()
-                .id("comment_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 4))
                 .username(username)
                 .avatar(avatar)
                 .rating(commentRequest.getRating())
@@ -84,6 +88,68 @@ public class CourseServiceImpl implements CourseService {
 
         Comment savedComment = commentRepository.save(comment);
         return courseMapper.toCommentDto(savedComment);
+    }
+
+    @Override
+    @Transactional
+    public CommentDto replyToComment(String lessonId, Long commentId,
+                                     CommentReplyRequest request, String username) {
+        Lesson lesson = lessonRepository.findById(lessonId)
+                .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
+        Comment requestedParent = commentRepository.findById(commentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Comment", "id", commentId));
+        if (!requestedParent.getLesson().getId().equals(lessonId)) {
+            throw new IllegalArgumentException("Bình luận không thuộc bài học này");
+        }
+
+        Comment replyTarget = requestedParent;
+        if (request.getReplyToCommentId() != null) {
+            replyTarget = commentRepository.findById(request.getReplyToCommentId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Comment", "id", request.getReplyToCommentId()));
+            if (!replyTarget.getLesson().getId().equals(lessonId)) {
+                throw new IllegalArgumentException("Phản hồi không thuộc bài học này");
+            }
+        }
+        Comment root = requestedParent.getParent() == null
+                ? requestedParent
+                : requestedParent.getParent();
+
+        Comment reply = Comment.builder()
+                .username(username)
+                .avatar(String.valueOf(username.charAt(0)).toUpperCase())
+                .content(request.getContent().trim())
+                .createdAt(LocalDateTime.now())
+                .lesson(lesson)
+                .parent(root)
+                .replyToUsername(replyTarget.getUsername())
+                .build();
+        Comment savedReply = commentRepository.save(reply);
+        if (!replyTarget.getUsername().equals(username)) {
+            notificationService.create(
+                    replyTarget.getUsername(),
+                    NotificationType.COMMENT_REPLY,
+                    "Có phản hồi mới cho bình luận của bạn",
+                    username + " đã phản hồi bình luận của bạn trong bài "
+                            + lesson.getTitle(),
+                    "/lesson/" + lessonId);
+        }
+        return courseMapper.toCommentDto(savedReply);
+    }
+
+    @Override
+    @Transactional
+    public void deleteComment(
+            String lessonId, Long commentId, String username, boolean isAdmin) {
+        Comment comment = commentRepository.findById(commentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Comment", "id", commentId));
+        if (!comment.getLesson().getId().equals(lessonId)) {
+            throw new ResourceNotFoundException("Comment", "id", commentId);
+        }
+        if (!isAdmin && !comment.getUsername().equals(username)) {
+            throw new AccessDeniedException("Bạn chỉ có thể gỡ bình luận của chính mình");
+        }
+        commentRepository.delete(comment);
     }
 
     @Override

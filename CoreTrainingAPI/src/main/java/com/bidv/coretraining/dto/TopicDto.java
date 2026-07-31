@@ -15,5 +15,7 @@ public class TopicDto {
     private String id;
     private String name;
     private String iconName;
+    private Boolean hasQuiz;
+    private Integer quizPassingScore;
     private List<LessonDto> lessons;
 }

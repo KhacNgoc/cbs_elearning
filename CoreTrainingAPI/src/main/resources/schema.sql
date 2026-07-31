@@ -4,8 +4,10 @@
 CREATE TABLE IF NOT EXISTS topics (
     id VARCHAR(255) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    icon_name VARCHAR(255)
+    icon_name VARCHAR(255),
+    quiz_passing_score INTEGER NOT NULL DEFAULT 80
 );
+ALTER TABLE topics ADD COLUMN IF NOT EXISTS quiz_passing_score INTEGER NOT NULL DEFAULT 80;
 
 -- 2. Create user_groups table
 CREATE TABLE IF NOT EXISTS user_groups (
@@ -51,11 +53,15 @@ CREATE TABLE IF NOT EXISTS lessons (
     hint TEXT,
     video_url VARCHAR(255),
     video_source VARCHAR(20),
+    quiz_passing_score INTEGER NOT NULL DEFAULT 80,
+    lesson_order INTEGER NOT NULL DEFAULT 0,
     topic_id VARCHAR(255) NOT NULL,
     CONSTRAINT fk_lessons_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
 );
 
 ALTER TABLE lessons ADD COLUMN IF NOT EXISTS video_source VARCHAR(20);
+ALTER TABLE lessons ADD COLUMN IF NOT EXISTS quiz_passing_score INTEGER NOT NULL DEFAULT 80;
+ALTER TABLE lessons ADD COLUMN IF NOT EXISTS lesson_order INTEGER NOT NULL DEFAULT 0;
 UPDATE lessons
 SET video_source = CASE
     WHEN video_url LIKE '%/uploads/%' THEN 'UPLOAD'
@@ -111,15 +117,64 @@ CREATE TABLE IF NOT EXISTS procedure_steps (
 
 -- 11. Create comments table
 CREATE TABLE IF NOT EXISTS comments (
-    id VARCHAR(255) PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     username VARCHAR(255) NOT NULL,
     avatar VARCHAR(255) NOT NULL,
-    rating INTEGER NOT NULL,
+    rating INTEGER,
     content TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL,
     lesson_id VARCHAR(255) NOT NULL,
-    CONSTRAINT fk_comments_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
+    parent_comment_id BIGINT,
+    reply_to_username VARCHAR(255),
+    CONSTRAINT fk_comments_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE,
+    CONSTRAINT fk_comments_parent FOREIGN KEY (parent_comment_id) REFERENCES comments(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS topic_enrollment_requests (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    topic_id VARCHAR(255) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    requested_at TIMESTAMP NOT NULL,
+    reviewed_at TIMESTAMP,
+    reviewed_by VARCHAR(255),
+    rejection_reason TEXT,
+    CONSTRAINT fk_enrollment_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_enrollment_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id BIGSERIAL PRIMARY KEY,
+    recipient_id BIGINT NOT NULL,
+    type VARCHAR(40) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    target_url VARCHAR(255),
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_notifications_recipient FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_recipient_created
+    ON notifications (recipient_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS navigation_items (
+    id VARCHAR(255) PRIMARY KEY,
+    label VARCHAR(255) NOT NULL,
+    route VARCHAR(255) NOT NULL,
+    icon VARCHAR(255) NOT NULL,
+    area VARCHAR(20) NOT NULL,
+    sort_order INTEGER NOT NULL,
+    visible BOOLEAN NOT NULL DEFAULT TRUE
+);
+CREATE TABLE IF NOT EXISTS navigation_item_roles (
+    navigation_id VARCHAR(255) NOT NULL,
+    role_name VARCHAR(255) NOT NULL,
+    PRIMARY KEY (navigation_id, role_name),
+    CONSTRAINT fk_navigation_role_item FOREIGN KEY (navigation_id) REFERENCES navigation_items(id) ON DELETE CASCADE
+);
+ALTER TABLE comments ALTER COLUMN rating DROP NOT NULL;
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS parent_comment_id BIGINT;
+ALTER TABLE comments ADD COLUMN IF NOT EXISTS reply_to_username VARCHAR(255);
 
 -- 12. Create private timestamped video notes
 CREATE TABLE IF NOT EXISTS video_notes (
@@ -187,6 +242,18 @@ CREATE TABLE IF NOT EXISTS user_quiz_scores (
     taken_at TIMESTAMP NOT NULL,
     user_id BIGINT NOT NULL,
     topic_id VARCHAR(255) NOT NULL,
+    lesson_id VARCHAR(255),
     CONSTRAINT fk_user_quiz_scores_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_user_quiz_scores_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
+    CONSTRAINT fk_user_quiz_scores_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE,
+    CONSTRAINT fk_user_quiz_scores_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
+);
+ALTER TABLE user_quiz_scores ADD COLUMN IF NOT EXISTS lesson_id VARCHAR(255);
+
+CREATE TABLE IF NOT EXISTS user_quiz_score_answers (
+    quiz_score_id BIGINT NOT NULL,
+    question_id BIGINT NOT NULL,
+    selected_answer INTEGER NOT NULL,
+    PRIMARY KEY (quiz_score_id, question_id),
+    CONSTRAINT fk_quiz_score_answers_score FOREIGN KEY (quiz_score_id) REFERENCES user_quiz_scores(id) ON DELETE CASCADE,
+    CONSTRAINT fk_quiz_score_answers_question FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
 );

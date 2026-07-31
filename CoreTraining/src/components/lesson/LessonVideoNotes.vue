@@ -66,6 +66,15 @@
         </div>
       </article>
     </div>
+    <ConfirmModal
+      :open="noteToDelete !== null"
+      title="Xóa ghi chú?"
+      :message="deleteConfirmationMessage"
+      confirm-label="Xóa ghi chú"
+      :loading="saving"
+      @cancel="cancelDelete"
+      @confirm="confirmDelete"
+    />
   </section>
 </template>
 
@@ -75,6 +84,7 @@ import {
   Clock3, LoaderCircle, NotebookPen, Pencil, Play, Plus, StickyNote, Trash2
 } from 'lucide-vue-next';
 import type { VideoNote } from '../../types';
+import ConfirmModal from '../ConfirmModal.vue';
 
 const props = defineProps<{
   notes: VideoNote[];
@@ -97,8 +107,14 @@ const sectionElement = ref<HTMLElement | null>(null);
 const composerTextarea = ref<HTMLTextAreaElement | null>(null);
 const editingId = ref<number | null>(null);
 const editingContent = ref('');
+const noteToDelete = ref<VideoNote | null>(null);
 const currentTimestamp = computed(() =>
   Math.max(0, Math.floor(composerTimestamp.value ?? props.currentTime))
+);
+const deleteConfirmationMessage = computed(() =>
+  noteToDelete.value
+    ? `Ghi chú tại ${formatTimestamp(noteToDelete.value.timestampSeconds)} sẽ bị xóa và không thể khôi phục.`
+    : ''
 );
 
 const openAt = async (seconds: number) => {
@@ -140,9 +156,18 @@ const saveEdit = (note: VideoNote) => {
 };
 
 const requestDelete = (note: VideoNote) => {
-  if (window.confirm(`Xóa ghi chú tại ${formatTimestamp(note.timestampSeconds)}?`)) {
-    emit('delete', note);
-  }
+  noteToDelete.value = note;
+};
+
+const cancelDelete = () => {
+  if (props.saving) return;
+  noteToDelete.value = null;
+};
+
+const confirmDelete = () => {
+  if (!noteToDelete.value || props.saving) return;
+  emit('delete', noteToDelete.value);
+  noteToDelete.value = null;
 };
 
 const formatTimestamp = (seconds: number) => {

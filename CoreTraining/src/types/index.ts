@@ -1,10 +1,13 @@
 export interface Comment {
-  id: string;
+  id: number;
   user: string;
   avatar: string;
-  rating: number;
+  rating?: number;
   content: string;
   date: string;
+  parentId?: number;
+  replyToUser?: string;
+  replies?: Comment[];
 }
 
 export interface VideoNote {
@@ -35,11 +38,13 @@ export interface Lesson {
   id: string;
   title: string;
   topicId: string;
+  lessonOrder?: number;
   hint: string;
   documents: LessonDocument[];
   videoUrl: string;
   videoSource?: 'UPLOAD' | 'URL';
   hasQuiz?: boolean;
+  quizPassingScore?: number;
   procedureSteps: ProcedureSection[];
   comments: Comment[];
 }
@@ -48,6 +53,8 @@ export interface Topic {
   id: string;
   name: string;
   iconName: string;
+  hasQuiz?: boolean;
+  quizPassingScore?: number;
   lessons: Lesson[];
 }
 
@@ -74,12 +81,15 @@ export interface UserProgress {
   completedLessons: string[]; // List of completed lesson IDs
   quizScores: Record<string, number>; // topicId -> max score achieved (e.g. 3)
   quizTotals: Record<string, number>; // topicId -> total questions (e.g. 5)
+  lessonQuizScores: Record<string, number>; // lessonId -> max score achieved
+  lessonQuizTotals: Record<string, number>; // lessonId -> total questions
   points: number; // Experience points
   unlockedBadges: Badge[];
   groupId?: string;
   groupName?: string;
   mandatoryTopics: string[];
   registeredTopics: string[];
+  pendingTopics: string[];
 }
 
 export interface UserProfile {

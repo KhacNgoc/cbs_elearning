@@ -16,10 +16,12 @@ public class LessonDto {
     private String id;
     private String title;
     private String topicId;
+    private Integer lessonOrder;
     private String hint;
     private String videoUrl;
     private VideoSource videoSource;
     private Boolean hasQuiz;
+    private Integer quizPassingScore;
     private List<LessonDocumentDto> documents;
     private List<ProcedureSectionDto> procedureSteps;
     private List<CommentDto> comments;

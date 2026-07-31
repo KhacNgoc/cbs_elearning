@@ -25,11 +25,19 @@ public class Lesson {
     @JoinColumn(name = "topic_id", nullable = false)
     private Topic topic;
 
+    @Column(name = "lesson_order", nullable = false, columnDefinition = "INTEGER DEFAULT 0")
+    @Builder.Default
+    private Integer lessonOrder = 0;
+
     @Column(columnDefinition = "TEXT")
     private String hint;
 
     @Column(name = "video_url")
     private String videoUrl;
+
+    @Column(name = "quiz_passing_score", nullable = false, columnDefinition = "INTEGER DEFAULT 80")
+    @Builder.Default
+    private Integer quizPassingScore = 80;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "video_source", length = 20)

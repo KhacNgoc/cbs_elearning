@@ -10,7 +10,13 @@
         :class="{ active: item.id === activeLessonId, completed: completedLessons.includes(item.id) }">
         <button class="lesson-row" @click="openLesson(item.id)">
           <span class="lesson-check"><Check v-if="completedLessons.includes(item.id)" :size="14" /></span>
-          <span class="lesson-row-copy"><strong>{{ index + 1 }}. {{ item.title }}</strong><small><PlayCircle :size="13" /> Bài học</small></span>
+          <span class="lesson-row-copy"><strong>{{ index + 1 }}. {{ item.title }}</strong>
+            <small><PlayCircle :size="13" /> Bài học</small>
+            <small v-if="item.hasQuiz" class="lesson-quiz-note">
+              <Award :size="13" />
+              {{ hasPassedLessonQuiz(item) ? 'Đã đạt bài kiểm tra' : `Có bài kiểm tra · Đạt ≥ ${item.quizPassingScore ?? 80}%` }}
+            </small>
+          </span>
         </button>
         <button v-if="getDocuments(item).length" class="lesson-resources-toggle" :class="{ expanded: expandedLessons.has(item.id) }"
           @click="toggleDocuments(item.id)">
@@ -24,22 +30,69 @@
         </div>
       </div>
     </div>
-    <div class="quiz-box">
-      <div><Award :size="22" /><strong>{{ activeLesson?.hasQuiz ? 'Kiểm tra bài học' : 'Đánh giá năng lực' }}</strong></div>
-      <p>{{ activeLesson?.hasQuiz ? 'Đạt tối thiểu 80% để hoàn thành bài học này.' : 'Kiểm tra và củng cố kiến thức sau khi hoàn thành chủ đề.' }}</p>
-      <button @click="$emit('quiz')">{{ activeLesson?.hasQuiz ? 'Làm bài kiểm tra bài học' : 'Làm bài kiểm tra' }} <ArrowRight :size="16" /></button>
+    <div v-if="activeLesson?.hasQuiz" class="quiz-box">
+      <div><Award :size="22" /><strong>{{ activeLessonPassed ? 'Bài kiểm tra đã hoàn thành' : 'Kiểm tra bài học' }}</strong></div>
+      <p v-if="activeLessonPassed">Bạn đã đạt bài kiểm tra này. Xem lại các câu đúng, câu sai và đáp án đã chọn.</p>
+      <p v-else>Hoàn thành bài kiểm tra và đạt tối thiểu {{ activeLesson.quizPassingScore ?? 80 }}% trước khi chuyển sang bài khác.</p>
+      <button @click="$emit('quiz')">
+        {{ activeLessonPassed ? 'Xem chi tiết bài đã làm' : 'Làm bài kiểm tra' }}
+        <ArrowRight :size="16" />
+      </button>
+    </div>
+    <div v-if="topic?.hasQuiz" class="quiz-box topic-quiz-box">
+      <div><Trophy :size="22" /><strong>{{ topicQuizPassed ? 'Đã hoàn thành kiểm tra tổng' : 'Kiểm tra tổng kết chủ đề' }}</strong></div>
+      <p v-if="topicQuizPassed">Bạn đã đạt bài kiểm tra tổng của chủ đề {{ topic.name }}. Có thể mở lại để xem chi tiết bài làm.</p>
+      <p v-else>Đánh giá kiến thức tổng hợp của chủ đề {{ topic.name }}. Ngưỡng đạt tối thiểu {{ topic.quizPassingScore ?? 80 }}%.</p>
+      <button @click="$emit('topic-quiz')">
+        {{ topicQuizPassed ? 'Xem chi tiết bài đã làm' : 'Làm bài kiểm tra tổng' }}
+        <ArrowRight :size="16" />
+      </button>
     </div>
   </aside>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { ArrowRight, Award, Check, ChevronDown, FileText, FolderOpen, PlayCircle, X } from 'lucide-vue-next';
+import { ArrowRight, Award, Check, ChevronDown, FileText, FolderOpen, PlayCircle, Trophy, X } from 'lucide-vue-next';
 import type { Lesson, LessonDocument, Topic } from '../../types';
-const props = defineProps<{ topic: Topic | null | undefined; activeLessonId: string; completedLessons: string[]; completedCount: number; progress: number; open: boolean; selectedDocumentId?: number }>();
-const emit = defineEmits<{ close: []; select: [lessonId: string]; 'select-document': [lessonId: string, document: LessonDocument]; quiz: [] }>();
+const props = defineProps<{
+  topic: Topic | null | undefined;
+  activeLessonId: string;
+  completedLessons: string[];
+  completedCount: number;
+  progress: number;
+  open: boolean;
+  selectedDocumentId?: number;
+  lessonQuizScores: Record<string, number>;
+  lessonQuizTotals: Record<string, number>;
+  topicQuizScores: Record<string, number>;
+  topicQuizTotals: Record<string, number>;
+}>();
+const emit = defineEmits<{
+  close: [];
+  select: [lessonId: string];
+  'select-document': [lessonId: string, document: LessonDocument];
+  quiz: [];
+  'topic-quiz': [];
+}>();
 const expandedLessons = ref(new Set<string>());
 const activeLesson = computed(() => props.topic?.lessons.find(item => item.id === props.activeLessonId));
+const hasPassedLessonQuiz = (lesson: Lesson) => {
+  const score = props.lessonQuizScores[lesson.id];
+  const total = props.lessonQuizTotals[lesson.id];
+  return score !== undefined && total > 0
+    && Math.round(score / total * 100) >= (lesson.quizPassingScore ?? 80);
+};
+const activeLessonPassed = computed(() =>
+  activeLesson.value ? hasPassedLessonQuiz(activeLesson.value) : false
+);
+const topicQuizPassed = computed(() => {
+  if (!props.topic) return false;
+  const score = props.topicQuizScores[props.topic.id];
+  const total = props.topicQuizTotals[props.topic.id];
+  return score !== undefined && total > 0
+    && Math.round(score / total * 100) >= (props.topic.quizPassingScore ?? 80);
+});
 const getDocuments = (lesson: Lesson): LessonDocument[] => {
   return lesson.documents || [];
 };

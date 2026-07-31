@@ -9,13 +9,13 @@
       <div class="header-right card">
         <span class="score-label">ĐIỂM CAO NHẤT</span>
         <span class="score-value">
-          {{ highScore ? `${highScore}/${totalQuestions}` : 'Chưa thi' }}
+          {{ highScore !== null ? `${highScore}/${highScoreTotal}` : 'Chưa thi' }}
         </span>
       </div>
     </div>
 
     <!-- Active Quiz Card -->
-    <div v-if="!quizStore.isQuizFinished" class="quiz-main-card card">
+    <div v-if="!isReviewMode && !quizStore.isQuizFinished" class="quiz-main-card card">
       <!-- Question progress and timer row -->
       <div class="quiz-status-row">
         <span class="question-progress">Câu hỏi {{ quizStore.currentQuestionIndex + 1 }} / {{ totalQuestions }}</span>
@@ -66,11 +66,56 @@
       </div>
     </div>
 
+    <div v-else-if="isReviewMode && review" class="quiz-result-card review-card card animate-fade-in">
+      <div class="review-heading">
+        <div>
+          <span class="review-eyebrow">Bài kiểm tra đã hoàn thành</span>
+          <h2>Xem lại chi tiết bài làm</h2>
+          <p>
+            Điểm cao nhất <strong>{{ review.score }}/{{ review.total }}</strong>
+            · {{ review.percent }}% · Ngưỡng đạt {{ review.passingScore }}%
+          </p>
+        </div>
+        <div class="review-passed-badge"><CheckCircle2 :size="20" /> Đã đạt</div>
+      </div>
+
+      <div class="review-list">
+        <article
+          v-for="(question, index) in review.questions"
+          :key="question.id"
+          class="review-question-card"
+          :class="{ correct: question.correct, incorrect: !question.correct }"
+        >
+          <div class="review-question-status">
+            <CheckCircle2 v-if="question.correct" :size="21" />
+            <XCircle v-else :size="21" />
+          </div>
+          <div>
+            <h3>Câu {{ index + 1 }}: {{ question.text }}</h3>
+            <p>
+              Đáp án của bạn:
+              <strong>{{ formatReviewAnswer(question.options, question.selectedAnswer) }}</strong>
+            </p>
+            <p v-if="!question.correct" class="correct-answer">
+              Đáp án đúng: <strong>{{ formatReviewAnswer(question.options, question.correctAnswer) }}</strong>
+            </p>
+          </div>
+        </article>
+      </div>
+
+      <div class="result-actions">
+        <button class="btn btn-secondary" @click="retakeQuiz">Thi lại</button>
+        <router-link :to="lessonId ? `/lesson/${lessonId}` : '/'" class="btn btn-primary">
+          {{ lessonId ? 'Quay lại bài học' : 'Về Trang chủ' }}
+        </router-link>
+      </div>
+    </div>
+
     <!-- Quiz Result Screen -->
     <div v-else class="quiz-result-card card animate-fade-in">
       <div class="result-celebration">
         <div class="result-badge-icon" :class="getResultColorClass()">
-          <svg v-if="quizResult && quizResult.percent >= 80" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="badge-icon"><path d="M12 2l3.09 6.26 6.91 1.01-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          <svg v-if="quizResult?.passed" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="badge-icon"><path d="M12 2l3.09 6.26 6.91 1.01-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
           <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="badge-icon"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         </div>
         
@@ -78,6 +123,7 @@
         <p class="result-score-desc">
           Bạn đạt <strong class="score-highlight">{{ quizResult?.score }} / {{ quizResult?.total }}</strong> câu trả lời đúng ({{ quizResult?.percent }}%)
         </p>
+        <p class="passing-note">Ngưỡng đạt: <strong>{{ quizResult?.passingScore ?? passingScore }}%</strong></p>
         <p class="time-spent-desc">Thời gian hoàn thành: <strong>{{ quizStore.formattedTime }}</strong></p>
       </div>
 
@@ -93,32 +139,14 @@
         </div>
       </div>
 
-      <!-- Review Questions Answers details -->
-      <div class="result-review-list">
-        <h3>CHI TIẾT BÀI LÀM</h3>
-        <div 
-          v-for="(q, idx) in quizStore.quizQuestions" 
-          :key="q.id" 
-          class="review-item"
-          :class="{ correct: selectedAnswers[q.id] === quizStore.correctAnswers[q.id], incorrect: selectedAnswers[q.id] !== quizStore.correctAnswers[q.id] }"
-        >
-          <div class="review-status">
-            <svg v-if="selectedAnswers[q.id] === quizStore.correctAnswers[q.id]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="status-icon"><polyline points="20 6 9 17 4 12"/></svg>
-            <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="status-icon"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </div>
-          <div class="review-content">
-            <p class="review-question"><strong>Câu {{ idx + 1 }}:</strong> {{ q.text }}</p>
-            <p class="review-answer">Đáp án của bạn: <span class="selected-ans">{{ q.options[selectedAnswers[q.id]] }}</span></p>
-            <p class="review-correct" v-if="selectedAnswers[q.id] !== quizStore.correctAnswers[q.id]">
-              Đáp án đúng: <span class="correct-ans">{{ q.options[quizStore.correctAnswers[q.id]] }}</span>
-            </p>
-          </div>
-        </div>
-      </div>
-
       <div class="result-actions">
-        <button class="btn btn-secondary" @click="retakeQuiz">Thi lại</button>
-        <router-link to="/" class="btn btn-primary">Về Trang chủ</router-link>
+        <button v-if="quizResult?.passed" class="btn btn-secondary" @click="showReview">
+          Xem lại chi tiết bài làm
+        </button>
+        <button v-else class="btn btn-secondary" @click="retakeQuiz">Thi lại</button>
+        <router-link :to="lessonId ? `/lesson/${lessonId}` : '/'" class="btn btn-primary">
+          {{ lessonId ? 'Quay lại bài học' : 'Về Trang chủ' }}
+        </router-link>
       </div>
     </div>
   </div>
@@ -131,7 +159,9 @@ import { useRoute, useRouter } from 'vue-router';
 import { useCourseStore } from '../stores/courseStore';
 import { useQuizStore } from '../stores/quizStore';
 import { useUserStore } from '../stores/userStore';
-import { Award, Shield, Medal } from 'lucide-vue-next';
+import { quizApi } from '../api/quizApi';
+import type { QuizReview } from '../api/quizApi';
+import { Award, CheckCircle2, Shield, Medal, XCircle } from 'lucide-vue-next';
 
 const props = defineProps({
   topicId: {
@@ -154,23 +184,35 @@ const currentQuestion = computed(() => quizStore.currentQuestion);
 const selectedAnswers = computed(() => quizStore.selectedAnswers);
 const quizResult = computed(() => quizStore.quizResult);
 const lessonId = computed(() => typeof route.query.lessonId === 'string' ? route.query.lessonId : undefined);
+const activeLesson = computed(() => topic.value?.lessons.find(item => item.id === lessonId.value));
+const passingScore = computed(() => activeLesson.value?.quizPassingScore ?? topic.value?.quizPassingScore ?? 80);
+const isReviewMode = ref(false);
+const review = ref<QuizReview | null>(null);
 
 const highScore = computed(() => {
-  return userStore.quizScores[props.topicId] || null;
+  if (lessonId.value) return userStore.lessonQuizScores[lessonId.value] ?? null;
+  return userStore.quizScores[props.topicId] ?? null;
+});
+const highScoreTotal = computed(() => {
+  if (lessonId.value) return userStore.lessonQuizTotals[lessonId.value] ?? totalQuestions.value;
+  return userStore.quizTotals[props.topicId] ?? totalQuestions.value;
 });
 
 // Capture recently unlocked badge if any
 const unlockedBadge = ref<any | null>(null);
 
 onMounted(async () => {
+  if (courseStore.topics.length === 0) {
+    await courseStore.fetchTopics();
+  }
   if (userStore.mandatoryTopics.length === 0) {
     await userStore.fetchProgress();
   }
-  startNewQuiz();
+  await openQuizOrReview();
 });
 
-watch(() => props.topicId, () => {
-  startNewQuiz();
+watch([() => props.topicId, lessonId], async () => {
+  await openQuizOrReview();
 });
 
 const startNewQuiz = () => {
@@ -179,8 +221,32 @@ const startNewQuiz = () => {
     router.push('/');
     return;
   }
+  isReviewMode.value = false;
+  review.value = null;
   unlockedBadge.value = null;
   quizStore.startQuiz(props.topicId, lessonId.value);
+};
+
+const openQuizOrReview = async () => {
+  const score = lessonId.value
+    ? userStore.lessonQuizScores[lessonId.value]
+    : userStore.quizScores[props.topicId];
+  const total = lessonId.value
+    ? userStore.lessonQuizTotals[lessonId.value]
+    : userStore.quizTotals[props.topicId];
+  const passed = score !== undefined && total > 0
+    && Math.round(score / total * 100) >= passingScore.value;
+  if (passed) {
+    try {
+      review.value = await quizApi.getQuizReview(props.topicId, lessonId.value);
+      isReviewMode.value = true;
+      quizStore.stopTimer();
+      return;
+    } catch (error) {
+      console.warn('Không thể tải dữ liệu xem lại, chuyển sang làm bài:', error);
+    }
+  }
+  startNewQuiz();
 };
 
 const selectOption = (questionId: number, optionIdx: number) => {
@@ -194,6 +260,21 @@ const isSelected = (questionId: number, optionIdx: number) => {
 const retakeQuiz = () => {
   startNewQuiz();
 };
+
+const showReview = async () => {
+  try {
+    review.value = await quizApi.getQuizReview(props.topicId, lessonId.value);
+    isReviewMode.value = true;
+  } catch (error) {
+    console.error('Không thể tải chi tiết bài làm:', error);
+    alert('Không thể tải chi tiết bài làm. Vui lòng thử lại.');
+  }
+};
+
+const formatReviewAnswer = (options: string[], answer?: number) =>
+  answer === undefined || answer === null
+    ? 'Không chọn đáp án'
+    : `${String.fromCharCode(65 + answer)}. ${options[answer] ?? ''}`;
 
 // Check for unlocked badge after quiz submit completes
 watch(() => quizStore.isQuizFinished, (finished) => {
@@ -221,7 +302,7 @@ const getResultColorClass = () => {
   if (!quizResult.value) return '';
   if (quizResult.value.percent === 100) return 'gold';
   if (quizResult.value.percent > 90) return 'silver';
-  if (quizResult.value.percent >= 80) return 'bronze';
+  if (quizResult.value.passed) return 'bronze';
   return 'fail';
 };
 
@@ -230,7 +311,7 @@ const getResultTitle = () => {
   const percent = quizResult.value.percent;
   if (percent === 100) return 'XUẤT SẮC - ĐẠT ĐIỂM TUYỆT ĐỐI!';
   if (percent > 90) return 'QUÁ TỐT - HOÀN THÀNH BÀI THI!';
-  if (percent >= 80) return 'CHÚC MỪNG - ĐÃ ĐẠT YÊU CẦU!';
+  if (quizResult.value.passed) return 'CHÚC MỪNG - ĐÃ ĐẠT YÊU CẦU!';
   return 'CHƯA ĐẠT - HÃY ÔN LUYỆN LẠI!';
 };
 
@@ -538,98 +619,6 @@ const getBadgeIcon = (icon: string) => {
   color: var(--text-muted);
 }
 
-/* Review questions list */
-.result-review-list {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  margin: 1rem 0;
-}
-
-.result-review-list h3 {
-  font-size: 1rem;
-  font-weight: 700;
-  border-bottom: 1.5px solid var(--border-color);
-  padding-bottom: 0.5rem;
-  color: var(--text-main);
-}
-
-.review-item {
-  display: flex;
-  gap: 1rem;
-  padding: 1.2rem;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
-}
-
-.review-item.correct {
-  background-color: #f0fdf4;
-  border-color: #bbf7d0;
-}
-
-.review-item.incorrect {
-  background-color: #fef2f2;
-  border-color: #fecaca;
-}
-
-.review-status {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-
-.correct .review-status {
-  background-color: #10b981;
-}
-
-.incorrect .review-status {
-  background-color: #ef4444;
-}
-
-.status-icon {
-  width: 14px;
-  height: 14px;
-}
-
-.review-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.review-question {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--text-main);
-}
-
-.review-answer, .review-correct {
-  font-size: 0.85rem;
-}
-
-.selected-ans {
-  font-weight: 600;
-}
-
-.correct .selected-ans {
-  color: #065f46;
-}
-
-.incorrect .selected-ans {
-  color: #991b1b;
-}
-
-.correct-ans {
-  color: #065f46;
-  font-weight: 600;
-}
-
 .result-actions {
   display: flex;
   gap: 1.5rem;
@@ -638,5 +627,26 @@ const getBadgeIcon = (icon: string) => {
 .result-actions button, .result-actions a {
   padding: 0.8rem 2rem;
   border-radius: var(--radius-full);
+}
+
+.review-card { gap: 1.25rem; }
+.review-heading { width: 100%; display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color); }
+.review-eyebrow { color: var(--primary-color); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.review-heading h2 { margin: .3rem 0; color: var(--text-main); }
+.review-heading p { color: var(--text-muted); }
+.review-passed-badge { flex: 0 0 auto; display: flex; align-items: center; gap: .35rem; padding: .5rem .75rem; border-radius: var(--radius-full); background: #e8f5ef; color: var(--primary-color); font-weight: 800; }
+.review-list { width: 100%; display: grid; gap: .75rem; }
+.review-question-card { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: .75rem; padding: 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); }
+.review-question-card.correct { background: #f0fdf4; border-color: #bbf7d0; }
+.review-question-card.incorrect { background: #fef2f2; border-color: #fecaca; }
+.review-question-status { color: #10b981; }
+.review-question-card.incorrect .review-question-status { color: #ef4444; }
+.review-question-card h3 { margin: 0 0 .55rem; font-size: .95rem; line-height: 1.45; }
+.review-question-card p { margin: .2rem 0; color: #52645d; font-size: .85rem; }
+.review-question-card .correct-answer { color: #067647; }
+
+@media (max-width: 600px) {
+  .review-heading { flex-direction: column; }
+  .review-passed-badge { align-self: flex-start; }
 }
 </style>

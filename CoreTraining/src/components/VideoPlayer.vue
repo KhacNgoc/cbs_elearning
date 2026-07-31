@@ -2,10 +2,6 @@
   <div class="video-container card">
     <div class="video-title-bar">
       <span class="video-filename">{{ title || 'CIF03_Quy trinh tao CIF KHTC.mp4' }}</span>
-      <button class="btn-open-browser" @click="openInBrowser">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-        Open in browser
-      </button>
     </div>
     
     <div class="video-player-wrapper">
@@ -67,10 +63,28 @@
           </div>
           
           <div class="right-ctrls">
-            <button class="ctrl-btn" @click="toggleMute">
+            <div class="volume-control">
+              <button
+                class="ctrl-btn"
+                :aria-label="isMuted ? 'Bật âm thanh' : 'Tắt âm thanh'"
+                @click="toggleMute"
+              >
               <svg v-if="isMuted" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="icon-svg"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
               <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="icon-svg"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-            </button>
+              </button>
+              <input
+                v-model.number="volume"
+                class="volume-slider"
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                aria-label="Âm lượng video"
+                :style="{ '--volume-progress': `${volume * 100}%` }"
+                @input="updateVolume"
+              />
+              <span class="volume-value">{{ Math.round(volume * 100) }}%</span>
+            </div>
             <button class="ctrl-btn" @click="toggleFullscreen">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-svg"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
             </button>
@@ -111,6 +125,7 @@ const isPlaying = ref(false);
 const currentTime = ref(0);
 const duration = ref(0);
 const isMuted = ref(false);
+const volume = ref(1);
 
 const youtubeVideoId = computed(() => {
   const value = props.videoUrl.trim();
@@ -178,7 +193,19 @@ const togglePlay = () => {
 
 const toggleMute = () => {
   if (!videoElement.value) return;
-  videoElement.value.muted = !videoElement.value.muted;
+  const shouldUnmute = videoElement.value.muted;
+  if (shouldUnmute && videoElement.value.volume === 0) {
+    videoElement.value.volume = 0.5;
+    volume.value = 0.5;
+  }
+  videoElement.value.muted = !shouldUnmute;
+  isMuted.value = videoElement.value.muted;
+};
+
+const updateVolume = () => {
+  if (!videoElement.value) return;
+  videoElement.value.volume = volume.value;
+  videoElement.value.muted = volume.value === 0;
   isMuted.value = videoElement.value.muted;
 };
 
@@ -198,6 +225,9 @@ const onTimeUpdate = () => {
 };
 
 const onLoadedMetadata = () => {
+  if (videoElement.value) {
+    volume.value = videoElement.value.volume;
+  }
   syncDuration();
 };
 
@@ -240,10 +270,6 @@ const formatTime = (timeInSeconds: number) => {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 };
 
-const openInBrowser = () => {
-  window.open(props.videoUrl, '_blank');
-};
-
 const openExternal = () => {
   window.open(props.videoUrl, '_blank');
 };
@@ -273,31 +299,6 @@ const openExternal = () => {
   font-size: 0.9rem;
   font-weight: 500;
   color: #ccc;
-}
-
-.btn-open-browser {
-  background-color: #333;
-  border: 1px solid #444;
-  color: #aaa;
-  padding: 0.25rem 0.75rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.8rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  transition: var(--transition);
-}
-
-.btn-open-browser:hover {
-  background-color: #444;
-  color: #fff;
-  border-color: #666;
-}
-
-.btn-icon {
-  width: 12px;
-  height: 12px;
 }
 
 .video-player-wrapper {
@@ -439,6 +440,51 @@ const openExternal = () => {
   height: 20px;
 }
 
+.volume-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.volume-slider {
+  width: 82px;
+  height: 4px;
+  border-radius: 999px;
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+  background: linear-gradient(
+    to right,
+    #ffffff var(--volume-progress),
+    rgba(255, 255, 255, 0.32) var(--volume-progress)
+  );
+}
+
+.volume-slider::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  appearance: none;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+.volume-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.volume-value {
+  min-width: 32px;
+  color: #d7dee8;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .time-display {
   font-size: 0.8rem;
   color: #ccc;
@@ -463,6 +509,8 @@ const openExternal = () => {
 
 @media (max-width: 600px) {
   .note-control span { display: none; }
+  .volume-value { display: none; }
+  .volume-slider { width: 58px; }
 }
 
 .video-footer-info {

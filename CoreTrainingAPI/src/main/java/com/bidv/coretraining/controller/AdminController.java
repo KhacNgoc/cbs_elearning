@@ -1,10 +1,8 @@
 package com.bidv.coretraining.controller;
 
-import com.bidv.coretraining.dto.LessonDto;
-import com.bidv.coretraining.dto.LessonDocumentDto;
-import com.bidv.coretraining.dto.QuestionDto;
-import com.bidv.coretraining.dto.TopicDto;
-import com.bidv.coretraining.dto.UserDto;
+import com.bidv.coretraining.dto.*;
+import com.bidv.coretraining.security.CustomUserDetails;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.bidv.coretraining.service.AdminService;
 import com.bidv.coretraining.service.DocumentStorageService;
 import com.bidv.coretraining.service.VideoStorageService;
@@ -73,6 +71,13 @@ public class AdminController {
         return ResponseEntity.noContent().build();
     }
 
+    @PutMapping("/topics/{topicId}/lessons/order")
+    public ResponseEntity<List<LessonDto>> reorderLessons(
+            @PathVariable String topicId,
+            @RequestBody List<String> lessonIds) {
+        return ResponseEntity.ok(adminService.reorderLessons(topicId, lessonIds));
+    }
+
     // Questions CRUD
     @PostMapping("/questions")
     public ResponseEntity<QuestionDto> createQuestion(@RequestBody QuestionDto questionDto) {
@@ -87,6 +92,18 @@ public class AdminController {
     @DeleteMapping("/questions/{id}")
     public ResponseEntity<Void> deleteQuestion(@PathVariable Long id) {
         adminService.deleteQuestion(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/quizzes/settings")
+    public ResponseEntity<QuizSettingsDto> updateQuizSettings(@RequestBody QuizSettingsDto settings) {
+        return ResponseEntity.ok(adminService.updateQuizSettings(settings));
+    }
+
+    @DeleteMapping("/quizzes")
+    public ResponseEntity<Void> deleteQuiz(@RequestParam String topicId,
+                                           @RequestParam(required = false) String lessonId) {
+        adminService.deleteQuiz(topicId, lessonId);
         return ResponseEntity.noContent().build();
     }
 
@@ -110,5 +127,22 @@ public class AdminController {
     public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
         adminService.deleteUser(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/enrollment-requests")
+    public ResponseEntity<List<EnrollmentRequestDto>> getEnrollmentRequests() {
+        return ResponseEntity.ok(adminService.getEnrollmentRequests());
+    }
+
+    @PutMapping("/enrollment-requests/{id}")
+    public ResponseEntity<EnrollmentRequestDto> reviewEnrollmentRequest(
+            @PathVariable Long id,
+            @RequestBody ReviewEnrollmentRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(
+                adminService.reviewEnrollmentRequest(
+                        id, request.isApprove(), request.getRejectionReason(),
+                        userDetails.getUsername())
+        );
     }
 }

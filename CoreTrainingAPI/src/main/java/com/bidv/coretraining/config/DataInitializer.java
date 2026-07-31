@@ -105,6 +105,7 @@ public class DataInitializer implements CommandLineRunner {
                 .id("CIF01")
                 .title("CIF01. Quy trình tạo CIF Khách hàng cá nhân")
                 .topic(cif)
+                .lessonOrder(0)
                 .hint("Menu: WebCSR -> Tìm kiếm khách hàng -> Thông tin khách hàng cá nhân")
                 .videoUrl("https://assets.mixkit.co/videos/preview/mixkit-startup-team-working-on-laptops-in-office-41553-large.mp4")
                 .build();
@@ -128,6 +129,7 @@ public class DataInitializer implements CommandLineRunner {
                 .id("CIF03")
                 .title("CIF03. Quy trình tạo CIF Khách hàng tổ chức")
                 .topic(cif)
+                .lessonOrder(1)
                 .hint("Menu: WebCSR -> Tìm kiếm khách hàng -> Thông tin khách hàng / Customer Information -> Tab Tín dụng/Tài chính -> Tab Hạn mức tín dụng khách hàng")
                 .videoUrl("https://assets.mixkit.co/videos/preview/mixkit-business-woman-using-a-tablet-at-the-office-41571-large.mp4")
                 .build();
@@ -158,7 +160,6 @@ public class DataInitializer implements CommandLineRunner {
 
         // Add Comments to CIF03
         Comment c2 = Comment.builder()
-                .id("c2")
                 .username("nguyenvanb")
                 .avatar("B")
                 .rating(4)
@@ -167,7 +168,6 @@ public class DataInitializer implements CommandLineRunner {
                 .lesson(cif03)
                 .build();
         Comment c3 = Comment.builder()
-                .id("c3")
                 .username("lethic")
                 .avatar("C")
                 .rating(5)
@@ -183,6 +183,7 @@ public class DataInitializer implements CommandLineRunner {
                 .id("LN01")
                 .title("LN01. Quy trình mở hồ sơ vay và phê duyệt tín dụng")
                 .topic(tienVay)
+                .lessonOrder(0)
                 .hint("Menu: WebCSR -> Tín dụng -> Khởi tạo hồ sơ cho vay")
                 .videoUrl("https://assets.mixkit.co/videos/preview/mixkit-startup-team-working-on-laptops-in-office-41553-large.mp4")
                 .build();
@@ -205,6 +206,7 @@ public class DataInitializer implements CommandLineRunner {
                 .id("LN02")
                 .title("LN02. Quy trình giải ngân khoản vay")
                 .topic(tienVay)
+                .lessonOrder(1)
                 .hint("Menu: WebCSR -> Tín dụng -> Giải ngân khoản vay")
                 .videoUrl("https://assets.mixkit.co/videos/preview/mixkit-executives-working-on-a-business-plan-41559-large.mp4")
                 .build();
@@ -228,6 +230,7 @@ public class DataInitializer implements CommandLineRunner {
                 .id("TR01")
                 .title("TR01. Quy trình chuyển tiền nhanh NAPAS 247")
                 .topic(chuyenTien)
+                .lessonOrder(0)
                 .hint("Menu: WebCSR -> Chuyển tiền -> Chuyển tiền nhanh Napas 247")
                 .videoUrl("https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-businessman-working-on-a-laptop-42289-large.mp4")
                 .build();
@@ -251,6 +254,7 @@ public class DataInitializer implements CommandLineRunner {
                 .id("DEP01")
                 .title("DEP01. Quy trình mở sổ tiết kiệm tại quầy")
                 .topic(tienGui)
+                .lessonOrder(0)
                 .hint("Menu: WebCSR -> Tiền gửi -> Mở tài khoản tiết kiệm có kỳ hạn")
                 .videoUrl("https://assets.mixkit.co/videos/preview/mixkit-business-people-meeting-around-a-table-41558-large.mp4")
                 .build();
@@ -274,6 +278,7 @@ public class DataInitializer implements CommandLineRunner {
                 .id("TEL01")
                 .title("TEL01. Quy trình quản lý quỹ đầu ngày và cuối ngày")
                 .topic(teller)
+                .lessonOrder(0)
                 .hint("Menu: WebCSR -> Teller -> Quản lý két tiền mặt")
                 .videoUrl("https://assets.mixkit.co/videos/preview/mixkit-business-team-in-a-meeting-working-41563-large.mp4")
                 .build();
@@ -297,6 +302,7 @@ public class DataInitializer implements CommandLineRunner {
                 .id("GL01")
                 .title("GL01. Quy trình hạch toán bút toán thủ công")
                 .topic(gl)
+                .lessonOrder(0)
                 .hint("Menu: WebCSR -> Sổ cái (GL) -> Tạo bút toán thủ công")
                 .videoUrl("https://assets.mixkit.co/videos/preview/mixkit-group-of-businesspeople-discussing-charts-41565-large.mp4")
                 .build();
@@ -320,6 +326,7 @@ public class DataInitializer implements CommandLineRunner {
                 .id("CARD01")
                 .title("CARD01. Quy trình phát hành thẻ ghi nợ nội địa")
                 .topic(the)
+                .lessonOrder(0)
                 .hint("Menu: WebCSR -> Thẻ -> Phát hành thẻ ghi nợ")
                 .videoUrl("https://assets.mixkit.co/videos/preview/mixkit-colleagues-discussing-data-on-a-monitor-41567-large.mp4")
                 .build();
