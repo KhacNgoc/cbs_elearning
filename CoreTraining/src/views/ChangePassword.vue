@@ -75,6 +75,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useUserStore } from '../stores/userStore';
+import { updateCachedAuthSession } from '../utils/authSession';
 import { courseApi } from '../api/courseApi';
 import router from '../router';
 
@@ -110,6 +111,7 @@ const handleChangePassword = async () => {
     // Update local storage and pinia store state
     localStorage.setItem('mustChangePassword', 'false');
     userStore.mustChangePassword = false;
+    updateCachedAuthSession({ mustChangePassword: false });
 
     successMessage.value = 'Đổi mật khẩu thành công! Hệ thống đang chuyển hướng...';
     

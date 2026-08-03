@@ -196,7 +196,10 @@ const currentLessonIndex = computed(
 const loadLessonData = async (lessonId: string) => {
   currentVideoTime.value = 0;
   videoNotes.value = [];
-  await courseStore.fetchLessonDetail(lessonId);
+  await Promise.all([
+    courseStore.fetchLessonDetail(lessonId),
+    loadVideoNotes(lessonId),
+  ]);
 
   // Guard check: topic accessibility
   if (topic.value && !userStore.isTopicAccessible(topic.value.id)) {
@@ -205,7 +208,6 @@ const loadLessonData = async (lessonId: string) => {
     return;
   }
 
-  if (lesson.value) await loadVideoNotes(lesson.value.id);
 };
 
 const selectInitialContent = (requestedDocument?: LessonDocument) => {
@@ -228,7 +230,8 @@ const selectInitialContent = (requestedDocument?: LessonDocument) => {
 const loadVideoNotes = async (lessonId: string) => {
   notesLoading.value = true;
   try {
-    videoNotes.value = await courseApi.getVideoNotes(lessonId);
+    const notes = await courseApi.getVideoNotes(lessonId);
+    if (courseStore.currentLessonId === lessonId) videoNotes.value = notes;
   } catch (error) {
     console.error("Failed to load video notes:", error);
     videoNotes.value = [];
@@ -238,12 +241,10 @@ const loadVideoNotes = async (lessonId: string) => {
 };
 
 onMounted(async () => {
-  if (userStore.mandatoryTopics.length === 0) {
-    await userStore.fetchProgress();
-  }
-  if (courseStore.topics.length === 0) {
-    await courseStore.fetchTopics();
-  }
+  await Promise.all([
+    userStore.mandatoryTopics.length === 0 ? userStore.fetchProgress() : Promise.resolve(),
+    courseStore.fetchTopics(),
+  ]);
   await loadLessonData(props.id);
   selectInitialContent();
   sidebarOpen.value = window.innerWidth > 900;

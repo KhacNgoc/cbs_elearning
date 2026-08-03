@@ -1358,6 +1358,10 @@ const pendingEnrollmentCount = computed(
       .length,
 );
 const questions = ref<Question[]>([]);
+
+type ToastVariant = "success" | "error" | "info" | "warning";
+const showToast = (message: string, variant: ToastVariant = "success") =>
+  window.dispatchEvent(new CustomEvent("app-toast", { detail: { message, variant } }));
 const ALL_TOPICS = "__ALL__";
 const selectedTopicId = ref(
   typeof route.params.topicId === "string" ? route.params.topicId : ALL_TOPICS,
@@ -1590,6 +1594,7 @@ const dropLessonAt = async (targetLessonId: string) => {
       topic.id,
       topic.lessons.map((lesson) => lesson.id),
     );
+    showToast("Đã lưu thứ tự bài học.");
   } catch (error) {
     topic.lessons = previousLessons;
     console.error("Failed to reorder lessons:", error);
@@ -1663,6 +1668,12 @@ watch(
       } catch (error) {
         console.error("Failed to refresh enrollment requests:", error);
       }
+    }
+    if (activeTab.value === "users" && users.value.length === 0) {
+      users.value = await adminApi.getAllUsers();
+    }
+    if (activeTab.value === "exams" && questions.value.length === 0) {
+      await loadQuestions();
     }
   },
 );
@@ -1954,30 +1965,30 @@ const confirmModalAction = async () => {
 // ==========================================
 // LOAD ALL DATA
 // ==========================================
+const loadQuestions = async () => {
+  const requests = courseStore.topics.flatMap((topic) => [
+    quizApi.getQuizQuestions(topic.id),
+    ...topic.lessons.map((lesson) => quizApi.getQuizQuestions(topic.id, lesson.id)),
+  ]);
+  const results = await Promise.allSettled(requests);
+  questions.value = results.flatMap((result) =>
+    result.status === "fulfilled" ? (result.value as unknown as Question[]) : [],
+  );
+};
+
 const loadAllData = async () => {
   loading.value = true;
   try {
     await courseStore.fetchTopics();
-    users.value = await adminApi.getAllUsers();
-    enrollmentRequests.value = await adminApi.getEnrollmentRequests();
-
-    const questionsList: Question[] = [];
-    for (const topic of courseStore.topics) {
-      try {
-        const qList = await quizApi.getQuizQuestions(topic.id);
-        questionsList.push(...(qList as unknown as Question[]));
-        for (const lesson of topic.lessons) {
-          const lessonQuestions = await quizApi.getQuizQuestions(
-            topic.id,
-            lesson.id,
-          );
-          questionsList.push(...(lessonQuestions as unknown as Question[]));
-        }
-      } catch (err) {
-        console.error(`Failed to load questions for ${topic.id}:`, err);
-      }
+    const tasks: Promise<unknown>[] = [];
+    if (["overview", "users"].includes(activeTab.value)) {
+      tasks.push(adminApi.getAllUsers().then((value) => (users.value = value)));
     }
-    questions.value = questionsList;
+    if (["overview", "enrollments"].includes(activeTab.value)) {
+      tasks.push(adminApi.getEnrollmentRequests().then((value) => (enrollmentRequests.value = value)));
+    }
+    if (["overview", "exams"].includes(activeTab.value)) tasks.push(loadQuestions());
+    await Promise.all(tasks);
 
     if (courseStore.topics.length > 0 && !selectedTopicId.value) {
       selectedTopicId.value = courseStore.topics[0].id;
@@ -2022,9 +2033,10 @@ const saveTopic = async () => {
       await adminApi.createTopic(topicForm.value as unknown as Topic);
     }
     topicModal.value.show = false;
-    await loadAllData();
+    await courseStore.fetchTopics(true);
+    showToast(topicModal.value.isEdit ? "Cập nhật chủ đề thành công." : "Tạo chủ đề thành công.");
   } catch (err) {
-    alert("Thao tác chủ đề thất bại!");
+    showToast("Không thể lưu chủ đề. Vui lòng thử lại.", "error");
     console.error(err);
   } finally {
     loading.value = false;
@@ -2131,9 +2143,10 @@ const saveUser = async () => {
       await adminApi.createUser(userForm.value as AdminUser);
     }
     userModal.value.show = false;
-    await loadAllData();
+    users.value = await adminApi.getAllUsers();
+    showToast(userModal.value.isEdit ? "Cập nhật học viên thành công." : "Tạo học viên thành công.");
   } catch (err) {
-    alert("Lưu người dùng thất bại!");
+    showToast("Không thể lưu học viên. Vui lòng thử lại.", "error");
     console.error(err);
   } finally {
     loading.value = false;
@@ -2344,9 +2357,10 @@ const saveLesson = async () => {
     }
 
     lessonModal.value.show = false;
-    await loadAllData();
+    await courseStore.fetchTopics(true);
+    showToast(lessonModal.value.isEdit ? "Cập nhật bài học thành công." : "Tạo bài học thành công.");
   } catch (err) {
-    alert("Lưu bài học thất bại!");
+    showToast("Không thể lưu bài học. Vui lòng kiểm tra dữ liệu và thử lại.", "error");
     console.error(err);
   } finally {
     loading.value = false;
@@ -2436,9 +2450,10 @@ const saveQuestion = async () => {
     }
 
     questionModal.value.show = false;
-    await loadAllData();
+    await loadQuestions();
+    showToast(questionModal.value.isEdit ? "Cập nhật câu hỏi thành công." : "Tạo câu hỏi thành công.");
   } catch (err) {
-    alert("Lưu câu hỏi trắc nghiệm thất bại!");
+    showToast("Không thể lưu câu hỏi trắc nghiệm.", "error");
     console.error(err);
   } finally {
     loading.value = false;

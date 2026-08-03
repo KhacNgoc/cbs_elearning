@@ -55,9 +55,10 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
 
     private String resolveToken(ServerHttpRequest request) {
         return request.getHeaders().getOrEmpty("Cookie").stream()
-                .flatMap(header -> java.net.HttpCookie.parse(header).stream())
-                .filter(cookie -> JwtCookieService.COOKIE_NAME.equals(cookie.getName()))
-                .map(java.net.HttpCookie::getValue)
+                .flatMap(header -> java.util.Arrays.stream(header.split(";")))
+                .map(String::trim)
+                .filter(cookie -> cookie.startsWith(JwtCookieService.COOKIE_NAME + "="))
+                .map(cookie -> cookie.substring(cookie.indexOf('=') + 1))
                 .findFirst()
                 .orElse(null);
     }

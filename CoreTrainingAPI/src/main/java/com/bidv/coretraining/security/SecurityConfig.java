@@ -97,8 +97,11 @@ public class SecurityConfig {
         // Allow dynamic development ports from application configuration
         configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("Content-Type", "X-Requested-With", "X-Correlation-Id", "accept", "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"));
-        configuration.setExposedHeaders(Arrays.asList("X-Correlation-Id"));
+        configuration.setAllowedHeaders(Arrays.asList(
+                "Content-Type", "X-Requested-With", "X-Correlation-Id", "Accept", "Origin", "Range",
+                "Access-Control-Request-Method", "Access-Control-Request-Headers"));
+        configuration.setExposedHeaders(Arrays.asList(
+                "X-Correlation-Id", "Accept-Ranges", "Content-Range", "Content-Length"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 

@@ -10,7 +10,7 @@ import AdminQuizDetail from '../views/AdminQuizDetail.vue';
 import AdminLayout from '../views/AdminLayout.vue';
 import Profile from '../views/Profile.vue';
 import { useNavigationStore } from '../stores/navigationStore';
-import { clearAuthSession } from '../utils/authSession';
+import { clearAuthSession, getCachedAuthSession, setCachedAuthSession } from '../utils/authSession';
 import { authApi } from '../api/authApi';
 
 const routes: Array<RouteRecordRaw> = [
@@ -103,15 +103,18 @@ router.beforeEach(async (to, _, next) => {
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
   const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin);
   const isMock = import.meta.env.VITE_USE_MOCK_API === 'true';
+  let session = getCachedAuthSession();
   let isAuthenticated = isMock
     ? !!localStorage.getItem('accessToken')
-    : false;
-  let role = localStorage.getItem('userRole') || '';
-  let mustChangePassword = localStorage.getItem('mustChangePassword') === 'true';
+    : !!session;
+  let role = session?.role || localStorage.getItem('userRole') || '';
+  let mustChangePassword = session?.mustChangePassword
+    ?? localStorage.getItem('mustChangePassword') === 'true';
 
-  if (!isMock && (requiresAuth || to.name === 'Login')) {
+  if (!isMock && !session && (requiresAuth || to.name === 'Login')) {
     try {
-      const session = await authApi.session();
+      session = await authApi.session();
+      setCachedAuthSession(session);
       localStorage.setItem('userRole', session.role);
       localStorage.setItem('username', session.username);
       localStorage.setItem('fullName', session.fullName);

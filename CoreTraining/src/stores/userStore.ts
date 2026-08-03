@@ -7,6 +7,9 @@ import { courseApi } from '../api/courseApi';
 import { userApi } from '../api/userApi';
 import router from '../router';
 import { isMockApi } from '../api/axiosClient';
+import { clearAuthSession, setCachedAuthSession } from '../utils/authSession';
+
+let progressRequest: Promise<void> | null = null;
 
 export const useUserStore = defineStore('user', {
   state: (): UserProgress & { isAuthenticated: boolean; role: string; username: string; fullName: string; mustChangePassword: boolean } => ({
@@ -82,6 +85,12 @@ export const useUserStore = defineStore('user', {
         this.username = res.username;
         this.fullName = res.fullName;
         this.mustChangePassword = res.mustChangePassword;
+        setCachedAuthSession({
+          role: res.role,
+          username: res.username,
+          fullName: res.fullName,
+          mustChangePassword: res.mustChangePassword,
+        });
         
         await this.fetchProgress();
         router.push(this.mustChangePassword ? '/change-password' : '/');
@@ -97,6 +106,7 @@ export const useUserStore = defineStore('user', {
       } catch (error) {
         console.error('Server logout failed:', error);
       }
+      clearAuthSession();
       localStorage.removeItem('accessToken');
       localStorage.removeItem('userRole');
       localStorage.removeItem('username');
@@ -126,7 +136,9 @@ export const useUserStore = defineStore('user', {
 
     async fetchProgress() {
       if (!this.isAuthenticated) return;
-      try {
+      if (progressRequest) return progressRequest;
+      progressRequest = (async () => {
+        try {
         const [progress, profile] = await Promise.all([
           courseApi.getMyProgress(),
           userApi.getMyProfile()
@@ -152,8 +164,14 @@ export const useUserStore = defineStore('user', {
 
         // Save progress to localstorage for mock caching if active
         localStorage.setItem('mockCompletedLessons', JSON.stringify(this.completedLessons));
-      } catch (error) {
-        console.error('Failed to fetch user progress:', error);
+        } catch (error) {
+          console.error('Failed to fetch user progress:', error);
+        }
+      })();
+      try {
+        await progressRequest;
+      } finally {
+        progressRequest = null;
       }
     },
 

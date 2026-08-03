@@ -110,6 +110,15 @@ public class VideoAccessService {
         }
     }
 
+    public Path authorizeStreamPath(String token) {
+        String fileName = authorizeStream(token);
+        Path video = videoDirectory.resolve(fileName).normalize();
+        if (!video.startsWith(videoDirectory) || !Files.isRegularFile(video)) {
+            throw new ResourceNotFoundException("Video", "fileName", fileName);
+        }
+        return video;
+    }
+
     private Lesson findLocalVideoLesson(String lessonId) {
         Lesson lesson = lessonRepository.findById(lessonId)
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));

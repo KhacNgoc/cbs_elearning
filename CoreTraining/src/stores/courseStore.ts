@@ -2,6 +2,9 @@ import { defineStore } from 'pinia';
 import type { Topic, Lesson } from '../types';
 import { courseApi } from '../api/courseApi';
 
+let topicsRequest: Promise<void> | null = null;
+let lessonRequestId = 0;
+
 export const useCourseStore = defineStore('course', {
   state: () => ({
     topics: [] as Topic[],
@@ -25,22 +28,26 @@ export const useCourseStore = defineStore('course', {
   },
 
   actions: {
-    async fetchTopics() {
+    async fetchTopics(force = false) {
+      if (this.topics.length > 0 && !force) return;
+      if (topicsRequest && !force) return topicsRequest;
       this.isLoading = true;
-      try {
+      topicsRequest = (async () => {
         this.topics = await courseApi.getAllTopics();
-      } catch (error) {
-        console.error('Failed to load topics:', error);
-      } finally {
-        this.isLoading = false;
-      }
+      })();
+      try { await topicsRequest; }
+      catch (error) { console.error('Failed to load topics:', error); }
+      finally { topicsRequest = null; this.isLoading = false; }
     },
 
     async fetchLessonDetail(lessonId: string) {
+      const requestId = ++lessonRequestId;
       this.isLoading = true;
       this.currentLessonId = lessonId;
       try {
-        this.currentLessonData = await courseApi.getLessonById(lessonId);
+        const lesson = await courseApi.getLessonById(lessonId);
+        if (requestId !== lessonRequestId) return;
+        this.currentLessonData = lesson;
         // Keep the topic outline in sync with the detailed lesson response.
         // The sidebar reads from `topics`, while the learning page reads from
         // `currentLessonData`; without this merge a newly-created quiz can
@@ -57,9 +64,9 @@ export const useCourseStore = defineStore('course', {
         }
       } catch (error) {
         console.error(`Failed to load lesson detail for ${lessonId}:`, error);
-        this.currentLessonData = null;
+        if (requestId === lessonRequestId) this.currentLessonData = null;
       } finally {
-        this.isLoading = false;
+        if (requestId === lessonRequestId) this.isLoading = false;
       }
     },
 
