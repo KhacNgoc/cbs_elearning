@@ -52,21 +52,39 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) throws Exception {
-        // Ensure system user is seeded even if database already has data from previous runs
-        if (!userRepository.existsByUsername("system")) {
-            UserGroup ksvGroup = userGroupRepository.findById("KSV").orElse(null);
-            userRepository.save(User.builder()
-                    .username("system")
-                    .password(passwordEncoder.encode("123@qwe"))
-                    .fullName("Hệ Thống")
-                    .avatarColor("#8B5CF6")
-                    .employeeId("SYSTEM")
-                    .email("system@bidv.com.vn")
-                    .role("ROLE_USER")
-                    .points(2000)
-                    .userGroup(ksvGroup)
-                    .build());
-        }
+        // Ensure core users exist even if database already has data from previous runs
+        saveUserIfNotExists(User.builder()
+                .username("admin")
+                .password(passwordEncoder.encode("admin123"))
+                .fullName("Quản trị hệ thống")
+                .avatarColor("#EF4444")
+                .employeeId("ADMIN")
+                .email("admin@bidv.com.vn")
+                .role("ROLE_ADMIN")
+                .points(0)
+                .build());
+
+        saveUserIfNotExists(User.builder()
+                .username("quantrh")
+                .password(passwordEncoder.encode("123456"))
+                .fullName("Quản Trị Hệ Thống (Bạn)")
+                .avatarColor("#005B41")
+                .employeeId("BIDV001")
+                .email("quantrh@bidv.com.vn")
+                .role("ROLE_USER")
+                .points(1850)
+                .build());
+
+        saveUserIfNotExists(User.builder()
+                .username("system")
+                .password(passwordEncoder.encode("123@qwe"))
+                .fullName("Hệ Thống")
+                .avatarColor("#8B5CF6")
+                .employeeId("SYSTEM")
+                .email("system@bidv.com.vn")
+                .role("ROLE_USER")
+                .points(2000)
+                .build());
 
         if (topicRepository.count() > 0) {
             return; // Data already initialized
@@ -453,7 +471,7 @@ public class DataInitializer implements CommandLineRunner {
 
 
         // 11. Create Users (with password encrypted)
-        User adminUser = userRepository.save(User.builder()
+        User adminUser = saveUserIfNotExists(User.builder()
                 .username("admin")
                 .password(passwordEncoder.encode("admin123"))
                 .fullName("Quản trị hệ thống")
@@ -464,7 +482,7 @@ public class DataInitializer implements CommandLineRunner {
                 .points(0)
                 .build());
 
-        User systemUser = userRepository.save(User.builder()
+        User systemUser = saveUserIfNotExists(User.builder()
                 .username("system")
                 .password(passwordEncoder.encode("123@qwe"))
                 .fullName("Hệ Thống")
@@ -476,7 +494,7 @@ public class DataInitializer implements CommandLineRunner {
                 .userGroup(ksvGroup)
                 .build());
 
-        User quantrh = userRepository.save(User.builder()
+        User quantrh = saveUserIfNotExists(User.builder()
                 .username("quantrh")
                 .password(passwordEncoder.encode("123456"))
                 .fullName("Quản Trị Hệ Thống (Bạn)")
@@ -488,7 +506,7 @@ public class DataInitializer implements CommandLineRunner {
                 .userGroup(gdvGroup)
                 .build());
 
-        User userA = userRepository.save(User.builder()
+        User userA = saveUserIfNotExists(User.builder()
                 .username("nguyenvana")
                 .password(passwordEncoder.encode("123456"))
                 .fullName("Nguyễn Văn An")
@@ -500,7 +518,7 @@ public class DataInitializer implements CommandLineRunner {
                 .userGroup(gdvGroup)
                 .build());
 
-        User userB = userRepository.save(User.builder()
+        User userB = saveUserIfNotExists(User.builder()
                 .username("tranb")
                 .password(passwordEncoder.encode("123456"))
                 .fullName("Trần Thị Bình")
@@ -512,7 +530,7 @@ public class DataInitializer implements CommandLineRunner {
                 .userGroup(qkhGroup)
                 .build());
 
-        User userC = userRepository.save(User.builder()
+        User userC = saveUserIfNotExists(User.builder()
                 .username("lephuc")
                 .password(passwordEncoder.encode("123456"))
                 .fullName("Lê Hoàng Phúc")
@@ -524,7 +542,7 @@ public class DataInitializer implements CommandLineRunner {
                 .userGroup(ksvGroup)
                 .build());
 
-        User userD = userRepository.save(User.builder()
+        User userD = saveUserIfNotExists(User.builder()
                 .username("phamduc")
                 .password(passwordEncoder.encode("123456"))
                 .fullName("Phạm Minh Đức")
@@ -536,7 +554,7 @@ public class DataInitializer implements CommandLineRunner {
                 .userGroup(gdvGroup)
                 .build());
 
-        User userE = userRepository.save(User.builder()
+        User userE = saveUserIfNotExists(User.builder()
                 .username("hoangyen")
                 .password(passwordEncoder.encode("123456"))
                 .fullName("Hoàng Kim Yến")
@@ -548,7 +566,7 @@ public class DataInitializer implements CommandLineRunner {
                 .userGroup(qkhGroup)
                 .build());
 
-        User userF = userRepository.save(User.builder()
+        User userF = saveUserIfNotExists(User.builder()
                 .username("vuongminh")
                 .password(passwordEncoder.encode("123456"))
                 .fullName("Vương Tuấn Minh")
@@ -643,5 +661,10 @@ public class DataInitializer implements CommandLineRunner {
                         .build());
             }
         }
+    }
+
+    private User saveUserIfNotExists(User user) {
+        return userRepository.findByUsername(user.getUsername())
+                .orElseGet(() -> userRepository.save(user));
     }
 }
