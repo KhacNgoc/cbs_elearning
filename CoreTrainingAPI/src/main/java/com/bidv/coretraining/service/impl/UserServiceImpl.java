@@ -34,13 +34,15 @@ public class UserServiceImpl implements UserService {
     private final UserMapper userMapper;
     private final TopicEnrollmentRequestRepository enrollmentRequestRepository;
     private final NotificationService notificationService;
+    private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
     public UserServiceImpl(UserRepository userRepository, LessonRepository lessonRepository,
                            QuestionRepository questionRepository,
                            com.bidv.coretraining.repository.TopicRepository topicRepository,
                            UserMapper userMapper,
                            TopicEnrollmentRequestRepository enrollmentRequestRepository,
-                           NotificationService notificationService) {
+                           NotificationService notificationService,
+                           org.springframework.security.crypto.password.PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.lessonRepository = lessonRepository;
         this.questionRepository = questionRepository;
@@ -48,6 +50,7 @@ public class UserServiceImpl implements UserService {
         this.userMapper = userMapper;
         this.enrollmentRequestRepository = enrollmentRequestRepository;
         this.notificationService = notificationService;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -190,6 +193,17 @@ public class UserServiceImpl implements UserService {
                 .mandatoryTopics(mandatoryTopics)
                 .registeredTopics(registeredTopics)
                 .pendingTopics(pendingTopics)
+                .mustChangePassword(user.isMustChangePassword())
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public void changePassword(String username, String newPassword) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
+        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setMustChangePassword(false);
+        userRepository.save(user);
     }
 }

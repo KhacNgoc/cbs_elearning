@@ -31,5 +31,8 @@ public interface AdminService {
     List<EnrollmentRequestDto> getEnrollmentRequests();
     EnrollmentRequestDto reviewEnrollmentRequest(
             Long id, boolean approve, String rejectionReason, String reviewedBy);
+    void importUsersFromExcel(org.springframework.web.multipart.MultipartFile file);
+    byte[] generateExcelTemplate();
+    List<com.bidv.coretraining.entity.UserGroup> getAllUserGroups();
 }
 

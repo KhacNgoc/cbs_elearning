@@ -1,4 +1,5 @@
 -- BIDV Core Training (WebCSR) - PostgreSQL Database Schema DDL
+CREATE DATABASE IF NOT EXISTS coretraining
 
 -- 1. Create topics table
 CREATE TABLE IF NOT EXISTS topics (
@@ -256,4 +257,13 @@ CREATE TABLE IF NOT EXISTS user_quiz_score_answers (
     PRIMARY KEY (quiz_score_id, question_id),
     CONSTRAINT fk_quiz_score_answers_score FOREIGN KEY (quiz_score_id) REFERENCES user_quiz_scores(id) ON DELETE CASCADE,
     CONSTRAINT fk_quiz_score_answers_question FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+);
+
+-- 17. Create password_reset_otps table
+CREATE TABLE IF NOT EXISTS password_reset_otps (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL UNIQUE,
+    otp_code VARCHAR(255) NOT NULL,
+    expiry_date TIMESTAMP NOT NULL,
+    CONSTRAINT fk_reset_otp_users FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );

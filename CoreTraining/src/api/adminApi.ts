@@ -23,6 +23,9 @@ export interface AdminUser {
   avatarColor: string;
   role: string;
   points: number;
+  userGroupId?: string;
+  employeeId?: string;
+  email?: string;
 }
 
 export interface EnrollmentRequest {
@@ -445,5 +448,31 @@ export const adminApi = {
       return;
     }
     await axiosClient.delete('/api/admin/quizzes', { params: { topicId, lessonId } });
+  },
+
+  async importUsersExcel(file: File): Promise<string> {
+    if (isMockApi()) {
+      await mockDelay(300);
+      return 'Mock Excel upload successful!';
+    }
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await axiosClient.post<string>('/api/admin/users/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+  },
+
+  async downloadUserTemplate(): Promise<Blob> {
+    if (isMockApi()) {
+      await mockDelay(300);
+      return new Blob(['Mock Excel Content'], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+    }
+    const response = await axiosClient.get<Blob>('/api/admin/users/template', {
+      responseType: 'blob'
+    });
+    return response.data;
   }
 };

@@ -4,10 +4,15 @@ import { mockTopics } from '../data/mockData';
 import { authApi } from '../api/authApi';
 import type { LoginRequest } from '../api/authApi';
 import { courseApi } from '../api/courseApi';
+import { userApi } from '../api/userApi';
 import router from '../router';
+import { isMockApi } from '../api/axiosClient';
+import { clearAuthSession, setCachedAuthSession } from '../utils/authSession';
+
+let progressRequest: Promise<void> | null = null;
 
 export const useUserStore = defineStore('user', {
-  state: (): UserProgress & { isAuthenticated: boolean; role: string; username: string; fullName: string } => ({
+  state: (): UserProgress & { isAuthenticated: boolean; role: string; username: string; fullName: string; mustChangePassword: boolean } => ({
     completedLessons: [],
     quizScores: {},
     quizTotals: {},
@@ -20,10 +25,11 @@ export const useUserStore = defineStore('user', {
     mandatoryTopics: [],
     registeredTopics: [],
     pendingTopics: [],
-    isAuthenticated: !!localStorage.getItem('accessToken'),
+    isAuthenticated: !!localStorage.getItem('username'),
     role: localStorage.getItem('userRole') || '',
     username: localStorage.getItem('username') || '',
-    fullName: localStorage.getItem('fullName') || ''
+    fullName: localStorage.getItem('fullName') || '',
+    mustChangePassword: localStorage.getItem('mustChangePassword') === 'true'
   }),
 
   getters: {
@@ -68,34 +74,50 @@ export const useUserStore = defineStore('user', {
     async login(credentials: LoginRequest) {
       try {
         const res = await authApi.login(credentials);
-        localStorage.setItem('accessToken', res.accessToken);
+        if (isMockApi() && res.accessToken) localStorage.setItem('accessToken', res.accessToken);
         localStorage.setItem('userRole', res.role);
         localStorage.setItem('username', res.username);
         localStorage.setItem('fullName', res.fullName);
+        localStorage.setItem('mustChangePassword', res.mustChangePassword ? 'true' : 'false');
         
         this.isAuthenticated = true;
         this.role = res.role;
         this.username = res.username;
         this.fullName = res.fullName;
+        this.mustChangePassword = res.mustChangePassword;
+        setCachedAuthSession({
+          role: res.role,
+          username: res.username,
+          fullName: res.fullName,
+          mustChangePassword: res.mustChangePassword,
+        });
         
         await this.fetchProgress();
-        router.push('/');
+        router.push(this.mustChangePassword ? '/change-password' : '/');
       } catch (error) {
         console.error('Login failed:', error);
         throw error;
       }
     },
 
-    logout() {
+    async logout() {
+      try {
+        await authApi.logout();
+      } catch (error) {
+        console.error('Server logout failed:', error);
+      }
+      clearAuthSession();
       localStorage.removeItem('accessToken');
       localStorage.removeItem('userRole');
       localStorage.removeItem('username');
       localStorage.removeItem('fullName');
+      localStorage.removeItem('mustChangePassword');
       
       this.isAuthenticated = false;
       this.role = '';
       this.username = '';
       this.fullName = '';
+      this.mustChangePassword = false;
       this.completedLessons = [];
       this.quizScores = {};
       this.quizTotals = {};
@@ -114,8 +136,14 @@ export const useUserStore = defineStore('user', {
 
     async fetchProgress() {
       if (!this.isAuthenticated) return;
-      try {
-        const progress = await courseApi.getMyProgress();
+      if (progressRequest) return progressRequest;
+      progressRequest = (async () => {
+        try {
+        const [progress, profile] = await Promise.all([
+          courseApi.getMyProgress(),
+          userApi.getMyProfile()
+        ]);
+        
         this.completedLessons = progress.completedLessons || [];
         this.quizScores = progress.quizScores || {};
         this.quizTotals = progress.quizTotals || {};
@@ -128,11 +156,22 @@ export const useUserStore = defineStore('user', {
         this.mandatoryTopics = progress.mandatoryTopics || [];
         this.registeredTopics = progress.registeredTopics || [];
         this.pendingTopics = progress.pendingTopics || [];
+        this.mustChangePassword = progress.mustChangePassword || false;
+        
+        this.fullName = profile.fullName || '';
+        localStorage.setItem('fullName', this.fullName);
+        localStorage.setItem('mustChangePassword', this.mustChangePassword ? 'true' : 'false');
 
         // Save progress to localstorage for mock caching if active
         localStorage.setItem('mockCompletedLessons', JSON.stringify(this.completedLessons));
-      } catch (error) {
-        console.error('Failed to fetch user progress:', error);
+        } catch (error) {
+          console.error('Failed to fetch user progress:', error);
+        }
+      })();
+      try {
+        await progressRequest;
+      } finally {
+        progressRequest = null;
       }
     },
 

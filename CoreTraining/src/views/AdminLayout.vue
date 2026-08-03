@@ -40,6 +40,8 @@ const navigationIcon = (name: string) => iconRegistry[name as keyof typeof iconR
 const activeSection = computed(() =>
   route.path.includes("/admin/quizzes")
     ? "admin.exams"
+    : route.name === "AdminTopicLessons" || route.path.startsWith("/admin/lessons")
+      ? "admin.lessons"
     : typeof route.query.tab === "string"
       ? `admin.${route.query.tab}`
       : "admin.overview",

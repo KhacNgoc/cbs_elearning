@@ -28,5 +28,6 @@ public class UserGroup {
         inverseJoinColumns = @JoinColumn(name = "topic_id")
     )
     @Builder.Default
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Set<Topic> mandatoryTopics = new HashSet<>();
 }

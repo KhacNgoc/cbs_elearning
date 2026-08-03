@@ -38,13 +38,10 @@ export class NotificationSocket {
 
   private connect() {
     if (this.stopped || !navigator.onLine || this.socket) return;
-    const token = localStorage.getItem('accessToken');
-    if (!token) return;
     const url = new URL(import.meta.env.VITE_API_URL || window.location.origin);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     url.pathname = '/ws/notifications';
     url.search = '';
-    url.searchParams.set('access_token', token);
 
     const socket = new WebSocket(url.toString());
     this.socket = socket;

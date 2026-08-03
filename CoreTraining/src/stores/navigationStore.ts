@@ -2,6 +2,8 @@ import { defineStore } from 'pinia';
 import { navigationApi } from '../api/navigationApi';
 import type { NavigationItem } from '../api/navigationApi';
 
+let navigationRequest: Promise<void> | null = null;
+
 export const useNavigationStore = defineStore('navigation', {
   state: () => ({
     items: [] as NavigationItem[],
@@ -15,8 +17,16 @@ export const useNavigationStore = defineStore('navigation', {
   actions: {
     async load(force = false) {
       if (this.loaded && !force) return;
-      this.items = await navigationApi.getMyNavigation();
-      this.loaded = true;
+      if (navigationRequest && !force) return navigationRequest;
+      navigationRequest = (async () => {
+        this.items = await navigationApi.getMyNavigation();
+        this.loaded = true;
+      })();
+      try {
+        await navigationRequest;
+      } finally {
+        navigationRequest = null;
+      }
     },
     clear() {
       this.items = [];

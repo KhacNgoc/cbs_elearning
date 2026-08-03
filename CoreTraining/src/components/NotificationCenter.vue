@@ -157,9 +157,15 @@ const handleSystemError = (event: Event) =>
     "error",
   );
 
+const handleAppToast = (event: Event) => {
+  const detail = (event as CustomEvent<{ message?: string; variant?: ToastVariant }>).detail;
+  if (detail?.message) showToast(detail.message, detail.variant || "info");
+};
+
 onMounted(async () => {
   document.addEventListener("click", closeOnOutside);
   window.addEventListener("system-error", handleSystemError);
+  window.addEventListener("app-toast", handleAppToast);
   try {
     notifications.value = await notificationApi.getNotifications();
   } catch {
@@ -175,6 +181,7 @@ onBeforeUnmount(() => {
   socket?.stop();
   document.removeEventListener("click", closeOnOutside);
   window.removeEventListener("system-error", handleSystemError);
+  window.removeEventListener("app-toast", handleAppToast);
   if (toastTimer) window.clearTimeout(toastTimer);
 });
 </script>

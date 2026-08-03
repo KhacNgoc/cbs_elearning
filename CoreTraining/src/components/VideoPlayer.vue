@@ -102,7 +102,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
+import { axiosClient } from '../api/axiosClient';
 
 const emit = defineEmits<{
   'time-update': [seconds: number];
@@ -110,6 +111,10 @@ const emit = defineEmits<{
 }>();
 
 const props = defineProps({
+  lessonId: {
+    type: String,
+    required: true
+  },
   videoUrl: {
     type: String,
     required: true
@@ -126,6 +131,7 @@ const currentTime = ref(0);
 const duration = ref(0);
 const isMuted = ref(false);
 const volume = ref(1);
+const authorizedStreamUrl = ref('');
 
 const youtubeVideoId = computed(() => {
   const value = props.videoUrl.trim();
@@ -153,9 +159,26 @@ const youtubeEmbedUrl = computed(() =>
 
 const resolvedVideoUrl = computed(() => {
   if (/^(https?:|blob:|data:)/i.test(props.videoUrl)) return props.videoUrl;
-  const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+  if (props.videoUrl.startsWith('/uploads/videos/')) return authorizedStreamUrl.value;
+  const apiBaseUrl = import.meta.env.VITE_API_URL || '';
   return `${apiBaseUrl}${props.videoUrl.startsWith('/') ? '' : '/'}${props.videoUrl}`;
 });
+
+const requestVideoAccess = async () => {
+  authorizedStreamUrl.value = '';
+  if (!props.videoUrl.startsWith('/uploads/videos/')) return;
+  const response = await axiosClient.get<{ streamUrl: string }>(
+    `/api/videos/access/${encodeURIComponent(props.lessonId)}`
+  );
+  const apiBaseUrl = import.meta.env.VITE_API_URL || '';
+  authorizedStreamUrl.value = `${apiBaseUrl}${response.data.streamUrl}`;
+};
+
+watch(
+  () => [props.lessonId, props.videoUrl],
+  () => void requestVideoAccess(),
+  { immediate: true }
+);
 
 const progressPercent = computed(() => {
   if (duration.value <= 0) return 0;
@@ -271,7 +294,7 @@ const formatTime = (timeInSeconds: number) => {
 };
 
 const openExternal = () => {
-  window.open(props.videoUrl, '_blank');
+  window.open(resolvedVideoUrl.value, '_blank');
 };
 </script>
 

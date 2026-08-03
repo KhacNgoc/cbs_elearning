@@ -13,7 +13,7 @@
         <PowerPointDocumentPreview v-else-if="selectedDocument.documentType === 'POWERPOINT'" :url="resolveDocumentUrl(selectedDocument.fileUrl)" :original-file-name="selectedDocument.originalFileName" />
         <WordDocumentPreview v-else :url="resolveDocumentUrl(selectedDocument.fileUrl)" :original-file-name="selectedDocument.originalFileName" />
       </div>
-      <VideoPlayer v-else-if="hasVideo" ref="videoPlayer" :video-url="lesson.videoUrl" :title="lesson.title"
+      <VideoPlayer v-else-if="hasVideo" ref="videoPlayer" :lesson-id="lesson.id" :video-url="lesson.videoUrl" :title="lesson.title"
         @time-update="$emit('time-update', $event)" @add-note="$emit('add-note', $event)" />
       <div v-else class="empty-lesson-media">
         <FileText :size="34" />

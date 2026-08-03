@@ -25,4 +25,5 @@ public class UserProgressDto {
     private List<String> mandatoryTopics;
     private List<String> registeredTopics;
     private List<String> pendingTopics;
+    private boolean mustChangePassword;
 }

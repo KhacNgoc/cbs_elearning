@@ -220,9 +220,18 @@
                   tập.
                 </p>
               </div>
-              <button class="btn btn-primary" @click="openUserModal()">
-                <Plus class="btn-icon" /> THÊM HỌC VIÊN
-              </button>
+              <div class="header-actions">
+                <button class="btn btn-secondary" @click="handleDownloadTemplate">
+                  <Download class="btn-icon" /> TẢI EXCEL MẪU
+                </button>
+                <button class="btn btn-secondary" @click="excelFileInput?.click()">
+                  <Upload class="btn-icon" /> NHẬP TỪ EXCEL
+                </button>
+                <input ref="excelFileInput" type="file" hidden accept=".xlsx,.xls" @change="handleExcelUpload" />
+                <button class="btn btn-primary" @click="openUserModal()">
+                  <Plus class="btn-icon" /> THÊM HỌC VIÊN
+                </button>
+              </div>
             </div>
 
             <!-- Filter Search -->
@@ -240,6 +249,9 @@
                 <tr>
                   <th>Học viên</th>
                   <th>Tên đăng nhập</th>
+                  <th>Mã NV</th>
+                  <th>Email</th>
+                  <th>Nhóm nghiệp vụ</th>
                   <th>Vai trò</th>
                   <th>Điểm số tích lũy</th>
                   <th class="actions-col">Thao tác</th>
@@ -263,6 +275,9 @@
                   <td>
                     <span class="code-badge">{{ u.username }}</span>
                   </td>
+                  <td>{{ u.employeeId || "-" }}</td>
+                  <td>{{ u.email || "-" }}</td>
+                  <td>{{ u.userGroupId || "-" }}</td>
                   <td>
                     <span
                       class="role-tag"
@@ -295,7 +310,7 @@
                   </td>
                 </tr>
                 <tr v-if="filteredUsers.length === 0">
-                  <td colspan="5" class="empty-row">
+                  <td colspan="8" class="empty-row">
                     Không tìm thấy thành viên phù hợp.
                   </td>
                 </tr>
@@ -800,20 +815,21 @@
             />
           </div>
           <div class="form-group">
-            <label>Màu đại diện Avatar Color (Hex code)</label>
-            <div class="color-picker-row">
-              <input
-                v-model="userForm.avatarColor"
-                type="color"
-                class="color-picker"
-              />
-              <input
-                v-model="userForm.avatarColor"
-                type="text"
-                class="form-control color-text"
-                required
-              />
-            </div>
+            <label>Mã nhân viên</label>
+            <input v-model="userForm.employeeId" type="text" class="form-control" required />
+          </div>
+          <div class="form-group">
+            <label>Email công vụ</label>
+            <input v-model="userForm.email" type="email" class="form-control" required />
+          </div>
+          <div class="form-group">
+            <label>Nhóm nghiệp vụ</label>
+            <select v-model="userForm.userGroupId" class="form-control">
+              <option value="">Không phân nhóm</option>
+              <option value="GDV">Giao dịch viên</option>
+              <option value="QHKH">Quan hệ khách hàng</option>
+              <option value="KSV">Kiểm soát viên</option>
+            </select>
           </div>
           <div class="form-group">
             <label>Vai trò hệ thống</label>
@@ -821,16 +837,6 @@
               <option value="ROLE_USER">Học viên (ROLE_USER)</option>
               <option value="ROLE_ADMIN">Quản trị viên (ROLE_ADMIN)</option>
             </select>
-          </div>
-          <div class="form-group">
-            <label>Điểm số tích lũy (PTS)</label>
-            <input
-              v-model.number="userForm.points"
-              type="number"
-              min="0"
-              class="form-control"
-              required
-            />
           </div>
           <div class="modal-buttons">
             <button
@@ -1247,6 +1253,7 @@ import {
   Trash2,
   FileText,
   Upload,
+  Download,
   Link2,
   X,
   Search,
@@ -1351,6 +1358,10 @@ const pendingEnrollmentCount = computed(
       .length,
 );
 const questions = ref<Question[]>([]);
+
+type ToastVariant = "success" | "error" | "info" | "warning";
+const showToast = (message: string, variant: ToastVariant = "success") =>
+  window.dispatchEvent(new CustomEvent("app-toast", { detail: { message, variant } }));
 const ALL_TOPICS = "__ALL__";
 const selectedTopicId = ref(
   typeof route.params.topicId === "string" ? route.params.topicId : ALL_TOPICS,
@@ -1397,6 +1408,9 @@ const userForm = ref({
   avatarColor: "#005B41",
   role: "ROLE_USER",
   points: 0,
+  userGroupId: "",
+  employeeId: "",
+  email: "",
 });
 
 const lessonModal = ref({ show: false, isEdit: false });
@@ -1580,6 +1594,7 @@ const dropLessonAt = async (targetLessonId: string) => {
       topic.id,
       topic.lessons.map((lesson) => lesson.id),
     );
+    showToast("Đã lưu thứ tự bài học.");
   } catch (error) {
     topic.lessons = previousLessons;
     console.error("Failed to reorder lessons:", error);
@@ -1653,6 +1668,12 @@ watch(
       } catch (error) {
         console.error("Failed to refresh enrollment requests:", error);
       }
+    }
+    if (activeTab.value === "users" && users.value.length === 0) {
+      users.value = await adminApi.getAllUsers();
+    }
+    if (activeTab.value === "exams" && questions.value.length === 0) {
+      await loadQuestions();
     }
   },
 );
@@ -1944,30 +1965,30 @@ const confirmModalAction = async () => {
 // ==========================================
 // LOAD ALL DATA
 // ==========================================
+const loadQuestions = async () => {
+  const requests = courseStore.topics.flatMap((topic) => [
+    quizApi.getQuizQuestions(topic.id),
+    ...topic.lessons.map((lesson) => quizApi.getQuizQuestions(topic.id, lesson.id)),
+  ]);
+  const results = await Promise.allSettled(requests);
+  questions.value = results.flatMap((result) =>
+    result.status === "fulfilled" ? (result.value as unknown as Question[]) : [],
+  );
+};
+
 const loadAllData = async () => {
   loading.value = true;
   try {
     await courseStore.fetchTopics();
-    users.value = await adminApi.getAllUsers();
-    enrollmentRequests.value = await adminApi.getEnrollmentRequests();
-
-    const questionsList: Question[] = [];
-    for (const topic of courseStore.topics) {
-      try {
-        const qList = await quizApi.getQuizQuestions(topic.id);
-        questionsList.push(...(qList as unknown as Question[]));
-        for (const lesson of topic.lessons) {
-          const lessonQuestions = await quizApi.getQuizQuestions(
-            topic.id,
-            lesson.id,
-          );
-          questionsList.push(...(lessonQuestions as unknown as Question[]));
-        }
-      } catch (err) {
-        console.error(`Failed to load questions for ${topic.id}:`, err);
-      }
+    const tasks: Promise<unknown>[] = [];
+    if (["overview", "users"].includes(activeTab.value)) {
+      tasks.push(adminApi.getAllUsers().then((value) => (users.value = value)));
     }
-    questions.value = questionsList;
+    if (["overview", "enrollments"].includes(activeTab.value)) {
+      tasks.push(adminApi.getEnrollmentRequests().then((value) => (enrollmentRequests.value = value)));
+    }
+    if (["overview", "exams"].includes(activeTab.value)) tasks.push(loadQuestions());
+    await Promise.all(tasks);
 
     if (courseStore.topics.length > 0 && !selectedTopicId.value) {
       selectedTopicId.value = courseStore.topics[0].id;
@@ -2012,9 +2033,10 @@ const saveTopic = async () => {
       await adminApi.createTopic(topicForm.value as unknown as Topic);
     }
     topicModal.value.show = false;
-    await loadAllData();
+    await courseStore.fetchTopics(true);
+    showToast(topicModal.value.isEdit ? "Cập nhật chủ đề thành công." : "Tạo chủ đề thành công.");
   } catch (err) {
-    alert("Thao tác chủ đề thất bại!");
+    showToast("Không thể lưu chủ đề. Vui lòng thử lại.", "error");
     console.error(err);
   } finally {
     loading.value = false;
@@ -2054,6 +2076,9 @@ const openUserModal = (user?: AdminUser) => {
       avatarColor: user.avatarColor || "#005B41",
       role: user.role,
       points: user.points,
+      userGroupId: user.userGroupId || "",
+      employeeId: user.employeeId || "",
+      email: user.email || "",
     };
   } else {
     userModal.value = { show: true, isEdit: false, editId: null };
@@ -2064,7 +2089,45 @@ const openUserModal = (user?: AdminUser) => {
       avatarColor: "#005B41",
       role: "ROLE_USER",
       points: 0,
+      userGroupId: "",
+      employeeId: "",
+      email: "",
     };
+  }
+};
+
+const excelFileInput = ref<HTMLInputElement | null>(null);
+
+const handleDownloadTemplate = async () => {
+  try {
+    const blob = await adminApi.downloadUserTemplate();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "mau-import-hoc-vien.xlsx";
+    link.click();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error(error);
+    alert("Không thể tải file Excel mẫu.");
+  }
+};
+
+const handleExcelUpload = async (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  loading.value = true;
+  try {
+    await adminApi.importUsersExcel(file);
+    await loadAllData();
+    alert("Nhập danh sách học viên thành công.");
+  } catch (error) {
+    console.error(error);
+    alert("Không thể nhập danh sách học viên.");
+  } finally {
+    loading.value = false;
+    input.value = "";
   }
 };
 
@@ -2080,9 +2143,10 @@ const saveUser = async () => {
       await adminApi.createUser(userForm.value as AdminUser);
     }
     userModal.value.show = false;
-    await loadAllData();
+    users.value = await adminApi.getAllUsers();
+    showToast(userModal.value.isEdit ? "Cập nhật học viên thành công." : "Tạo học viên thành công.");
   } catch (err) {
-    alert("Lưu người dùng thất bại!");
+    showToast("Không thể lưu học viên. Vui lòng thử lại.", "error");
     console.error(err);
   } finally {
     loading.value = false;
@@ -2293,9 +2357,10 @@ const saveLesson = async () => {
     }
 
     lessonModal.value.show = false;
-    await loadAllData();
+    await courseStore.fetchTopics(true);
+    showToast(lessonModal.value.isEdit ? "Cập nhật bài học thành công." : "Tạo bài học thành công.");
   } catch (err) {
-    alert("Lưu bài học thất bại!");
+    showToast("Không thể lưu bài học. Vui lòng kiểm tra dữ liệu và thử lại.", "error");
     console.error(err);
   } finally {
     loading.value = false;
@@ -2385,9 +2450,10 @@ const saveQuestion = async () => {
     }
 
     questionModal.value.show = false;
-    await loadAllData();
+    await loadQuestions();
+    showToast(questionModal.value.isEdit ? "Cập nhật câu hỏi thành công." : "Tạo câu hỏi thành công.");
   } catch (err) {
-    alert("Lưu câu hỏi trắc nghiệm thất bại!");
+    showToast("Không thể lưu câu hỏi trắc nghiệm.", "error");
     console.error(err);
   } finally {
     loading.value = false;
@@ -3104,11 +3170,14 @@ void handleDeleteQuestion;
   justify-content: center;
   z-index: 1000;
   padding: 1.25rem;
+  overflow-y: auto;
 }
 
 .modal-content {
   width: 100%;
   max-width: 480px;
+  max-height: calc(100vh - 2.5rem);
+  overflow-y: auto;
   padding: 2rem;
   background: white;
   border-radius: var(--radius-md);

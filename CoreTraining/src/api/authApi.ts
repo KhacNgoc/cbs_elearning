@@ -16,11 +16,12 @@ export interface RegisterRequest {
 }
 
 export interface LoginResponse {
-  accessToken: string;
-  tokenType: string;
+  accessToken?: string;
+  tokenType?: string;
   role: string;
   username: string;
   fullName: string;
+  mustChangePassword: boolean;
 }
 
 export const authApi = {
@@ -32,11 +33,21 @@ export const authApi = {
         tokenType: 'Bearer',
         role: 'ROLE_USER',
         username: data.username,
-        fullName: data.username === 'quantrh' ? 'Quản Trị Hệ Thống (Bạn)' : data.username
+        fullName: data.username === 'quantrh' ? 'Quản Trị Hệ Thống (Bạn)' : data.username,
+        mustChangePassword: false
       };
     }
     const response = await axiosClient.post<LoginResponse>('/api/auth/login', data);
     return response.data;
+  },
+
+  async session(): Promise<LoginResponse> {
+    const response = await axiosClient.get<LoginResponse>('/api/auth/session');
+    return response.data;
+  },
+
+  async logout(): Promise<void> {
+    if (!isMockApi()) await axiosClient.post('/api/auth/logout');
   },
 
   async register(data: RegisterRequest): Promise<string> {
@@ -45,6 +56,33 @@ export const authApi = {
       return 'User registered successfully';
     }
     const response = await axiosClient.post<string>('/api/auth/register', data);
+    return response.data;
+  },
+
+  async sendResetOtp(username: string, email: string): Promise<string> {
+    if (isMockApi()) {
+      await mockDelay(300);
+      return 'OTP sent successfully';
+    }
+    const response = await axiosClient.post<string>('/api/auth/forgot-password-otp', { username, email });
+    return response.data;
+  },
+
+  async resetPasswordWithOtp(username: string, otp: string, newPassword: string): Promise<string> {
+    if (isMockApi()) {
+      await mockDelay(300);
+      return 'Password reset successfully';
+    }
+    const response = await axiosClient.post<string>('/api/auth/reset-password-otp', { username, otp, newPassword });
+    return response.data;
+  },
+
+  async resetPasswordDirect(username: string, email: string, employeeId: string, newPassword: string): Promise<string> {
+    if (isMockApi()) {
+      await mockDelay(300);
+      return 'Đặt lại mật khẩu thành công!';
+    }
+    const response = await axiosClient.post<string>('/api/auth/reset-password-direct', { username, email, employeeId, newPassword });
     return response.data;
   }
 };

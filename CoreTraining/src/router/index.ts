@@ -10,6 +10,8 @@ import AdminQuizDetail from '../views/AdminQuizDetail.vue';
 import AdminLayout from '../views/AdminLayout.vue';
 import Profile from '../views/Profile.vue';
 import { useNavigationStore } from '../stores/navigationStore';
+import { clearAuthSession, getCachedAuthSession, setCachedAuthSession } from '../utils/authSession';
+import { authApi } from '../api/authApi';
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -48,6 +50,12 @@ const routes: Array<RouteRecordRaw> = [
     name: 'Profile',
     component: Profile,
     meta: { requiresAuth: true, pageKey: 'profile' }
+  },
+  {
+    path: '/change-password',
+    name: 'ChangePassword',
+    component: () => import('../views/ChangePassword.vue'),
+    meta: { requiresAuth: true }
   },
   {
     path: '/admin',
@@ -92,17 +100,41 @@ const router = createRouter({
 
 // Navigation Guard to protect routes
 router.beforeEach(async (to, _, next) => {
-  const token = localStorage.getItem('accessToken');
-  const role = localStorage.getItem('userRole') || '';
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
   const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin);
+  const isMock = import.meta.env.VITE_USE_MOCK_API === 'true';
+  let session = getCachedAuthSession();
+  let isAuthenticated = isMock
+    ? !!localStorage.getItem('accessToken')
+    : !!session;
+  let role = session?.role || localStorage.getItem('userRole') || '';
+  let mustChangePassword = session?.mustChangePassword
+    ?? localStorage.getItem('mustChangePassword') === 'true';
 
-  if (requiresAuth && !token) {
+  if (!isMock && !session && (requiresAuth || to.name === 'Login')) {
+    try {
+      session = await authApi.session();
+      setCachedAuthSession(session);
+      localStorage.setItem('userRole', session.role);
+      localStorage.setItem('username', session.username);
+      localStorage.setItem('fullName', session.fullName);
+      localStorage.setItem('mustChangePassword', session.mustChangePassword ? 'true' : 'false');
+      role = session.role;
+      mustChangePassword = session.mustChangePassword;
+      isAuthenticated = true;
+    } catch {
+      clearAuthSession();
+    }
+  }
+
+  if (requiresAuth && !isAuthenticated) {
     next('/login');
+  } else if (isAuthenticated && mustChangePassword && to.name !== 'ChangePassword') {
+    next('/change-password');
   } else if (requiresAdmin && role !== 'ROLE_ADMIN') {
     next('/');
-  } else if (to.name === 'Login' && token) {
-    next('/');
+  } else if (to.name === 'Login' && isAuthenticated) {
+    next(mustChangePassword ? '/change-password' : '/');
   } else {
     if (requiresAuth) {
       try {
