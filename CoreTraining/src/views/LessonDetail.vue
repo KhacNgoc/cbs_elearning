@@ -290,7 +290,7 @@ const downloadDocument = async (
   document: import("../types").LessonDocument,
 ) => {
   try {
-    const apiBaseUrl = import.meta.env.VITE_API_URL || "http://localhost:8080";
+    const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
     const url =
       /^https?:\/\//i.test(document.fileUrl) ||
       document.fileUrl.startsWith("blob:")
