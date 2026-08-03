@@ -557,4 +557,10 @@ public class AdminServiceImpl implements AdminService {
             throw new RuntimeException("Lỗi khi tạo file Excel mẫu: " + exception.getMessage(), exception);
         }
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserGroup> getAllUserGroups() {
+        return userGroupRepository.findAll();
+    }
 }
