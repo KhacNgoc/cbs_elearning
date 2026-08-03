@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { redirectToLogin } from '../utils/authSession';
 
 const baseURL = import.meta.env.VITE_API_URL || '';
 const CORRELATION_ID_HEADER = 'X-Correlation-Id';
@@ -10,6 +11,7 @@ const createCorrelationId = () =>
 
 export const axiosClient = axios.create({
   baseURL,
+  withCredentials: true,
   timeout: 15_000,
   headers: {
     'Content-Type': 'application/json',
@@ -19,10 +21,6 @@ export const axiosClient = axios.create({
 // Request interceptor to append JWT Token
 axiosClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('accessToken');
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
     if (config.headers) {
       config.headers[CORRELATION_ID_HEADER] = createCorrelationId();
     }
@@ -48,15 +46,10 @@ axiosClient.interceptors.response.use(
       code: error.code,
       traceId,
     });
-    if (error.response && error.response.status === 401) {
+    if (error.response?.status === 401) {
       const isLoginRequest = error.config && error.config.url && error.config.url.includes('/api/auth/login');
       if (!isLoginRequest) {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('userRole');
-        localStorage.removeItem('username');
-        localStorage.removeItem('fullName');
-        // Redirect to login if needed
-        window.location.href = '/login';
+        redirectToLogin();
       }
     }
     const isTimeout =

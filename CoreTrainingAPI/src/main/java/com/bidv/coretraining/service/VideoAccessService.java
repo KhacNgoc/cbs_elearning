@@ -59,11 +59,11 @@ public class VideoAccessService {
 
         Instant expiresAt = Instant.now().plusSeconds(accessDurationSeconds);
         String token = Jwts.builder()
-                .subject(username)
+                .setSubject(username)
                 .claim("lessonId", lessonId)
                 .claim("fileName", fileName)
-                .issuedAt(new Date())
-                .expiration(Date.from(expiresAt))
+                .setIssuedAt(new Date())
+                .setExpiration(Date.from(expiresAt))
                 .signWith(signingKey)
                 .compact();
 
@@ -89,11 +89,11 @@ public class VideoAccessService {
     @Transactional(readOnly = true)
     public String authorizeStream(String token) {
         try {
-            Claims claims = Jwts.parser()
-                    .verifyWith(signingKey)
+            Claims claims = Jwts.parserBuilder()
+                    .setSigningKey(signingKey)
                     .build()
-                    .parseSignedClaims(token)
-                    .getPayload();
+                    .parseClaimsJws(token)
+                    .getBody();
             String lessonId = claims.get("lessonId", String.class);
             String fileName = claims.get("fileName", String.class);
             Lesson lesson = findLocalVideoLesson(lessonId);

@@ -1,4 +1,5 @@
 -- BIDV Core Training (WebCSR) - PostgreSQL Database Schema DDL
+CREATE DATABASE IF NOT EXISTS coretraining
 
 -- 1. Create topics table
 CREATE TABLE IF NOT EXISTS topics (

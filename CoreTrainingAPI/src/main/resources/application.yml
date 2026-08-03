@@ -17,10 +17,12 @@ app:
   jwt:
     secret: 9a6ZpG8sV2xY5qB0wE1rT3yU4iO5pA6sD7fG8hJ9kL0zX1c2v3b4n5m6Q7wE8rT9yU0iO
     expiration-ms: 86400000 # 24 hours
+    cookie-secure: ${JWT_COOKIE_SECURE:false}
+    cookie-same-site: ${JWT_COOKIE_SAME_SITE:Lax}
   cors:
     allowed-origins: http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173
   data-initializer:
-    enabled: false
+    enabled: true
   storage:
     documents-directory: ${DOCUMENT_STORAGE_PATH:uploads/documents}
     videos-directory: ${VIDEO_STORAGE_PATH:uploads/videos}

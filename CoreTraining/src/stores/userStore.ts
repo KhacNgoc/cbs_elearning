@@ -5,6 +5,7 @@ import { authApi } from '../api/authApi';
 import type { LoginRequest } from '../api/authApi';
 import { courseApi } from '../api/courseApi';
 import router from '../router';
+import { isMockApi } from '../api/axiosClient';
 
 export const useUserStore = defineStore('user', {
   state: (): UserProgress & { isAuthenticated: boolean; role: string; username: string; fullName: string } => ({
@@ -20,7 +21,7 @@ export const useUserStore = defineStore('user', {
     mandatoryTopics: [],
     registeredTopics: [],
     pendingTopics: [],
-    isAuthenticated: !!localStorage.getItem('accessToken'),
+    isAuthenticated: !!localStorage.getItem('username'),
     role: localStorage.getItem('userRole') || '',
     username: localStorage.getItem('username') || '',
     fullName: localStorage.getItem('fullName') || ''
@@ -68,7 +69,7 @@ export const useUserStore = defineStore('user', {
     async login(credentials: LoginRequest) {
       try {
         const res = await authApi.login(credentials);
-        localStorage.setItem('accessToken', res.accessToken);
+        if (isMockApi() && res.accessToken) localStorage.setItem('accessToken', res.accessToken);
         localStorage.setItem('userRole', res.role);
         localStorage.setItem('username', res.username);
         localStorage.setItem('fullName', res.fullName);
@@ -86,7 +87,12 @@ export const useUserStore = defineStore('user', {
       }
     },
 
-    logout() {
+    async logout() {
+      try {
+        await authApi.logout();
+      } catch (error) {
+        console.error('Server logout failed:', error);
+      }
       localStorage.removeItem('accessToken');
       localStorage.removeItem('userRole');
       localStorage.removeItem('username');

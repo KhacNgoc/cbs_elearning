@@ -14,6 +14,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -27,13 +28,16 @@ public class SecurityConfig {
 
     private final JwtTokenProvider tokenProvider;
     private final UserDetailsServiceImpl userDetailsService;
+    private final JwtCookieService jwtCookieService;
 
     @org.springframework.beans.factory.annotation.Value("${app.cors.allowed-origins}")
     private java.util.List<String> allowedOrigins;
 
-    public SecurityConfig(JwtTokenProvider tokenProvider, UserDetailsServiceImpl userDetailsService) {
+    public SecurityConfig(JwtTokenProvider tokenProvider, UserDetailsServiceImpl userDetailsService,
+                          JwtCookieService jwtCookieService) {
         this.tokenProvider = tokenProvider;
         this.userDetailsService = userDetailsService;
+        this.jwtCookieService = jwtCookieService;
     }
 
     @Bean
@@ -48,7 +52,8 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        JwtAuthenticationFilter jwtAuthenticationFilter = new JwtAuthenticationFilter(tokenProvider, userDetailsService);
+        JwtAuthenticationFilter jwtAuthenticationFilter = new JwtAuthenticationFilter(
+                tokenProvider, userDetailsService, jwtCookieService);
         RequestLoggingFilter requestLoggingFilter = new RequestLoggingFilter();
 
         http.headers(headers -> headers
@@ -59,7 +64,12 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .exceptionHandling(exceptions -> exceptions
+                .authenticationEntryPoint((request, response, exception) ->
+                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized"))
+            )
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/auth/session").authenticated()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/ws/**").permitAll()
                 .requestMatchers("/api/videos/stream").permitAll()
@@ -87,8 +97,8 @@ public class SecurityConfig {
         // Allow dynamic development ports from application configuration
         configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "X-Requested-With", "X-Correlation-Id", "accept", "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"));
-        configuration.setExposedHeaders(Arrays.asList("Authorization", "X-Correlation-Id"));
+        configuration.setAllowedHeaders(Arrays.asList("Content-Type", "X-Requested-With", "X-Correlation-Id", "accept", "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"));
+        configuration.setExposedHeaders(Arrays.asList("X-Correlation-Id"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 

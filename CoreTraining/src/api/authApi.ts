@@ -16,8 +16,8 @@ export interface RegisterRequest {
 }
 
 export interface LoginResponse {
-  accessToken: string;
-  tokenType: string;
+  accessToken?: string;
+  tokenType?: string;
   role: string;
   username: string;
   fullName: string;
@@ -37,6 +37,15 @@ export const authApi = {
     }
     const response = await axiosClient.post<LoginResponse>('/api/auth/login', data);
     return response.data;
+  },
+
+  async session(): Promise<LoginResponse> {
+    const response = await axiosClient.get<LoginResponse>('/api/auth/session');
+    return response.data;
+  },
+
+  async logout(): Promise<void> {
+    if (!isMockApi()) await axiosClient.post('/api/auth/logout');
   },
 
   async register(data: RegisterRequest): Promise<string> {

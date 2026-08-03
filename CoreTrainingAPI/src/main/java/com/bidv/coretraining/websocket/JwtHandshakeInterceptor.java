@@ -1,6 +1,7 @@
 package com.bidv.coretraining.websocket;
 
 import com.bidv.coretraining.security.JwtTokenProvider;
+import com.bidv.coretraining.security.JwtCookieService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.ServerHttpRequest;
@@ -9,7 +10,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.HandshakeInterceptor;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.Map;
 
@@ -17,8 +17,6 @@ import java.util.Map;
 @Slf4j
 public class JwtHandshakeInterceptor implements HandshakeInterceptor {
     public static final String USERNAME_ATTRIBUTE = "username";
-    private static final String ACCESS_TOKEN_PARAMETER = "access_token";
-
     private final JwtTokenProvider tokenProvider;
 
     public JwtHandshakeInterceptor(JwtTokenProvider tokenProvider) {
@@ -56,14 +54,11 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
     }
 
     private String resolveToken(ServerHttpRequest request) {
-        String authorization = request.getHeaders().getFirst("Authorization");
-        if (StringUtils.hasText(authorization) && authorization.startsWith("Bearer ")) {
-            return authorization.substring(7);
-        }
-
-        return UriComponentsBuilder.fromUri(request.getURI())
-                .build()
-                .getQueryParams()
-                .getFirst(ACCESS_TOKEN_PARAMETER);
+        return request.getHeaders().getOrEmpty("Cookie").stream()
+                .flatMap(header -> java.net.HttpCookie.parse(header).stream())
+                .filter(cookie -> JwtCookieService.COOKIE_NAME.equals(cookie.getName()))
+                .map(java.net.HttpCookie::getValue)
+                .findFirst()
+                .orElse(null);
     }
 }

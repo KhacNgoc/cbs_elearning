@@ -10,6 +10,8 @@ import AdminQuizDetail from '../views/AdminQuizDetail.vue';
 import AdminLayout from '../views/AdminLayout.vue';
 import Profile from '../views/Profile.vue';
 import { useNavigationStore } from '../stores/navigationStore';
+import { clearAuthSession } from '../utils/authSession';
+import { authApi } from '../api/authApi';
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -92,16 +94,32 @@ const router = createRouter({
 
 // Navigation Guard to protect routes
 router.beforeEach(async (to, _, next) => {
-  const token = localStorage.getItem('accessToken');
-  const role = localStorage.getItem('userRole') || '';
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
   const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin);
+  const isMock = import.meta.env.VITE_USE_MOCK_API === 'true';
+  let isAuthenticated = isMock
+    ? !!localStorage.getItem('accessToken')
+    : false;
+  let role = localStorage.getItem('userRole') || '';
 
-  if (requiresAuth && !token) {
+  if (!isMock && (requiresAuth || to.name === 'Login')) {
+    try {
+      const session = await authApi.session();
+      localStorage.setItem('userRole', session.role);
+      localStorage.setItem('username', session.username);
+      localStorage.setItem('fullName', session.fullName);
+      role = session.role;
+      isAuthenticated = true;
+    } catch {
+      clearAuthSession();
+    }
+  }
+
+  if (requiresAuth && !isAuthenticated) {
     next('/login');
   } else if (requiresAdmin && role !== 'ROLE_ADMIN') {
     next('/');
-  } else if (to.name === 'Login' && token) {
+  } else if (to.name === 'Login' && isAuthenticated) {
     next('/');
   } else {
     if (requiresAuth) {

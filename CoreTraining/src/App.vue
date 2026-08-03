@@ -55,9 +55,9 @@ const userAvatarLetter = computed(() => {
   return (userStore.fullName || userStore.username || 'Q').charAt(0).toUpperCase();
 });
 
-const handleLogout = () => {
+const handleLogout = async () => {
   navigationStore.clear();
-  userStore.logout();
+  await userStore.logout();
 };
 
 onMounted(async () => {
