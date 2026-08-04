@@ -111,6 +111,31 @@ CREATE TABLE IF NOT EXISTS lesson_progress (
     CONSTRAINT fk_lesson_progress_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS rag_chat_messages (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    topic_id VARCHAR(255) NOT NULL,
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    grounded BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_rag_chat_message_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_rag_chat_message_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS rag_chat_sources (
+    id BIGSERIAL PRIMARY KEY,
+    message_id BIGINT NOT NULL,
+    document_id VARCHAR(255) NOT NULL,
+    document_name VARCHAR(255) NOT NULL,
+    page INTEGER NOT NULL,
+    section VARCHAR(255) NOT NULL,
+    CONSTRAINT fk_rag_chat_source_message FOREIGN KEY (message_id) REFERENCES rag_chat_messages(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_rag_chat_history
+    ON rag_chat_messages (user_id, topic_id, created_at);
+
 -- 9. Create procedure_sections table
 CREATE TABLE IF NOT EXISTS procedure_sections (
     id BIGSERIAL PRIMARY KEY,

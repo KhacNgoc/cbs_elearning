@@ -47,39 +47,83 @@
         </div>
 
         <template v-else>
-          <div class="chat-body">
+          <div class="chat-course-filter">
+            <label for="chat-course">Khóa học</label>
+            <select id="chat-course" v-model="selectedCourseId" :disabled="sending" @change="loadHistory">
+              <option v-for="topic in accessibleTopics" :key="topic.id" :value="topic.id">
+                {{ topic.name }}
+              </option>
+            </select>
+          </div>
+
+          <div ref="chatBody" class="chat-body">
             <div class="chat-date">Hôm nay</div>
-            <div class="assistant-message">
+            <div v-if="loadingHistory" class="chat-loading">Đang tải lịch sử trao đổi...</div>
+            <div v-else-if="messages.length === 0" class="assistant-message">
               <span class="message-avatar"><Bot :size="17" /></span>
               <div>
                 <p>
-                  Xin chào! Mình có thể giúp bạn giải thích nội dung trong bài
-                  học này.
+                  Xin chào! Tôi chỉ trả lời dựa trên tài liệu đã được index của
+                  khóa học đang chọn.
                 </p>
                 <span>Trợ lý học tập · Bây giờ</span>
               </div>
             </div>
-            <div class="quick-prompts" aria-label="Câu hỏi gợi ý">
-              <button type="button">Tóm tắt bài học này</button>
-              <button type="button">Giải thích nội dung chính</button>
-              <button type="button">Cho tôi một ví dụ dễ hiểu</button>
+
+            <article v-for="message in messages" :key="message.id" class="chat-exchange">
+              <div class="user-message"><p>{{ message.question }}</p></div>
+              <div class="assistant-message">
+                <span class="message-avatar"><Bot :size="17" /></span>
+                <div class="assistant-answer">
+                  <p>{{ message.answer }}</p>
+                  <span class="grounding-state" :class="{ grounded: message.grounded }">
+                    {{ message.grounded ? 'Có nguồn tài liệu' : 'Không tìm thấy trong tài liệu' }}
+                  </span>
+                  <ul v-if="message.sources.length" class="chat-sources">
+                    <li v-for="source in message.sources" :key="`${message.id}-${source.documentId}-${source.page}-${source.section}`">
+                      <FileText :size="13" />
+                      <span><strong>{{ source.documentName }}</strong> · Trang {{ source.page }} · {{ source.section }}</span>
+                    </li>
+                  </ul>
+                  <small>{{ formatTime(message.createdAt) }}</small>
+                </div>
+              </div>
+            </article>
+
+            <template v-if="pendingQuestion">
+              <div class="user-message"><p>{{ pendingQuestion }}</p></div>
+              <div class="assistant-message chat-thinking">
+                <span class="message-avatar"><Bot :size="17" /></span>
+                <p><LoaderCircle :size="15" /> Đang tìm trong tài liệu khóa học...</p>
+              </div>
+            </template>
+
+            <p v-if="chatError" class="chat-error">{{ chatError }}</p>
+
+            <div v-if="messages.length === 0 && !loadingHistory" class="quick-prompts" aria-label="Câu hỏi gợi ý">
+              <button v-for="prompt in quickPrompts" :key="prompt" type="button" @click="askPrompt(prompt)">
+                {{ prompt }}
+              </button>
             </div>
           </div>
 
-          <form class="chat-composer" @submit.prevent>
+          <form class="chat-composer" @submit.prevent="sendQuestion">
             <label class="sr-only" for="learning-chat-input">
               Nhập câu hỏi về bài học
             </label>
             <textarea
               id="learning-chat-input"
+              v-model="question"
               rows="1"
               placeholder="Hỏi về nội dung bài học..."
+              :disabled="sending || !selectedCourseId"
+              @keydown.enter.exact.prevent="sendQuestion"
             ></textarea>
-            <button type="submit" aria-label="Gửi câu hỏi">
+            <button type="submit" aria-label="Gửi câu hỏi" :disabled="sending || !question.trim() || !selectedCourseId">
               <SendHorizontal :size="19" />
             </button>
             <p>
-              <Sparkles :size="13" /> Nội dung trả lời chỉ mang tính tham khảo
+              <Sparkles :size="13" /> Chỉ trả lời từ tài liệu của khóa học đã chọn
             </p>
           </form>
         </template>
@@ -104,9 +148,16 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
+import { useCourseStore } from "../stores/courseStore";
+import { useUserStore } from "../stores/userStore";
+import { ragApi } from "../api/ragApi";
+import type { RagChatHistory } from "../api/ragApi";
 import {
   Bot,
+  FileText,
+  LoaderCircle,
   LockKeyhole,
   MessageCircleMore,
   SendHorizontal,
@@ -116,14 +167,112 @@ import {
 } from "lucide-vue-next";
 
 const props = defineProps<{ locked: boolean }>();
+const route = useRoute();
+const courseStore = useCourseStore();
+const userStore = useUserStore();
 const open = ref(false);
 const showLauncher = ref(true);
 const chatbotElement = ref<HTMLElement | null>(null);
 const dragging = ref(false);
 const position = ref({ x: 0, y: 0 });
 const launcherPosition = ref({ x: 0, y: 0 });
+const chatBody = ref<HTMLElement | null>(null);
+const selectedCourseId = ref("");
+const messages = ref<RagChatHistory[]>([]);
+const question = ref("");
+const pendingQuestion = ref("");
+const sending = ref(false);
+const loadingHistory = ref(false);
+const chatError = ref("");
+const quickPrompts = [
+  "Tóm tắt nội dung chính của khóa học",
+  "Các bước nghiệp vụ quan trọng là gì?",
+  "Những điều kiện nào cần lưu ý?",
+];
 const dragOffset = { x: 0, y: 0 };
 let movedDuringDrag = false;
+
+const accessibleTopics = computed(() =>
+  courseStore.topics.filter(topic => userStore.isTopicAccessible(topic.id)),
+);
+
+const scrollToLatest = async () => {
+  await nextTick();
+  if (chatBody.value) chatBody.value.scrollTop = chatBody.value.scrollHeight;
+};
+
+const selectCourseFromContext = () => {
+  const contextualCourseId = route.name === "LessonDetail"
+    ? courseStore.currentTopic?.id
+    : undefined;
+  const nextCourseId = contextualCourseId && accessibleTopics.value.some(topic => topic.id === contextualCourseId)
+    ? contextualCourseId
+    : accessibleTopics.value.some(topic => topic.id === selectedCourseId.value)
+      ? selectedCourseId.value
+      : accessibleTopics.value[0]?.id || "";
+  const changed = nextCourseId !== selectedCourseId.value;
+  selectedCourseId.value = nextCourseId;
+  if (changed) messages.value = [];
+  return changed;
+};
+
+const loadHistory = async () => {
+  if (!selectedCourseId.value) {
+    messages.value = [];
+    return;
+  }
+  loadingHistory.value = true;
+  chatError.value = "";
+  try {
+    messages.value = await ragApi.getHistory(selectedCourseId.value);
+    await scrollToLatest();
+  } catch (error) {
+    console.error("Failed to load chat history:", error);
+    chatError.value = "Không thể tải lịch sử trợ lý.";
+  } finally {
+    loadingHistory.value = false;
+  }
+};
+
+const sendQuestion = async () => {
+  const content = question.value.trim();
+  if (!content || !selectedCourseId.value || sending.value) return;
+  sending.value = true;
+  chatError.value = "";
+  pendingQuestion.value = content;
+  question.value = "";
+  await scrollToLatest();
+  try {
+    const response = await ragApi.chat(content, selectedCourseId.value);
+    messages.value.push({
+      id: Date.now(),
+      courseId: selectedCourseId.value,
+      question: content,
+      answer: response.answer,
+      grounded: response.grounded,
+      sources: response.sources,
+      createdAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Failed to ask learning assistant:", error);
+    question.value = content;
+    chatError.value = "Không thể kết nối tới trợ lý học tập. Vui lòng thử lại.";
+  } finally {
+    pendingQuestion.value = "";
+    sending.value = false;
+    await scrollToLatest();
+  }
+};
+
+const askPrompt = (prompt: string) => {
+  question.value = prompt;
+  void sendQuestion();
+};
+
+const formatTime = (value: string) => new Intl.DateTimeFormat("vi-VN", {
+  hour: "2-digit",
+  minute: "2-digit",
+}).format(new Date(value));
 
 const clampPosition = () => {
   const element = chatbotElement.value;
@@ -185,6 +334,8 @@ const toggleChat = async () => {
   open.value = true;
   await nextTick();
   await placeAtBottomRight();
+  selectCourseFromContext();
+  await loadHistory();
 };
 
 const closeChat = () => {
@@ -217,6 +368,15 @@ watch(
     open.value = false;
     showLauncher.value = true;
   },
+);
+
+watch(
+  () => [route.name, courseStore.currentTopic?.id, accessibleTopics.value.map(topic => topic.id).join(",")],
+  () => {
+    const changed = selectCourseFromContext();
+    if (open.value && changed) void loadHistory();
+  },
+  { immediate: true },
 );
 
 onMounted(() => {
@@ -379,6 +539,32 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.12);
 }
 
+.chat-course-filter {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+.chat-course-filter label {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.chat-course-filter select {
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.78rem;
+}
+
 .chat-body {
   flex: 1;
   overflow-y: auto;
@@ -408,6 +594,34 @@ onBeforeUnmount(() => {
   gap: 9px;
 }
 
+.chat-exchange {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.user-message {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 10px 42px;
+}
+
+.user-message p {
+  margin: 0;
+  padding: 10px 13px;
+  border-radius: 15px 5px 15px 15px;
+  background: #006747;
+  color: #fff;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.assistant-answer {
+  min-width: 0;
+  flex: 1;
+}
+
 .message-avatar {
   width: 32px;
   height: 32px;
@@ -432,6 +646,86 @@ onBeforeUnmount(() => {
   font-size: 0.68rem;
 }
 
+.assistant-answer > small {
+  display: block;
+  margin-top: 5px;
+  color: #94a3b8;
+  font-size: 0.68rem;
+}
+
+.assistant-answer .grounding-state {
+  display: inline-flex;
+  margin: 1px 0 7px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.assistant-answer .grounding-state.grounded {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.chat-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-sources li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 7px 8px;
+  border: 1px solid #dbe7e2;
+  border-radius: 8px;
+  background: #f7faf9;
+  color: #475569;
+}
+
+.chat-sources li > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: #006747;
+}
+
+.chat-sources li span {
+  color: #475569;
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.chat-thinking p {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.chat-thinking svg {
+  animation: chat-spin 0.9s linear infinite;
+}
+
+.chat-loading,
+.chat-error {
+  margin: 12px 0;
+  color: #64748b;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.chat-error {
+  padding: 8px;
+  border-radius: 8px;
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
 .quick-prompts {
   display: flex;
   flex-direction: column;
@@ -448,7 +742,7 @@ onBeforeUnmount(() => {
   color: #006747;
   font-size: 0.78rem;
   font-weight: 600;
-  cursor: default;
+  cursor: pointer;
 }
 
 .chat-composer {
@@ -485,7 +779,13 @@ onBeforeUnmount(() => {
   border-radius: 12px;
   background: #005b41;
   color: #fff;
-  cursor: default;
+  cursor: pointer;
+}
+
+.chat-composer > button:disabled,
+.chat-composer textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .chat-composer p {
@@ -566,6 +866,10 @@ onBeforeUnmount(() => {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+@keyframes chat-spin {
+  to { transform: rotate(360deg); }
 }
 
 .sr-only {

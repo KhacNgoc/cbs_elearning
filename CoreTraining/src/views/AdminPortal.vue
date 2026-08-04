@@ -633,64 +633,76 @@
         </div>
 
         <div v-if="activeTab === 'documents'" class="tab-pane animate-fade-in">
-          <div class="topics-summary card">
+          <div class="topics-summary card rag-documents-manager">
             <div class="card-header-row">
               <div class="header-left">
-                <h3 class="card-title">TÀI LIỆU RAG</h3>
+                <h3 class="card-title">TÀI LIỆU TRI THỨC AI</h3>
                 <p class="card-subtitle">
-                  Tải PDF/DOCX lên để hệ thống index theo khóa học.
+                  Tải PDF hoặc DOCX theo từng chủ đề. Tài liệu sẽ được gửi tới
+                  dịch vụ embedding và lưu vector trong Qdrant.
                 </p>
               </div>
+              <button class="btn btn-secondary" :disabled="documentListLoading" @click="loadDocuments()">
+                <RefreshCw :size="16" :class="{ 'spin-icon': documentListLoading }" />
+                LÀM MỚI
+              </button>
             </div>
-            <label class="form-label">Khóa học</label>
-            <select
-              v-model="selectedTopicId"
-              class="form-input"
-              @change="loadDocuments"
-            >
-              <option
-                v-for="topic in courseStore.topics"
-                :key="topic.id"
-                :value="topic.id"
-              >
-                {{ topic.name }}
-              </option>
-            </select>
-            <div
-              style="
-                margin: 1rem 0;
-                display: flex;
-                gap: 0.75rem;
-                align-items: center;
-              "
-            >
-              <input
-                type="file"
-                accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                @change="uploadDocument"
-              />
-              <span v-if="documentUploadMessage">{{
-                documentUploadMessage
-              }}</span>
+
+            <div class="rag-document-controls">
+              <div class="form-group">
+                <label class="form-label">Chủ đề nhận tài liệu</label>
+                <select v-model="selectedTopicId" class="form-input" @change="loadDocuments()">
+                  <option v-for="topic in courseStore.topics" :key="topic.id" :value="topic.id">
+                    {{ topic.id }} — {{ topic.name }}
+                  </option>
+                </select>
+              </div>
+              <div class="rag-upload-box">
+                <Database :size="28" />
+                <div>
+                  <strong>Upload và embedding tài liệu</strong>
+                  <small>Định dạng PDF/DOCX, tối đa theo cấu hình máy chủ.</small>
+                </div>
+                <button class="btn btn-primary" :disabled="documentUploading || !selectedTopicId || selectedTopicId === ALL_TOPICS"
+                  @click="ragFileInput?.click()">
+                  <LoaderCircle v-if="documentUploading" :size="16" class="spin-icon" />
+                  <Upload v-else :size="16" />
+                  {{ documentUploading ? 'ĐANG TẢI LÊN' : 'CHỌN TỆP' }}
+                </button>
+                <input ref="ragFileInput" type="file" hidden
+                  accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  @change="uploadDocument" />
+              </div>
             </div>
+            <p v-if="documentUploadMessage" class="rag-upload-message">{{ documentUploadMessage }}</p>
+
             <table class="admin-table">
               <thead>
                 <tr>
                   <th>Tệp</th>
+                  <th>Dung lượng</th>
                   <th>Trạng thái</th>
                   <th>Chunks</th>
+                  <th>Thời gian</th>
                   <th>Lỗi</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="document in courseDocuments" :key="document.id">
-                  <td>{{ document.fileName }}</td>
-                  <td>{{ document.status }}</td>
-                  <td>{{ document.indexedChunks ?? "-" }}</td>
-                  <td>{{ document.errorMessage || "-" }}</td>
+                <tr v-if="documentListLoading && courseDocuments.length === 0">
+                  <td colspan="6" class="rag-empty-cell">Đang tải danh sách tài liệu...</td>
                 </tr>
-                <tr v-if="courseDocuments.length === 0">
-                  <td colspan="4">Chưa có tài liệu.</td>
+                <tr v-for="document in courseDocuments" :key="document.id">
+                  <td><strong>{{ document.fileName }}</strong></td>
+                  <td>{{ formatFileSize(document.sizeBytes) }}</td>
+                  <td><span class="rag-status" :class="`status-${document.status.toLowerCase()}`">
+                    {{ documentStatusLabel(document.status) }}
+                  </span></td>
+                  <td>{{ document.indexedChunks ?? "-" }}</td>
+                  <td>{{ formatDocumentDate(document.indexedAt || document.createdAt) }}</td>
+                  <td class="rag-error-cell">{{ document.errorMessage || "-" }}</td>
+                </tr>
+                <tr v-if="!documentListLoading && courseDocuments.length === 0">
+                  <td colspan="6" class="rag-empty-cell">Chủ đề này chưa có tài liệu được embedding.</td>
                 </tr>
               </tbody>
             </table>
@@ -1299,7 +1311,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, watch } from "vue";
+import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useCourseStore } from "../stores/courseStore";
 import { useNavigationStore } from "../stores/navigationStore";
@@ -1331,6 +1343,9 @@ import {
   GripVertical,
   CheckCircle2,
   XCircle,
+  Database,
+  LoaderCircle,
+  RefreshCw,
 } from "lucide-vue-next";
 
 // Chart.js imports & registrations
@@ -1432,6 +1447,10 @@ const showToast = (message: string, variant: ToastVariant = "success") =>
   window.dispatchEvent(new CustomEvent("app-toast", { detail: { message, variant } }));
 const courseDocuments = ref<CourseDocument[]>([]);
 const documentUploadMessage = ref("");
+const documentUploading = ref(false);
+const documentListLoading = ref(false);
+const ragFileInput = ref<HTMLInputElement | null>(null);
+let documentPollingTimer: ReturnType<typeof setTimeout> | null = null;
 const ALL_TOPICS = "__ALL__";
 const selectedTopicId = ref(
   typeof route.params.topicId === "string" ? route.params.topicId : ALL_TOPICS,
@@ -1719,14 +1738,32 @@ watch(
   { immediate: true },
 );
 
-const loadDocuments = async () => {
-  if (!selectedTopicId.value || selectedTopicId.value === ALL_TOPICS) return;
+const clearDocumentPolling = () => {
+  if (documentPollingTimer) clearTimeout(documentPollingTimer);
+  documentPollingTimer = null;
+};
+
+const loadDocuments = async (silent = false) => {
+  clearDocumentPolling();
+  if (!selectedTopicId.value || selectedTopicId.value === ALL_TOPICS) {
+    courseDocuments.value = [];
+    return;
+  }
+  if (!silent) documentListLoading.value = true;
   try {
     courseDocuments.value = await adminApi.getCourseDocuments(
       selectedTopicId.value,
     );
+    if (courseDocuments.value.some(document => ["PENDING", "INDEXING"].includes(document.status))) {
+      documentPollingTimer = setTimeout(() => {
+        if (activeTab.value === "documents") void loadDocuments(true);
+      }, 2500);
+    }
   } catch (error) {
     console.error("Failed to load course documents:", error);
+    documentUploadMessage.value = "Không thể tải trạng thái tài liệu.";
+  } finally {
+    documentListLoading.value = false;
   }
 };
 
@@ -1735,18 +1772,38 @@ const uploadDocument = async (event: Event) => {
   const file = input.files?.[0];
   if (!file || !selectedTopicId.value || selectedTopicId.value === ALL_TOPICS)
     return;
-  documentUploadMessage.value = "Đang gửi tài liệu để index...";
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  if (!extension || !["pdf", "docx"].includes(extension)) {
+    documentUploadMessage.value = "Chỉ hỗ trợ tệp PDF hoặc DOCX.";
+    input.value = "";
+    return;
+  }
+  documentUploading.value = true;
+  documentUploadMessage.value = "Đang tải tài liệu lên máy chủ...";
   try {
     await adminApi.uploadCourseDocument(selectedTopicId.value, file);
     documentUploadMessage.value =
-      "Đã tạo job index. Làm mới danh sách sau ít phút để xem trạng thái.";
+      "Đã nhận tài liệu. Hệ thống đang embedding và đồng bộ vào Qdrant.";
     await loadDocuments();
-    input.value = "";
   } catch (error) {
-    documentUploadMessage.value = "Tải tài liệu thất bại.";
+    documentUploadMessage.value = "Tải hoặc xử lý tài liệu thất bại. Vui lòng kiểm tra trạng thái dịch vụ embedding.";
     console.error("Failed to upload course document:", error);
+  } finally {
+    documentUploading.value = false;
+    input.value = "";
   }
 };
+
+const documentStatusLabel = (status: CourseDocument["status"]) => ({
+  PENDING: "Đang chờ",
+  INDEXING: "Đang embedding",
+  INDEXED: "Đã index",
+  FAILED: "Thất bại",
+}[status]);
+
+const formatDocumentDate = (value?: string) => value
+  ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short" }).format(new Date(value))
+  : "-";
 
 watch(
   () => [route.name, route.query.tab, route.params.topicId],
@@ -1782,6 +1839,8 @@ watch(
         selectedTopicId.value = courseStore.topics[0].id;
       }
       void loadDocuments();
+    } else {
+      clearDocumentPolling();
     }
   },
   { immediate: true },
@@ -2102,6 +2161,12 @@ const loadAllData = async () => {
     if (courseStore.topics.length > 0 && !selectedTopicId.value) {
       selectedTopicId.value = courseStore.topics[0].id;
     }
+    if (activeTab.value === "documents" && courseStore.topics.length > 0) {
+      if (selectedTopicId.value === ALL_TOPICS) {
+        selectedTopicId.value = courseStore.topics[0].id;
+      }
+      await loadDocuments();
+    }
   } catch (error) {
     console.error("Failed to load admin panel data:", error);
   } finally {
@@ -2112,6 +2177,8 @@ const loadAllData = async () => {
 onMounted(() => {
   loadAllData();
 });
+
+onBeforeUnmount(clearDocumentPolling);
 
 // ==========================================
 // TOPIC ACTIONS
@@ -4079,6 +4146,103 @@ select:disabled {
   border: 1px solid #d1d5db;
   cursor: not-allowed;
   opacity: 1;
+}
+
+.rag-documents-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.rag-document-controls {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.8fr) minmax(420px, 2fr);
+  gap: 1rem;
+  align-items: end;
+}
+
+.rag-upload-box {
+  min-height: 82px;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1rem;
+  border: 1px dashed #9db9ae;
+  border-radius: var(--radius-md);
+  background: #f4f8f6;
+  color: var(--primary-color);
+}
+
+.rag-upload-box > div {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.rag-upload-box small {
+  color: var(--text-muted);
+}
+
+.rag-upload-message {
+  margin: -0.45rem 0 0;
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+.rag-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rag-status.status-indexing,
+.rag-status.status-pending {
+  background: #fff7d6;
+  color: #806710;
+}
+
+.rag-status.status-indexed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.rag-status.status-failed {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.rag-error-cell {
+  max-width: 320px;
+  color: #b91c1c;
+  overflow-wrap: anywhere;
+}
+
+.rag-empty-cell {
+  padding: 2rem !important;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.spin-icon {
+  animation: spin 0.9s linear infinite;
+}
+
+@media (max-width: 900px) {
+  .rag-document-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .rag-upload-box {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
 }
 
 @keyframes spin {

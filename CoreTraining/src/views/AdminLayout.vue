@@ -28,13 +28,13 @@ import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { onMounted } from "vue";
 import { useNavigationStore } from "../stores/navigationStore";
-import { BookOpen, ClipboardCheck, HelpCircle, Settings, Users } from "lucide-vue-next";
+import { BookOpen, ClipboardCheck, FileText, HelpCircle, Settings, Users } from "lucide-vue-next";
 
 const route = useRoute();
 const router = useRouter();
 const navigationStore = useNavigationStore();
 const navigation = computed(() => navigationStore.adminItems);
-const iconRegistry = { BookOpen, ClipboardCheck, HelpCircle, Settings, Users };
+const iconRegistry = { BookOpen, ClipboardCheck, FileText, HelpCircle, Settings, Users };
 const navigationIcon = (name: string) => iconRegistry[name as keyof typeof iconRegistry] || Settings;
 
 const activeSection = computed(() =>

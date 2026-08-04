@@ -1,7 +1,6 @@
 package com.bidv.coretraining.service;
 
 import com.bidv.coretraining.dto.CourseDocumentDto;
-import com.bidv.coretraining.dto.RagChatRequest;
 import com.bidv.coretraining.entity.CourseDocument;
 import com.bidv.coretraining.entity.DocumentStatus;
 import com.bidv.coretraining.entity.Topic;
@@ -10,9 +9,8 @@ import com.bidv.coretraining.exception.ResourceNotFoundException;
 import com.bidv.coretraining.repository.CourseDocumentRepository;
 import com.bidv.coretraining.repository.TopicRepository;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -20,7 +18,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -28,16 +25,13 @@ public class DocumentService {
     private final CourseDocumentRepository documentRepository;
     private final TopicRepository topicRepository;
     private final RagIngestionService ragIngestionService;
-    private final String ragUrl;
     private final Path uploadDirectory;
-    private final RestTemplate restTemplate = new RestTemplate();
 
     public DocumentService(CourseDocumentRepository documentRepository, TopicRepository topicRepository, RagIngestionService ragIngestionService,
-                           @Value("${app.rag-url}") String ragUrl, @Value("${app.upload-directory}") String uploadDirectory) {
+                           @Value("${app.upload-directory}") String uploadDirectory) {
         this.documentRepository = documentRepository;
         this.topicRepository = topicRepository;
         this.ragIngestionService = ragIngestionService;
-        this.ragUrl = ragUrl;
         this.uploadDirectory = Path.of(uploadDirectory);
     }
 
@@ -61,11 +55,11 @@ public class DocumentService {
         }
     }
 
+    @Transactional(readOnly = true)
     public List<CourseDocumentDto> list(String topicId) {
+        if (!topicRepository.existsById(topicId)) {
+            throw new ResourceNotFoundException("Không tìm thấy khóa học: " + topicId);
+        }
         return documentRepository.findByTopicIdOrderByCreatedAtDesc(topicId).stream().map(CourseDocumentDto::from).toList();
-    }
-
-    public Map chat(RagChatRequest request) {
-        return restTemplate.postForObject(ragUrl + "/chat", request, Map.class);
     }
 }

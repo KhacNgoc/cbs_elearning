@@ -2,19 +2,27 @@ package com.bidv.coretraining.controller;
 
 import com.bidv.coretraining.dto.CourseDocumentDto;
 import com.bidv.coretraining.dto.RagChatRequest;
+import com.bidv.coretraining.dto.RagChatResponse;
+import com.bidv.coretraining.dto.RagChatHistoryDto;
+import com.bidv.coretraining.security.CustomUserDetails;
 import com.bidv.coretraining.service.DocumentService;
+import com.bidv.coretraining.service.RagChatService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
 public class DocumentController {
     private final DocumentService documentService;
-    public DocumentController(DocumentService documentService) { this.documentService = documentService; }
+    private final RagChatService ragChatService;
+    public DocumentController(DocumentService documentService, RagChatService ragChatService) {
+        this.documentService = documentService;
+        this.ragChatService = ragChatService;
+    }
 
     @PostMapping("/admin/topics/{topicId}/documents")
     public ResponseEntity<CourseDocumentDto> upload(@PathVariable String topicId, @RequestParam("file") MultipartFile file) {
@@ -23,5 +31,16 @@ public class DocumentController {
     @GetMapping("/admin/topics/{topicId}/documents")
     public ResponseEntity<List<CourseDocumentDto>> list(@PathVariable String topicId) { return ResponseEntity.ok(documentService.list(topicId)); }
     @PostMapping("/rag/chat")
-    public ResponseEntity<Map> chat(@Valid @RequestBody RagChatRequest request) { return ResponseEntity.ok(documentService.chat(request)); }
+    public ResponseEntity<RagChatResponse> chat(
+            @Valid @RequestBody RagChatRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(ragChatService.chat(userDetails.getUsername(), request));
+    }
+
+    @GetMapping("/rag/chat/history")
+    public ResponseEntity<List<RagChatHistoryDto>> history(
+            @RequestParam String courseId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(ragChatService.history(userDetails.getUsername(), courseId));
+    }
 }

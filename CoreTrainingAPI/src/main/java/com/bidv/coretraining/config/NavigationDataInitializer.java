@@ -29,6 +29,7 @@ public class NavigationDataInitializer implements ApplicationRunner {
         seed("admin.lessons", "Bài học", "/admin?tab=lessons", "BookOpen", "ADMIN", 130, true, "ROLE_ADMIN");
         seed("admin.lesson.topic", "Quản lý bài học theo chủ đề", "/admin/lessons/:topicId", "BookOpen", "ADMIN", 135, false, "ROLE_ADMIN");
         seed("admin.exams", "Đề thi trắc nghiệm", "/admin?tab=exams", "HelpCircle", "ADMIN", 140, true, "ROLE_ADMIN");
+        seed("admin.documents", "Tài liệu AI", "/admin?tab=documents", "FileText", "ADMIN", 145, true, "ROLE_ADMIN");
         seed("admin.quiz.create", "Tạo bài kiểm tra", "/admin/quizzes/new", "Plus", "ADMIN", 150, false, "ROLE_ADMIN");
         seed("admin.quiz.lesson", "Chi tiết kiểm tra bài học", "/admin/quizzes/lesson/:scopeId", "HelpCircle", "ADMIN", 160, false, "ROLE_ADMIN");
         seed("admin.quiz.topic", "Chi tiết kiểm tra chủ đề", "/admin/quizzes/topic/:scopeId", "HelpCircle", "ADMIN", 170, false, "ROLE_ADMIN");

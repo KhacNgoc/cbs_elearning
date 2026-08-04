@@ -75,3 +75,6 @@ buildNumber.properties
 .env.test.local
 .env.production.local
 *.local
+.venv/
+__pycache__/
+*.py[cod]

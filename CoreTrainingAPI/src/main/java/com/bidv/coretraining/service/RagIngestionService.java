@@ -28,18 +28,29 @@ public class RagIngestionService {
 
     @Async
     public void ingestAsync(String documentId) {
-        CourseDocument document = documentRepository.findById(documentId).orElseThrow();
+        CourseDocument document = documentRepository.findWithTopicById(documentId).orElseThrow();
         document.setStatus(DocumentStatus.INDEXING);
         documentRepository.save(document);
         try {
             MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
             body.add("document_id", document.getId());
             body.add("course_id", document.getTopic().getId());
-            body.add("file", new FileSystemResource(document.getStoragePath()));
+            body.add("file", new FileSystemResource(document.getStoragePath()) {
+                @Override
+                public String getFilename() {
+                    return document.getFileName();
+                }
+            });
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.MULTIPART_FORM_DATA);
             ResponseEntity<Map> response = restTemplate.postForEntity(ragUrl + "/ingest", new HttpEntity<>(body, headers), Map.class);
-            document.setIndexedChunks(((Number) response.getBody().get("chunks_indexed")).intValue());
+            Map responseBody = response.getBody();
+            if (!response.getStatusCode().is2xxSuccessful()
+                    || responseBody == null
+                    || !(responseBody.get("chunks_indexed") instanceof Number chunks)) {
+                throw new IllegalStateException("Dịch vụ embedding trả về dữ liệu không hợp lệ");
+            }
+            document.setIndexedChunks(chunks.intValue());
             document.setStatus(DocumentStatus.INDEXED);
             document.setIndexedAt(LocalDateTime.now());
             document.setErrorMessage(null);
