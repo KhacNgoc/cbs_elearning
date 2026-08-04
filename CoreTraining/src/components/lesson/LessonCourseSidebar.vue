@@ -8,16 +8,21 @@
     <div class="lesson-list">
       <div v-for="(item, index) in topic?.lessons" :key="item.id" class="lesson-entry"
         :class="{ active: item.id === activeLessonId, completed: completedLessons.includes(item.id) }">
-        <button class="lesson-row" @click="openLesson(item.id)">
-          <span class="lesson-check"><Check v-if="completedLessons.includes(item.id)" :size="14" /></span>
-          <span class="lesson-row-copy"><strong>{{ index + 1 }}. {{ item.title }}</strong>
+        <div class="lesson-row">
+          <button class="lesson-check" type="button"
+            :aria-label="completedLessons.includes(item.id) ? `Bỏ hoàn thành bài ${item.title}` : `Đánh dấu hoàn thành bài ${item.title}`"
+            :aria-checked="completedLessons.includes(item.id)" role="checkbox"
+            @click="$emit('toggle-completion', item.id)">
+            <Check v-if="completedLessons.includes(item.id)" :size="14" />
+          </button>
+          <button class="lesson-row-copy" type="button" @click="openLesson(item.id)"><strong>{{ index + 1 }}. {{ item.title }}</strong>
             <small><PlayCircle :size="13" /> Bài học</small>
             <small v-if="item.hasQuiz" class="lesson-quiz-note">
               <Award :size="13" />
               {{ hasPassedLessonQuiz(item) ? 'Đã đạt bài kiểm tra' : `Có bài kiểm tra · Đạt ≥ ${item.quizPassingScore ?? 80}%` }}
             </small>
-          </span>
-        </button>
+          </button>
+        </div>
         <button v-if="getDocuments(item).length" class="lesson-resources-toggle" :class="{ expanded: expandedLessons.has(item.id) }"
           @click="toggleDocuments(item.id)">
           <FolderOpen :size="14" /><span>Tài liệu</span><span class="resource-count">{{ getDocuments(item).length }}</span><ChevronDown :size="14" />
@@ -71,6 +76,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: [];
   select: [lessonId: string];
+  'toggle-completion': [lessonId: string];
   'select-document': [lessonId: string, document: LessonDocument];
   quiz: [];
   'topic-quiz': [];

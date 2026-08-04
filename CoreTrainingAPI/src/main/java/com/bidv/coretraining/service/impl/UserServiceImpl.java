@@ -13,9 +13,11 @@ import com.bidv.coretraining.exception.ResourceNotFoundException;
 import com.bidv.coretraining.repository.LessonRepository;
 import com.bidv.coretraining.repository.QuestionRepository;
 import com.bidv.coretraining.repository.UserRepository;
+import com.bidv.coretraining.repository.UserQuizScoreRepository;
 import com.bidv.coretraining.repository.TopicEnrollmentRequestRepository;
 import com.bidv.coretraining.service.UserService;
 import com.bidv.coretraining.service.NotificationService;
+import com.bidv.coretraining.service.LessonProgressService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +37,8 @@ public class UserServiceImpl implements UserService {
     private final TopicEnrollmentRequestRepository enrollmentRequestRepository;
     private final NotificationService notificationService;
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+    private final LessonProgressService lessonProgressService;
+    private final UserQuizScoreRepository userQuizScoreRepository;
 
     public UserServiceImpl(UserRepository userRepository, LessonRepository lessonRepository,
                            QuestionRepository questionRepository,
@@ -42,7 +46,9 @@ public class UserServiceImpl implements UserService {
                            UserMapper userMapper,
                            TopicEnrollmentRequestRepository enrollmentRequestRepository,
                            NotificationService notificationService,
-                           org.springframework.security.crypto.password.PasswordEncoder passwordEncoder) {
+                           org.springframework.security.crypto.password.PasswordEncoder passwordEncoder,
+                           LessonProgressService lessonProgressService,
+                           UserQuizScoreRepository userQuizScoreRepository) {
         this.userRepository = userRepository;
         this.lessonRepository = lessonRepository;
         this.questionRepository = questionRepository;
@@ -51,6 +57,8 @@ public class UserServiceImpl implements UserService {
         this.enrollmentRequestRepository = enrollmentRequestRepository;
         this.notificationService = notificationService;
         this.passwordEncoder = passwordEncoder;
+        this.lessonProgressService = lessonProgressService;
+        this.userQuizScoreRepository = userQuizScoreRepository;
     }
 
     @Override
@@ -90,9 +98,10 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
 
         if (questionRepository.existsByLessonId(lessonId)
-                && !user.getCompletedLessons().contains(lesson)) {
-            throw new IllegalStateException("Bạn cần đạt tối thiểu "
-                    + lesson.getQuizPassingScore() + "% bài kiểm tra của bài học");
+                && !hasPassedLessonQuiz(user, lesson)) {
+            throw new com.bidv.coretraining.exception.BadRequestException(
+                    "Bạn cần đạt tối thiểu " + lesson.getQuizPassingScore()
+                            + "% bài kiểm tra của bài học");
         }
 
         if (!user.getCompletedLessons().contains(lesson)) {
@@ -102,6 +111,30 @@ public class UserServiceImpl implements UserService {
         }
 
         return buildUserProgressDto(user);
+    }
+
+    @Override
+    @Transactional
+    public UserProgressDto resetLesson(String username, String lessonId) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
+        Lesson lesson = lessonRepository.findById(lessonId)
+                .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
+
+        if (user.getCompletedLessons().remove(lesson)) {
+            user.setPoints(Math.max(0, user.getPoints() - 100));
+            user = userRepository.save(user);
+        }
+        lessonProgressService.resetProgress(user.getId(), lessonId);
+        return buildUserProgressDto(user);
+    }
+
+    private boolean hasPassedLessonQuiz(User user, Lesson lesson) {
+        return userQuizScoreRepository.findByUserIdAndLessonId(user.getId(), lesson.getId())
+                .filter(score -> score.getTotal() != null && score.getTotal() > 0)
+                .map(score -> Math.round((float) score.getScore() / score.getTotal() * 100)
+                        >= lesson.getQuizPassingScore())
+                .orElse(false);
     }
 
     @Override
@@ -186,6 +219,7 @@ public class UserServiceImpl implements UserService {
                 .quizTotals(quizTotals)
                 .lessonQuizScores(lessonQuizScores)
                 .lessonQuizTotals(lessonQuizTotals)
+                .lessonProgress(lessonProgressService.getAllProgress(user))
                 .points(user.getPoints())
                 .unlockedBadges(userMapper.toUserBadgeDtoList(new ArrayList<>(user.getUnlockedBadges())))
                 .groupId(groupId)

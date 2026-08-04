@@ -104,9 +104,12 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import { axiosClient } from '../api/axiosClient';
+import type { LessonProgressRequest } from '../types';
 
 const emit = defineEmits<{
   'time-update': [seconds: number];
+  'progress-update': [progress: LessonProgressRequest];
+  ended: [progress: LessonProgressRequest];
   'add-note': [seconds: number];
 }>();
 
@@ -122,6 +125,14 @@ const props = defineProps({
   title: {
     type: String,
     default: ''
+  },
+  initialPositionSeconds: {
+    type: Number,
+    default: 0
+  },
+  initialWatchedSeconds: {
+    type: Number,
+    default: 0
   }
 });
 
@@ -129,6 +140,8 @@ const videoElement = ref<HTMLVideoElement | null>(null);
 const isPlaying = ref(false);
 const currentTime = ref(0);
 const duration = ref(0);
+const watchedSeconds = ref(props.initialWatchedSeconds);
+const lastPlaybackPosition = ref(props.initialPositionSeconds);
 const isMuted = ref(false);
 const volume = ref(1);
 const authorizedStreamUrl = ref('');
@@ -176,7 +189,12 @@ const requestVideoAccess = async () => {
 
 watch(
   () => [props.lessonId, props.videoUrl],
-  () => void requestVideoAccess(),
+  () => {
+    currentTime.value = props.initialPositionSeconds;
+    watchedSeconds.value = props.initialWatchedSeconds;
+    lastPlaybackPosition.value = props.initialPositionSeconds;
+    void requestVideoAccess();
+  },
   { immediate: true }
 );
 
@@ -241,22 +259,46 @@ const toggleFullscreen = () => {
 
 const onTimeUpdate = () => {
   if (videoElement.value) {
-    currentTime.value = videoElement.value.currentTime;
+    const nextPosition = videoElement.value.currentTime;
+    const elapsed = nextPosition - lastPlaybackPosition.value;
+    if (isPlaying.value && elapsed > 0 && elapsed <= 2) watchedSeconds.value += elapsed;
+    currentTime.value = nextPosition;
+    lastPlaybackPosition.value = nextPosition;
     syncDuration();
     emit('time-update', currentTime.value);
+    emit('progress-update', progressSnapshot());
   }
 };
 
 const onLoadedMetadata = () => {
   if (videoElement.value) {
     volume.value = videoElement.value.volume;
+    if (props.initialPositionSeconds > 0) {
+      videoElement.value.currentTime = Math.min(
+        props.initialPositionSeconds,
+        videoElement.value.duration || props.initialPositionSeconds
+      );
+      currentTime.value = videoElement.value.currentTime;
+      lastPlaybackPosition.value = currentTime.value;
+    }
   }
   syncDuration();
 };
 
 const onVideoEnded = () => {
   isPlaying.value = false;
+  currentTime.value = duration.value;
+  watchedSeconds.value = Math.max(watchedSeconds.value, duration.value);
+  const progress = progressSnapshot();
+  emit('progress-update', progress);
+  emit('ended', progress);
 };
+
+const progressSnapshot = (): LessonProgressRequest => ({
+  lastPositionSeconds: currentTime.value,
+  watchedSeconds: watchedSeconds.value,
+  durationSeconds: duration.value
+});
 
 const seek = (event: MouseEvent) => {
   if (!videoElement.value || duration.value === 0) return;
@@ -276,6 +318,18 @@ const seekTo = (seconds: number) => {
   emit('time-update', currentTime.value);
 };
 
+const resetProgress = () => {
+  if (videoElement.value) {
+    videoElement.value.pause();
+    videoElement.value.currentTime = 0;
+  }
+  isPlaying.value = false;
+  currentTime.value = 0;
+  watchedSeconds.value = 0;
+  lastPlaybackPosition.value = 0;
+  emit('time-update', 0);
+};
+
 const requestNote = () => {
   if (!videoElement.value) return;
   videoElement.value.pause();
@@ -284,7 +338,7 @@ const requestNote = () => {
   emit('add-note', Math.floor(currentTime.value));
 };
 
-defineExpose({ seekTo });
+defineExpose({ seekTo, resetProgress });
 
 const formatTime = (timeInSeconds: number) => {
   if (isNaN(timeInSeconds)) return '00:00';

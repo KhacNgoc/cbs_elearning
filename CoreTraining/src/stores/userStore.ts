@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import type { UserProgress } from '../types';
+import type { LessonProgressRequest, UserProgress } from '../types';
 import { mockTopics } from '../data/mockData';
 import { authApi } from '../api/authApi';
 import type { LoginRequest } from '../api/authApi';
@@ -18,6 +18,7 @@ export const useUserStore = defineStore('user', {
     quizTotals: {},
     lessonQuizScores: {},
     lessonQuizTotals: {},
+    lessonProgress: {},
     points: 0,
     unlockedBadges: [],
     groupId: '',
@@ -123,6 +124,7 @@ export const useUserStore = defineStore('user', {
       this.quizTotals = {};
       this.lessonQuizScores = {};
       this.lessonQuizTotals = {};
+      this.lessonProgress = {};
       this.points = 0;
       this.unlockedBadges = [];
       this.groupId = '';
@@ -149,6 +151,7 @@ export const useUserStore = defineStore('user', {
         this.quizTotals = progress.quizTotals || {};
         this.lessonQuizScores = progress.lessonQuizScores || {};
         this.lessonQuizTotals = progress.lessonQuizTotals || {};
+        this.lessonProgress = progress.lessonProgress || {};
         this.points = progress.points || 0;
         this.unlockedBadges = progress.unlockedBadges || [];
         this.groupId = progress.groupId || '';
@@ -186,6 +189,32 @@ export const useUserStore = defineStore('user', {
         localStorage.setItem('mockCompletedLessons', JSON.stringify(this.completedLessons));
       } catch (error) {
         console.error('Failed to mark lesson complete:', error);
+      }
+    },
+
+    async resetLesson(lessonId: string) {
+      if (!this.isAuthenticated) return;
+      try {
+        const updatedProgress = await courseApi.resetLesson(lessonId);
+        this.completedLessons = updatedProgress.completedLessons || [];
+        this.lessonProgress = updatedProgress.lessonProgress || {};
+        this.points = updatedProgress.points;
+        localStorage.setItem('mockCompletedLessons', JSON.stringify(this.completedLessons));
+      } catch (error) {
+        console.error('Failed to reset lesson:', error);
+        throw error;
+      }
+    },
+
+    async saveLessonProgress(lessonId: string, request: LessonProgressRequest) {
+      if (!this.isAuthenticated) return null;
+      try {
+        const progress = await courseApi.saveLessonProgress(lessonId, request);
+        this.lessonProgress = { ...(this.lessonProgress || {}), [lessonId]: progress };
+        return progress;
+      } catch (error) {
+        console.error('Failed to save lesson progress:', error);
+        return null;
       }
     },
 

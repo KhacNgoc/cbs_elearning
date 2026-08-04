@@ -98,6 +98,19 @@ CREATE TABLE IF NOT EXISTS user_completed_lessons (
     CONSTRAINT fk_user_completed_lessons FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS lesson_progress (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    lesson_id VARCHAR(255) NOT NULL,
+    last_position_seconds DOUBLE PRECISION NOT NULL DEFAULT 0,
+    watched_seconds DOUBLE PRECISION NOT NULL DEFAULT 0,
+    duration_seconds DOUBLE PRECISION NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT uk_lesson_progress_user_lesson UNIQUE (user_id, lesson_id),
+    CONSTRAINT fk_lesson_progress_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_lesson_progress_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
+);
+
 -- 9. Create procedure_sections table
 CREATE TABLE IF NOT EXISTS procedure_sections (
     id BIGSERIAL PRIMARY KEY,
