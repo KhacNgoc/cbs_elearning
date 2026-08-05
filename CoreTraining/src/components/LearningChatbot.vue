@@ -77,7 +77,9 @@
                 <div class="assistant-answer">
                   <p>{{ message.answer }}</p>
                   <span class="grounding-state" :class="{ grounded: message.grounded }">
-                    {{ message.grounded ? 'Có nguồn tài liệu' : 'Không tìm thấy trong tài liệu' }}
+                    {{ message.needsClarification
+                      ? 'Cần làm rõ câu hỏi'
+                      : message.grounded ? 'Có nguồn tài liệu' : 'Không tìm thấy trong tài liệu' }}
                   </span>
                   <ul v-if="message.sources.length" class="chat-sources">
                     <li v-for="source in message.sources" :key="`${message.id}-${source.documentId}-${source.page}-${source.section}`">
@@ -94,7 +96,12 @@
               <div class="user-message"><p>{{ pendingQuestion }}</p></div>
               <div class="assistant-message chat-thinking">
                 <span class="message-avatar"><Bot :size="17" /></span>
-                <p><LoaderCircle :size="15" /> Đang tìm trong tài liệu khóa học...</p>
+                <p>
+                  <LoaderCircle :size="15" />
+                  {{ longWait
+                    ? 'Mô hình đang tổng hợp câu trả lời, quá trình này có thể mất thêm một chút thời gian...'
+                    : 'Đang tìm trong tài liệu khóa học...' }}
+                </p>
               </div>
             </template>
 
@@ -153,6 +160,7 @@ import { useRoute } from "vue-router";
 import { useCourseStore } from "../stores/courseStore";
 import { useUserStore } from "../stores/userStore";
 import { ragApi } from "../api/ragApi";
+import { isTimeoutError } from "../api/axiosClient";
 import type { RagChatHistory } from "../api/ragApi";
 import {
   Bot,
@@ -179,9 +187,11 @@ const launcherPosition = ref({ x: 0, y: 0 });
 const chatBody = ref<HTMLElement | null>(null);
 const selectedCourseId = ref("");
 const messages = ref<RagChatHistory[]>([]);
+const conversationIds = ref<Record<string, string>>({});
 const question = ref("");
 const pendingQuestion = ref("");
 const sending = ref(false);
+const longWait = ref(false);
 const loadingHistory = ref(false);
 const chatError = ref("");
 const quickPrompts = [
@@ -191,6 +201,13 @@ const quickPrompts = [
 ];
 const dragOffset = { x: 0, y: 0 };
 let movedDuringDrag = false;
+let longWaitTimer: number | undefined;
+
+const clearLongWaitTimer = () => {
+  if (longWaitTimer) window.clearTimeout(longWaitTimer);
+  longWaitTimer = undefined;
+  longWait.value = false;
+};
 
 const accessibleTopics = computed(() =>
   courseStore.topics.filter(topic => userStore.isTopicAccessible(topic.id)),
@@ -224,7 +241,12 @@ const loadHistory = async () => {
   loadingHistory.value = true;
   chatError.value = "";
   try {
-    messages.value = await ragApi.getHistory(selectedCourseId.value);
+    messages.value = await ragApi.getHistory(
+      selectedCourseId.value,
+      conversationIds.value[selectedCourseId.value],
+    );
+    const loadedConversationId = messages.value[0]?.conversationId;
+    if (loadedConversationId) conversationIds.value[selectedCourseId.value] = loadedConversationId;
     await scrollToLatest();
   } catch (error) {
     console.error("Failed to load chat history:", error);
@@ -241,23 +263,38 @@ const sendQuestion = async () => {
   chatError.value = "";
   pendingQuestion.value = content;
   question.value = "";
+  clearLongWaitTimer();
+  longWaitTimer = window.setTimeout(() => {
+    longWait.value = true;
+  }, 15_000);
   await scrollToLatest();
   try {
-    const response = await ragApi.chat(content, selectedCourseId.value);
+    const response = await ragApi.chat(
+      content,
+      selectedCourseId.value,
+      undefined,
+      conversationIds.value[selectedCourseId.value],
+    );
+    conversationIds.value[selectedCourseId.value] = response.conversationId;
     messages.value.push({
       id: Date.now(),
+      conversationId: response.conversationId,
       courseId: selectedCourseId.value,
       question: content,
       answer: response.answer,
       grounded: response.grounded,
+      needsClarification: response.needsClarification,
       sources: response.sources,
       createdAt: new Date().toISOString(),
     });
   } catch (error) {
     console.error("Failed to ask learning assistant:", error);
     question.value = content;
-    chatError.value = "Không thể kết nối tới trợ lý học tập. Vui lòng thử lại.";
+    chatError.value = isTimeoutError(error)
+      ? "Trợ lý chưa hoàn tất câu trả lời trong thời gian cho phép. Câu hỏi đã được giữ lại để bạn có thể thử lại."
+      : "Không thể kết nối tới trợ lý học tập. Vui lòng thử lại.";
   } finally {
+    clearLongWaitTimer();
     pendingQuestion.value = "";
     sending.value = false;
     await scrollToLatest();
@@ -385,6 +422,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  clearLongWaitTimer();
   window.removeEventListener("resize", clampPosition);
   window.removeEventListener("pointermove", moveChatbot);
   window.removeEventListener("pointerup", stopDrag);

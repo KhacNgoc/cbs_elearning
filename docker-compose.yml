@@ -1,17 +1,17 @@
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: coretraining-postgres
+    container_name: coretraining-db
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: coretraining
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d coretraining"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -19,12 +19,12 @@ services:
 
   pgadmin:
     image: dpage/pgadmin4:latest
-    container_name: coretraining-pgadmin
+    container_name: coretraining-db-ide
     ports:
       - "5050:80"
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@example.com
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:?PGADMIN_DEFAULT_EMAIL is required}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?PGADMIN_DEFAULT_PASSWORD is required}
     volumes:
       - pgadmin_data:/var/lib/pgadmin
     depends_on:
@@ -45,32 +45,60 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
 
   ollama-init:
     image: ollama/ollama:latest
     depends_on:
-      - ollama
+      ollama:
+        condition: service_healthy
     environment:
-      OLLAMA_HOST: http://ollama:11434
-      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-qwen3:4b}
-      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
-    entrypoint: ["/bin/sh", "-c"]
-    command: "until ollama list >/dev/null 2>&1; do sleep 2; done; ollama pull $$OLLAMA_CHAT_MODEL; ollama pull $$OLLAMA_EMBEDDING_MODEL"
+      OLLAMA_HOST: ${OLLAMA_HOST:?OLLAMA_HOST is required}
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:?OLLAMA_CHAT_MODEL is required}
+      OLLAMA_REWRITE_MODEL: ${OLLAMA_REWRITE_MODEL:?OLLAMA_REWRITE_MODEL is required}
+      OLLAMA_SUMMARY_MODEL: ${OLLAMA_SUMMARY_MODEL:?OLLAMA_SUMMARY_MODEL is required}
+      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:?OLLAMA_EMBEDDING_MODEL is required}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        ollama pull "$$OLLAMA_CHAT_MODEL"
+        ollama pull "$$OLLAMA_REWRITE_MODEL"
+        ollama pull "$$OLLAMA_SUMMARY_MODEL"
+        ollama pull "$$OLLAMA_EMBEDDING_MODEL"
     restart: "no"
 
   rag-service:
     build: ./rag-service
     environment:
-      QDRANT_URL: http://qdrant:6333
-      OLLAMA_URL: http://ollama:11434
-      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-qwen3:4b}
-      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
-      EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-32}
+      QDRANT_URL: ${QDRANT_URL:?QDRANT_URL is required}
+      OLLAMA_URL: ${OLLAMA_URL:?OLLAMA_URL is required}
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:?OLLAMA_CHAT_MODEL is required}
+      OLLAMA_REWRITE_MODEL: ${OLLAMA_REWRITE_MODEL:?OLLAMA_REWRITE_MODEL is required}
+      OLLAMA_SUMMARY_MODEL: ${OLLAMA_SUMMARY_MODEL:?OLLAMA_SUMMARY_MODEL is required}
+      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:?OLLAMA_EMBEDDING_MODEL is required}
+      EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:?EMBEDDING_BATCH_SIZE is required}
+      RAG_SCORE_THRESHOLD: ${RAG_SCORE_THRESHOLD:?RAG_SCORE_THRESHOLD is required}
+      RAG_TOP_K: ${RAG_TOP_K:?RAG_TOP_K is required}
+      RAG_CANDIDATE_LIMIT: ${RAG_CANDIDATE_LIMIT:?RAG_CANDIDATE_LIMIT is required}
+      RAG_CONTEXT_MAX_CHARS: ${RAG_CONTEXT_MAX_CHARS:?RAG_CONTEXT_MAX_CHARS is required}
+      OLLAMA_CHAT_TIMEOUT_SECONDS: ${OLLAMA_CHAT_TIMEOUT_SECONDS:?OLLAMA_CHAT_TIMEOUT_SECONDS is required}
+      OLLAMA_REWRITE_TIMEOUT_SECONDS: ${OLLAMA_REWRITE_TIMEOUT_SECONDS:?OLLAMA_REWRITE_TIMEOUT_SECONDS is required}
+      OLLAMA_QUERY_EMBEDDING_TIMEOUT_SECONDS: ${OLLAMA_QUERY_EMBEDDING_TIMEOUT_SECONDS:?OLLAMA_QUERY_EMBEDDING_TIMEOUT_SECONDS is required}
+      OLLAMA_SUMMARY_TIMEOUT_SECONDS: ${OLLAMA_SUMMARY_TIMEOUT_SECONDS:?OLLAMA_SUMMARY_TIMEOUT_SECONDS is required}
     ports:
       - "8001:8001"
     depends_on:
-      - qdrant
-      - ollama
+      qdrant:
+        condition: service_started
+      ollama-init:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   backend:
@@ -81,20 +109,34 @@ services:
     ports:
       - "8000:8080"
     environment:
-      SPRING_PROFILES_ACTIVE: postgres
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/coretraining
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: postgres
-      DOCUMENT_STORAGE_PATH: /app/uploads/documents
-      VIDEO_STORAGE_PATH: /app/uploads/videos
-      VIDEO_ACCESS_SECRET: ${VIDEO_ACCESS_SECRET:-change-this-video-signing-secret-before-production-2026}
-      VIDEO_ACCESS_DURATION_SECONDS: ${VIDEO_ACCESS_DURATION_SECONDS:-3600}
-      JWT_SECRET: ${JWT_SECRET:-change-this-jwt-secret-before-production-at-least-64-characters-long}
-      JWT_COOKIE_SECURE: ${JWT_COOKIE_SECURE:-false}
-      JWT_COOKIE_SAME_SITE: ${JWT_COOKIE_SAME_SITE:-Lax}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
-      APP_RAG_URL: http://rag-service:8001
-      APP_UPLOAD_DIRECTORY: /app/uploads
+      SERVER_PORT: ${SERVER_PORT:?SERVER_PORT is required}
+      SERVER_SERVLET_CONTEXT_PATH: ${SERVER_SERVLET_CONTEXT_PATH:?SERVER_SERVLET_CONTEXT_PATH is required}
+      SPRING_APPLICATION_NAME: ${SPRING_APPLICATION_NAME:?SPRING_APPLICATION_NAME is required}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:?SPRING_PROFILES_ACTIVE is required}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:?SPRING_DATASOURCE_URL is required}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:?SPRING_DATASOURCE_USERNAME is required}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is required}
+      MAX_UPLOAD_SIZE: ${MAX_UPLOAD_SIZE:?MAX_UPLOAD_SIZE is required}
+      DOCUMENT_STORAGE_PATH: ${DOCUMENT_STORAGE_PATH:?DOCUMENT_STORAGE_PATH is required}
+      VIDEO_STORAGE_PATH: ${VIDEO_STORAGE_PATH:?VIDEO_STORAGE_PATH is required}
+      VIDEO_ACCESS_SECRET: ${VIDEO_ACCESS_SECRET:?VIDEO_ACCESS_SECRET is required}
+      VIDEO_ACCESS_DURATION_SECONDS: ${VIDEO_ACCESS_DURATION_SECONDS:?VIDEO_ACCESS_DURATION_SECONDS is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:?JWT_EXPIRATION_MS is required}
+      JWT_COOKIE_SECURE: ${JWT_COOKIE_SECURE:?JWT_COOKIE_SECURE is required}
+      JWT_COOKIE_SAME_SITE: ${JWT_COOKIE_SAME_SITE:?JWT_COOKIE_SAME_SITE is required}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS is required}
+      DATA_INITIALIZER_ENABLED: ${DATA_INITIALIZER_ENABLED:?DATA_INITIALIZER_ENABLED is required}
+      APP_RAG_URL: ${APP_RAG_URL:?APP_RAG_URL is required}
+      RAG_RECENT_MESSAGE_LIMIT: ${RAG_RECENT_MESSAGE_LIMIT:?RAG_RECENT_MESSAGE_LIMIT is required}
+      RAG_RECENT_CHARACTER_LIMIT: ${RAG_RECENT_CHARACTER_LIMIT:?RAG_RECENT_CHARACTER_LIMIT is required}
+      RAG_SUMMARY_MESSAGE_THRESHOLD: ${RAG_SUMMARY_MESSAGE_THRESHOLD:?RAG_SUMMARY_MESSAGE_THRESHOLD is required}
+      RAG_SUMMARY_CHARACTER_THRESHOLD: ${RAG_SUMMARY_CHARACTER_THRESHOLD:?RAG_SUMMARY_CHARACTER_THRESHOLD is required}
+      RAG_CONNECT_TIMEOUT_MS: ${RAG_CONNECT_TIMEOUT_MS:?RAG_CONNECT_TIMEOUT_MS is required}
+      RAG_READ_TIMEOUT_MS: ${RAG_READ_TIMEOUT_MS:?RAG_READ_TIMEOUT_MS is required}
+      APP_UPLOAD_DIRECTORY: ${APP_UPLOAD_DIRECTORY:?APP_UPLOAD_DIRECTORY is required}
+      LOG_PATH: ${LOG_PATH:?LOG_PATH is required}
+      LOG_LEVEL: ${LOG_LEVEL:?LOG_LEVEL is required}
     volumes:
       - training_uploads:/app/uploads
     depends_on:
@@ -109,7 +151,9 @@ services:
       context: ./CoreTraining
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+        VITE_API_URL: ${VITE_API_URL:?VITE_API_URL is required}
+        VITE_USE_MOCK_API: ${VITE_USE_MOCK_API:?VITE_USE_MOCK_API is required}
+        VITE_RAG_CHAT_TIMEOUT_MS: ${VITE_RAG_CHAT_TIMEOUT_MS:?VITE_RAG_CHAT_TIMEOUT_MS is required}
     container_name: cbs-elearning-frontend
     ports:
       - "5173:80"

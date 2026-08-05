@@ -76,12 +76,18 @@ Mở file cấu hình môi trường [.env](file:///f:/CoreTraining/.env) hoặc
     ```ini
     VITE_API_URL=http://localhost:8000
     VITE_USE_MOCK_API=true
+    VITE_RAG_CHAT_TIMEOUT_MS=330000
     ```
 *   **Chế độ Live API (Kết nối trực tiếp đến Spring Boot Backend cổng 8000):**
     ```ini
     VITE_API_URL=http://localhost:8000
     VITE_USE_MOCK_API=false
+    VITE_RAG_CHAT_TIMEOUT_MS=330000
     ```
+
+`VITE_RAG_CHAT_TIMEOUT_MS` chỉ áp dụng cho `POST /api/rag/chat`. Các API thông
+thường vẫn dùng timeout 15 giây. Giá trị mặc định 330 giây dành một khoảng đệm
+30 giây so với timeout 300 giây giữa Spring Boot và RAG service.
 
 ### 3. Chạy ứng dụng trên môi trường Phát triển (Local Dev)
 Khởi động dev server:

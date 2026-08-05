@@ -136,6 +136,50 @@ CREATE TABLE IF NOT EXISTS rag_chat_sources (
 CREATE INDEX IF NOT EXISTS idx_rag_chat_history
     ON rag_chat_messages (user_id, topic_id, created_at);
 
+-- Context-aware RAG conversations. Kept separate from the legacy exchange table
+-- so existing chat history remains intact while Hibernate ddl-auto=update rolls
+-- this additive schema out in the current migration-less project.
+CREATE TABLE IF NOT EXISTS rag_conversations (
+    id VARCHAR(36) PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    topic_id VARCHAR(255) NOT NULL,
+    title VARCHAR(255),
+    summary TEXT,
+    last_summarized_message_id BIGINT,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_rag_conversation_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_rag_conversation_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS rag_conversation_messages (
+    id BIGSERIAL PRIMARY KEY,
+    conversation_id VARCHAR(36) NOT NULL,
+    role VARCHAR(16) NOT NULL,
+    content TEXT NOT NULL,
+    grounded BOOLEAN,
+    original_question TEXT,
+    standalone_question TEXT,
+    needs_clarification BOOLEAN,
+    created_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_rag_conversation_message FOREIGN KEY (conversation_id) REFERENCES rag_conversations(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS rag_conversation_sources (
+    id BIGSERIAL PRIMARY KEY,
+    message_id BIGINT NOT NULL,
+    document_id VARCHAR(255) NOT NULL,
+    document_name VARCHAR(255) NOT NULL,
+    page INTEGER NOT NULL,
+    section VARCHAR(255) NOT NULL,
+    CONSTRAINT fk_rag_conversation_source FOREIGN KEY (message_id) REFERENCES rag_conversation_messages(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_rag_conversation_owner_topic_updated
+    ON rag_conversations (user_id, topic_id, updated_at);
+CREATE INDEX IF NOT EXISTS idx_rag_conversation_message_order
+    ON rag_conversation_messages (conversation_id, id);
+
 -- 9. Create procedure_sections table
 CREATE TABLE IF NOT EXISTS procedure_sections (
     id BIGSERIAL PRIMARY KEY,

@@ -189,13 +189,36 @@ public class QuizServiceImpl implements QuizService {
                     .selectedAnswers(new HashMap<>(request.getSelectedAnswers()))
                     .build());
         }
-        if (total > 0 && percent >= passingScore && !user.getCompletedLessons().contains(lesson)) {
+        if (total > 0 && percent >= passingScore
+                && !user.getCompletedLessons().contains(lesson)
+                && !requiresTopicQuizBeforeCourseCompletion(user, lesson)) {
             user.getCompletedLessons().add(lesson);
             user.setPoints(user.getPoints() + 100);
             userRepository.save(user);
         }
         return QuizResultDto.builder().score(score).total(total).percent(percent)
                 .passingScore(passingScore).passed(total > 0 && percent >= passingScore).build();
+    }
+
+    private boolean requiresTopicQuizBeforeCourseCompletion(User user, Lesson lesson) {
+        Topic topic = lesson.getTopic();
+        if (!questionRepository.existsByTopicIdAndLessonIsNull(topic.getId())
+                || hasPassedTopicQuiz(user, topic)) {
+            return false;
+        }
+        return topic.getLessons().stream()
+                .allMatch(candidate -> candidate.getId().equals(lesson.getId())
+                        || user.getCompletedLessons().stream()
+                        .anyMatch(completed -> completed.getId().equals(candidate.getId())));
+    }
+
+    private boolean hasPassedTopicQuiz(User user, Topic topic) {
+        return userQuizScoreRepository
+                .findByUserIdAndTopicIdAndLessonIsNull(user.getId(), topic.getId())
+                .filter(score -> score.getTotal() != null && score.getTotal() > 0)
+                .map(score -> Math.round((float) score.getScore() / score.getTotal() * 100)
+                        >= topic.getQuizPassingScore())
+                .orElse(false);
     }
 
     @Override

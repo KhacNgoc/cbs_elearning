@@ -1,5 +1,5 @@
 <template>
-  <div class="app-container">
+  <div class="app-container" :class="{ 'admin-route': route.path.startsWith('/admin') }">
     <!-- Navbar Header (only when logged in and not on change-password page) -->
     <nav class="navbar" v-if="userStore.isAuthenticated && route.name !== 'ChangePassword'">
       <router-link to="/" class="nav-brand">
@@ -37,7 +37,6 @@
 
     <LearningChatbot
       v-if="showLearningChatbot"
-      :key="String(route.name)"
       :locked="chatbotLocked"
     />
   </div>

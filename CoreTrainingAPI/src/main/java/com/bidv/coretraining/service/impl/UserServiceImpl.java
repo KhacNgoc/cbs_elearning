@@ -105,6 +105,10 @@ public class UserServiceImpl implements UserService {
         }
 
         if (!user.getCompletedLessons().contains(lesson)) {
+            if (requiresTopicQuizBeforeCourseCompletion(user, lesson)) {
+                throw new com.bidv.coretraining.exception.BadRequestException(
+                        "Bạn cần hoàn thành bài kiểm tra tổng kết để hoàn thành khóa học");
+            }
             user.getCompletedLessons().add(lesson);
             user.setPoints(user.getPoints() + 100);
             user = userRepository.save(user);
@@ -134,6 +138,27 @@ public class UserServiceImpl implements UserService {
                 .filter(score -> score.getTotal() != null && score.getTotal() > 0)
                 .map(score -> Math.round((float) score.getScore() / score.getTotal() * 100)
                         >= lesson.getQuizPassingScore())
+                .orElse(false);
+    }
+
+    private boolean requiresTopicQuizBeforeCourseCompletion(User user, Lesson lesson) {
+        com.bidv.coretraining.entity.Topic topic = lesson.getTopic();
+        if (!questionRepository.existsByTopicIdAndLessonIsNull(topic.getId())
+                || hasPassedTopicQuiz(user, topic)) {
+            return false;
+        }
+        return topic.getLessons().stream()
+                .allMatch(candidate -> candidate.getId().equals(lesson.getId())
+                        || user.getCompletedLessons().stream()
+                        .anyMatch(completed -> completed.getId().equals(candidate.getId())));
+    }
+
+    private boolean hasPassedTopicQuiz(User user, com.bidv.coretraining.entity.Topic topic) {
+        return userQuizScoreRepository
+                .findByUserIdAndTopicIdAndLessonIsNull(user.getId(), topic.getId())
+                .filter(score -> score.getTotal() != null && score.getTotal() > 0)
+                .map(score -> Math.round((float) score.getScore() / score.getTotal() * 100)
+                        >= topic.getQuizPassingScore())
                 .orElse(false);
     }
 

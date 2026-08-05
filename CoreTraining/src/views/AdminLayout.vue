@@ -62,8 +62,8 @@ onMounted(() => navigationStore.load());
   --admin-heading-section: 1.125rem;
   --admin-heading-page: 1.5rem;
   display: flex;
-  min-height: calc(100dvh - 65px);
-  max-height: calc(100dvh - 65px);
+  height: calc(100% + 4rem);
+  min-height: 0;
   margin: -2rem;
   overflow: hidden;
   background: var(--bg-main);
@@ -182,9 +182,9 @@ onMounted(() => navigationStore.load());
 
 @media (max-width: 760px) {
   .admin-shell {
+    height: calc(100% + 2rem);
     margin: -1rem;
-    max-height: none;
-    overflow: visible;
+    overflow: hidden;
   }
 
   .admin-shell-sidebar {
@@ -192,7 +192,7 @@ onMounted(() => navigationStore.load());
   }
 
   .admin-shell-content {
-    overflow: visible;
+    overflow-y: auto;
   }
 }
 </style>

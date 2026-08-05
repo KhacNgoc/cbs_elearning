@@ -189,6 +189,7 @@ export const useUserStore = defineStore('user', {
         localStorage.setItem('mockCompletedLessons', JSON.stringify(this.completedLessons));
       } catch (error) {
         console.error('Failed to mark lesson complete:', error);
+        throw error;
       }
     },
 

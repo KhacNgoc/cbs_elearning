@@ -40,6 +40,22 @@ The first anti-hallucination gate uses a combined vector/lexical relevance
 score. Its default threshold is `0.55`; override it with
 `RAG_SCORE_THRESHOLD` only after measuring representative course questions.
 
+Context-aware chat uses `OLLAMA_REWRITE_MODEL` and `OLLAMA_SUMMARY_MODEL`
+(both default to `OLLAMA_CHAT_MODEL`). Retrieval can be tuned with `RAG_TOP_K`,
+`RAG_CANDIDATE_LIMIT`, and `RAG_CONTEXT_MAX_CHARS`. Ollama timeouts are
+configured independently through `OLLAMA_CHAT_TIMEOUT_SECONDS`,
+`OLLAMA_REWRITE_TIMEOUT_SECONDS`, and `OLLAMA_SUMMARY_TIMEOUT_SECONDS`.
+Query embedding has its own shorter budget through
+`OLLAMA_QUERY_EMBEDDING_TIMEOUT_SECONDS` (30 seconds by default), while document
+ingestion retains the 120-second embedding timeout. The default request budget
+is rewrite 45s + query embedding 30s + answer generation 180s, with Spring
+allowing 300s and the browser allowing 330s. Summary is capped at 30s.
+
+Rewrite, answer, and summary responses use Ollama structured-output schemas.
+Qwen reasoning before `</think>` is removed before validation, stored summaries
+are limited to the final clean answer, and summary-shaped answers are rejected
+to prevent internal conversation memory from leaking into learner responses.
+
 3. Start Spring Boot with the H2 profile, avoiding a local PostgreSQL dependency:
 
 ```bash
@@ -64,12 +80,22 @@ The chat model defaults to `qwen3:4b`; change `OLLAMA_CHAT_MODEL=qwen3:8b` in `.
 
 - `GET /health`
 - `POST /ingest` multipart: `file`, `document_id`, `course_id`
-- `POST /chat`: `{ "question": "Nội dung ở trang 3 là gì?", "course_id": "CIF", "page": 3 }`
+- `POST /chat`: `{ "question": "Nó được tạo khi nào?", "course_id": "CIF", "conversation_summary": "...", "recent_messages": [{"role": "user", "content": "CIF là gì?"}] }`
+- `POST /summarize`: internal endpoint receiving `current_summary` and `new_messages`
 
 Spring Boot provides the authenticated application-facing endpoints:
 
 - `POST /api/admin/topics/{topicId}/documents` (admin, multipart `file`)
 - `GET /api/admin/topics/{topicId}/documents` (admin)
 - `POST /api/rag/chat` (authenticated)
+- `GET /api/rag/chat/history?courseId=...&conversationId=...` (authenticated; `conversationId` is optional)
+
+The application-facing chat request accepts an optional `conversationId`. If
+omitted, Spring creates a conversation owned by the authenticated user and
+returns its ID. Subsequent requests must send that ID. Spring validates both
+ownership and course scope before reading any history or calling the RAG
+service. Recent-window and summary thresholds are configured with
+`RAG_RECENT_MESSAGE_LIMIT`, `RAG_RECENT_CHARACTER_LIMIT`,
+`RAG_SUMMARY_MESSAGE_THRESHOLD`, and `RAG_SUMMARY_CHARACTER_THRESHOLD`.
 
 The Vue API helpers are in `CoreTraining/src/api/adminApi.ts` (upload/list) and `CoreTraining/src/api/ragApi.ts` (chat). Upload uses `FormData`; never set the global JSON header for this request.
