@@ -40,4 +40,8 @@ public class Topic {
     @OneToMany(mappedBy = "topic", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<Badge> badges = new ArrayList<>();
+
+    @OneToMany(mappedBy = "topic", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<CourseDocument> documents = new ArrayList<>();
 }

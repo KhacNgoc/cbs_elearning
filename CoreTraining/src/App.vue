@@ -1,5 +1,5 @@
 <template>
-  <div class="app-container">
+  <div class="app-container" :class="{ 'admin-route': route.path.startsWith('/admin') }">
     <!-- Navbar Header (only when logged in and not on change-password page) -->
     <nav class="navbar" v-if="userStore.isAuthenticated && route.name !== 'ChangePassword'">
       <router-link to="/" class="nav-brand">
@@ -34,6 +34,11 @@
         </transition>
       </router-view>
     </main>
+
+    <LearningChatbot
+      v-if="showLearningChatbot"
+      :locked="chatbotLocked"
+    />
   </div>
 </template>
 
@@ -44,6 +49,7 @@ import { useUserStore } from './stores/userStore';
 import { useCourseStore } from './stores/courseStore';
 import { useNavigationStore } from './stores/navigationStore';
 import NotificationCenter from './components/NotificationCenter.vue';
+import LearningChatbot from './components/LearningChatbot.vue';
 import { BookOpen, ClipboardCheck, HelpCircle, Home, LogOut, Settings, Trophy, UserCircle, Users } from 'lucide-vue-next';
 
 const route = useRoute();
@@ -52,6 +58,8 @@ const courseStore = useCourseStore();
 const navigationStore = useNavigationStore();
 const iconRegistry = { BookOpen, ClipboardCheck, HelpCircle, Home, Settings, Trophy, UserCircle, Users };
 const navigationIcon = (name: string) => iconRegistry[name as keyof typeof iconRegistry] || Home;
+const showLearningChatbot = computed(() => userStore.isAuthenticated);
+const chatbotLocked = computed(() => route.name === 'QuizView');
 
 const userAvatarLetter = computed(() => {
   return (userStore.fullName || userStore.username || 'Q').charAt(0).toUpperCase();

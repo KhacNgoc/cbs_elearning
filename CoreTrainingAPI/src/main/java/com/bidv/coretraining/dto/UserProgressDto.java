@@ -18,6 +18,7 @@ public class UserProgressDto {
     private Map<String, Integer> quizTotals; // topicId -> total questions
     private Map<String, Integer> lessonQuizScores; // lessonId -> max score achieved
     private Map<String, Integer> lessonQuizTotals; // lessonId -> total questions
+    private Map<String, LessonProgressDto> lessonProgress;
     private Integer points;
     private List<UserBadgeDto> unlockedBadges;
     private String groupId;

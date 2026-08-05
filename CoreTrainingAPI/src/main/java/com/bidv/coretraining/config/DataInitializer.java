@@ -610,6 +610,24 @@ public class DataInitializer implements CommandLineRunner {
         ));
     }
 
+    private void createSystemUserIfMissing(UserGroup userGroup) {
+        if (userRepository.existsByUsername("system")) {
+            return;
+        }
+
+        userRepository.save(User.builder()
+                .username("system")
+                .password(passwordEncoder.encode("123@qwe"))
+                .fullName("Hệ Thống")
+                .avatarColor("#8B5CF6")
+                .employeeId("SYSTEM")
+                .email("system@bidv.com.vn")
+                .role("ROLE_USER")
+                .points(2000)
+                .userGroup(userGroup)
+                .build());
+    }
+
     private void createQuestion(Topic topic, String text, List<String> options, int correctIndex) {
         questionRepository.save(Question.builder()
                 .topic(topic)

@@ -28,13 +28,13 @@ import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { onMounted } from "vue";
 import { useNavigationStore } from "../stores/navigationStore";
-import { BookOpen, ClipboardCheck, HelpCircle, Settings, Users } from "lucide-vue-next";
+import { BookOpen, ClipboardCheck, FileText, HelpCircle, Settings, Users } from "lucide-vue-next";
 
 const route = useRoute();
 const router = useRouter();
 const navigationStore = useNavigationStore();
 const navigation = computed(() => navigationStore.adminItems);
-const iconRegistry = { BookOpen, ClipboardCheck, HelpCircle, Settings, Users };
+const iconRegistry = { BookOpen, ClipboardCheck, FileText, HelpCircle, Settings, Users };
 const navigationIcon = (name: string) => iconRegistry[name as keyof typeof iconRegistry] || Settings;
 
 const activeSection = computed(() =>
@@ -62,8 +62,8 @@ onMounted(() => navigationStore.load());
   --admin-heading-section: 1.125rem;
   --admin-heading-page: 1.5rem;
   display: flex;
-  min-height: calc(100dvh - 65px);
-  max-height: calc(100dvh - 65px);
+  height: calc(100% + 4rem);
+  min-height: 0;
   margin: -2rem;
   overflow: hidden;
   background: var(--bg-main);
@@ -182,9 +182,9 @@ onMounted(() => navigationStore.load());
 
 @media (max-width: 760px) {
   .admin-shell {
+    height: calc(100% + 2rem);
     margin: -1rem;
-    max-height: none;
-    overflow: visible;
+    overflow: hidden;
   }
 
   .admin-shell-sidebar {
@@ -192,7 +192,7 @@ onMounted(() => navigationStore.load());
   }
 
   .admin-shell-content {
-    overflow: visible;
+    overflow-y: auto;
   }
 }
 </style>

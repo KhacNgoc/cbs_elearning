@@ -1,5 +1,5 @@
 import { axiosClient, isMockApi, mockDelay } from './axiosClient';
-import type { Topic, Lesson, Comment, UserProgress, VideoNote } from '../types';
+import type { Topic, Lesson, Comment, UserProgress, VideoNote, LessonProgress, LessonProgressRequest } from '../types';
 import { mockTopics } from '../data/mockData';
 
 // We maintain an in-memory database in mock mode so updates are reflected dynamically!
@@ -223,6 +223,7 @@ export const courseApi = {
         quizTotals: JSON.parse(localStorage.getItem('mockQuizTotals') || '{}'),
         lessonQuizScores: JSON.parse(localStorage.getItem('mockLessonQuizScores') || '{}'),
         lessonQuizTotals: JSON.parse(localStorage.getItem('mockLessonQuizTotals') || '{}'),
+        lessonProgress: JSON.parse(localStorage.getItem('mockLessonProgress') || '{}'),
         points: mockDbPoints,
         unlockedBadges: JSON.parse(localStorage.getItem('mockUnlockedBadges') || '[]'),
         groupId: 'GDV',
@@ -246,6 +247,49 @@ export const courseApi = {
       return this.getMyProgress();
     }
     const response = await axiosClient.post<UserProgress>(`/api/users/me/complete-lesson/${lessonId}`);
+    return response.data;
+  },
+
+  async resetLesson(lessonId: string): Promise<UserProgress> {
+    if (isMockApi()) {
+      await mockDelay(200);
+      if (mockDbCompleted.includes(lessonId)) {
+        mockDbCompleted = mockDbCompleted.filter(id => id !== lessonId);
+        mockDbPoints = Math.max(0, mockDbPoints - 100);
+      }
+      const allProgress = JSON.parse(localStorage.getItem('mockLessonProgress') || '{}');
+      delete allProgress[lessonId];
+      localStorage.setItem('mockLessonProgress', JSON.stringify(allProgress));
+      localStorage.setItem('mockCompletedLessons', JSON.stringify(mockDbCompleted));
+      return this.getMyProgress();
+    }
+    const response = await axiosClient.delete<UserProgress>(
+      `/api/users/me/lessons/${lessonId}/completion`
+    );
+    return response.data;
+  },
+
+  async saveLessonProgress(lessonId: string, request: LessonProgressRequest): Promise<LessonProgress> {
+    if (isMockApi()) {
+      await mockDelay(100);
+      const allProgress: Record<string, LessonProgress> = JSON.parse(
+        localStorage.getItem('mockLessonProgress') || '{}'
+      );
+      const previous = allProgress[lessonId];
+      const progress: LessonProgress = {
+        lessonId,
+        lastPositionSeconds: Math.max(0, request.lastPositionSeconds),
+        watchedSeconds: Math.max(previous?.watchedSeconds || 0, request.watchedSeconds),
+        durationSeconds: Math.max(previous?.durationSeconds || 0, request.durationSeconds)
+      };
+      allProgress[lessonId] = progress;
+      localStorage.setItem('mockLessonProgress', JSON.stringify(allProgress));
+      return progress;
+    }
+    const response = await axiosClient.post<LessonProgress>(
+      `/api/users/me/lessons/${lessonId}/progress`,
+      request
+    );
     return response.data;
   },
 

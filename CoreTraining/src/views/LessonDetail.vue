@@ -20,10 +20,14 @@
         :selected-document="selectedDocument"
         :current-index="currentLessonIndex"
         :total-lessons="topic?.lessons.length || 0"
+        :initial-position-seconds="currentLessonProgress?.lastPositionSeconds || 0"
+        :initial-watched-seconds="currentLessonProgress?.watchedSeconds || 0"
         @adjacent="goToAdjacentLesson"
         @close-document="selectedDocument = null"
         @download-document="downloadDocument"
         @time-update="currentVideoTime = $event"
+        @progress-update="handleVideoProgress"
+        @video-ended="handleVideoEnded"
         @add-note="openNoteComposer"
       />
       <LessonCourseSidebar
@@ -40,6 +44,7 @@
         :topic-quiz-totals="userStore.quizTotals"
         @close="sidebarOpen = false"
         @select="switchLesson"
+        @toggle-completion="toggleLessonCompletion"
         @select-document="showDocument"
         @quiz="startQuiz"
         @topic-quiz="startTopicQuiz"
@@ -94,7 +99,7 @@
         v-if="quizGateOpen"
         class="quiz-gate-backdrop"
         role="presentation"
-        @click.self="quizGateOpen = false"
+        @click.self="closeQuizPrompt"
       >
         <section
           class="quiz-gate-dialog"
@@ -105,27 +110,35 @@
           <button
             class="quiz-gate-close"
             aria-label="Đóng thông báo"
-            @click="quizGateOpen = false"
+            @click="closeQuizPrompt"
           >
             <X :size="20" />
           </button>
           <div class="quiz-gate-icon"><AlertTriangle :size="28" /></div>
-          <span class="quiz-gate-eyebrow">Chưa hoàn thành bài học</span>
+          <span class="quiz-gate-eyebrow">
+            {{ quizPromptKind === "topic" ? "Bài kiểm tra tổng kết" : "Bài học có bài kiểm tra" }}
+          </span>
           <h2 id="quiz-gate-title">
-            Bạn cần làm bài kiểm tra trước khi chuyển bài
+            {{ quizPromptKind === "topic"
+              ? "Bạn cần làm bài kiểm tra để hoàn thành khóa học"
+              : "Bạn có muốn làm bài kiểm tra ngay không?" }}
           </h2>
-          <p>
-            Bài <strong>{{ lesson.title }}</strong> có bài kiểm tra bắt buộc.
-            Bạn cần đạt tối thiểu
-            <strong>{{ lesson.quizPassingScore ?? 80 }}%</strong> để mở bài tiếp
-            theo.
+          <p v-if="quizPromptKind === 'topic'">
+            Đây là bài học cuối cùng chưa hoàn thành của khóa
+            <strong>{{ topic?.name }}</strong>. Bạn cần đạt tối thiểu
+            {{ topic?.quizPassingScore ?? 80 }}% bài kiểm tra tổng kết để hoàn thành khóa học.
+          </p>
+          <p v-else>
+            Bài <strong>{{ quizPromptLesson?.title }}</strong> có bài kiểm tra. Kết quả bài
+            kiểm tra sẽ được dùng để ghi nhận hoàn thành bài học.
           </p>
           <div class="quiz-gate-actions">
-            <button class="quiz-gate-secondary" @click="quizGateOpen = false">
-              Ở lại học
+            <button class="quiz-gate-secondary" @click="closeQuizPrompt">
+              Để sau
             </button>
             <button class="quiz-gate-primary" @click="continueToQuiz">
-              Làm bài kiểm tra <ChevronRight :size="17" />
+              {{ quizPromptKind === "topic" ? "Làm bài kiểm tra tổng" : "Làm bài kiểm tra" }}
+              <ChevronRight :size="17" />
             </button>
           </div>
         </section>
@@ -136,14 +149,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, watch } from "vue";
+import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from "vue";
 import { useRouter } from "vue-router";
 import { AlertTriangle, ChevronLeft, ChevronRight, X } from "lucide-vue-next";
 import { useCourseStore } from "../stores/courseStore";
 import { useUserStore } from "../stores/userStore";
 import { axiosClient } from "../api/axiosClient";
 import { courseApi } from "../api/courseApi";
-import type { LessonDocument, VideoNote } from "../types";
+import type { LessonDocument, LessonProgressRequest, VideoNote } from "../types";
 import LessonLearningHeader from "../components/lesson/LessonLearningHeader.vue";
 import LessonCourseSidebar from "../components/lesson/LessonCourseSidebar.vue";
 import LessonMediaStage from "../components/lesson/LessonMediaStage.vue";
@@ -170,9 +183,23 @@ const videoNotes = ref<VideoNote[]>([]);
 const notesLoading = ref(false);
 const noteSaving = ref(false);
 const quizGateOpen = ref(false);
+const quizPromptLessonId = ref<string | null>(null);
+const quizPromptKind = ref<"lesson" | "topic">("lesson");
+const currentProgressSnapshot = ref<LessonProgressRequest>({
+  lastPositionSeconds: 0,
+  watchedSeconds: 0,
+  durationSeconds: 0,
+});
+let progressSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 const lesson = computed(() => courseStore.currentLesson);
 const topic = computed(() => courseStore.currentTopic);
+const quizPromptLesson = computed(() =>
+  topic.value?.lessons.find(item => item.id === quizPromptLessonId.value) || lesson.value,
+);
+const currentLessonProgress = computed(() =>
+  lesson.value ? userStore.lessonProgress?.[lesson.value.id] : undefined,
+);
 const isCompleted = computed(() =>
   lesson.value ? userStore.completedLessons.includes(lesson.value.id) : false,
 );
@@ -207,7 +234,12 @@ const loadLessonData = async (lessonId: string) => {
     router.push("/");
     return;
   }
-
+  const progress = userStore.lessonProgress?.[lessonId];
+  currentProgressSnapshot.value = {
+    lastPositionSeconds: progress?.lastPositionSeconds || 0,
+    watchedSeconds: progress?.watchedSeconds || 0,
+    durationSeconds: progress?.durationSeconds || 0,
+  };
 };
 
 const selectInitialContent = (requestedDocument?: LessonDocument) => {
@@ -250,9 +282,15 @@ onMounted(async () => {
   sidebarOpen.value = window.innerWidth > 900;
 });
 
+onBeforeUnmount(() => {
+  if (progressSaveTimer) clearTimeout(progressSaveTimer);
+  void persistCurrentProgress();
+});
+
 watch(
   () => props.id,
   async (newId) => {
+    await persistCurrentProgress();
     selectedDocument.value = null;
     await loadLessonData(newId);
     const requestedDocument =
@@ -265,15 +303,56 @@ watch(
   },
 );
 
+const handleVideoProgress = (progress: LessonProgressRequest) => {
+  currentProgressSnapshot.value = progress;
+  if (progressSaveTimer) clearTimeout(progressSaveTimer);
+  progressSaveTimer = setTimeout(() => void persistCurrentProgress(), 5000);
+};
+
+const persistCurrentProgress = async () => {
+  if (!lesson.value) return null;
+  if (progressSaveTimer) {
+    clearTimeout(progressSaveTimer);
+    progressSaveTimer = null;
+  }
+  return userStore.saveLessonProgress(lesson.value.id, {
+    ...currentProgressSnapshot.value,
+  });
+};
+
+const handleVideoEnded = async (progress: LessonProgressRequest) => {
+  if (!lesson.value) return;
+  if (progressSaveTimer) {
+    clearTimeout(progressSaveTimer);
+    progressSaveTimer = null;
+  }
+  const finishedLessonId = lesson.value.id;
+  const hasQuiz = Boolean(lesson.value.hasQuiz);
+  const nextLesson = topic.value?.lessons[currentLessonIndex.value + 1];
+  const wasCompleted = userStore.completedLessons.includes(finishedLessonId);
+  currentProgressSnapshot.value = progress;
+  await userStore.saveLessonProgress(finishedLessonId, progress);
+
+  if (wasCompleted) return;
+
+  if (hasQuiz) {
+    quizPromptKind.value = "lesson";
+    quizPromptLessonId.value = finishedLessonId;
+    quizGateOpen.value = true;
+    return;
+  }
+
+  if (promptForRequiredTopicQuiz(finishedLessonId)) return;
+  const completed = await completeLessonWithFeedback(finishedLessonId);
+  if (completed && nextLesson) {
+    await router.push(`/lesson/${nextLesson.id}`);
+  }
+};
+
 const switchLesson = async (lessonId: string): Promise<boolean> => {
   if (!lesson.value) return false;
   if (lessonId === lesson.value.id) return true;
-  if (lesson.value.hasQuiz && !isCompleted.value) {
-    quizGateOpen.value = true;
-    return false;
-  }
-  if (!lesson.value.hasQuiz && !isCompleted.value)
-    await userStore.completeLesson(lesson.value.id);
+  await persistCurrentProgress();
   await router.push(`/lesson/${lessonId}`);
   return true;
 };
@@ -316,17 +395,84 @@ const goToAdjacentLesson = (offset: number) => {
 };
 const markAsCompleted = async () => {
   if (!lesson.value) return;
-  if (lesson.value.hasQuiz && !isCompleted.value) {
-    startQuiz();
+  await toggleLessonCompletion(lesson.value.id);
+};
+const hasPassedLessonQuiz = (lessonId: string) => {
+  const targetLesson = topic.value?.lessons.find(item => item.id === lessonId);
+  if (!targetLesson) return false;
+  const score = userStore.lessonQuizScores[lessonId];
+  const total = userStore.lessonQuizTotals[lessonId];
+  return score !== undefined && total > 0
+    && Math.round(score / total * 100) >= (targetLesson.quizPassingScore ?? 80);
+};
+const hasPassedTopicQuiz = () => {
+  if (!topic.value) return false;
+  const score = userStore.quizScores[topic.value.id];
+  const total = userStore.quizTotals[topic.value.id];
+  return score !== undefined && total > 0
+    && Math.round(score / total * 100) >= (topic.value.quizPassingScore ?? 80);
+};
+const promptForRequiredTopicQuiz = (lessonId: string) => {
+  if (!topic.value?.hasQuiz || hasPassedTopicQuiz()) return false;
+  const wouldCompleteCourse = topic.value.lessons.every(item =>
+    item.id === lessonId || userStore.completedLessons.includes(item.id),
+  );
+  if (!wouldCompleteCourse) return false;
+  quizPromptKind.value = "topic";
+  quizPromptLessonId.value = null;
+  quizGateOpen.value = true;
+  return true;
+};
+const completeLessonWithFeedback = async (lessonId: string) => {
+  try {
+    await userStore.completeLesson(lessonId);
+    return userStore.completedLessons.includes(lessonId);
+  } catch (error) {
+    const apiMessage = (error as { response?: { data?: { message?: unknown } } })
+      .response?.data?.message;
+    alert(typeof apiMessage === "string"
+      ? apiMessage
+      : "Không thể đánh dấu hoàn thành bài học. Vui lòng thử lại.");
+    return false;
+  }
+};
+const toggleLessonCompletion = async (lessonId: string) => {
+  const targetLesson = topic.value?.lessons.find(item => item.id === lessonId);
+  if (!targetLesson) return;
+
+  if (userStore.completedLessons.includes(lessonId)) {
+    if (progressSaveTimer && lesson.value?.id === lessonId) {
+      clearTimeout(progressSaveTimer);
+      progressSaveTimer = null;
+    }
+    await userStore.resetLesson(lessonId);
+    if (lesson.value?.id === lessonId) {
+      currentProgressSnapshot.value = {
+        lastPositionSeconds: 0,
+        watchedSeconds: 0,
+        durationSeconds: 0,
+      };
+      currentVideoTime.value = 0;
+      mediaStage.value?.resetProgress();
+    }
     return;
   }
-  await userStore.completeLesson(lesson.value.id);
+
+  if (targetLesson.hasQuiz && !hasPassedLessonQuiz(lessonId)) {
+    quizPromptKind.value = "lesson";
+    quizPromptLessonId.value = lessonId;
+    quizGateOpen.value = true;
+    return;
+  }
+  if (promptForRequiredTopicQuiz(lessonId)) return;
+  await completeLessonWithFeedback(lessonId);
 };
-const startQuiz = () => {
-  if (topic.value && lesson.value?.hasQuiz) {
+const startQuiz = (lessonId = lesson.value?.id) => {
+  const targetLesson = topic.value?.lessons.find(item => item.id === lessonId);
+  if (topic.value && targetLesson?.hasQuiz) {
     router.push({
       path: `/quiz/${topic.value.id}`,
-      query: { lessonId: lesson.value.id },
+      query: { lessonId: targetLesson.id },
     });
   } else if (topic.value) {
     router.push(`/quiz/${topic.value.id}`);
@@ -336,8 +482,21 @@ const startTopicQuiz = () => {
   if (topic.value) router.push(`/quiz/${topic.value.id}`);
 };
 const continueToQuiz = () => {
+  if (quizPromptKind.value === "topic") {
+    quizGateOpen.value = false;
+    quizPromptLessonId.value = null;
+    startTopicQuiz();
+    return;
+  }
+  const targetLessonId = quizPromptLessonId.value || lesson.value?.id;
   quizGateOpen.value = false;
-  startQuiz();
+  quizPromptLessonId.value = null;
+  startQuiz(targetLessonId);
+};
+const closeQuizPrompt = () => {
+  quizGateOpen.value = false;
+  quizPromptLessonId.value = null;
+  quizPromptKind.value = "lesson";
 };
 const sortVideoNotes = () => {
   videoNotes.value.sort(
@@ -829,6 +988,10 @@ const deleteComment = async (commentId: number) => {
   place-items: center;
   border: 1.5px solid #94a3b8;
   border-radius: 3px;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
 }
 .lesson-row.completed .lesson-check {
   background: var(--primary-color);
@@ -840,6 +1003,13 @@ const deleteComment = async (commentId: number) => {
   flex-direction: column;
   gap: 0.35rem;
   min-width: 0;
+  flex: 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 .lesson-row-copy strong {
   font-size: 0.85rem;

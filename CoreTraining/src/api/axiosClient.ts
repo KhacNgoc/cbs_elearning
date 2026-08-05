@@ -3,6 +3,26 @@ import { redirectToLogin } from '../utils/authSession';
 
 const baseURL = import.meta.env.VITE_API_URL || '';
 const CORRELATION_ID_HEADER = 'X-Correlation-Id';
+const DEFAULT_API_TIMEOUT_MS = 15_000;
+
+const positiveTimeout = (value: unknown, fallback: number) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+// A contextual RAG turn can include rewrite, embedding, retrieval, generation,
+// and an occasional summary update. Keep this budget isolated from normal APIs.
+export const RAG_CHAT_TIMEOUT_MS = positiveTimeout(
+  import.meta.env.VITE_RAG_CHAT_TIMEOUT_MS,
+  330_000,
+);
+
+export const isTimeoutError = (error: unknown): boolean => {
+  if (!axios.isAxiosError(error)) return false;
+  return error.code === 'ECONNABORTED' ||
+    error.code === 'ETIMEDOUT' ||
+    String(error.message || '').toLowerCase().includes('timeout');
+};
 
 const createCorrelationId = () =>
   typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
@@ -12,7 +32,7 @@ const createCorrelationId = () =>
 export const axiosClient = axios.create({
   baseURL,
   withCredentials: true,
-  timeout: 15_000,
+  timeout: DEFAULT_API_TIMEOUT_MS,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -52,10 +72,7 @@ axiosClient.interceptors.response.use(
         redirectToLogin();
       }
     }
-    const isTimeout =
-      error.code === 'ECONNABORTED' ||
-      error.code === 'ETIMEDOUT' ||
-      String(error.message || '').toLowerCase().includes('timeout');
+    const isTimeout = isTimeoutError(error);
     const isNetworkError = !error.response;
     const isServerError = error.response?.status >= 500;
     if (isTimeout || isNetworkError || isServerError) {

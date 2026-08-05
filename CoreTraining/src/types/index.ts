@@ -83,6 +83,7 @@ export interface UserProgress {
   quizTotals: Record<string, number>; // topicId -> total questions (e.g. 5)
   lessonQuizScores: Record<string, number>; // lessonId -> max score achieved
   lessonQuizTotals: Record<string, number>; // lessonId -> total questions
+  lessonProgress?: Record<string, LessonProgress>;
   points: number; // Experience points
   unlockedBadges: Badge[];
   groupId?: string;
@@ -92,6 +93,15 @@ export interface UserProgress {
   mustChangePassword?: boolean;
   pendingTopics: string[];
 }
+
+export interface LessonProgress {
+  lessonId: string;
+  lastPositionSeconds: number;
+  watchedSeconds: number;
+  durationSeconds: number;
+}
+
+export type LessonProgressRequest = Omit<LessonProgress, 'lessonId'>;
 
 export interface UserProfile {
   id?: number;

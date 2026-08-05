@@ -2,7 +2,10 @@ package com.bidv.coretraining.controller;
 
 import com.bidv.coretraining.dto.UserProgressDto;
 import com.bidv.coretraining.dto.UserProfileDto;
+import com.bidv.coretraining.dto.LessonProgressDto;
+import com.bidv.coretraining.dto.LessonProgressRequest;
 import com.bidv.coretraining.security.CustomUserDetails;
+import com.bidv.coretraining.service.LessonProgressService;
 import com.bidv.coretraining.service.UserService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -13,9 +16,11 @@ import org.springframework.web.bind.annotation.*;
 public class UserController {
 
     private final UserService userService;
+    private final LessonProgressService lessonProgressService;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, LessonProgressService lessonProgressService) {
         this.userService = userService;
+        this.lessonProgressService = lessonProgressService;
     }
 
     @GetMapping("/me/profile")
@@ -36,6 +41,22 @@ public class UserController {
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         UserProgressDto response = userService.completeLesson(userDetails.getUsername(), lessonId);
         return ResponseEntity.ok(response);
+    }
+
+    @DeleteMapping("/me/lessons/{lessonId}/completion")
+    public ResponseEntity<UserProgressDto> resetLesson(
+            @PathVariable String lessonId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(userService.resetLesson(userDetails.getUsername(), lessonId));
+    }
+
+    @PostMapping("/me/lessons/{lessonId}/progress")
+    public ResponseEntity<LessonProgressDto> saveLessonProgress(
+            @PathVariable String lessonId,
+            @jakarta.validation.Valid @RequestBody LessonProgressRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(lessonProgressService.saveProgress(
+                userDetails.getUsername(), lessonId, request));
     }
 
     @PostMapping("/me/register-topic/{topicId}")
