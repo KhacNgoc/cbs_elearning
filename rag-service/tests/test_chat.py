@@ -130,6 +130,20 @@ class ChatGroundingTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(["GL là gì?"], embedded_texts)
         self.assertEqual("GL là gì?", result.standaloneQuestion)
 
+    async def test_standalone_follow_up_skips_rewrite_model(self):
+        model = AsyncMock(side_effect=AssertionError("Rewrite model must not be called"))
+        with patch.object(main, "ollama_chat", model), \
+                patch.object(main, "ensure_collection", no_op_collection), \
+                patch.object(main, "embeddings", fake_embedding), \
+                patch.object(main, "qdrant", FakeQdrant([])):
+            result = await main.chat(main.ChatRequest(
+                question="GL là gì?",
+                recent_messages=[main.ConversationMessage(role="user", content="CIF là gì?")],
+            ))
+
+        self.assertEqual("GL là gì?", result.standaloneQuestion)
+        model.assert_not_awaited()
+
     def test_rewrite_parser_accepts_json_code_fence(self):
         result = main.parse_rewrite_result(
             '```json\n{"standalone_question":"CIF là gì?","needs_clarification":false,"reason":""}\n```'
