@@ -39,4 +39,16 @@ public class Question {
 
     @Column(name = "correct_answer", nullable = false)
     private Integer correctAnswer; // 0-indexed index of options
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "question_type", nullable = false, columnDefinition = "VARCHAR(32) DEFAULT 'SINGLE_CHOICE'")
+    @Builder.Default
+    private QuestionType type = QuestionType.SINGLE_CHOICE;
+
+    @ElementCollection
+    @CollectionTable(name = "question_correct_answers", joinColumns = @JoinColumn(name = "question_id"))
+    @Column(name = "answer_index", nullable = false)
+    @OrderColumn(name = "answer_order")
+    @Builder.Default
+    private List<Integer> correctAnswers = new ArrayList<>();
 }

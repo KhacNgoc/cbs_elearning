@@ -1,4 +1,4 @@
-import { axiosClient, isMockApi, mockDelay } from "./axiosClient";
+import { axiosClient, isMockApi, mockDelay, RAG_CHAT_TIMEOUT_MS } from "./axiosClient";
 import type { Topic, Lesson, LessonDocument, Question } from "../types";
 import { mockDbTopics, setMockDbTopics } from "./courseApi";
 import { mockDbQuestions, setMockDbQuestions } from "./quizApi";
@@ -53,6 +53,29 @@ export interface CourseDocument {
   errorMessage?: string;
   createdAt: string;
   indexedAt?: string;
+}
+
+export interface GeneratedQuizQuestion {
+  type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE";
+  text: string;
+  options: string[];
+  correctAnswers: number[];
+  explanation: string;
+  sourceIds: string[];
+}
+
+export interface QuizGenerationSource {
+  id: string;
+  documentId: string;
+  documentName: string;
+  page: number;
+  section: string;
+}
+
+export interface QuizGenerationResponse {
+  questions: GeneratedQuizQuestion[];
+  sources: QuizGenerationSource[];
+  warnings: string[];
 }
 
 // In mock mode, we seed the list of users from the default mock user data
@@ -492,6 +515,54 @@ export const adminApi = {
   // ==========================================
   // Question Management
   // ==========================================
+  async getQuizQuestions(topicId: string, lessonId?: string): Promise<Question[]> {
+    if (isMockApi()) {
+      await mockDelay(200);
+      return mockDbQuestions.filter(question =>
+        lessonId ? question.lessonId === lessonId : question.topicId === topicId && !question.lessonId,
+      );
+    }
+    const response = await axiosClient.get<Question[]>("/api/admin/quizzes/questions", {
+      params: { topicId, lessonId },
+    });
+    return response.data;
+  },
+
+  async generateQuizQuestions(request: {
+    topicId: string;
+    lessonId?: string;
+    singleChoiceCount: number;
+    multipleChoiceCount: number;
+    optionCount: number;
+  }): Promise<QuizGenerationResponse> {
+    if (isMockApi()) {
+      await mockDelay(500);
+      const sourceQuestions = mockDbQuestions.filter(question =>
+        request.lessonId
+          ? question.lessonId === request.lessonId
+          : question.topicId === request.topicId && !question.lessonId,
+      ).slice(0, request.singleChoiceCount + request.multipleChoiceCount);
+      return {
+        questions: sourceQuestions.map(question => ({
+          type: question.type || "SINGLE_CHOICE",
+          text: question.text,
+          options: question.options,
+          correctAnswers: question.correctAnswers || [question.correctAnswer],
+          explanation: "Câu hỏi mẫu trong chế độ mock.",
+          sourceIds: [],
+        })),
+        sources: [],
+        warnings: sourceQuestions.length ? [] : ["Không có dữ liệu mẫu phù hợp."],
+      };
+    }
+    const response = await axiosClient.post<QuizGenerationResponse>(
+      "/api/admin/quizzes/generate",
+      request,
+      { timeout: RAG_CHAT_TIMEOUT_MS },
+    );
+    return response.data;
+  },
+
   async createQuestion(question: Omit<Question, "id">): Promise<Question> {
     if (isMockApi()) {
       await mockDelay(300);
@@ -531,6 +602,8 @@ export const adminApi = {
         text: question.text,
         options: question.options,
         correctAnswer: question.correctAnswer,
+        correctAnswers: question.correctAnswers,
+        type: question.type,
         topicId: question.topicId,
         lessonId: question.lessonId,
       };

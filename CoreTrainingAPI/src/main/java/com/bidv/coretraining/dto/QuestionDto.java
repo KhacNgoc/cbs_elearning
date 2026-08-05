@@ -1,5 +1,6 @@
 package com.bidv.coretraining.dto;
 
+import com.bidv.coretraining.entity.QuestionType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,4 +19,6 @@ public class QuestionDto {
     private String text;
     private List<String> options;
     private Integer correctAnswer;
+    private QuestionType type;
+    private List<Integer> correctAnswers;
 }

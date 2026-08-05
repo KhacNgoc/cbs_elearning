@@ -63,6 +63,9 @@
           <span>2</span>
           <div><h2>Danh sách câu hỏi</h2><p>{{ questions.length }} câu hỏi trong bài kiểm tra.</p></div>
           <div class="question-tools">
+            <button class="ai-button" :disabled="generating" @click="showAiPanel = !showAiPanel">
+              <Sparkles :size="16" /> {{ generating ? "Đang tạo..." : "Tạo bằng AI" }}
+            </button>
             <button class="secondary-button" @click="downloadTemplate"><Download :size="16" /> File mẫu</button>
             <label class="secondary-button import-button">
               <FileUp :size="16" /> Import CSV
@@ -77,22 +80,79 @@
           <input v-model="searchQuery" type="search" placeholder="Tìm theo nội dung câu hỏi hoặc đáp án..." />
         </div>
 
+        <section v-if="showAiPanel" class="ai-panel">
+          <div class="ai-panel-heading">
+            <div>
+              <strong>Tạo bản nháp từ tài liệu của {{ lessonId ? "bài học" : "chủ đề" }}</strong>
+              <small>AI tìm kiếm trên toàn bộ tài liệu của topic. Tên lesson chỉ được dùng để định hướng tìm kiếm.</small>
+            </div>
+            <button aria-label="Đóng" @click="showAiPanel = false"><X :size="18" /></button>
+          </div>
+          <div class="ai-settings">
+            <label><span>Single choice</span><input v-model.number="aiConfig.singleChoiceCount" type="number" min="0" max="10" /></label>
+            <label><span>Multiple choice</span><input v-model.number="aiConfig.multipleChoiceCount" type="number" min="0" max="10" /></label>
+            <label><span>Số lựa chọn</span><input v-model.number="aiConfig.optionCount" type="number" min="3" max="6" /></label>
+            <button class="primary-button" :disabled="generating" @click="generateQuestions">
+              <LoaderCircle v-if="generating" class="spin" :size="17" />
+              <Sparkles v-else :size="17" />
+              {{ generating ? "Đang truy xuất và tạo..." : "Tạo bản nháp" }}
+            </button>
+          </div>
+          <p v-for="warning in aiWarnings" :key="warning" class="ai-warning">{{ warning }}</p>
+          <div v-if="aiDrafts.length" class="ai-drafts">
+            <article v-for="(draft, index) in aiDrafts" :key="index" class="ai-draft-card">
+              <label class="draft-select"><input v-model="draft.selected" type="checkbox" /> Chọn</label>
+              <span class="question-type-badge">{{ draft.type === "MULTIPLE_CHOICE" ? "Nhiều đáp án" : "Một đáp án" }}</span>
+              <h3>{{ draft.text }}</h3>
+              <div class="answer-grid">
+                <span v-for="(option, optionIndex) in draft.options" :key="optionIndex"
+                  :class="{ correct: draft.correctAnswers.includes(optionIndex) }">
+                  <strong>{{ String.fromCharCode(65 + optionIndex) }}</strong>{{ option }}
+                  <CheckCircle2 v-if="draft.correctAnswers.includes(optionIndex)" :size="15" />
+                </span>
+              </div>
+              <p v-if="draft.explanation" class="draft-explanation">{{ draft.explanation }}</p>
+              <small v-if="draft.sourceIds.length" class="draft-sources">
+                Nguồn: {{ formatDraftSources(draft.sourceIds) }}
+              </small>
+            </article>
+            <div class="ai-draft-actions">
+              <button class="secondary-button" @click="aiDrafts = []">Bỏ bản nháp</button>
+              <button class="primary-button" :disabled="savingDrafts || !selectedDraftCount" @click="saveAiDrafts">
+                {{ savingDrafts ? "Đang lưu..." : `Lưu ${selectedDraftCount} câu đã chọn` }}
+              </button>
+            </div>
+          </div>
+        </section>
+
         <Transition name="editor-expand">
         <div v-if="showQuestionForm" class="question-editor">
           <div class="question-editor-title">
-            <div><strong>{{ editingId ? "Chỉnh sửa câu hỏi" : "Câu hỏi mới" }}</strong><small>Nhập đủ 4 đáp án và chọn một đáp án đúng.</small></div>
+            <div><strong>{{ editingId ? "Chỉnh sửa câu hỏi" : "Câu hỏi mới" }}</strong><small>Chọn loại câu hỏi và đánh dấu đầy đủ đáp án đúng.</small></div>
             <button aria-label="Đóng" @click="closeQuestionForm"><X :size="18" /></button>
           </div>
           <label class="question-text-field">
             <span>Nội dung câu hỏi</span>
             <textarea v-model="form.text" rows="3" placeholder="Nhập câu hỏi rõ ràng, chỉ tập trung vào một nội dung..." />
           </label>
+          <label class="question-type-field">
+            <span>Loại câu hỏi</span>
+            <select v-model="form.type" @change="normalizeFormAnswers">
+              <option value="SINGLE_CHOICE">Single choice</option>
+              <option value="MULTIPLE_CHOICE">Multiple choice</option>
+            </select>
+          </label>
           <div class="answer-editor">
-            <label v-for="index in 4" :key="index" :class="{ correct: form.correctAnswer === index - 1 }">
-              <input v-model="form.correctAnswer" type="radio" :value="index - 1" name="editor-correct-answer" />
+            <label v-for="index in form.options.length" :key="index" :class="{ correct: form.correctAnswers.includes(index - 1) }">
+              <input
+                :type="form.type === 'MULTIPLE_CHOICE' ? 'checkbox' : 'radio'"
+                :checked="form.correctAnswers.includes(index - 1)"
+                name="editor-correct-answer"
+                @change="toggleCorrectAnswer(index - 1)"
+              />
               <strong>{{ String.fromCharCode(64 + index) }}</strong>
               <input v-model="form.options[index - 1]" type="text" :placeholder="`Nhập đáp án ${String.fromCharCode(64 + index)}`" />
-              <CheckCircle2 v-if="form.correctAnswer === index - 1" :size="18" />
+              <CheckCircle2 v-if="form.correctAnswers.includes(index - 1)" :size="18" />
             </label>
           </div>
           <div class="form-actions">
@@ -116,9 +176,9 @@
               <h3>{{ question.text }}</h3>
               <div class="answer-grid">
                 <span v-for="(option, optionIndex) in question.options" :key="optionIndex"
-                  :class="{ correct: optionIndex === question.correctAnswer }">
+                  :class="{ correct: questionCorrectAnswers(question).includes(optionIndex) }">
                   <strong>{{ String.fromCharCode(65 + optionIndex) }}</strong>{{ option }}
-                  <CheckCircle2 v-if="optionIndex === question.correctAnswer" :size="15" />
+                  <CheckCircle2 v-if="questionCorrectAnswers(question).includes(optionIndex)" :size="15" />
                 </span>
               </div>
             </div>
@@ -157,10 +217,10 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { ArrowLeft, ArrowRight, CheckCircle2, Download, Edit, FileUp, Plus, Search, Trash2, X } from "lucide-vue-next";
+import { ArrowLeft, ArrowRight, CheckCircle2, Download, Edit, FileUp, LoaderCircle, Plus, Search, Sparkles, Trash2, X } from "lucide-vue-next";
 import { useCourseStore } from "../stores/courseStore";
-import { quizApi } from "../api/quizApi";
 import { adminApi } from "../api/adminApi";
+import type { GeneratedQuizQuestion, QuizGenerationSource } from "../api/adminApi";
 import type { Question } from "../types";
 import ConfirmModal from "../components/ConfirmModal.vue";
 
@@ -177,6 +237,13 @@ const editingId = ref<number | null>(null);
 const saving = ref(false);
 const savingSettings = ref(false);
 const deletingQuiz = ref(false);
+const showAiPanel = ref(false);
+const generating = ref(false);
+const savingDrafts = ref(false);
+const aiWarnings = ref<string[]>([]);
+const aiSources = ref<QuizGenerationSource[]>([]);
+const aiDrafts = ref<(GeneratedQuizQuestion & { selected: boolean })[]>([]);
+const aiConfig = reactive({ singleChoiceCount: 5, multipleChoiceCount: 0, optionCount: 4 });
 const confirmationModal = ref<{
   show: boolean;
   title: string;
@@ -193,7 +260,12 @@ const confirmationModal = ref<{
   action: null,
 });
 const passingScore = ref(80);
-const form = reactive({ text: "", options: ["", "", "", ""], correctAnswer: 0 });
+const form = reactive<{
+  text: string;
+  options: string[];
+  type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE";
+  correctAnswers: number[];
+}>({ text: "", options: ["", "", "", ""], type: "SINGLE_CHOICE", correctAnswers: [0] });
 
 const availableLessons = computed(() => courseStore.topics.find((topic) => topic.id === topicId.value)?.lessons || []);
 const pageTitle = computed(() => {
@@ -208,6 +280,7 @@ const filteredQuestions = computed(() => {
     `${question.text} ${question.options.join(" ")}`.toLocaleLowerCase("vi").includes(query),
   );
 });
+const selectedDraftCount = computed(() => aiDrafts.value.filter(draft => draft.selected).length);
 
 onMounted(async () => {
   if (!courseStore.topics.length) await courseStore.fetchTopics();
@@ -231,7 +304,7 @@ watch(topicId, () => {
 });
 
 const loadQuestions = async () => {
-  questions.value = (await quizApi.getQuizQuestions(topicId.value, lessonId.value || undefined)) as Question[];
+  questions.value = await adminApi.getQuizQuestions(topicId.value, lessonId.value || undefined);
 };
 const confirmScope = () => router.replace(
   lessonId.value
@@ -301,8 +374,9 @@ const deleteQuiz = () => {
 };
 const resetForm = () => {
   form.text = "";
-  form.options.splice(0, 4, "", "", "", "");
-  form.correctAnswer = 0;
+  form.options.splice(0, form.options.length, "", "", "", "");
+  form.type = "SINGLE_CHOICE";
+  form.correctAnswers = [0];
   editingId.value = null;
 };
 const startAdding = () => { resetForm(); showQuestionForm.value = true; };
@@ -310,8 +384,9 @@ const closeQuestionForm = () => { showQuestionForm.value = false; resetForm(); }
 const editQuestion = (question: Question) => {
   editingId.value = question.id;
   form.text = question.text;
-  form.options.splice(0, 4, ...question.options);
-  form.correctAnswer = question.correctAnswer;
+  form.options.splice(0, form.options.length, ...question.options);
+  form.type = question.type || ((question.correctAnswers?.length || 1) > 1 ? "MULTIPLE_CHOICE" : "SINGLE_CHOICE");
+  form.correctAnswers = questionCorrectAnswers(question);
   showQuestionForm.value = true;
   window.scrollTo({ top: 360, behavior: "smooth" });
 };
@@ -322,8 +397,24 @@ const saveQuestion = async () => {
     alert("Vui lòng nhập nội dung câu hỏi và đầy đủ 4 đáp án.");
     return;
   }
+  if (form.type === "SINGLE_CHOICE" && form.correctAnswers.length !== 1) {
+    alert("Câu single choice phải có đúng một đáp án đúng.");
+    return;
+  }
+  if (form.type === "MULTIPLE_CHOICE" && (form.correctAnswers.length < 2 || form.correctAnswers.length >= options.length)) {
+    alert("Câu multiple choice cần ít nhất hai đáp án đúng và không được chọn tất cả.");
+    return;
+  }
   saving.value = true;
-  const payload = { topicId: topicId.value, lessonId: lessonId.value || undefined, text, options, correctAnswer: form.correctAnswer };
+  const payload = {
+    topicId: topicId.value,
+    lessonId: lessonId.value || undefined,
+    text,
+    options,
+    type: form.type,
+    correctAnswers: [...form.correctAnswers].sort(),
+    correctAnswer: [...form.correctAnswers].sort()[0],
+  };
   try {
     if (editingId.value) await adminApi.updateQuestion(editingId.value, { ...payload, id: editingId.value });
     else await adminApi.createQuestion(payload);
@@ -332,6 +423,76 @@ const saveQuestion = async () => {
     closeQuestionForm();
   } finally {
     saving.value = false;
+  }
+};
+const questionCorrectAnswers = (question: Question) =>
+  question.correctAnswers?.length ? question.correctAnswers : [question.correctAnswer];
+const normalizeFormAnswers = () => {
+  if (form.type === "SINGLE_CHOICE") form.correctAnswers = [form.correctAnswers[0] ?? 0];
+};
+const toggleCorrectAnswer = (index: number) => {
+  if (form.type === "SINGLE_CHOICE") {
+    form.correctAnswers = [index];
+    return;
+  }
+  form.correctAnswers = form.correctAnswers.includes(index)
+    ? form.correctAnswers.filter(answer => answer !== index)
+    : [...form.correctAnswers, index].sort();
+};
+
+const generateQuestions = async () => {
+  const total = aiConfig.singleChoiceCount + aiConfig.multipleChoiceCount;
+  if (!Number.isInteger(total) || total < 1 || total > 10) {
+    alert("Tổng số câu hỏi phải từ 1 đến 10.");
+    return;
+  }
+  if (!Number.isInteger(aiConfig.optionCount) || aiConfig.optionCount < 3 || aiConfig.optionCount > 6) {
+    alert("Số lựa chọn phải từ 3 đến 6.");
+    return;
+  }
+  generating.value = true;
+  aiWarnings.value = [];
+  try {
+    const result = await adminApi.generateQuizQuestions({
+      topicId: topicId.value,
+      lessonId: lessonId.value || undefined,
+      ...aiConfig,
+    });
+    aiSources.value = result.sources || [];
+    aiWarnings.value = result.warnings || [];
+    aiDrafts.value = (result.questions || []).map(question => ({ ...question, selected: true }));
+  } catch (error) {
+    alert(error instanceof Error ? error.message : "Không thể tạo câu hỏi. Vui lòng thử lại.");
+  } finally {
+    generating.value = false;
+  }
+};
+const formatDraftSources = (sourceIds: string[]) => sourceIds.map(sourceId => {
+  const source = aiSources.value.find(item => item.id === sourceId);
+  return source ? `${source.documentName}, trang ${source.page}, ${source.section}` : sourceId;
+}).join("; ");
+const saveAiDrafts = async () => {
+  const selected = aiDrafts.value.filter(draft => draft.selected);
+  if (!selected.length) return;
+  savingDrafts.value = true;
+  try {
+    for (const draft of selected) {
+      await adminApi.createQuestion({
+        topicId: topicId.value,
+        lessonId: lessonId.value || undefined,
+        text: draft.text,
+        options: draft.options,
+        type: draft.type,
+        correctAnswers: draft.correctAnswers,
+        correctAnswer: draft.correctAnswers[0],
+      });
+    }
+    await loadQuestions();
+    await courseStore.fetchTopics();
+    aiDrafts.value = [];
+    showAiPanel.value = false;
+  } finally {
+    savingDrafts.value = false;
   }
 };
 const deleteQuestion = (question: Question) => {
@@ -436,10 +597,32 @@ select, textarea, .question-text-field input { width: 100%; padding: .7rem; bord
 .danger-zone button:disabled { opacity: .55; cursor: wait; }
 .question-section-heading { flex-wrap: wrap; }
 .question-tools { display: flex; gap: .45rem; margin-left: auto; }
+.ai-button { display: inline-flex; align-items: center; gap: .4rem; padding: .65rem .85rem; border: 1px solid #7c3aed; border-radius: var(--radius-sm); background: #f5f3ff; color: #6d28d9; cursor: pointer; font-weight: 800; }
+.ai-button:disabled { opacity: .65; cursor: wait; }
 .import-button { position: relative; }
 .import-button input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .search-box { display: flex; align-items: center; gap: .5rem; max-width: 560px; margin-bottom: 1rem; padding: 0 .75rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-muted); }
 .search-box input { width: 100%; height: 42px; border: 0; outline: 0; }
+.ai-panel { margin-bottom: 1.2rem; padding: 1rem; border: 1px solid #ddd6fe; border-radius: var(--radius-md); background: #faf9ff; }
+.ai-panel-heading { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: .9rem; }
+.ai-panel-heading > div { display: flex; flex-direction: column; gap: .2rem; }
+.ai-panel-heading small { color: var(--text-muted); }
+.ai-panel-heading > button { border: 0; background: transparent; cursor: pointer; }
+.ai-settings { display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)) auto; gap: .7rem; align-items: end; }
+.ai-settings label span, .question-type-field > span { display: block; margin-bottom: .3rem; font-size: var(--admin-text-label); font-weight: 700; }
+.ai-settings input { width: 100%; padding: .65rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); }
+.ai-warning { margin: .75rem 0 0; padding: .65rem .75rem; border-radius: var(--radius-sm); background: #fff7ed; color: #9a3412; }
+.ai-drafts { display: grid; gap: .75rem; margin-top: 1rem; }
+.ai-draft-card { position: relative; padding: 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: white; }
+.ai-draft-card h3 { margin: .55rem 0 .75rem; padding-right: 4rem; font-size: var(--admin-text-body); }
+.draft-select { position: absolute; top: 1rem; right: 1rem; display: flex; gap: .35rem; align-items: center; font-weight: 700; }
+.question-type-badge { display: inline-flex; padding: .2rem .45rem; border-radius: 999px; background: #ede9fe; color: #6d28d9; font-size: var(--admin-text-caption); font-weight: 800; }
+.draft-explanation { margin: .7rem 0 .25rem; color: var(--text-muted); }
+.draft-sources { color: #475569; }
+.ai-draft-actions { display: flex; justify-content: flex-end; gap: .6rem; }
+.question-type-field { display: block; max-width: 280px; margin-bottom: .75rem; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .question-editor { margin-bottom: 1rem; padding: 1rem; border: 1px solid var(--primary-color); border-radius: var(--radius-md); background: var(--primary-light); }
 .editor-expand-enter-active, .editor-expand-leave-active { transition: opacity .22s ease, transform .22s ease; transform-origin: top center; }
 .editor-expand-enter-from, .editor-expand-leave-to { opacity: 0; transform: translateY(-10px) scale(.985); }
@@ -473,6 +656,7 @@ select, textarea, .question-text-field input { width: 100%; padding: .7rem; bord
   .settings-grid, .answer-editor, .answer-grid { grid-template-columns: 1fr; }
   .danger-zone { align-items: flex-start; flex-direction: column; }
   .question-tools { width: 100%; margin-left: 0; flex-wrap: wrap; }
+  .ai-settings { grid-template-columns: 1fr; }
   .question-card { grid-template-columns: 30px 1fr; }
   .question-actions { grid-column: 2; }
 }

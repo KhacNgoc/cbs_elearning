@@ -1321,7 +1321,6 @@ import type {
   CourseDocument,
   EnrollmentRequest,
 } from "../api/adminApi";
-import { quizApi } from "../api/quizApi";
 import type { Topic, Lesson, LessonDocument, Question } from "../types";
 import ConfirmModal from "../components/ConfirmModal.vue";
 import {
@@ -2135,8 +2134,8 @@ const confirmModalAction = async () => {
 // ==========================================
 const loadQuestions = async () => {
   const requests = courseStore.topics.flatMap((topic) => [
-    quizApi.getQuizQuestions(topic.id),
-    ...topic.lessons.map((lesson) => quizApi.getQuizQuestions(topic.id, lesson.id)),
+    adminApi.getQuizQuestions(topic.id),
+    ...topic.lessons.map((lesson) => adminApi.getQuizQuestions(topic.id, lesson.id)),
   ]);
   const results = await Promise.allSettled(requests);
   questions.value = results.flatMap((result) =>

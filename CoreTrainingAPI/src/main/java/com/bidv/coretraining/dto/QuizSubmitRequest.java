@@ -6,7 +6,7 @@ import java.util.Map;
 
 @Data
 public class QuizSubmitRequest {
-    // Map of questionId -> answerIndex
-    private Map<Long, Integer> selectedAnswers;
+    // Map of questionId -> selected option indexes
+    private Map<Long, java.util.List<Integer>> selectedAnswers;
     private Integer timeElapsed;
 }

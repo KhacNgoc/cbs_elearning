@@ -6,6 +6,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.bidv.coretraining.service.AdminService;
 import com.bidv.coretraining.service.DocumentStorageService;
 import com.bidv.coretraining.service.VideoStorageService;
+import com.bidv.coretraining.service.QuizGenerationService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -19,12 +21,15 @@ public class AdminController {
     private final AdminService adminService;
     private final DocumentStorageService documentStorageService;
     private final VideoStorageService videoStorageService;
+    private final QuizGenerationService quizGenerationService;
 
     public AdminController(AdminService adminService, DocumentStorageService documentStorageService,
-                           VideoStorageService videoStorageService) {
+                           VideoStorageService videoStorageService,
+                           QuizGenerationService quizGenerationService) {
         this.adminService = adminService;
         this.documentStorageService = documentStorageService;
         this.videoStorageService = videoStorageService;
+        this.quizGenerationService = quizGenerationService;
     }
 
     // Topics CRUD
@@ -79,6 +84,19 @@ public class AdminController {
     }
 
     // Questions CRUD
+    @GetMapping("/quizzes/questions")
+    public ResponseEntity<List<QuestionDto>> getQuizQuestions(
+            @RequestParam String topicId,
+            @RequestParam(required = false) String lessonId) {
+        return ResponseEntity.ok(adminService.getQuizQuestions(topicId, lessonId));
+    }
+
+    @PostMapping("/quizzes/generate")
+    public ResponseEntity<QuizGenerationResponseDto> generateQuiz(
+            @Valid @RequestBody QuizGenerationRequestDto request) {
+        return ResponseEntity.ok(quizGenerationService.generate(request));
+    }
+
     @PostMapping("/questions")
     public ResponseEntity<QuestionDto> createQuestion(@RequestBody QuestionDto questionDto) {
         return ResponseEntity.ok(adminService.createQuestion(questionDto));
