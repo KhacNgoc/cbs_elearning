@@ -83,6 +83,7 @@ public class RagChatService {
         Map<String, Object> pythonRequest = new LinkedHashMap<>();
         pythonRequest.put("question", question);
         pythonRequest.put("course_id", topic.getId());
+        pythonRequest.put("topic_name", topic.getName());
         if (request.page() != null) pythonRequest.put("page", request.page());
         pythonRequest.put("conversation_summary", Objects.toString(conversation.getSummary(), ""));
         pythonRequest.put("recent_messages", recent.stream()

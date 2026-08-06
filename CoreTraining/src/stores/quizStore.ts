@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import type { Question } from '../types';
+import type { QuizQuestion } from '../types';
 import { quizApi } from '../api/quizApi';
 import type { QuizSubmitResponse } from '../api/quizApi';
 import { useUserStore } from './userStore';
@@ -9,8 +9,8 @@ export const useQuizStore = defineStore('quiz', {
     currentTopicId: null as string | null,
     currentLessonId: null as string | null,
     currentQuestionIndex: 0,
-    questions: [] as Omit<Question, 'correctAnswer'>[],
-    selectedAnswers: {} as Record<number, number>, // questionId -> optionIndex
+    questions: [] as QuizQuestion[],
+    selectedAnswers: {} as Record<number, number[]>, // questionId -> selected option indexes
     timeElapsed: 0, // seconds
     timerIntervalId: null as any | null,
     isQuizFinished: false,
@@ -19,10 +19,10 @@ export const useQuizStore = defineStore('quiz', {
   }),
 
   getters: {
-    quizQuestions(): Omit<Question, 'correctAnswer'>[] {
+    quizQuestions(): QuizQuestion[] {
       return this.questions;
     },
-    currentQuestion(): Omit<Question, 'correctAnswer'> | null {
+    currentQuestion(): QuizQuestion | null {
       if (this.questions.length === 0 || this.currentQuestionIndex >= this.questions.length) return null;
       return this.questions[this.currentQuestionIndex];
     },
@@ -60,7 +60,15 @@ export const useQuizStore = defineStore('quiz', {
       }
     },
     selectAnswer(questionId: number, answerIndex: number) {
-      this.selectedAnswers[questionId] = answerIndex;
+      const question = this.questions.find(item => item.id === questionId);
+      if (question?.type === 'MULTIPLE_CHOICE') {
+        const current = this.selectedAnswers[questionId] || [];
+        this.selectedAnswers[questionId] = current.includes(answerIndex)
+          ? current.filter(index => index !== answerIndex)
+          : [...current, answerIndex].sort();
+      } else {
+        this.selectedAnswers[questionId] = [answerIndex];
+      }
     },
     async nextQuestion() {
       if (this.currentQuestionIndex < this.questions.length - 1) {

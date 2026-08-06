@@ -17,6 +17,11 @@ export const RAG_CHAT_TIMEOUT_MS = positiveTimeout(
   330_000,
 );
 
+export const QUIZ_GENERATION_TIMEOUT_MS = positiveTimeout(
+  import.meta.env.VITE_QUIZ_GENERATION_TIMEOUT_MS,
+  300_000,
+);
+
 export const isTimeoutError = (error: unknown): boolean => {
   if (!axios.isAxiosError(error)) return false;
   return error.code === 'ECONNABORTED' ||

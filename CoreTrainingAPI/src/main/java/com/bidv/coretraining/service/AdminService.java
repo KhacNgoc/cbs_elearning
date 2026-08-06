@@ -17,6 +17,7 @@ public interface AdminService {
     List<LessonDto> reorderLessons(String topicId, List<String> lessonIds);
 
     // Question CRUD
+    List<QuestionDto> getQuizQuestions(String topicId, String lessonId);
     QuestionDto createQuestion(QuestionDto questionDto);
     QuestionDto updateQuestion(Long id, QuestionDto questionDto);
     void deleteQuestion(Long id);
@@ -35,4 +36,3 @@ public interface AdminService {
     byte[] generateExcelTemplate();
     List<com.bidv.coretraining.entity.UserGroup> getAllUserGroups();
 }
-

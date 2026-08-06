@@ -65,6 +65,40 @@ class ChatGroundingTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(main.REFUSAL_ANSWER, result.answer)
         self.assertEqual([], result.sources)
 
+    async def test_course_summary_uses_topic_context_and_bypasses_detail_threshold(self):
+        embedded_texts = []
+
+        async def capture_embedding(texts, *_args):
+            embedded_texts.extend(texts)
+            return [[0.1, 0.2, 0.3]]
+
+        low_score_point = SimpleNamespace(score=0.2, payload={
+            "document_id": "doc-teller",
+            "file_name": "Teller.docx",
+            "page": 1,
+            "section": "Trách nhiệm của Teller",
+            "full_text": "Teller tiếp nhận yêu cầu, kiểm tra chứng từ và thực hiện giao dịch.",
+        })
+        model = AsyncMock(return_value=json.dumps({
+            "answer": "Khóa học trình bày việc tiếp nhận, kiểm tra chứng từ và thực hiện giao dịch.",
+            "source_ids": ["SOURCE_1"],
+        }))
+        with patch.object(main, "ensure_collection", no_op_collection), \
+                patch.object(main, "embeddings", capture_embedding), \
+                patch.object(main, "qdrant", FakeQdrant([low_score_point])), \
+                patch.object(main, "ollama_chat", model):
+            result = await main.chat(main.ChatRequest(
+                question="Tóm tắt nội dung của khóa học",
+                course_id="TELLER",
+                topic_name="Nghiệp vụ Teller",
+            ))
+
+        self.assertTrue(result.grounded)
+        self.assertIn("Nghiệp vụ Teller", embedded_texts[0])
+        prompt = model.await_args.args[1][1]["content"]
+        self.assertIn('<course_scope knowledge_source="false" id="TELLER">', prompt)
+        self.assertIn("Nghiệp vụ Teller", prompt)
+
     async def test_follow_up_uses_rewritten_question_for_embedding(self):
         embedded_texts = []
         embedding_options = []
@@ -198,6 +232,32 @@ Chủ đề chính: Posting giao dịch
             schema,
         )
 
+    def test_ollama_schema_resolves_nested_quiz_question_reference(self):
+        schema = main.ollama_compatible_schema(main.CompactSingleChoiceQuestion.model_json_schema())
+
+        self.assertEqual("object", schema["type"])
+        self.assertIn("q", schema["properties"])
+        self.assertEqual("integer", schema["properties"]["a"]["type"])
+
+    def test_single_choice_allows_distractors_that_are_terms_from_source(self):
+        question = main.GeneratedQuizQuestion(
+            type="SINGLE_CHOICE",
+            text="Điều kiện nào bắt buộc trước khi phê duyệt?",
+            options=["Kiểm tra đầy đủ", "Phê duyệt hồ sơ", "Lưu hồ sơ", "Từ chối hồ sơ"],
+            correct_answers=[0],
+            explanation="",
+            source_ids=["SOURCE_1"],
+        )
+
+        error = main.generated_question_validation_error(
+            question,
+            4,
+            {"SOURCE_1"},
+            {"SOURCE_1": "Kiểm tra đầy đủ trước khi phê duyệt hồ sơ và lưu hồ sơ."},
+        )
+
+        self.assertIsNone(error)
+
     async def test_internal_summary_shaped_answer_is_blocked(self):
         point = SimpleNamespace(score=0.9, payload={
             "document_id": "doc-1",
@@ -263,6 +323,64 @@ Chủ đề chính: Posting giao dịch
         self.assertFalse(result.grounded)
         self.assertEqual(main.REFUSAL_ANSWER, result.answer)
         self.assertEqual([], result.sources)
+
+    async def test_quiz_generation_filters_by_topic_and_uses_lesson_name_as_scope(self):
+        point = SimpleNamespace(score=0.91, payload={
+            "document_id": "doc-1",
+            "file_name": "Quy trình.pdf",
+            "page": 4,
+            "section": "Phê duyệt",
+            "full_text": "Hồ sơ cần được kiểm tra đầy đủ trước khi phê duyệt.",
+        })
+        qdrant = FakeQdrant([point])
+        model = AsyncMock(side_effect=[json.dumps({
+            "q": "Hồ sơ cần được xử lý thế nào trước khi phê duyệt?",
+            "o": ["Kiểm tra đầy đủ", "Bỏ qua", "Hủy ngay", "Chuyển ra ngoài"],
+            "a": 0,
+        }), json.dumps({"accepted_question_indexes": [0]})])
+
+        async def quiz_embeddings(texts, *_args):
+            return [[0.1, 0.2, 0.3] for _ in texts]
+
+        with patch.object(main, "ensure_collection", no_op_collection), \
+                patch.object(main, "embeddings", quiz_embeddings), \
+                patch.object(main, "qdrant", qdrant), \
+                patch.object(main, "QUIZ_LLM_VERIFICATION_ENABLED", True), \
+                patch.object(main, "ollama_chat", model):
+            result = await main.generate_quiz(main.QuizGenerationRequest(
+                course_id="CIF",
+                topic_name="Quy trình tín dụng",
+                lesson_name="Điều kiện phê duyệt",
+                single_choice_count=1,
+                multiple_choice_count=0,
+                option_count=4,
+            ))
+
+        self.assertEqual(1, len(result.questions))
+        self.assertEqual([0], result.questions[0].correct_answers)
+        self.assertEqual(["SOURCE_1"], result.questions[0].source_ids)
+        self.assertNotIn("Theo tài liệu", result.questions[0].text)
+        prompt = model.await_args_list[0].args[1][1]["content"]
+        self.assertIn("Bài học được chọn: Điều kiện phê duyệt", prompt)
+        self.assertNotIn("procedureSteps", prompt)
+
+    async def test_quiz_generation_allows_twelve_questions(self):
+        async def quiz_embeddings(texts, *_args):
+            return [[0.1, 0.2, 0.3] for _ in texts]
+
+        with patch.object(main, "ensure_collection", no_op_collection), \
+                patch.object(main, "embeddings", quiz_embeddings), \
+                patch.object(main, "qdrant", FakeQdrant([])):
+            result = await main.generate_quiz(main.QuizGenerationRequest(
+                course_id="CIF",
+                topic_name="CIF",
+                single_choice_count=10,
+                multiple_choice_count=2,
+                option_count=4,
+            ))
+
+        self.assertEqual([], result.questions)
+        self.assertTrue(result.warnings)
 
 
 if __name__ == "__main__":

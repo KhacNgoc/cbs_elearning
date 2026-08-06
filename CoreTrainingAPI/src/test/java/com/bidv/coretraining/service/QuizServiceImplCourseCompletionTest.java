@@ -5,6 +5,7 @@ import com.bidv.coretraining.dto.QuizResultDto;
 import com.bidv.coretraining.dto.QuizSubmitRequest;
 import com.bidv.coretraining.entity.Lesson;
 import com.bidv.coretraining.entity.Question;
+import com.bidv.coretraining.entity.QuestionType;
 import com.bidv.coretraining.entity.Topic;
 import com.bidv.coretraining.entity.User;
 import com.bidv.coretraining.repository.BadgeRepository;
@@ -22,6 +23,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -29,6 +31,43 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class QuizServiceImplCourseCompletionTest {
+
+    @Test
+    void multipleChoiceRequiresTheExactAnswerSet() {
+        QuestionRepository questionRepository = mock(QuestionRepository.class);
+        LessonRepository lessonRepository = mock(LessonRepository.class);
+        UserRepository userRepository = mock(UserRepository.class);
+        UserQuizScoreRepository scoreRepository = mock(UserQuizScoreRepository.class);
+        QuizServiceImpl service = new QuizServiceImpl(
+                questionRepository, mock(TopicRepository.class), lessonRepository,
+                userRepository, scoreRepository, mock(BadgeRepository.class),
+                mock(UserBadgeRepository.class), mock(QuizMapper.class));
+
+        Topic topic = Topic.builder().id("COURSE").name("Khóa học").build();
+        Lesson lesson = Lesson.builder().id("LESSON").title("Bài học").topic(topic).quizPassingScore(80).build();
+        User user = User.builder().id(1L).username("learner").password("encoded")
+                .fullName("Học viên").role("ROLE_USER").build();
+        Question question = Question.builder()
+                .id(20L).topic(topic).lesson(lesson).text("Chọn hai đáp án")
+                .options(List.of("A", "B", "C", "D"))
+                .type(QuestionType.MULTIPLE_CHOICE)
+                .correctAnswer(0)
+                .correctAnswers(List.of(0, 2))
+                .build();
+        QuizSubmitRequest request = new QuizSubmitRequest();
+        request.setSelectedAnswers(Map.of(20L, List.of(2, 0)));
+
+        when(lessonRepository.findById("LESSON")).thenReturn(Optional.of(lesson));
+        when(userRepository.findByUsername("learner")).thenReturn(Optional.of(user));
+        when(questionRepository.findByLessonId("LESSON")).thenReturn(List.of(question));
+        when(scoreRepository.findByUserIdAndLessonId(1L, "LESSON")).thenReturn(Optional.empty());
+        when(questionRepository.existsByTopicIdAndLessonIsNull("COURSE")).thenReturn(false);
+
+        QuizResultDto result = service.submitLessonQuiz("LESSON", request, "learner");
+
+        assertEquals(1, result.getScore());
+        assertTrue(result.getPassed());
+    }
 
     @Test
     void passingFinalLessonQuizDoesNotBypassRequiredTopicQuiz() {
@@ -72,7 +111,7 @@ class QuizServiceImplCourseCompletionTest {
                 .correctAnswer(0)
                 .build();
         QuizSubmitRequest request = new QuizSubmitRequest();
-        request.setSelectedAnswers(Map.of(10L, 0));
+        request.setSelectedAnswers(Map.of(10L, List.of(0)));
 
         when(lessonRepository.findById(finalLesson.getId())).thenReturn(Optional.of(finalLesson));
         when(userRepository.findByUsername("learner")).thenReturn(Optional.of(user));

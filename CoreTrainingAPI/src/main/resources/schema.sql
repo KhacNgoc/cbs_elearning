@@ -280,6 +280,7 @@ CREATE TABLE IF NOT EXISTS questions (
     id BIGSERIAL PRIMARY KEY,
     text TEXT NOT NULL,
     correct_answer INTEGER NOT NULL,
+    question_type VARCHAR(32) NOT NULL DEFAULT 'SINGLE_CHOICE',
     topic_id VARCHAR(255) NOT NULL,
     lesson_id VARCHAR(255),
     CONSTRAINT fk_questions_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE,
@@ -287,6 +288,7 @@ CREATE TABLE IF NOT EXISTS questions (
 );
 
 ALTER TABLE questions ADD COLUMN IF NOT EXISTS lesson_id VARCHAR(255);
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS question_type VARCHAR(32) NOT NULL DEFAULT 'SINGLE_CHOICE';
 
 -- 14. Create question_options table (ElementCollection)
 CREATE TABLE IF NOT EXISTS question_options (
@@ -295,6 +297,14 @@ CREATE TABLE IF NOT EXISTS question_options (
     option_order INTEGER NOT NULL,
     PRIMARY KEY (question_id, option_order),
     CONSTRAINT fk_question_options_question FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS question_correct_answers (
+    question_id BIGINT NOT NULL,
+    answer_index INTEGER NOT NULL,
+    answer_order INTEGER NOT NULL,
+    PRIMARY KEY (question_id, answer_order),
+    CONSTRAINT fk_question_correct_answers_question FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
 );
 
 -- 15. Create badges table
@@ -339,6 +349,15 @@ CREATE TABLE IF NOT EXISTS user_quiz_score_answers (
     PRIMARY KEY (quiz_score_id, question_id),
     CONSTRAINT fk_quiz_score_answers_score FOREIGN KEY (quiz_score_id) REFERENCES user_quiz_scores(id) ON DELETE CASCADE,
     CONSTRAINT fk_quiz_score_answers_question FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS user_quiz_score_answer_sets (
+    quiz_score_id BIGINT NOT NULL,
+    question_id BIGINT NOT NULL,
+    selected_answers VARCHAR(255) NOT NULL,
+    PRIMARY KEY (quiz_score_id, question_id),
+    CONSTRAINT fk_quiz_score_answer_sets_score FOREIGN KEY (quiz_score_id) REFERENCES user_quiz_scores(id) ON DELETE CASCADE,
+    CONSTRAINT fk_quiz_score_answer_sets_question FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
 );
 
 -- 17. Create password_reset_otps table

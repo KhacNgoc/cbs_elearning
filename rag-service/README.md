@@ -10,6 +10,20 @@ Each Qdrant payload stores `excerpt` (the first 500 characters, returned to the 
 2. Run `docker compose up --build` from the repository root. The initial Ollama model download may take several minutes.
 3. Check `http://localhost:8001/health`.
 
+On Apple Silicon, Ollama inside Docker is CPU-only. For low-latency quiz
+generation, run Ollama natively with Metal and apply the macOS Compose override:
+
+```bash
+OLLAMA_HOST=127.0.0.1:11435 OLLAMA_NUM_PARALLEL=5 ollama serve
+OLLAMA_HOST=http://127.0.0.1:11435 ollama pull qwen3:4b
+OLLAMA_HOST=http://127.0.0.1:11435 ollama pull nomic-embed-text
+docker compose --env-file .env.production \
+  -f docker-compose.yml -f docker-compose.macos.yml up -d --build
+```
+
+The native Ollama process must remain running. The RAG service keeps the quiz
+model loaded for 30 minutes, avoiding cold-start cost on normal requests.
+
 ## Run application services locally (Qdrant in Docker)
 
 Only Qdrant needs to run in Docker. Ollama, Python, Spring Boot, and Vue run
@@ -45,6 +59,24 @@ Context-aware chat uses `OLLAMA_REWRITE_MODEL` and `OLLAMA_SUMMARY_MODEL`
 `RAG_CANDIDATE_LIMIT`, and `RAG_CONTEXT_MAX_CHARS`. Ollama timeouts are
 configured independently through `OLLAMA_CHAT_TIMEOUT_SECONDS`,
 `OLLAMA_REWRITE_TIMEOUT_SECONDS`, and `OLLAMA_SUMMARY_TIMEOUT_SECONDS`.
+Quiz generation defaults to `OLLAMA_QUIZ_MODEL=qwen3:4b`. It runs one compact,
+single-source generation per requested question. Runtime capacity is configurable:
+use `QUIZ_GENERATION_CONCURRENCY=1` on constrained CPU machines, and increase it
+to match the inference server's parallel slots on GPU servers. `QUIZ_NUM_CTX`,
+`QUIZ_SOURCE_MAX_CHARS`, `QUIZ_SINGLE_NUM_PREDICT`, and
+`QUIZ_MULTIPLE_NUM_PREDICT` bound memory and token costs without changing code.
+`QUIZ_GENERATION_MAX_ATTEMPTS` controls targeted retries for questions rejected
+by structural or grounding checks; the default `2` performs one replacement pass.
+The per-question timeout is controlled by
+`OLLAMA_QUIZ_GENERATION_TIMEOUT_SECONDS` (120s). A second LLM verification pass
+is disabled by default; enable `QUIZ_LLM_VERIFICATION_ENABLED=true` when the
+deployment has spare inference capacity. Its timeout is controlled by
+`OLLAMA_QUIZ_VERIFICATION_TIMEOUT_SECONDS` (60s).
+
+For production, `OLLAMA_URL` may point to any reachable Ollama server. Select
+`OLLAMA_QUIZ_MODEL` and `QUIZ_GENERATION_CONCURRENCY` from benchmark results on
+that server; no application-code change is required when moving between CPU,
+Apple Metal, NVIDIA GPU, or a separate inference host.
 Query embedding has its own shorter budget through
 `OLLAMA_QUERY_EMBEDDING_TIMEOUT_SECONDS` (30 seconds by default), while document
 ingestion retains the 120-second embedding timeout. The default request budget
@@ -95,6 +127,7 @@ The chat model defaults to `qwen3:4b`; change `OLLAMA_CHAT_MODEL=qwen3:8b` in `.
 - `GET /health`
 - `POST /ingest` multipart: `file`, `document_id`, `course_id`
 - `POST /chat`: `{ "question": "Nó được tạo khi nào?", "course_id": "CIF", "conversation_summary": "...", "recent_messages": [{"role": "user", "content": "CIF là gì?"}] }`
+- `POST /quiz/generate`: creates grounded single/multiple-choice drafts. Retrieval is always filtered by `course_id`; optional `lesson_name` only guides semantic search and is never treated as a knowledge source.
 - `POST /summarize`: internal endpoint receiving `current_summary` and `new_messages`
 
 Spring Boot provides the authenticated application-facing endpoints:
@@ -102,6 +135,7 @@ Spring Boot provides the authenticated application-facing endpoints:
 - `POST /api/admin/topics/{topicId}/documents` (admin, multipart `file`)
 - `GET /api/admin/topics/{topicId}/documents` (admin)
 - `POST /api/rag/chat` (authenticated)
+- `POST /api/admin/quizzes/generate` (admin; topic is required and lesson is optional)
 - `GET /api/rag/chat/history?courseId=...&conversationId=...` (authenticated; `conversationId` is optional)
 
 The application-facing chat request accepts an optional `conversationId`. If

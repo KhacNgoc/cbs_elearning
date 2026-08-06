@@ -1,6 +1,6 @@
 package com.bidv.coretraining.controller;
 
-import com.bidv.coretraining.dto.QuestionDto;
+import com.bidv.coretraining.dto.QuizQuestionDto;
 import com.bidv.coretraining.dto.QuizResultDto;
 import com.bidv.coretraining.dto.QuizSubmitRequest;
 import com.bidv.coretraining.dto.QuizReviewDto;
@@ -23,7 +23,7 @@ public class QuizController {
     }
 
     @GetMapping("/lessons/{lessonId}/questions")
-    public ResponseEntity<List<QuestionDto>> getQuestionsForLesson(@PathVariable String lessonId) {
+    public ResponseEntity<List<QuizQuestionDto>> getQuestionsForLesson(@PathVariable String lessonId) {
         return ResponseEntity.ok(quizService.getQuestionsForLesson(lessonId));
     }
 
@@ -45,7 +45,7 @@ public class QuizController {
     }
 
     @GetMapping("/{topicId}/questions")
-    public ResponseEntity<List<QuestionDto>> getQuestionsForTopic(@PathVariable String topicId) {
+    public ResponseEntity<List<QuizQuestionDto>> getQuestionsForTopic(@PathVariable String topicId) {
         return ResponseEntity.ok(quizService.getQuestionsForTopic(topicId));
     }
 

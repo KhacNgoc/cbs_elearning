@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.HashMap;
+import java.util.Map;
 
 @Service
 public class QuizServiceImpl implements QuizService {
@@ -44,12 +45,12 @@ public class QuizServiceImpl implements QuizService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<QuestionDto> getQuestionsForTopic(String topicId) {
+    public List<QuizQuestionDto> getQuestionsForTopic(String topicId) {
         if (!topicRepository.existsById(topicId)) {
             throw new ResourceNotFoundException("Topic", "id", topicId);
         }
         List<Question> questions = questionRepository.findByTopicIdAndLessonIsNull(topicId);
-        return quizMapper.toQuestionDtoList(questions);
+        return questions.stream().map(this::toQuizQuestionDto).toList();
     }
 
     @Override
@@ -61,6 +62,8 @@ public class QuizServiceImpl implements QuizService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
 
         List<Question> questions = questionRepository.findByTopicIdAndLessonIsNull(topicId);
+        Map<Long, List<Integer>> submittedAnswers = request.getSelectedAnswers() == null
+                ? Map.of() : request.getSelectedAnswers();
         int totalQuestions = questions.size();
         if (totalQuestions == 0) {
             return QuizResultDto.builder().score(0).total(0).percent(0)
@@ -69,8 +72,8 @@ public class QuizServiceImpl implements QuizService {
 
         int correctCount = 0;
         for (Question question : questions) {
-            Integer selectedAnswer = request.getSelectedAnswers().get(question.getId());
-            if (selectedAnswer != null && selectedAnswer.equals(question.getCorrectAnswer())) {
+            List<Integer> selectedAnswers = submittedAnswers.get(question.getId());
+            if (answersMatch(selectedAnswers, correctAnswers(question))) {
                 correctCount++;
             }
         }
@@ -90,7 +93,7 @@ public class QuizServiceImpl implements QuizService {
                 existingScore.setScore(correctCount);
                 existingScore.setTotal(totalQuestions);
                 existingScore.setTakenAt(LocalDateTime.now());
-                existingScore.setSelectedAnswers(new HashMap<>(request.getSelectedAnswers()));
+                saveSelectedAnswers(existingScore, submittedAnswers);
                 userQuizScoreRepository.save(existingScore);
 
                 // Add points for score improvement
@@ -106,8 +109,8 @@ public class QuizServiceImpl implements QuizService {
                     .score(correctCount)
                     .total(totalQuestions)
                     .takenAt(LocalDateTime.now())
-                    .selectedAnswers(new HashMap<>(request.getSelectedAnswers()))
                     .build();
+            saveSelectedAnswers(quizScore, submittedAnswers);
             userQuizScoreRepository.save(quizScore);
 
             // Add points for initial attempt
@@ -144,11 +147,12 @@ public class QuizServiceImpl implements QuizService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<QuestionDto> getQuestionsForLesson(String lessonId) {
+    public List<QuizQuestionDto> getQuestionsForLesson(String lessonId) {
         if (!lessonRepository.existsById(lessonId)) {
             throw new ResourceNotFoundException("Lesson", "id", lessonId);
         }
-        return quizMapper.toQuestionDtoList(questionRepository.findByLessonId(lessonId));
+        return questionRepository.findByLessonId(lessonId).stream()
+                .map(this::toQuizQuestionDto).toList();
     }
 
     @Override
@@ -159,11 +163,13 @@ public class QuizServiceImpl implements QuizService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
         List<Question> questions = questionRepository.findByLessonId(lessonId);
+        Map<Long, List<Integer>> submittedAnswers = request.getSelectedAnswers() == null
+                ? Map.of() : request.getSelectedAnswers();
         int total = questions.size();
         int score = 0;
         for (Question question : questions) {
-            Integer selected = request.getSelectedAnswers().get(question.getId());
-            if (selected != null && selected.equals(question.getCorrectAnswer())) score++;
+            List<Integer> selected = submittedAnswers.get(question.getId());
+            if (answersMatch(selected, correctAnswers(question))) score++;
         }
         int percent = total == 0 ? 0 : Math.round((float) score / total * 100);
         int passingScore = lesson.getQuizPassingScore();
@@ -175,19 +181,20 @@ public class QuizServiceImpl implements QuizService {
                 quizScore.setScore(score);
                 quizScore.setTotal(total);
                 quizScore.setTakenAt(LocalDateTime.now());
-                quizScore.setSelectedAnswers(new HashMap<>(request.getSelectedAnswers()));
+                saveSelectedAnswers(quizScore, submittedAnswers);
                 userQuizScoreRepository.save(quizScore);
             }
         } else if (total > 0) {
-            userQuizScoreRepository.save(UserQuizScore.builder()
+            UserQuizScore quizScore = UserQuizScore.builder()
                     .user(user)
                     .topic(lesson.getTopic())
                     .lesson(lesson)
                     .score(score)
                     .total(total)
                     .takenAt(LocalDateTime.now())
-                    .selectedAnswers(new HashMap<>(request.getSelectedAnswers()))
-                    .build());
+                    .build();
+            saveSelectedAnswers(quizScore, submittedAnswers);
+            userQuizScoreRepository.save(quizScore);
         }
         if (total > 0 && percent >= passingScore
                 && !user.getCompletedLessons().contains(lesson)
@@ -253,19 +260,21 @@ public class QuizServiceImpl implements QuizService {
         if (percent < passingScore) {
             throw new BadRequestException("Chỉ có thể xem lại bài kiểm tra đã đạt");
         }
-        if (score.getSelectedAnswers() == null || score.getSelectedAnswers().isEmpty()) {
+        if ((score.getSelectedAnswerSets() == null || score.getSelectedAnswerSets().isEmpty())
+                && (score.getSelectedAnswers() == null || score.getSelectedAnswers().isEmpty())) {
             throw new BadRequestException("Lần làm bài cũ chưa có dữ liệu đáp án để xem lại");
         }
         List<QuizReviewQuestionDto> reviewQuestions = questions.stream()
                 .map(question -> {
-                    Integer selected = score.getSelectedAnswers().get(question.getId());
+                    List<Integer> selected = storedSelectedAnswers(score, question.getId());
+                    List<Integer> correct = correctAnswers(question);
                     return QuizReviewQuestionDto.builder()
                             .id(question.getId())
                             .text(question.getText())
                             .options(question.getOptions())
-                            .selectedAnswer(selected)
-                            .correctAnswer(question.getCorrectAnswer())
-                            .correct(selected != null && selected.equals(question.getCorrectAnswer()))
+                            .selectedAnswers(selected)
+                            .correctAnswers(correct)
+                            .correct(answersMatch(selected, correct))
                             .build();
                 })
                 .toList();
@@ -277,6 +286,66 @@ public class QuizServiceImpl implements QuizService {
                 .passed(true)
                 .questions(reviewQuestions)
                 .build();
+    }
+
+    private QuizQuestionDto toQuizQuestionDto(Question question) {
+        return QuizQuestionDto.builder()
+                .id(question.getId())
+                .topicId(question.getTopic().getId())
+                .lessonId(question.getLesson() == null ? null : question.getLesson().getId())
+                .text(question.getText())
+                .options(question.getOptions())
+                .type(question.getType() == null ? QuestionType.SINGLE_CHOICE : question.getType())
+                .build();
+    }
+
+    private List<Integer> correctAnswers(Question question) {
+        if (question.getCorrectAnswers() != null && !question.getCorrectAnswers().isEmpty()) {
+            return normalizeAnswers(question.getCorrectAnswers());
+        }
+        return question.getCorrectAnswer() == null
+                ? List.of() : List.of(question.getCorrectAnswer());
+    }
+
+    private List<Integer> normalizeAnswers(List<Integer> answers) {
+        if (answers == null) return List.of();
+        return answers.stream().filter(java.util.Objects::nonNull).distinct().sorted().toList();
+    }
+
+    private boolean answersMatch(List<Integer> selected, List<Integer> correct) {
+        return !correct.isEmpty() && normalizeAnswers(selected).equals(normalizeAnswers(correct));
+    }
+
+    private void saveSelectedAnswers(UserQuizScore score, Map<Long, List<Integer>> answers) {
+        Map<Long, String> serialized = new HashMap<>();
+        Map<Long, Integer> legacy = new HashMap<>();
+        if (answers != null) {
+            answers.forEach((questionId, selected) -> {
+                List<Integer> normalized = normalizeAnswers(selected);
+                serialized.put(questionId, normalized.stream()
+                        .map(String::valueOf).collect(java.util.stream.Collectors.joining(",")));
+                if (!normalized.isEmpty()) legacy.put(questionId, normalized.get(0));
+            });
+        }
+        score.setSelectedAnswerSets(serialized);
+        score.setSelectedAnswers(legacy);
+    }
+
+    private List<Integer> storedSelectedAnswers(UserQuizScore score, Long questionId) {
+        String serialized = score.getSelectedAnswerSets() == null
+                ? null : score.getSelectedAnswerSets().get(questionId);
+        if (serialized != null) {
+            if (serialized.isBlank()) return List.of();
+            try {
+                return java.util.Arrays.stream(serialized.split(","))
+                        .map(Integer::valueOf).sorted().toList();
+            } catch (NumberFormatException ignored) {
+                return List.of();
+            }
+        }
+        Integer legacy = score.getSelectedAnswers() == null
+                ? null : score.getSelectedAnswers().get(questionId);
+        return legacy == null ? List.of() : List.of(legacy);
     }
 
     private void checkAndUnlockBadges(User user, Topic topic, int score, int total) {
