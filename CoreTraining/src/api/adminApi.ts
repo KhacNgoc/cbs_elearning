@@ -1,4 +1,4 @@
-import { axiosClient, isMockApi, mockDelay, RAG_CHAT_TIMEOUT_MS } from "./axiosClient";
+import { axiosClient, isMockApi, mockDelay, QUIZ_GENERATION_TIMEOUT_MS } from "./axiosClient";
 import type { Topic, Lesson, LessonDocument, Question } from "../types";
 import { mockDbTopics, setMockDbTopics } from "./courseApi";
 import { mockDbQuestions, setMockDbQuestions } from "./quizApi";
@@ -558,7 +558,7 @@ export const adminApi = {
     const response = await axiosClient.post<QuizGenerationResponse>(
       "/api/admin/quizzes/generate",
       request,
-      { timeout: RAG_CHAT_TIMEOUT_MS },
+      { timeout: QUIZ_GENERATION_TIMEOUT_MS },
     );
     return response.data;
   },

@@ -33,7 +33,7 @@ public class QuizGenerationService {
             LessonRepository lessonRepository,
             @Value("${app.rag-url}") String ragUrl,
             @Value("${app.rag.connect-timeout-ms:5000}") int connectTimeoutMs,
-            @Value("${app.rag.read-timeout-ms:300000}") int readTimeoutMs) {
+            @Value("${app.rag.quiz-read-timeout-ms:300000}") int readTimeoutMs) {
         this.topicRepository = topicRepository;
         this.lessonRepository = lessonRepository;
         this.ragUrl = ragUrl;
@@ -45,8 +45,8 @@ public class QuizGenerationService {
 
     public QuizGenerationResponseDto generate(QuizGenerationRequestDto request) {
         int total = request.getSingleChoiceCount() + request.getMultipleChoiceCount();
-        if (total < 1 || total > 10) {
-            throw new BadRequestException("Tổng số câu hỏi phải nằm trong khoảng từ 1 đến 10");
+        if (total < 1 || total > 20) {
+            throw new BadRequestException("Tổng số câu hỏi phải nằm trong khoảng từ 1 đến 20");
         }
         Topic topic = topicRepository.findById(request.getTopicId())
                 .orElseThrow(() -> new ResourceNotFoundException("Topic", "id", request.getTopicId()));

@@ -102,22 +102,60 @@
           <div v-if="aiDrafts.length" class="ai-drafts">
             <article v-for="(draft, index) in aiDrafts" :key="index" class="ai-draft-card">
               <label class="draft-select"><input v-model="draft.selected" type="checkbox" /> Chọn</label>
-              <span class="question-type-badge">{{ draft.type === "MULTIPLE_CHOICE" ? "Nhiều đáp án" : "Một đáp án" }}</span>
-              <h3>{{ draft.text }}</h3>
-              <div class="answer-grid">
-                <span v-for="(option, optionIndex) in draft.options" :key="optionIndex"
-                  :class="{ correct: draft.correctAnswers.includes(optionIndex) }">
-                  <strong>{{ String.fromCharCode(65 + optionIndex) }}</strong>{{ option }}
-                  <CheckCircle2 v-if="draft.correctAnswers.includes(optionIndex)" :size="15" />
-                </span>
+              <div class="draft-heading-actions">
+                <span class="question-type-badge">{{ draft.type === "MULTIPLE_CHOICE" ? "Nhiều đáp án" : "Một đáp án" }}</span>
+                <button v-if="editingDraftIndex !== index" class="draft-edit-button" @click="startDraftEditing(index)">
+                  <Edit :size="15" /> Sửa
+                </button>
               </div>
-              <p v-if="draft.explanation" class="draft-explanation">{{ draft.explanation }}</p>
+              <div v-if="editingDraftIndex === index" class="ai-draft-editor">
+                <label class="question-text-field">
+                  <span>Nội dung câu hỏi</span>
+                  <textarea v-model="draft.text" rows="3" />
+                </label>
+                <label class="question-type-field">
+                  <span>Loại câu hỏi</span>
+                  <select v-model="draft.type" @change="normalizeDraftAnswers(draft)">
+                    <option value="SINGLE_CHOICE">Single choice</option>
+                    <option value="MULTIPLE_CHOICE">Multiple choice</option>
+                  </select>
+                </label>
+                <div class="ai-draft-answer-editor">
+                  <label v-for="(_, optionIndex) in draft.options" :key="optionIndex"
+                    :class="{ correct: draft.correctAnswers.includes(optionIndex) }">
+                    <input
+                      :type="draft.type === 'MULTIPLE_CHOICE' ? 'checkbox' : 'radio'"
+                      :checked="draft.correctAnswers.includes(optionIndex)"
+                      :name="`draft-correct-answer-${index}`"
+                      @change="toggleDraftCorrectAnswer(draft, optionIndex)"
+                    />
+                    <strong>{{ String.fromCharCode(65 + optionIndex) }}</strong>
+                    <input v-model="draft.options[optionIndex]" type="text" :placeholder="`Nhập đáp án ${String.fromCharCode(65 + optionIndex)}`" />
+                    <CheckCircle2 v-if="draft.correctAnswers.includes(optionIndex)" :size="17" />
+                  </label>
+                </div>
+                <div class="draft-editor-actions">
+                  <button class="secondary-button" @click="cancelDraftEditing">Hủy</button>
+                  <button class="primary-button" @click="finishDraftEditing(index)">Hoàn tất chỉnh sửa</button>
+                </div>
+              </div>
+              <template v-else>
+                <h3>{{ draft.text }}</h3>
+                <div class="answer-grid">
+                  <span v-for="(option, optionIndex) in draft.options" :key="optionIndex"
+                    :class="{ correct: draft.correctAnswers.includes(optionIndex) }">
+                    <strong>{{ String.fromCharCode(65 + optionIndex) }}</strong>{{ option }}
+                    <CheckCircle2 v-if="draft.correctAnswers.includes(optionIndex)" :size="15" />
+                  </span>
+                </div>
+                <p v-if="draft.explanation" class="draft-explanation">{{ draft.explanation }}</p>
+              </template>
               <small v-if="draft.sourceIds.length" class="draft-sources">
                 Nguồn: {{ formatDraftSources(draft.sourceIds) }}
               </small>
             </article>
             <div class="ai-draft-actions">
-              <button class="secondary-button" @click="aiDrafts = []">Bỏ bản nháp</button>
+              <button class="secondary-button" @click="discardAiDrafts">Bỏ bản nháp</button>
               <button class="primary-button" :disabled="savingDrafts || !selectedDraftCount" @click="saveAiDrafts">
                 {{ savingDrafts ? "Đang lưu..." : `Lưu ${selectedDraftCount} câu đã chọn` }}
               </button>
@@ -242,7 +280,10 @@ const generating = ref(false);
 const savingDrafts = ref(false);
 const aiWarnings = ref<string[]>([]);
 const aiSources = ref<QuizGenerationSource[]>([]);
-const aiDrafts = ref<(GeneratedQuizQuestion & { selected: boolean })[]>([]);
+type AiDraft = GeneratedQuizQuestion & { selected: boolean };
+const aiDrafts = ref<AiDraft[]>([]);
+const editingDraftIndex = ref<number | null>(null);
+const draftBackup = ref<GeneratedQuizQuestion | null>(null);
 const aiConfig = reactive({ singleChoiceCount: 5, multipleChoiceCount: 0, optionCount: 4 });
 const confirmationModal = ref<{
   show: boolean;
@@ -440,10 +481,78 @@ const toggleCorrectAnswer = (index: number) => {
     : [...form.correctAnswers, index].sort();
 };
 
+const cloneGeneratedQuestion = (draft: GeneratedQuizQuestion): GeneratedQuizQuestion => ({
+  ...draft,
+  options: [...draft.options],
+  correctAnswers: [...draft.correctAnswers],
+  sourceIds: [...draft.sourceIds],
+});
+const validateAiDraft = (draft: GeneratedQuizQuestion): string | null => {
+  const text = draft.text.trim();
+  const options = draft.options.map(option => option.trim());
+  if (!text) return "Nội dung câu hỏi không được để trống.";
+  if (options.length < 3 || options.some(option => !option)) return "Vui lòng nhập đầy đủ các lựa chọn.";
+  if (new Set(options.map(option => option.toLocaleLowerCase("vi"))).size !== options.length) {
+    return "Các lựa chọn không được trùng nhau.";
+  }
+  if (draft.correctAnswers.some(index => index < 0 || index >= options.length)) {
+    return "Đáp án đúng không hợp lệ.";
+  }
+  if (draft.type === "SINGLE_CHOICE" && draft.correctAnswers.length !== 1) {
+    return "Câu single choice phải có đúng một đáp án đúng.";
+  }
+  if (draft.type === "MULTIPLE_CHOICE" && (draft.correctAnswers.length < 2 || draft.correctAnswers.length >= options.length)) {
+    return "Câu multiple choice cần ít nhất hai đáp án đúng và không được chọn tất cả.";
+  }
+  return null;
+};
+const startDraftEditing = (index: number) => {
+  if (editingDraftIndex.value !== null) cancelDraftEditing();
+  draftBackup.value = cloneGeneratedQuestion(aiDrafts.value[index]);
+  editingDraftIndex.value = index;
+};
+const cancelDraftEditing = () => {
+  const index = editingDraftIndex.value;
+  if (index !== null && draftBackup.value) {
+    const selected = aiDrafts.value[index].selected;
+    aiDrafts.value[index] = { ...cloneGeneratedQuestion(draftBackup.value), selected };
+  }
+  editingDraftIndex.value = null;
+  draftBackup.value = null;
+};
+const finishDraftEditing = (index: number): boolean => {
+  const draft = aiDrafts.value[index];
+  const validationError = validateAiDraft(draft);
+  if (validationError) {
+    alert(validationError);
+    return false;
+  }
+  draft.text = draft.text.trim();
+  draft.options = draft.options.map(option => option.trim());
+  draft.correctAnswers = [...draft.correctAnswers].sort((left, right) => left - right);
+  editingDraftIndex.value = null;
+  draftBackup.value = null;
+  return true;
+};
+const normalizeDraftAnswers = (draft: AiDraft) => {
+  if (draft.type === "SINGLE_CHOICE") {
+    draft.correctAnswers = [draft.correctAnswers[0] ?? 0];
+  }
+};
+const toggleDraftCorrectAnswer = (draft: AiDraft, index: number) => {
+  if (draft.type === "SINGLE_CHOICE") {
+    draft.correctAnswers = [index];
+    return;
+  }
+  draft.correctAnswers = draft.correctAnswers.includes(index)
+    ? draft.correctAnswers.filter(answer => answer !== index)
+    : [...draft.correctAnswers, index].sort((left, right) => left - right);
+};
+
 const generateQuestions = async () => {
   const total = aiConfig.singleChoiceCount + aiConfig.multipleChoiceCount;
-  if (!Number.isInteger(total) || total < 1 || total > 10) {
-    alert("Tổng số câu hỏi phải từ 1 đến 10.");
+  if (!Number.isInteger(total) || total < 1 || total > 20) {
+    alert("Tổng số câu hỏi phải từ 1 đến 20.");
     return;
   }
   if (!Number.isInteger(aiConfig.optionCount) || aiConfig.optionCount < 3 || aiConfig.optionCount > 6) {
@@ -460,7 +569,12 @@ const generateQuestions = async () => {
     });
     aiSources.value = result.sources || [];
     aiWarnings.value = result.warnings || [];
-    aiDrafts.value = (result.questions || []).map(question => ({ ...question, selected: true }));
+    editingDraftIndex.value = null;
+    draftBackup.value = null;
+    aiDrafts.value = (result.questions || []).map(question => ({
+      ...cloneGeneratedQuestion(question),
+      selected: true,
+    }));
   } catch (error) {
     alert(error instanceof Error ? error.message : "Không thể tạo câu hỏi. Vui lòng thử lại.");
   } finally {
@@ -471,9 +585,21 @@ const formatDraftSources = (sourceIds: string[]) => sourceIds.map(sourceId => {
   const source = aiSources.value.find(item => item.id === sourceId);
   return source ? `${source.documentName}, trang ${source.page}, ${source.section}` : sourceId;
 }).join("; ");
+const discardAiDrafts = () => {
+  aiDrafts.value = [];
+  editingDraftIndex.value = null;
+  draftBackup.value = null;
+};
 const saveAiDrafts = async () => {
+  if (editingDraftIndex.value !== null && !finishDraftEditing(editingDraftIndex.value)) return;
   const selected = aiDrafts.value.filter(draft => draft.selected);
   if (!selected.length) return;
+  const invalidIndex = aiDrafts.value.findIndex(draft => draft.selected && validateAiDraft(draft));
+  if (invalidIndex >= 0) {
+    alert(`Câu AI số ${invalidIndex + 1}: ${validateAiDraft(aiDrafts.value[invalidIndex])}`);
+    startDraftEditing(invalidIndex);
+    return;
+  }
   savingDrafts.value = true;
   try {
     for (const draft of selected) {
@@ -616,7 +742,15 @@ select, textarea, .question-text-field input { width: 100%; padding: .7rem; bord
 .ai-draft-card { position: relative; padding: 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: white; }
 .ai-draft-card h3 { margin: .55rem 0 .75rem; padding-right: 4rem; font-size: var(--admin-text-body); }
 .draft-select { position: absolute; top: 1rem; right: 1rem; display: flex; gap: .35rem; align-items: center; font-weight: 700; }
+.draft-heading-actions { display: flex; align-items: center; gap: .5rem; padding-right: 5rem; }
+.draft-edit-button { display: inline-flex; align-items: center; gap: .3rem; padding: .25rem .45rem; border: 1px solid #c4b5fd; border-radius: 6px; background: white; color: #6d28d9; cursor: pointer; font-weight: 700; }
 .question-type-badge { display: inline-flex; padding: .2rem .45rem; border-radius: 999px; background: #ede9fe; color: #6d28d9; font-size: var(--admin-text-caption); font-weight: 800; }
+.ai-draft-editor { margin-top: .8rem; padding: .85rem; border: 1px solid #ddd6fe; border-radius: var(--radius-sm); background: #faf9ff; }
+.ai-draft-answer-editor { display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; }
+.ai-draft-answer-editor label { display: grid; grid-template-columns: 18px 24px 1fr 18px; align-items: center; gap: .4rem; padding: .55rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: white; }
+.ai-draft-answer-editor label.correct { border-color: #7c3aed; }
+.ai-draft-answer-editor label > input[type="text"] { width: 100%; border: 0; outline: 0; }
+.draft-editor-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .75rem; }
 .draft-explanation { margin: .7rem 0 .25rem; color: var(--text-muted); }
 .draft-sources { color: #475569; }
 .ai-draft-actions { display: flex; justify-content: flex-end; gap: .6rem; }
@@ -653,7 +787,7 @@ select, textarea, .question-text-field input { width: 100%; padding: .7rem; bord
 @media (max-width: 760px) {
   .quiz-editor-page { width: 100%; padding: 1rem; }
   .quiz-editor-header { grid-template-columns: 1fr; }
-  .settings-grid, .answer-editor, .answer-grid { grid-template-columns: 1fr; }
+  .settings-grid, .answer-editor, .answer-grid, .ai-draft-answer-editor { grid-template-columns: 1fr; }
   .danger-zone { align-items: flex-start; flex-direction: column; }
   .question-tools { width: 100%; margin-left: 0; flex-wrap: wrap; }
   .ai-settings { grid-template-columns: 1fr; }
