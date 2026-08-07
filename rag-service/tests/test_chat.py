@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from app import main
+from app import config, infrastructure, main
 
 
 async def no_op_collection(*_args):
@@ -51,14 +51,14 @@ class FakeHttpClient:
 
 class ChatGroundingTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        main.ollama_http_client = None
+        infrastructure.ollama_http_client = None
 
     async def test_low_retrieval_score_refuses_without_calling_llm(self):
         low_score_point = SimpleNamespace(score=0.1, payload={})
-        with patch.object(main, "ensure_collection", no_op_collection), \
-                patch.object(main, "embeddings", fake_embedding), \
-                patch.object(main, "qdrant", FakeQdrant([low_score_point])), \
-                patch.object(main.httpx, "AsyncClient", side_effect=AssertionError("LLM must not be called")):
+        with patch.object(infrastructure, "ensure_collection", no_op_collection), \
+                patch.object(infrastructure, "embeddings", fake_embedding), \
+                patch.object(infrastructure, "qdrant", FakeQdrant([low_score_point])), \
+                patch.object(infrastructure.httpx, "AsyncClient", side_effect=AssertionError("LLM must not be called")):
             result = await main.chat(main.ChatRequest(question="Không có trong tài liệu", course_id="CIF"))
 
         self.assertFalse(result.grounded)
@@ -83,10 +83,10 @@ class ChatGroundingTest(unittest.IsolatedAsyncioTestCase):
             "answer": "Khóa học trình bày việc tiếp nhận, kiểm tra chứng từ và thực hiện giao dịch.",
             "source_ids": ["SOURCE_1"],
         }))
-        with patch.object(main, "ensure_collection", no_op_collection), \
-                patch.object(main, "embeddings", capture_embedding), \
-                patch.object(main, "qdrant", FakeQdrant([low_score_point])), \
-                patch.object(main, "ollama_chat", model):
+        with patch.object(infrastructure, "ensure_collection", no_op_collection), \
+                patch.object(infrastructure, "embeddings", capture_embedding), \
+                patch.object(infrastructure, "qdrant", FakeQdrant([low_score_point])), \
+                patch.object(infrastructure, "ollama_chat", model):
             result = await main.chat(main.ChatRequest(
                 question="Tóm tắt nội dung của khóa học",
                 course_id="TELLER",
@@ -113,10 +113,10 @@ class ChatGroundingTest(unittest.IsolatedAsyncioTestCase):
             "needs_clarification": False,
             "reason": "",
         })
-        with patch.object(main, "ensure_collection", no_op_collection), \
-                patch.object(main, "embeddings", capture_embedding), \
-                patch.object(main, "qdrant", FakeQdrant([])), \
-                patch.object(main, "ollama_chat", AsyncMock(return_value=rewrite)):
+        with patch.object(infrastructure, "ensure_collection", no_op_collection), \
+                patch.object(infrastructure, "embeddings", capture_embedding), \
+                patch.object(infrastructure, "qdrant", FakeQdrant([])), \
+                patch.object(infrastructure, "ollama_chat", AsyncMock(return_value=rewrite)):
             result = await main.chat(main.ChatRequest(
                 question="Nó được tạo khi nào?",
                 recent_messages=[
@@ -133,9 +133,9 @@ class ChatGroundingTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("CIF được tạo khi nào?", result.standaloneQuestion)
 
     async def test_invalid_rewrite_for_ambiguous_question_requests_clarification(self):
-        with patch.object(main, "ollama_chat", AsyncMock(return_value="not json")), \
-                patch.object(main, "embeddings", side_effect=AssertionError("Embedding must not be called")), \
-                patch.object(main, "qdrant", side_effect=AssertionError("Qdrant must not be called")):
+        with patch.object(infrastructure, "ollama_chat", AsyncMock(return_value="not json")), \
+                patch.object(infrastructure, "embeddings", side_effect=AssertionError("Embedding must not be called")), \
+                patch.object(infrastructure, "qdrant", side_effect=AssertionError("Qdrant must not be called")):
             result = await main.chat(main.ChatRequest(
                 question="Giải thích kỹ hơn bước đó.",
                 recent_messages=[main.ConversationMessage(role="user", content="Cho tôi biết quy trình.")],
@@ -152,10 +152,10 @@ class ChatGroundingTest(unittest.IsolatedAsyncioTestCase):
             embedded_texts.extend(texts)
             return [[0.1, 0.2, 0.3]]
 
-        with patch.object(main, "ollama_chat", AsyncMock(return_value="not json")), \
-                patch.object(main, "ensure_collection", no_op_collection), \
-                patch.object(main, "embeddings", capture_embedding), \
-                patch.object(main, "qdrant", FakeQdrant([])):
+        with patch.object(infrastructure, "ollama_chat", AsyncMock(return_value="not json")), \
+                patch.object(infrastructure, "ensure_collection", no_op_collection), \
+                patch.object(infrastructure, "embeddings", capture_embedding), \
+                patch.object(infrastructure, "qdrant", FakeQdrant([])):
             result = await main.chat(main.ChatRequest(
                 question="GL là gì?",
                 conversation_summary="Trước đó người dùng hỏi về CIF.",
@@ -166,10 +166,10 @@ class ChatGroundingTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_standalone_follow_up_skips_rewrite_model(self):
         model = AsyncMock(side_effect=AssertionError("Rewrite model must not be called"))
-        with patch.object(main, "ollama_chat", model), \
-                patch.object(main, "ensure_collection", no_op_collection), \
-                patch.object(main, "embeddings", fake_embedding), \
-                patch.object(main, "qdrant", FakeQdrant([])):
+        with patch.object(infrastructure, "ollama_chat", model), \
+                patch.object(infrastructure, "ensure_collection", no_op_collection), \
+                patch.object(infrastructure, "embeddings", fake_embedding), \
+                patch.object(infrastructure, "qdrant", FakeQdrant([])):
             result = await main.chat(main.ChatRequest(
                 question="GL là gì?",
                 recent_messages=[main.ConversationMessage(role="user", content="CIF là gì?")],
@@ -194,7 +194,7 @@ class ChatGroundingTest(unittest.IsolatedAsyncioTestCase):
         model = AsyncMock(return_value=json.dumps({
             "summary": "Chủ đề hiện tại: CIF. Câu hỏi còn mở: thời điểm tạo CIF."
         }))
-        with patch.object(main, "ollama_chat", model):
+        with patch.object(infrastructure, "ollama_chat", model):
             result = await main.summarize(main.SummaryRequest(
                 current_summary="Người dùng đang hỏi về CIF.",
                 new_messages=[
@@ -270,10 +270,10 @@ Chủ đề chính: Posting giao dịch
             "answer": "Chủ đề chính: Bút toán. Câu hỏi chính: Posting là gì? Điểm chưa giải quyết: thời điểm posting.",
             "source_ids": ["SOURCE_1"],
         }
-        with patch.object(main, "ensure_collection", no_op_collection), \
-                patch.object(main, "embeddings", fake_embedding), \
-                patch.object(main, "qdrant", FakeQdrant([point])), \
-                patch.object(main.httpx, "AsyncClient", FakeHttpClient):
+        with patch.object(infrastructure, "ensure_collection", no_op_collection), \
+                patch.object(infrastructure, "embeddings", fake_embedding), \
+                patch.object(infrastructure, "qdrant", FakeQdrant([point])), \
+                patch.object(infrastructure.httpx, "AsyncClient", FakeHttpClient):
             result = await main.chat(main.ChatRequest(
                 question="Posting ghi sổ thông tin gì?", course_id="GL"
             ))
@@ -293,10 +293,10 @@ Chủ đề chính: Posting giao dịch
             "answer": "Hồ sơ được phê duyệt khi đáp ứng đủ điều kiện.",
             "source_ids": ["SOURCE_1"],
         }
-        with patch.object(main, "ensure_collection", no_op_collection), \
-                patch.object(main, "embeddings", fake_embedding), \
-                patch.object(main, "qdrant", FakeQdrant([point])), \
-                patch.object(main.httpx, "AsyncClient", FakeHttpClient):
+        with patch.object(infrastructure, "ensure_collection", no_op_collection), \
+                patch.object(infrastructure, "embeddings", fake_embedding), \
+                patch.object(infrastructure, "qdrant", FakeQdrant([point])), \
+                patch.object(infrastructure.httpx, "AsyncClient", FakeHttpClient):
             result = await main.chat(main.ChatRequest(question="Khi nào hồ sơ được duyệt?", course_id="CIF"))
 
         self.assertTrue(result.grounded)
@@ -314,10 +314,10 @@ Chủ đề chính: Posting giao dịch
             "answer": "Một câu trả lời không có nguồn hợp lệ.",
             "source_ids": ["SOURCE_999"],
         }
-        with patch.object(main, "ensure_collection", no_op_collection), \
-                patch.object(main, "embeddings", fake_embedding), \
-                patch.object(main, "qdrant", FakeQdrant([point])), \
-                patch.object(main.httpx, "AsyncClient", FakeHttpClient):
+        with patch.object(infrastructure, "ensure_collection", no_op_collection), \
+                patch.object(infrastructure, "embeddings", fake_embedding), \
+                patch.object(infrastructure, "qdrant", FakeQdrant([point])), \
+                patch.object(infrastructure.httpx, "AsyncClient", FakeHttpClient):
             result = await main.chat(main.ChatRequest(question="Câu hỏi", course_id="CIF"))
 
         self.assertFalse(result.grounded)
@@ -342,11 +342,11 @@ Chủ đề chính: Posting giao dịch
         async def quiz_embeddings(texts, *_args):
             return [[0.1, 0.2, 0.3] for _ in texts]
 
-        with patch.object(main, "ensure_collection", no_op_collection), \
-                patch.object(main, "embeddings", quiz_embeddings), \
-                patch.object(main, "qdrant", qdrant), \
-                patch.object(main, "QUIZ_LLM_VERIFICATION_ENABLED", True), \
-                patch.object(main, "ollama_chat", model):
+        with patch.object(infrastructure, "ensure_collection", no_op_collection), \
+                patch.object(infrastructure, "embeddings", quiz_embeddings), \
+                patch.object(infrastructure, "qdrant", qdrant), \
+                patch.object(config, "QUIZ_LLM_VERIFICATION_ENABLED", True), \
+                patch.object(infrastructure, "ollama_chat", model):
             result = await main.generate_quiz(main.QuizGenerationRequest(
                 course_id="CIF",
                 topic_name="Quy trình tín dụng",
@@ -368,9 +368,9 @@ Chủ đề chính: Posting giao dịch
         async def quiz_embeddings(texts, *_args):
             return [[0.1, 0.2, 0.3] for _ in texts]
 
-        with patch.object(main, "ensure_collection", no_op_collection), \
-                patch.object(main, "embeddings", quiz_embeddings), \
-                patch.object(main, "qdrant", FakeQdrant([])):
+        with patch.object(infrastructure, "ensure_collection", no_op_collection), \
+                patch.object(infrastructure, "embeddings", quiz_embeddings), \
+                patch.object(infrastructure, "qdrant", FakeQdrant([])):
             result = await main.generate_quiz(main.QuizGenerationRequest(
                 course_id="CIF",
                 topic_name="CIF",

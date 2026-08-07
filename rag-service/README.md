@@ -4,6 +4,20 @@ The FastAPI service accepts PDF/DOCX documents, splits extracted text by page, e
 
 Each Qdrant payload stores `excerpt` (the first 500 characters, returned to the frontend) separately from `full_text` (the entire chunk, used only to construct the LLM context).
 
+## Code structure
+
+- `app/main.py`: creates the FastAPI application and wires the router.
+- `app/api/routes.py`: HTTP endpoints and request delegation only.
+- `app/config.py`: environment-backed settings and constants.
+- `app/infrastructure.py`: shared Ollama/Qdrant clients, embeddings, and lifecycle.
+- `app/schemas.py`: request, response, and structured LLM schemas.
+- `app/services/`: chat, document ingestion, quiz generation, and summary logic.
+- `app/utils.py` and `app/quiz_utils.py`: reusable pure helper functions.
+
+When adding behavior, keep transport concerns in `api`, business flows in
+`services`, external clients in `infrastructure`, and side-effect-free helpers in
+the utility modules.
+
 ## Run
 
 1. Copy `.env.example` to `.env` and set a PostgreSQL password.
