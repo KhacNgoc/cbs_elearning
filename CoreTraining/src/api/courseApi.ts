@@ -307,12 +307,12 @@ export const courseApi = {
     return response.data;
   },
 
-  async changePassword(newPassword: string): Promise<string> {
+  async changePassword(newPassword: string, employeeId: string, email: string): Promise<string> {
     if (isMockApi()) {
       await mockDelay(300);
       return 'Đổi mật khẩu thành công!';
     }
-    const response = await axiosClient.post<string>('/api/users/me/change-password', { newPassword });
+    const response = await axiosClient.post<string>('/api/users/me/change-password', { newPassword, employeeId, email });
     return response.data;
   }
 };

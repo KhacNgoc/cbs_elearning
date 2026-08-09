@@ -34,5 +34,6 @@ public interface AdminService {
     void importUsersFromExcel(org.springframework.web.multipart.MultipartFile file);
     byte[] generateExcelTemplate();
     List<com.bidv.coretraining.entity.UserGroup> getAllUserGroups();
+    DashboardStatsDto getDashboardStats();
 }
 

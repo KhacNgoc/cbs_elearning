@@ -149,4 +149,8 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
             });
         }
     }
+
+    public Set<String> getOnlineUsers() {
+        return sessionsByUser.keySet();
+    }
 }

@@ -165,4 +165,9 @@ public class AdminController {
     public ResponseEntity<List<com.bidv.coretraining.entity.UserGroup>> getAllUserGroups() {
         return ResponseEntity.ok(adminService.getAllUserGroups());
     }
+
+    @GetMapping("/dashboard/stats")
+    public ResponseEntity<DashboardStatsDto> getDashboardStats() {
+        return ResponseEntity.ok(adminService.getDashboardStats());
+    }
 }

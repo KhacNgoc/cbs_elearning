@@ -20,6 +20,7 @@ public class UserProgressDto {
     private Map<String, Integer> lessonQuizTotals; // lessonId -> total questions
     private Map<String, LessonProgressDto> lessonProgress;
     private Integer points;
+    private Integer weeklyPoints;
     private List<UserBadgeDto> unlockedBadges;
     private String groupId;
     private String groupName;

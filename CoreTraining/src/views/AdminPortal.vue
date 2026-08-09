@@ -165,7 +165,6 @@
                 <tr>
                   <th>Mã chủ đề</th>
                   <th>Tên chủ đề</th>
-                  <th>Icon hiển thị</th>
                   <th>Số bài học</th>
                   <th>Số câu hỏi thi</th>
                   <th class="actions-col">Thao tác</th>
@@ -178,12 +177,6 @@
                   </td>
                   <td>
                     <strong>{{ topic.name }}</strong>
-                  </td>
-                  <td>
-                    <span class="icon-label"
-                      ><Settings class="inline-icon" />
-                      {{ topic.iconName }}</span
-                    >
                   </td>
                   <td>{{ topic.lessons.length }} bài học</td>
                   <td>{{ getQuestionCountForTopic(topic.id) }} câu hỏi</td>
@@ -277,7 +270,7 @@
                   </td>
                   <td>{{ u.employeeId || "-" }}</td>
                   <td>{{ u.email || "-" }}</td>
-                  <td>{{ u.userGroupId || "-" }}</td>
+                  <td>{{ userGroups.find(g => g.id === u.userGroupId)?.name || u.userGroupId || "-" }}</td>
                   <td>
                     <span
                       class="role-tag"
@@ -715,7 +708,6 @@
     <div
       v-if="rejectEnrollmentModal.show"
       class="modal-overlay"
-      @click.self="closeRejectEnrollmentModal"
     >
       <section
         class="modal-content card reject-enrollment-modal animate-scale-in"
@@ -794,7 +786,6 @@
     <div
       class="modal-overlay"
       v-if="topicModal.show"
-      @click.self="topicModal.show = false"
     >
       <div class="modal-content card animate-scale-in">
         <h3>{{ topicModal.isEdit ? "CẬP NHẬT CHỦ ĐỀ" : "TẠO CHỦ ĐỀ MỚI" }}</h3>
@@ -820,23 +811,12 @@
               required
             />
           </div>
-          <div class="form-group">
-            <label
-              >Tên biểu tượng Icon (Ví dụ: 'Coins', 'Users', 'Wallet',
-              'PiggyBank')</label
-            >
-            <input
-              v-model="topicForm.iconName"
-              type="text"
-              class="form-control"
-              required
-            />
-          </div>
+
           <div class="modal-buttons">
             <button
               type="button"
               class="btn btn-secondary"
-              @click="topicModal.show = false"
+              @click="cancelTopicModal"
             >
               Hủy
             </button>
@@ -850,7 +830,6 @@
     <div
       class="modal-overlay"
       v-if="userModal.show"
-      @click.self="userModal.show = false"
     >
       <div class="modal-content card animate-scale-in">
         <h3>
@@ -901,11 +880,11 @@
           </div>
           <div class="form-group">
             <label>Nhóm nghiệp vụ</label>
-            <select v-model="userForm.userGroupId" class="form-control">
-              <option value="">Không phân nhóm</option>
-              <option value="GDV">Giao dịch viên</option>
-              <option value="QHKH">Quan hệ khách hàng</option>
-              <option value="KSV">Kiểm soát viên</option>
+            <select v-model="userForm.userGroupId" class="form-control" required>
+              <option value="" disabled selected>-- Chọn nhóm nghiệp vụ --</option>
+              <option v-for="group in userGroups" :key="group.id" :value="group.id">
+                {{ group.name }} ({{ group.id }})
+              </option>
             </select>
           </div>
           <div class="form-group">
@@ -919,7 +898,7 @@
             <button
               type="button"
               class="btn btn-secondary"
-              @click="userModal.show = false"
+              @click="cancelUserModal"
             >
               Hủy
             </button>
@@ -933,7 +912,6 @@
     <div
       class="modal-overlay"
       v-if="lessonModal.show"
-      @click.self="lessonModal.show = false"
     >
       <div
         class="modal-content card modal-large lesson-modal-content animate-scale-in"
@@ -1195,7 +1173,6 @@
     <div
       class="modal-overlay"
       v-if="questionModal.show"
-      @click.self="questionModal.show = false"
     >
       <div class="modal-content card modal-large animate-scale-in">
         <h3>
@@ -1320,12 +1297,12 @@ import type {
   AdminUser,
   CourseDocument,
   EnrollmentRequest,
+  DashboardStats,
 } from "../api/adminApi";
 import { quizApi } from "../api/quizApi";
 import type { Topic, Lesson, LessonDocument, Question } from "../types";
 import ConfirmModal from "../components/ConfirmModal.vue";
 import {
-  Settings,
   Users,
   BookOpen,
   HelpCircle,
@@ -1435,6 +1412,8 @@ const activeSessions = ref([
 // Reactive states
 const loading = ref(false);
 const users = ref<AdminUser[]>([]);
+const userGroups = ref<{ id: string; name: string }[]>([]);
+const dashboardStats = ref<DashboardStats | null>(null);
 const enrollmentRequests = ref<EnrollmentRequest[]>([]);
 const pendingEnrollmentCount = computed(
   () =>
@@ -1863,20 +1842,18 @@ const getQuestionCountForTopic = (topicId: string) => {
 
 // 1. Line Chart: Daily Activity
 const activityChartData = computed(() => {
+  const labels = dashboardStats.value
+    ? dashboardStats.value.dailyActivity.map((a) => a.label)
+    : ["Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ Nhật", "Hôm nay"];
+  const data = dashboardStats.value
+    ? dashboardStats.value.dailyActivity.map((a) => a.count)
+    : [18, 24, 15, 29, 32, 12, 28];
   return {
-    labels: [
-      "Thứ 3",
-      "Thứ 4",
-      "Thứ 5",
-      "Thứ 6",
-      "Thứ 7",
-      "Chủ Nhật",
-      "Hôm nay",
-    ],
+    labels,
     datasets: [
       {
         label: "Bài học hoàn thành",
-        data: [18, 24, 15, 29, 32, 12, 28],
+        data,
         borderColor: "#005B41", // BIDV Emerald Green
         backgroundColor: "rgba(0, 91, 65, 0.1)",
         fill: true,
@@ -1965,35 +1942,20 @@ const competencyChartOptions = {
 
 // 3. Bar Chart: Average Score by Topic
 const topicScoreChartData = computed(() => {
-  // Let's calculate actual averages based on simulated points or actual answers
-  // We can calculate dynamic averages. If no scores exist, provide mock representative data.
-  const scores: Record<string, { sum: number; count: number }> = {};
-
-  users.value.forEach((u) => {
-    // If the mock system has quiz scores in localstorage or user record
-    // We can simulate averages based on user points to keep it dynamic!
-    courseStore.topics.forEach((t) => {
+  const labels = courseStore.topics.map((t) => t.name);
+  const dataValues = courseStore.topics.map((t) => {
+    if (dashboardStats.value && dashboardStats.value.avgScoreByTopic) {
+      return dashboardStats.value.avgScoreByTopic[t.name] || 0;
+    }
+    const scores: Record<string, { sum: number; count: number }> = {};
+    users.value.forEach((u) => {
       if (!scores[t.id]) scores[t.id] = { sum: 0, count: 0 };
-
-      // Let's create a dynamic mock score calculation based on the user's points
-      const basePercentage = Math.min(
-        60 + Math.round((u.points / 3000) * 40),
-        100,
-      );
-      // Add minor random variance per topic
+      const basePercentage = Math.min(60 + Math.round((u.points / 3000) * 40), 100);
       const randomVariance = (u.username.charCodeAt(0) % 15) - 7;
-      const finalScore = Math.max(
-        50,
-        Math.min(100, basePercentage + randomVariance),
-      );
-
+      const finalScore = Math.max(50, Math.min(100, basePercentage + randomVariance));
       scores[t.id].sum += finalScore;
       scores[t.id].count += 1;
     });
-  });
-
-  const labels = courseStore.topics.map((t) => t.name);
-  const dataValues = courseStore.topics.map((t) => {
     const entry = scores[t.id];
     return entry && entry.count > 0 ? Math.round(entry.sum / entry.count) : 75;
   });
@@ -2151,12 +2113,23 @@ const loadAllData = async () => {
     const tasks: Promise<unknown>[] = [];
     if (["overview", "users"].includes(activeTab.value)) {
       tasks.push(adminApi.getAllUsers().then((value) => (users.value = value)));
+      tasks.push(adminApi.getAllUserGroups().then((value) => (userGroups.value = value)));
     }
     if (["overview", "enrollments"].includes(activeTab.value)) {
       tasks.push(adminApi.getEnrollmentRequests().then((value) => (enrollmentRequests.value = value)));
     }
     if (["overview", "exams"].includes(activeTab.value)) tasks.push(loadQuestions());
     await Promise.all(tasks);
+
+    if (activeTab.value === "overview") {
+      try {
+        const stats = await adminApi.getDashboardStats();
+        dashboardStats.value = stats;
+        activeSessions.value = stats.activeSessions;
+      } catch (err) {
+        console.error("Failed to load dashboard stats:", err);
+      }
+    }
 
     if (courseStore.topics.length > 0 && !selectedTopicId.value) {
       selectedTopicId.value = courseStore.topics[0].id;
@@ -2192,9 +2165,16 @@ const openTopicModal = (topic?: Topic) => {
       iconName: topic.iconName,
     };
   } else {
+    if (topicModal.value.isEdit || (!topicForm.value.id && !topicForm.value.name)) {
+      topicForm.value = { id: "", name: "", iconName: "Settings" };
+    }
     topicModal.value = { show: true, isEdit: false };
-    topicForm.value = { id: "", name: "", iconName: "Settings" };
   }
+};
+
+const cancelTopicModal = () => {
+  topicModal.value.show = false;
+  topicForm.value = { id: "", name: "", iconName: "Settings" };
 };
 
 const saveTopic = async () => {
@@ -2257,19 +2237,36 @@ const openUserModal = (user?: AdminUser) => {
       email: user.email || "",
     };
   } else {
+    if (userModal.value.isEdit || (!userForm.value.username && !userForm.value.fullName && !userForm.value.email)) {
+      userForm.value = {
+        username: "",
+        password: "",
+        fullName: "",
+        avatarColor: "#005B41",
+        role: "ROLE_USER",
+        points: 0,
+        userGroupId: "",
+        employeeId: "",
+        email: "",
+      };
+    }
     userModal.value = { show: true, isEdit: false, editId: null };
-    userForm.value = {
-      username: "",
-      password: "",
-      fullName: "",
-      avatarColor: "#005B41",
-      role: "ROLE_USER",
-      points: 0,
-      userGroupId: "",
-      employeeId: "",
-      email: "",
-    };
   }
+};
+
+const cancelUserModal = () => {
+  userModal.value.show = false;
+  userForm.value = {
+    username: "",
+    password: "",
+    fullName: "",
+    avatarColor: "#005B41",
+    role: "ROLE_USER",
+    points: 0,
+    userGroupId: "",
+    employeeId: "",
+    email: "",
+  };
 };
 
 const excelFileInput = ref<HTMLInputElement | null>(null);
@@ -2321,8 +2318,9 @@ const saveUser = async () => {
     userModal.value.show = false;
     users.value = await adminApi.getAllUsers();
     showToast(userModal.value.isEdit ? "Cập nhật học viên thành công." : "Tạo học viên thành công.");
-  } catch (err) {
-    showToast("Không thể lưu học viên. Vui lòng thử lại.", "error");
+  } catch (err: any) {
+    const errorMsg = err.response?.data?.message || "Không thể lưu học viên. Vui lòng thử lại.";
+    showToast(errorMsg, "error");
     console.error(err);
   } finally {
     loading.value = false;

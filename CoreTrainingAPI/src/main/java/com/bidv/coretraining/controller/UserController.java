@@ -72,10 +72,12 @@ public class UserController {
             @RequestBody java.util.Map<String, String> request,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         String newPassword = request.get("newPassword");
+        String employeeId = request.get("employeeId");
+        String email = request.get("email");
         if (newPassword == null || newPassword.trim().isEmpty()) {
             throw new com.bidv.coretraining.exception.BadRequestException("Mật khẩu mới không được để trống!");
         }
-        userService.changePassword(userDetails.getUsername(), newPassword);
+        userService.changePassword(userDetails.getUsername(), newPassword, employeeId, email);
         return ResponseEntity.ok("Đổi mật khẩu thành công!");
     }
 }

@@ -20,6 +20,38 @@
 
       <form @submit.prevent="handleChangePassword" class="login-form">
         <div class="form-group">
+          <label for="employee-id">Mã nhân viên</label>
+          <div class="input-wrapper">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="input-icon"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+            <input 
+              type="text" 
+              id="employee-id" 
+              v-model="employeeId" 
+              placeholder="Nhập mã nhân viên của bạn" 
+              required
+              :disabled="loading"
+              class="password-input"
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="email">Email công vụ</label>
+          <div class="input-wrapper">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="input-icon"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            <input 
+              type="email" 
+              id="email" 
+              v-model="email" 
+              placeholder="Nhập email công vụ của bạn" 
+              required
+              :disabled="loading"
+              class="password-input"
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
           <label for="new-password">Mật khẩu mới</label>
           <div class="input-wrapper">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="input-icon"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -36,6 +68,18 @@
               <span v-if="showPassword">Ẩn</span>
               <span v-else>Hiện</span>
             </button>
+          </div>
+          
+          <!-- Password Strength Checklist -->
+          <div v-if="newPassword" class="requirements-checklist card animate-fade-in">
+            <p class="requirements-title">Yêu cầu mật khẩu mạnh:</p>
+            <ul>
+              <li v-for="req in passwordRequirements" :key="req.id" :class="{ 'met': req.met }">
+                <svg v-if="req.met" class="check-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                <span v-else class="bullet">•</span>
+                {{ req.label }}
+              </li>
+            </ul>
           </div>
         </div>
 
@@ -73,12 +117,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useUserStore } from '../stores/userStore';
 import { updateCachedAuthSession } from '../utils/authSession';
 import { courseApi } from '../api/courseApi';
 import router from '../router';
 
+const employeeId = ref('');
+const email = ref('');
 const newPassword = ref('');
 const confirmPassword = ref('');
 const showPassword = ref(false);
@@ -89,12 +135,37 @@ const successMessage = ref('');
 
 const userStore = useUserStore();
 
+const passwordRequirements = computed(() => {
+  const pass = newPassword.value;
+  return [
+    { id: 'length', label: 'Tối thiểu 8 ký tự', met: pass.length >= 8 },
+    { id: 'uppercase', label: 'Có chữ viết hoa (A-Z)', met: /[A-Z]/.test(pass) },
+    { id: 'lowercase', label: 'Có chữ viết thường (a-z)', met: /[a-z]/.test(pass) },
+    { id: 'number', label: 'Có chữ số (0-9)', met: /[0-9]/.test(pass) },
+    { id: 'special', label: 'Có ký tự đặc biệt (!@#$...)', met: /[!@#$%^&*(),.?":{}|<>]/.test(pass) }
+  ];
+});
+
+const isPasswordStrong = computed(() => {
+  return passwordRequirements.value.every(req => req.met);
+});
+
 const handleChangePassword = async () => {
   errorMessage.value = '';
   successMessage.value = '';
 
-  if (newPassword.value.length < 6) {
-    errorMessage.value = 'Mật khẩu phải dài tối thiểu 6 ký tự!';
+  if (!employeeId.value.trim()) {
+    errorMessage.value = 'Vui lòng nhập Mã nhân viên!';
+    return;
+  }
+
+  if (!email.value.trim()) {
+    errorMessage.value = 'Vui lòng nhập Email công vụ!';
+    return;
+  }
+
+  if (!isPasswordStrong.value) {
+    errorMessage.value = 'Mật khẩu mới chưa đạt yêu cầu mật khẩu mạnh!';
     return;
   }
 
@@ -106,7 +177,7 @@ const handleChangePassword = async () => {
   loading.value = true;
   try {
     // Call userApi to change password
-    await courseApi.changePassword(newPassword.value);
+    await courseApi.changePassword(newPassword.value, employeeId.value.trim(), email.value.trim());
     
     // Update local storage and pinia store state
     localStorage.setItem('mustChangePassword', 'false');
@@ -320,6 +391,54 @@ const handleLogout = () => {
 .back-to-login a:hover {
   color: var(--primary-color);
   text-decoration: underline;
+}
+
+.requirements-checklist {
+  background-color: var(--bg-main);
+  border: 1px solid var(--border-color);
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-md);
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.requirements-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 0.4rem;
+}
+.requirements-checklist ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.requirements-checklist li {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: color 0.2s ease;
+}
+.requirements-checklist li.met {
+  color: #059669;
+  font-weight: 600;
+}
+.check-icon {
+  width: 12px;
+  height: 12px;
+  color: #059669;
+  flex-shrink: 0;
+}
+.bullet {
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--text-muted);
+  width: 12px;
+  text-align: center;
 }
 
 .spinner {

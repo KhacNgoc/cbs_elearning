@@ -31,10 +31,10 @@ public class User {
     @Column(name = "avatar_color")
     private String avatarColor;
 
-    @Column(name = "employee_id")
+    @Column(name = "employee_id", unique = true)
     private String employeeId;
 
-    @Column
+    @Column(unique = true)
     private String email;
 
     @Column(nullable = false)

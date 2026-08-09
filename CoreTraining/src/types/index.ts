@@ -85,6 +85,7 @@ export interface UserProgress {
   lessonQuizTotals: Record<string, number>; // lessonId -> total questions
   lessonProgress?: Record<string, LessonProgress>;
   points: number; // Experience points
+  weeklyPoints?: number;
   unlockedBadges: Badge[];
   groupId?: string;
   groupName?: string;

@@ -12,7 +12,7 @@ import { clearAuthSession, setCachedAuthSession } from '../utils/authSession';
 let progressRequest: Promise<void> | null = null;
 
 export const useUserStore = defineStore('user', {
-  state: (): UserProgress & { isAuthenticated: boolean; role: string; username: string; fullName: string; mustChangePassword: boolean } => ({
+  state: (): UserProgress & { isAuthenticated: boolean; role: string; username: string; fullName: string; mustChangePassword: boolean; weeklyPoints: number } => ({
     completedLessons: [],
     quizScores: {},
     quizTotals: {},
@@ -20,6 +20,7 @@ export const useUserStore = defineStore('user', {
     lessonQuizTotals: {},
     lessonProgress: {},
     points: 0,
+    weeklyPoints: 0,
     unlockedBadges: [],
     groupId: '',
     groupName: '',
@@ -153,6 +154,7 @@ export const useUserStore = defineStore('user', {
         this.lessonQuizTotals = progress.lessonQuizTotals || {};
         this.lessonProgress = progress.lessonProgress || {};
         this.points = progress.points || 0;
+        this.weeklyPoints = progress.weeklyPoints || 0;
         this.unlockedBadges = progress.unlockedBadges || [];
         this.groupId = progress.groupId || '';
         this.groupName = progress.groupName || '';

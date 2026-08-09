@@ -646,9 +646,128 @@ export const adminApi = {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       });
     }
-    const response = await axiosClient.get<Blob>('/api/admin/users/template', {
+    const response = await axiosClient.get<Blob>(`/api/admin/users/template?t=${Date.now()}`, {
       responseType: 'blob'
     });
     return response.data;
+  },
+
+  async getAllUserGroups(): Promise<{ id: string; name: string }[]> {
+    if (isMockApi()) {
+      await mockDelay(300);
+      return [
+        { id: "CIF", name: "Nhóm nghiệp vụ CIF" },
+        { id: "TIEN_VAY", name: "Nhóm nghiệp vụ Tiền vay" },
+        { id: "CHUYEN_TIEN", name: "Nhóm nghiệp vụ Chuyển tiền" },
+        { id: "TIEN_GUI", name: "Nhóm nghiệp vụ Tiền gửi" },
+        { id: "TELLER", name: "Nhóm nghiệp vụ Teller" },
+        { id: "GL", name: "Nhóm nghiệp vụ GL" },
+        { id: "THE", name: "Nhóm nghiệp vụ Thẻ" }
+      ];
+    }
+    const response = await axiosClient.get<{ id: string; name: string }[]>("/api/admin/groups");
+    return response.data;
+  },
+
+  async getDashboardStats(): Promise<DashboardStats> {
+    if (isMockApi()) {
+      await mockDelay(300);
+      return {
+        totalUsers: mockDbUsers.length,
+        activeUsers: 4,
+        totalLessons: mockDbTopics.reduce((acc, t) => acc + t.lessons.length, 0),
+        totalQuestions: mockDbQuestions.length,
+        activeSessions: [
+          {
+            username: "nguyenvana",
+            fullName: "Nguyễn Văn An",
+            avatarColor: "#4F46E5",
+            action: "Đang học bài",
+            detail: "LN02. Quy trình giải ngân thông thường",
+            topic: "TIỀN VAY",
+            time: "Vừa xong",
+          },
+          {
+            username: "tranb",
+            fullName: "Trần Thị Bình",
+            avatarColor: "#10B981",
+            action: "Đang thi thử",
+            detail: "Đề đánh giá năng lực CIF",
+            topic: "CIF",
+            time: "2 phút trước",
+          },
+          {
+            username: "lephuc",
+            fullName: "Lê Hoàng Phúc",
+            avatarColor: "#F59E0B",
+            action: "Đang xem",
+            detail: "Bảng xếp hạng vinh danh",
+            topic: "HỆ THỐNG",
+            time: "5 phút trước",
+          },
+          {
+            username: "phamduc",
+            fullName: "Phạm Minh Đức",
+            avatarColor: "#EF4444",
+            action: "Đang học bài",
+            detail: "CT01. Quy trình chuyển tiền trong nước",
+            topic: "CHUYỂN TIỀN",
+            time: "12 phút trước",
+          },
+        ],
+        dailyActivity: [
+          { label: "Thứ 3", count: 18 },
+          { label: "Thứ 4", count: 24 },
+          { label: "Thứ 5", count: 15 },
+          { label: "Thứ 6", count: 29 },
+          { label: "Thứ 7", count: 32 },
+          { label: "Chủ Nhật", count: 12 },
+          { label: "Hôm nay", count: 28 },
+        ],
+        competencyDistribution: {
+          "Xuất sắc (>=2500)": 2,
+          "Khá (1800-2499)": 3,
+          "Trung bình (1000-1799)": 2,
+          "Yếu (<1000)": 0,
+        },
+        avgScoreByTopic: {
+          "CIF": 85,
+          "TIỀN VAY": 78,
+          "CHUYỂN TIỀN": 92,
+          "TIỀN GỬI": 80,
+          "TELLER": 88,
+          "GL": 74,
+          "THẺ": 82
+        }
+      };
+    }
+    const response = await axiosClient.get<DashboardStats>("/api/admin/dashboard/stats");
+    return response.data;
   }
 };
+
+export interface ActiveSession {
+  username: string;
+  fullName: string;
+  avatarColor: string;
+  action: string;
+  detail: string;
+  topic: string;
+  time: string;
+}
+
+export interface DailyActivity {
+  label: string;
+  count: number;
+}
+
+export interface DashboardStats {
+  totalUsers: number;
+  activeUsers: number;
+  totalLessons: number;
+  totalQuestions: number;
+  activeSessions: ActiveSession[];
+  dailyActivity: DailyActivity[];
+  competencyDistribution: Record<string, number>;
+  avgScoreByTopic: Record<string, number>;
+}

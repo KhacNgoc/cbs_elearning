@@ -9,5 +9,5 @@ public interface UserService {
     UserProgressDto completeLesson(String username, String lessonId);
     UserProgressDto resetLesson(String username, String lessonId);
     UserProgressDto registerTopic(String username, String topicId);
-    void changePassword(String username, String newPassword);
+    void changePassword(String username, String newPassword, String employeeId, String email);
 }

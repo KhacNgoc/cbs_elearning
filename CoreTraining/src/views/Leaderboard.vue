@@ -2,12 +2,14 @@
   <div class="leaderboard-view animate-fade-in">
     <!-- User Profile Hero Summary -->
     <div class="profile-hero card">
-      <div class="user-big-avatar">Q</div>
+      <div class="user-big-avatar">{{ userStore.fullName.charAt(0).toUpperCase() || 'U' }}</div>
       <div class="profile-info">
         <span class="user-status-tag">HỌC VIÊN CHÍNH THỨC</span>
-        <h1>Quản Trị Hệ Thống</h1>
+        <h1>{{ userStore.fullName }}</h1>
         <p class="profile-stats-row">
           <span>Điểm tích lũy: <strong>{{ userStore.points }} PTS</strong></span>
+          <span class="dot-separator">•</span>
+          <span>Điểm tuần này: <strong>+{{ userStore.weeklyPoints || 0 }} PTS</strong></span>
           <span class="dot-separator">•</span>
           <span>Bài học hoàn thành: <strong>{{ userStore.completedLessonsCount }} / {{ userStore.totalLessonsCount }}</strong></span>
           <span class="dot-separator">•</span>
@@ -19,7 +21,7 @@
     <div class="leaderboard-grid">
       <!-- Left Column: Rank List -->
       <div class="ranks-col card">
-        <h2 class="card-title">BẢNG VINH DANH CHI NHÁNH</h2>
+        <h2 class="card-title">BẢNG VINH DANH TOÀN HỆ THỐNG</h2>
         <p class="card-subtitle">Bảng xếp hạng năng lực học tập dựa trên điểm tích lũy (PTS)</p>
         
         <div class="ranks-list">
@@ -27,7 +29,7 @@
             v-for="user in sortedLeaderboard" 
             :key="user.username" 
             class="rank-row"
-            :class="{ 'is-current-user': user.username === 'quantrh' }"
+            :class="{ 'is-current-user': user.username === userStore.username }"
           >
             <div class="rank-num" :class="getRankClass(user.rank)">
               {{ user.rank }}

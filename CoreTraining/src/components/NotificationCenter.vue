@@ -50,21 +50,23 @@
         </div>
       </section>
     </Transition>
-    <Transition name="toast">
-      <div
-        v-if="toast"
-        class="system-toast"
-        :class="`system-toast--${toast.variant}`"
-        :role="toast.variant === 'error' ? 'alert' : 'status'"
-      >
-        <CircleAlert v-if="toast.variant === 'error'" :size="19" />
-        <TriangleAlert v-else-if="toast.variant === 'warning'" :size="19" />
-        <CircleCheck v-else-if="toast.variant === 'success'" :size="19" />
-        <Info v-else :size="19" />
-        <span>{{ toast.message }}</span>
-        <button aria-label="Đóng" @click="toast = null"><X :size="16" /></button>
-      </div>
-    </Transition>
+    <Teleport to="body">
+      <Transition name="toast">
+        <div
+          v-if="toast"
+          class="system-toast"
+          :class="`system-toast--${toast.variant}`"
+          :role="toast.variant === 'error' ? 'alert' : 'status'"
+        >
+          <CircleAlert v-if="toast.variant === 'error'" :size="19" />
+          <TriangleAlert v-else-if="toast.variant === 'warning'" :size="19" />
+          <CircleCheck v-else-if="toast.variant === 'success'" :size="19" />
+          <Info v-else :size="19" />
+          <span>{{ toast.message }}</span>
+          <button aria-label="Đóng" @click="toast = null"><X :size="16" /></button>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -351,7 +353,7 @@ onBeforeUnmount(() => {
   background: #eff6ff;
   color: #1d4ed8;
   box-shadow: var(--shadow-lg);
-  z-index: 500;
+  z-index: 2000;
   font-size: 0.82rem;
 }
 .system-toast--success {

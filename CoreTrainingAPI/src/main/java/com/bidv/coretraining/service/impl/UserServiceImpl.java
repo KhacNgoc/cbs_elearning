@@ -10,6 +10,7 @@ import com.bidv.coretraining.entity.EnrollmentStatus;
 import com.bidv.coretraining.entity.TopicEnrollmentRequest;
 import com.bidv.coretraining.entity.NotificationType;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
+import com.bidv.coretraining.exception.BadRequestException;
 import com.bidv.coretraining.repository.LessonRepository;
 import com.bidv.coretraining.repository.QuestionRepository;
 import com.bidv.coretraining.repository.UserRepository;
@@ -238,6 +239,30 @@ public class UserServiceImpl implements UserService {
                 .map(request -> request.getTopic().getId())
                 .collect(Collectors.toList());
 
+        // Calculate points gained in the last 7 days (weeklyPoints)
+        java.time.LocalDateTime sevenDaysAgo = java.time.LocalDateTime.now().minusDays(7);
+        java.time.LocalDate sevenDaysAgoDate = java.time.LocalDate.now().minusDays(7);
+        int weeklyPointsVal = 0;
+
+        if (user.getQuizScores() != null) {
+            for (UserQuizScore score : user.getQuizScores()) {
+                if (score.getTakenAt() != null && score.getTakenAt().isAfter(sevenDaysAgo)) {
+                    weeklyPointsVal += score.getScore() * 50;
+                }
+            }
+        }
+
+        if (user.getUnlockedBadges() != null) {
+            for (com.bidv.coretraining.entity.UserBadge badge : user.getUnlockedBadges()) {
+                if (badge.getUnlockedAt() != null && !badge.getUnlockedAt().isBefore(sevenDaysAgoDate)) {
+                    String badgeType = badge.getBadge().getType();
+                    if ("gold".equalsIgnoreCase(badgeType)) weeklyPointsVal += 300;
+                    else if ("silver".equalsIgnoreCase(badgeType)) weeklyPointsVal += 200;
+                    else if ("bronze".equalsIgnoreCase(badgeType)) weeklyPointsVal += 100;
+                }
+            }
+        }
+
         return UserProgressDto.builder()
                 .completedLessons(completedLessons)
                 .quizScores(quizScores)
@@ -246,6 +271,7 @@ public class UserServiceImpl implements UserService {
                 .lessonQuizTotals(lessonQuizTotals)
                 .lessonProgress(lessonProgressService.getAllProgress(user))
                 .points(user.getPoints())
+                .weeklyPoints(weeklyPointsVal)
                 .unlockedBadges(userMapper.toUserBadgeDtoList(new ArrayList<>(user.getUnlockedBadges())))
                 .groupId(groupId)
                 .groupName(groupName)
@@ -258,9 +284,21 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public void changePassword(String username, String newPassword) {
+    public void changePassword(String username, String newPassword, String employeeId, String email) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
+        if (employeeId == null || employeeId.trim().isEmpty()) {
+            throw new BadRequestException("Mã nhân viên không được để trống!");
+        }
+        if (email == null || email.trim().isEmpty()) {
+            throw new BadRequestException("Email không được để trống!");
+        }
+        if (user.getEmployeeId() == null || !user.getEmployeeId().trim().equalsIgnoreCase(employeeId.trim())) {
+            throw new BadRequestException("Mã nhân viên xác thực không chính xác!");
+        }
+        if (user.getEmail() == null || !user.getEmail().trim().equalsIgnoreCase(email.trim())) {
+            throw new BadRequestException("Email công vụ xác thực không chính xác!");
+        }
         user.setPassword(passwordEncoder.encode(newPassword));
         user.setMustChangePassword(false);
         userRepository.save(user);

@@ -13,6 +13,10 @@ import org.springframework.data.repository.query.Param;
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByUsername(String username);
     boolean existsByUsername(String username);
+    boolean existsByEmployeeId(String employeeId);
+    boolean existsByEmployeeIdAndIdNot(String employeeId, Long id);
+    boolean existsByEmail(String email);
+    boolean existsByEmailAndIdNot(String email, Long id);
     List<User> findByRole(String role);
 
     @Query("select count(topic) > 0 from User user join user.registeredTopics topic " +

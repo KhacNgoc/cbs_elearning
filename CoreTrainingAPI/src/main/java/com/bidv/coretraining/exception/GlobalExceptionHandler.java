@@ -112,6 +112,28 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.UNAUTHORIZED);
     }
 
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolationException(org.springframework.dao.DataIntegrityViolationException ex, WebRequest request) {
+        log.warn("Database constraint violation: {}", ex.getMessage());
+        String message = "Dữ liệu không hợp lệ hoặc đã tồn tại trong hệ thống (trùng lặp khóa)";
+        if (ex.getMessage() != null && (ex.getMessage().contains("employee_id") || ex.getMessage().contains("uk_users_employee_id"))) {
+            message = "Mã nhân viên đã tồn tại trong hệ thống";
+        } else if (ex.getMessage() != null && (ex.getMessage().contains("username") || ex.getMessage().contains("ukr43af9ap4edm43mmtq01oddj6"))) {
+            message = "Tên đăng nhập (Username) đã tồn tại trong hệ thống";
+        } else if (ex.getMessage() != null && (ex.getMessage().contains("email") || ex.getMessage().contains("uk_users_email"))) {
+            message = "Email đã tồn tại trong hệ thống";
+        }
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error("Conflict")
+                .message(message)
+                .path(request.getDescription(false).replace("uri=", ""))
+                .traceId(currentTraceId())
+                .build();
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGlobalException(Exception ex, WebRequest request) {
         log.error("Unhandled application error", ex);
