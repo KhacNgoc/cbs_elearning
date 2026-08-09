@@ -15,7 +15,7 @@ public class QuizReviewQuestionDto {
     private Long id;
     private String text;
     private List<String> options;
-    private Integer selectedAnswer;
-    private Integer correctAnswer;
+    private List<Integer> selectedAnswers;
+    private List<Integer> correctAnswers;
     private Boolean correct;
 }

@@ -1,5 +1,5 @@
 import { axiosClient, isMockApi, mockDelay } from './axiosClient';
-import type { Question } from '../types';
+import type { Question, QuizQuestion } from '../types';
 import { mockQuestions } from '../data/mockData';
 import { mockDbTopics } from './courseApi';
 
@@ -12,7 +12,7 @@ export const setMockDbQuestions = (newQuestions: Question[]) => {
 };
 
 export interface QuizSubmitRequest {
-  selectedAnswers: Record<string, number>;
+  selectedAnswers: Record<string, number[]>;
   timeElapsed: number;
 }
 
@@ -28,8 +28,8 @@ export interface QuizReviewQuestion {
   id: number;
   text: string;
   options: string[];
-  selectedAnswer?: number;
-  correctAnswer: number;
+  selectedAnswers: number[];
+  correctAnswers: number[];
   correct: boolean;
 }
 
@@ -38,19 +38,19 @@ export interface QuizReview extends QuizSubmitResponse {
 }
 
 export const quizApi = {
-  async getQuizQuestions(topicId: string, lessonId?: string): Promise<Omit<Question, 'correctAnswer'>[]> {
+  async getQuizQuestions(topicId: string, lessonId?: string): Promise<QuizQuestion[]> {
     if (isMockApi()) {
       await mockDelay(300);
       const filtered = mockDbQuestions.filter(q =>
         lessonId ? q.lessonId === lessonId : q.topicId === topicId && !q.lessonId
       );
       // Hide correctAnswer field from the returned payload to simulate backend anti-cheat logic
-      return filtered.map(({ correctAnswer, ...q }) => q);
+      return filtered.map(({ correctAnswer, correctAnswers, ...q }) => q);
     }
     const url = lessonId
       ? `/api/quizzes/lessons/${lessonId}/questions`
       : `/api/quizzes/${topicId}/questions`;
-    const response = await axiosClient.get<Omit<Question, 'correctAnswer'>[]>(url);
+    const response = await axiosClient.get<QuizQuestion[]>(url);
     return response.data;
   },
 
@@ -64,8 +64,9 @@ export const quizApi = {
       let score = 0;
       
       filteredOriginals.forEach(q => {
-        const selected = data.selectedAnswers[q.id];
-        if (selected === q.correctAnswer) {
+        const selected = [...(data.selectedAnswers[q.id] || [])].sort();
+        const correct = [...(q.correctAnswers || [q.correctAnswer])].sort();
+        if (selected.length === correct.length && selected.every((value, index) => value === correct[index])) {
           score++;
         }
       });
@@ -176,9 +177,10 @@ export const quizApi = {
           id: question.id,
           text: question.text,
           options: question.options,
-          selectedAnswer: selectedAnswers[question.id],
-          correctAnswer: question.correctAnswer,
-          correct: selectedAnswers[question.id] === question.correctAnswer
+          selectedAnswers: selectedAnswers[question.id] || [],
+          correctAnswers: question.correctAnswers || [question.correctAnswer],
+          correct: JSON.stringify([...(selectedAnswers[question.id] || [])].sort()) ===
+            JSON.stringify([...(question.correctAnswers || [question.correctAnswer])].sort())
         }))
       };
     }

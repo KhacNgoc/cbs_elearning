@@ -65,7 +65,11 @@ export interface Question {
   text: string;
   options: string[];
   correctAnswer: number; // 0-indexed index of options
+  correctAnswers?: number[];
+  type?: 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE';
 }
+
+export type QuizQuestion = Omit<Question, 'correctAnswer' | 'correctAnswers'>;
 
 export interface Badge {
   id: string;

@@ -669,7 +669,7 @@
             </div>
             <p v-if="documentUploadMessage" class="rag-upload-message">{{ documentUploadMessage }}</p>
 
-            <table class="admin-table">
+            <table class="admin-table rag-document-table">
               <thead>
                 <tr>
                   <th>Tệp</th>
@@ -692,7 +692,9 @@
                   </span></td>
                   <td>{{ document.indexedChunks ?? "-" }}</td>
                   <td>{{ formatDocumentDate(document.indexedAt || document.createdAt) }}</td>
-                  <td class="rag-error-cell">{{ document.errorMessage || "-" }}</td>
+                  <td class="rag-error-cell">
+                    <span :title="document.errorMessage || ''">{{ document.errorMessage || "-" }}</span>
+                  </td>
                 </tr>
                 <tr v-if="!documentListLoading && courseDocuments.length === 0">
                   <td colspan="6" class="rag-empty-cell">Chủ đề này chưa có tài liệu được embedding.</td>
@@ -1299,7 +1301,6 @@ import type {
   EnrollmentRequest,
   DashboardStats,
 } from "../api/adminApi";
-import { quizApi } from "../api/quizApi";
 import type { Topic, Lesson, LessonDocument, Question } from "../types";
 import ConfirmModal from "../components/ConfirmModal.vue";
 import {
@@ -2097,8 +2098,8 @@ const confirmModalAction = async () => {
 // ==========================================
 const loadQuestions = async () => {
   const requests = courseStore.topics.flatMap((topic) => [
-    quizApi.getQuizQuestions(topic.id),
-    ...topic.lessons.map((lesson) => quizApi.getQuizQuestions(topic.id, lesson.id)),
+    adminApi.getQuizQuestions(topic.id),
+    ...topic.lessons.map((lesson) => adminApi.getQuizQuestions(topic.id, lesson.id)),
   ]);
   const results = await Promise.allSettled(requests);
   questions.value = results.flatMap((result) =>
@@ -4217,10 +4218,28 @@ select:disabled {
 }
 
 .rag-error-cell {
-  max-width: 320px;
+  min-width: 0;
   color: #b91c1c;
+  white-space: normal;
+  word-break: break-word;
   overflow-wrap: anywhere;
 }
+
+.rag-error-cell span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.rag-document-table { table-layout: fixed; }
+.rag-document-table th:nth-child(1) { width: 24%; }
+.rag-document-table th:nth-child(2) { width: 11%; }
+.rag-document-table th:nth-child(3) { width: 12%; }
+.rag-document-table th:nth-child(4) { width: 9%; }
+.rag-document-table th:nth-child(5) { width: 15%; }
+.rag-document-table th:nth-child(6) { width: 29%; }
 
 .rag-empty-cell {
   padding: 2rem !important;

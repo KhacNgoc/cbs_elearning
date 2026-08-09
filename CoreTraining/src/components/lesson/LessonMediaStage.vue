@@ -56,7 +56,7 @@ defineExpose({
 });
 const resolveDocumentUrl = (url: string) => {
   if (/^https?:\/\//i.test(url) || url.startsWith('blob:')) return url;
-  return `${import.meta.env.VITE_API_URL || 'http://localhost:8080'}${url.startsWith('/') ? url : `/${url}`}`;
+  return `${import.meta.env.VITE_API_URL ?? 'http://localhost:8080'}${url.startsWith('/') ? url : `/${url}`}`;
 };
 </script>
 

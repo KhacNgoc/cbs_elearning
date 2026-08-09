@@ -37,6 +37,7 @@ class RagChatServiceTest {
     private RagConversationRepository conversationRepository;
     private RagConversationMessageRepository messageRepository;
     private RagChatMessageRepository legacyMessageRepository;
+    private RagConversationSummaryService summaryService;
     private RagChatService service;
     private User currentUser;
     private Topic course;
@@ -48,9 +49,10 @@ class RagChatServiceTest {
         conversationRepository = mock(RagConversationRepository.class);
         messageRepository = mock(RagConversationMessageRepository.class);
         legacyMessageRepository = mock(RagChatMessageRepository.class);
+        summaryService = mock(RagConversationSummaryService.class);
         service = new RagChatService(
                 userRepository, topicRepository, conversationRepository, messageRepository, legacyMessageRepository,
-                "http://localhost:8001", 8, 12000, 12, 24000, 1000, 1000);
+                summaryService, "http://localhost:8001", 8, 12000, 1000, 1000);
         currentUser = User.builder().id(1L).username("alice").role("ROLE_USER").build();
         course = Topic.builder().id("CIF").name("CIF").build();
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(currentUser));
@@ -82,10 +84,10 @@ class RagChatServiceTest {
     }
 
     @Test
-    void summaryFailureDoesNotDiscardSuccessfulAnswer() {
+    void summaryDispatchFailureDoesNotDiscardSuccessfulAnswer() {
         service = new RagChatService(
                 userRepository, topicRepository, conversationRepository, messageRepository, legacyMessageRepository,
-                "http://localhost:8001", 2, 12000, 3, 24000, 1000, 1000);
+                summaryService, "http://localhost:8001", 2, 12000, 1000, 1000);
         RagConversation conversation = conversation(currentUser, course);
         when(conversationRepository.findById("conversation-1")).thenReturn(Optional.of(conversation));
         when(conversationRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -97,12 +99,8 @@ class RagChatServiceTest {
         });
         when(messageRepository.findTop30ByConversationIdAndIdLessThanOrderByIdDesc(anyString(), anyLong()))
                 .thenReturn(List.of());
-        when(messageRepository.findByConversationIdAndIdGreaterThanOrderByIdAsc(anyString(), anyLong()))
-                .thenReturn(List.of(
-                        conversationMessage(1L, conversation, "user", "CIF là gì?"),
-                        conversationMessage(2L, conversation, "assistant", "CIF là hồ sơ."),
-                        conversationMessage(3L, conversation, "user", "Nó được tạo khi nào?"),
-                        conversationMessage(4L, conversation, "assistant", "Câu trả lời.")));
+        doThrow(new IllegalStateException("executor unavailable"))
+                .when(summaryService).updateAsync("conversation-1", 1L, "CIF");
 
         RestTemplate restTemplate = (RestTemplate) ReflectionTestUtils.getField(service, "restTemplate");
         MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
@@ -111,15 +109,13 @@ class RagChatServiceTest {
                         {"answer":"Câu trả lời có căn cứ.","grounded":true,"sources":[],
                          "standaloneQuestion":"CIF được tạo khi nào?","needsClarification":false,"rewriteReason":""}
                         """, MediaType.APPLICATION_JSON));
-        server.expect(requestTo("http://localhost:8001/summarize"))
-                .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
-
         var response = service.chat(
                 "alice", new RagChatRequest("Nó được tạo khi nào?", "CIF", null, "conversation-1"));
 
         server.verify();
         org.junit.jupiter.api.Assertions.assertEquals("Câu trả lời có căn cứ.", response.answer());
         org.junit.jupiter.api.Assertions.assertEquals("conversation-1", response.conversationId());
+        verify(summaryService).updateAsync("conversation-1", 1L, "CIF");
     }
 
     private RagConversation conversation(User owner, Topic topic) {

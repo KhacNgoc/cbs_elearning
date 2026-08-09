@@ -270,10 +270,29 @@ public class AdminServiceImpl implements AdminService {
 
     // Question CRUD
     @Override
+    @Transactional(readOnly = true)
+    public List<QuestionDto> getQuizQuestions(String topicId, String lessonId) {
+        if (!topicRepository.existsById(topicId)) {
+            throw new ResourceNotFoundException("Topic", "id", topicId);
+        }
+        if (lessonId != null && !lessonId.isBlank()) {
+            Lesson lesson = lessonRepository.findById(lessonId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
+            if (!lesson.getTopic().getId().equals(topicId)) {
+                throw new BadRequestException("Bài học không thuộc chủ đề đã chọn");
+            }
+            return quizMapper.toQuestionDtoList(questionRepository.findByLessonId(lessonId));
+        }
+        return quizMapper.toQuestionDtoList(questionRepository.findByTopicIdAndLessonIsNull(topicId));
+    }
+
+    @Override
     @Transactional
     public QuestionDto createQuestion(QuestionDto questionDto) {
         Topic topic = topicRepository.findById(questionDto.getTopicId())
                 .orElseThrow(() -> new ResourceNotFoundException("Topic", "id", questionDto.getTopicId()));
+
+        normalizeAndValidateQuestion(questionDto);
 
         Question question = Question.builder()
                 .topic(topic)
@@ -281,6 +300,8 @@ public class AdminServiceImpl implements AdminService {
                 .text(questionDto.getText())
                 .options(questionDto.getOptions() != null ? questionDto.getOptions() : new ArrayList<>())
                 .correctAnswer(questionDto.getCorrectAnswer())
+                .correctAnswers(questionDto.getCorrectAnswers())
+                .type(questionDto.getType())
                 .build();
 
         Question saved = questionRepository.save(question);
@@ -293,6 +314,7 @@ public class AdminServiceImpl implements AdminService {
         Question question = questionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Question", "id", id));
 
+        normalizeAndValidateQuestion(questionDto);
         if (!question.getTopic().getId().equals(questionDto.getTopicId())) {
             Topic topic = topicRepository.findById(questionDto.getTopicId())
                     .orElseThrow(() -> new ResourceNotFoundException("Topic", "id", questionDto.getTopicId()));
@@ -303,9 +325,49 @@ public class AdminServiceImpl implements AdminService {
         question.setLesson(resolveQuestionLesson(questionDto, question.getTopic()));
         question.setOptions(questionDto.getOptions() != null ? questionDto.getOptions() : new ArrayList<>());
         question.setCorrectAnswer(questionDto.getCorrectAnswer());
+        question.setCorrectAnswers(questionDto.getCorrectAnswers());
+        question.setType(questionDto.getType());
 
         Question saved = questionRepository.save(question);
         return quizMapper.toQuestionDto(saved);
+    }
+
+    private void normalizeAndValidateQuestion(QuestionDto questionDto) {
+        if (questionDto.getText() == null || questionDto.getText().isBlank()) {
+            throw new BadRequestException("Nội dung câu hỏi không được để trống");
+        }
+        List<String> options = questionDto.getOptions() == null
+                ? List.of() : questionDto.getOptions().stream().map(String::trim).toList();
+        if (options.size() < 3 || options.size() > 6 || options.stream().anyMatch(String::isBlank)) {
+            throw new BadRequestException("Câu hỏi phải có từ 3 đến 6 lựa chọn hợp lệ");
+        }
+        if (options.stream().map(String::toLowerCase).distinct().count() != options.size()) {
+            throw new BadRequestException("Các lựa chọn không được trùng nhau");
+        }
+        List<Integer> answers = questionDto.getCorrectAnswers();
+        if ((answers == null || answers.isEmpty()) && questionDto.getCorrectAnswer() != null) {
+            answers = List.of(questionDto.getCorrectAnswer());
+        }
+        answers = answers == null ? List.of() : answers.stream()
+                .filter(java.util.Objects::nonNull).distinct().sorted().toList();
+        if (answers.isEmpty() || answers.stream().anyMatch(index -> index < 0 || index >= options.size())) {
+            throw new BadRequestException("Đáp án đúng không hợp lệ");
+        }
+        QuestionType type = questionDto.getType() == null
+                ? (answers.size() > 1 ? QuestionType.MULTIPLE_CHOICE : QuestionType.SINGLE_CHOICE)
+                : questionDto.getType();
+        if (type == QuestionType.SINGLE_CHOICE && answers.size() != 1) {
+            throw new BadRequestException("Câu single choice phải có đúng một đáp án đúng");
+        }
+        if (type == QuestionType.MULTIPLE_CHOICE
+                && (answers.size() < 2 || answers.size() >= options.size())) {
+            throw new BadRequestException("Câu multiple choice cần ít nhất hai đáp án đúng và không được chọn tất cả");
+        }
+        questionDto.setText(questionDto.getText().trim());
+        questionDto.setOptions(options);
+        questionDto.setCorrectAnswers(answers);
+        questionDto.setCorrectAnswer(answers.get(0));
+        questionDto.setType(type);
     }
 
     private Lesson resolveQuestionLesson(QuestionDto questionDto, Topic topic) {

@@ -26,23 +26,21 @@ public class RagChatService {
     private final RagConversationRepository conversationRepository;
     private final RagConversationMessageRepository messageRepository;
     private final RagChatMessageRepository legacyMessageRepository;
+    private final RagConversationSummaryService summaryService;
     private final RestTemplate restTemplate;
     private final String ragUrl;
     private final int recentMessageLimit;
     private final int recentCharacterLimit;
-    private final int summaryMessageThreshold;
-    private final int summaryCharacterThreshold;
 
     public RagChatService(UserRepository userRepository,
                           TopicRepository topicRepository,
                           RagConversationRepository conversationRepository,
                           RagConversationMessageRepository messageRepository,
                           RagChatMessageRepository legacyMessageRepository,
+                          RagConversationSummaryService summaryService,
                           @Value("${app.rag-url}") String ragUrl,
                           @Value("${app.rag.recent-message-limit:8}") int recentMessageLimit,
                           @Value("${app.rag.recent-character-limit:12000}") int recentCharacterLimit,
-                          @Value("${app.rag.summary-message-threshold:12}") int summaryMessageThreshold,
-                          @Value("${app.rag.summary-character-threshold:24000}") int summaryCharacterThreshold,
                           @Value("${app.rag.connect-timeout-ms:5000}") int connectTimeoutMs,
                           @Value("${app.rag.read-timeout-ms:300000}") int readTimeoutMs) {
         this.userRepository = userRepository;
@@ -50,12 +48,11 @@ public class RagChatService {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.legacyMessageRepository = legacyMessageRepository;
+        this.summaryService = summaryService;
         this.ragUrl = ragUrl;
         int cappedRecentLimit = Math.max(2, Math.min(recentMessageLimit, 30));
         this.recentMessageLimit = cappedRecentLimit % 2 == 0 ? cappedRecentLimit : cappedRecentLimit - 1;
         this.recentCharacterLimit = Math.max(1000, recentCharacterLimit);
-        this.summaryMessageThreshold = Math.max(3, summaryMessageThreshold);
-        this.summaryCharacterThreshold = Math.max(2000, summaryCharacterThreshold);
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(connectTimeoutMs);
         requestFactory.setReadTimeout(readTimeoutMs);
@@ -86,6 +83,7 @@ public class RagChatService {
         Map<String, Object> pythonRequest = new LinkedHashMap<>();
         pythonRequest.put("question", question);
         pythonRequest.put("course_id", topic.getId());
+        pythonRequest.put("topic_name", topic.getName());
         if (request.page() != null) pythonRequest.put("page", request.page());
         pythonRequest.put("conversation_summary", Objects.toString(conversation.getSummary(), ""));
         pythonRequest.put("recent_messages", recent.stream()
@@ -126,7 +124,12 @@ public class RagChatService {
         }
         messageRepository.save(assistantMessage);
         touch(conversation);
-        updateSummaryBestEffort(conversation, user.getId(), topic.getId());
+        try {
+            summaryService.updateAsync(conversation.getId(), user.getId(), topic.getId());
+        } catch (RuntimeException exception) {
+            log.warn("Conversation summary dispatch failed conversationId={} userId={} courseId={} errorType={}",
+                    conversation.getId(), user.getId(), topic.getId(), exception.getClass().getSimpleName());
+        }
 
         long elapsedMs = (System.nanoTime() - startedAt) / 1_000_000;
         log.info("RAG chat completed conversationId={} userId={} courseId={} grounded={} clarification={} sources={} elapsedMs={}",
@@ -221,38 +224,6 @@ public class RagChatService {
         return selected;
     }
 
-    private void updateSummaryBestEffort(RagConversation conversation, Long userId, String topicId) {
-        try {
-            long marker = conversation.getLastSummarizedMessageId() == null ? 0 : conversation.getLastSummarizedMessageId();
-            List<RagConversationMessage> pending = messageRepository
-                    .findByConversationIdAndIdGreaterThanOrderByIdAsc(conversation.getId(), marker);
-            int pendingCharacters = pending.stream().mapToInt(message -> message.getContent().length()).sum();
-            if (pending.size() < summaryMessageThreshold && pendingCharacters < summaryCharacterThreshold) return;
-
-            int summarizeCount = Math.max(0, pending.size() - recentMessageLimit);
-            if (summarizeCount == 0) return;
-            List<RagConversationMessage> messagesToSummarize = pending.subList(0, summarizeCount);
-            Map<String, Object> summaryRequest = Map.of(
-                    "current_summary", Objects.toString(conversation.getSummary(), ""),
-                    "new_messages", messagesToSummarize.stream()
-                            .map(message -> Map.of("role", message.getRole(), "content", message.getContent()))
-                            .toList());
-            SummaryResponse summaryResponse = restTemplate.postForObject(
-                    ragUrl + "/summarize", summaryRequest, SummaryResponse.class);
-            if (summaryResponse == null || summaryResponse.summary() == null || summaryResponse.summary().isBlank()) {
-                throw new IllegalStateException("Summary response is empty");
-            }
-            conversation.setSummary(summaryResponse.summary().trim());
-            conversation.setLastSummarizedMessageId(messagesToSummarize.get(messagesToSummarize.size() - 1).getId());
-            touch(conversation);
-            log.info("Conversation summary updated conversationId={} userId={} courseId={} summarizedMessages={}",
-                    conversation.getId(), userId, topicId, messagesToSummarize.size());
-        } catch (RuntimeException exception) {
-            log.warn("Conversation summary update failed conversationId={} userId={} courseId={} errorType={}",
-                    conversation.getId(), userId, topicId, exception.getClass().getSimpleName());
-        }
-    }
-
     private void touch(RagConversation conversation) {
         conversation.setUpdatedAt(LocalDateTime.now());
         conversationRepository.save(conversation);
@@ -273,5 +244,4 @@ public class RagChatService {
         return topic;
     }
 
-    private record SummaryResponse(String summary) {}
 }

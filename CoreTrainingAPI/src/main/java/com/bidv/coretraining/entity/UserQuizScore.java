@@ -50,4 +50,14 @@ public class UserQuizScore {
     @Column(name = "selected_answer", nullable = false)
     @Builder.Default
     private Map<Long, Integer> selectedAnswers = new HashMap<>();
+
+    @ElementCollection
+    @CollectionTable(
+            name = "user_quiz_score_answer_sets",
+            joinColumns = @JoinColumn(name = "quiz_score_id")
+    )
+    @MapKeyColumn(name = "question_id")
+    @Column(name = "selected_answers", nullable = false)
+    @Builder.Default
+    private Map<Long, String> selectedAnswerSets = new HashMap<>();
 }

@@ -124,7 +124,7 @@
               rows="1"
               placeholder="Hỏi về nội dung bài học..."
               :disabled="sending || !selectedCourseId"
-              @keydown.enter.exact.prevent="sendQuestion"
+              @keydown.enter.exact="handleQuestionEnter"
             ></textarea>
             <button type="submit" aria-label="Gửi câu hỏi" :disabled="sending || !question.trim() || !selectedCourseId">
               <SendHorizontal :size="19" />
@@ -299,6 +299,15 @@ const sendQuestion = async () => {
     sending.value = false;
     await scrollToLatest();
   }
+};
+
+const handleQuestionEnter = (event: KeyboardEvent) => {
+  // With Vietnamese and other IMEs, the text visible in the textarea can still
+  // be composing and therefore not yet be reflected in Vue's v-model. Let the
+  // first Enter commit that text instead of sending a stale question value.
+  if (event.isComposing || event.key === "Process" || event.keyCode === 229) return;
+  event.preventDefault();
+  void sendQuestion();
 };
 
 const askPrompt = (prompt: string) => {
@@ -605,7 +614,9 @@ onBeforeUnmount(() => {
 
 .chat-body {
   flex: 1;
+  min-width: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 22px 18px;
   background:
     radial-gradient(
@@ -630,22 +641,32 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: flex-start;
   gap: 9px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.assistant-message > div {
+  min-width: 0;
 }
 
 .chat-exchange {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
+  max-width: 100%;
   margin-bottom: 18px;
 }
 
 .user-message {
   display: flex;
   justify-content: flex-end;
+  min-width: 0;
   margin: 0 0 10px 42px;
 }
 
 .user-message p {
+  max-width: 100%;
   margin: 0;
   padding: 10px 13px;
   border-radius: 15px 5px 15px 15px;
@@ -653,6 +674,9 @@ onBeforeUnmount(() => {
   color: #fff;
   font-size: 0.86rem;
   line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .assistant-answer {
@@ -668,6 +692,7 @@ onBeforeUnmount(() => {
 }
 
 .assistant-message p {
+  min-width: 0;
   max-width: 270px;
   margin: 0 0 5px;
   padding: 12px 14px;
@@ -677,6 +702,9 @@ onBeforeUnmount(() => {
   color: #334155;
   font-size: 0.88rem;
   line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .assistant-message span {
@@ -711,6 +739,8 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 5px;
+  min-width: 0;
+  max-width: 100%;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -720,6 +750,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: flex-start;
   gap: 6px;
+  min-width: 0;
+  max-width: 100%;
   padding: 7px 8px;
   border: 1px solid #dbe7e2;
   border-radius: 8px;
@@ -734,9 +766,14 @@ onBeforeUnmount(() => {
 }
 
 .chat-sources li span {
+  flex: 1 1 auto;
+  min-width: 0;
   color: #475569;
   font-size: 0.68rem;
   line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .chat-thinking p {

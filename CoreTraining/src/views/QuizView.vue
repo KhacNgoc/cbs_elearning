@@ -28,6 +28,9 @@
       <!-- Question Text -->
       <div class="question-container" v-if="currentQuestion">
         <h2 class="question-text">{{ currentQuestion.text }}</h2>
+        <p v-if="currentQuestion.type === 'MULTIPLE_CHOICE'" class="multiple-choice-note">
+          Câu hỏi có nhiều đáp án đúng. Hãy chọn tất cả đáp án phù hợp.
+        </p>
         
         <!-- Answer Choices -->
         <div class="options-list">
@@ -38,7 +41,7 @@
             :class="{ selected: isSelected(currentQuestion.id, idx) }"
             @click="selectOption(currentQuestion.id, idx)"
           >
-            <div class="radio-indicator">
+            <div class="radio-indicator" :class="{ checkbox: currentQuestion.type === 'MULTIPLE_CHOICE' }">
               <span class="inner-dot" v-if="isSelected(currentQuestion.id, idx)"></span>
             </div>
             <span class="option-text">{{ option }}</span>
@@ -58,7 +61,7 @@
         <button 
           class="btn btn-primary" 
           @click="quizStore.nextQuestion"
-          :disabled="selectedAnswers[currentQuestion?.id || 0] === undefined"
+          :disabled="!(selectedAnswers[currentQuestion?.id || 0]?.length)"
         >
           {{ quizStore.isLastQuestion ? 'Nộp bài' : 'Câu tiếp theo' }}
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="arrow-next"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
@@ -94,10 +97,10 @@
             <h3>Câu {{ index + 1 }}: {{ question.text }}</h3>
             <p>
               Đáp án của bạn:
-              <strong>{{ formatReviewAnswer(question.options, question.selectedAnswer) }}</strong>
+              <strong>{{ formatReviewAnswers(question.options, question.selectedAnswers) }}</strong>
             </p>
             <p v-if="!question.correct" class="correct-answer">
-              Đáp án đúng: <strong>{{ formatReviewAnswer(question.options, question.correctAnswer) }}</strong>
+              Đáp án đúng: <strong>{{ formatReviewAnswers(question.options, question.correctAnswers) }}</strong>
             </p>
           </div>
         </article>
@@ -254,7 +257,7 @@ const selectOption = (questionId: number, optionIdx: number) => {
 };
 
 const isSelected = (questionId: number, optionIdx: number) => {
-  return selectedAnswers.value[questionId] === optionIdx;
+  return selectedAnswers.value[questionId]?.includes(optionIdx) ?? false;
 };
 
 const retakeQuiz = () => {
@@ -271,10 +274,10 @@ const showReview = async () => {
   }
 };
 
-const formatReviewAnswer = (options: string[], answer?: number) =>
-  answer === undefined || answer === null
+const formatReviewAnswers = (options: string[], answers?: number[]) =>
+  !answers?.length
     ? 'Không chọn đáp án'
-    : `${String.fromCharCode(65 + answer)}. ${options[answer] ?? ''}`;
+    : answers.map(answer => `${String.fromCharCode(65 + answer)}. ${options[answer] ?? ''}`).join('; ');
 
 // Check for unlocked badge after quiz submit completes
 watch(() => quizStore.isQuizFinished, (finished) => {
@@ -426,6 +429,7 @@ const getBadgeIcon = (icon: string) => {
   color: var(--text-main);
   line-height: 1.4;
 }
+.multiple-choice-note { margin: -.3rem 0 1rem; color: var(--text-muted); font-size: .9rem; }
 
 .options-list {
   display: flex;
