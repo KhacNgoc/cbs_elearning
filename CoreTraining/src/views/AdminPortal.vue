@@ -1050,7 +1050,8 @@
                     }}</span>
                     <input
                       type="file"
-                      accept="video/mp4,video/webm,video/ogg,video/quicktime,.m4v"
+                      accept="video/mp4,video/webm,.m4v"
+                      :disabled="loading"
                       @change="handleVideoFileChange"
                     />
                   </label>
@@ -1066,8 +1067,12 @@
                   </button>
                 </div>
                 <small class="video-source-help">
-                  Hỗ trợ MP4, WebM, OGG, MOV hoặc M4V.
+                  Tối đa {{ Math.floor(VIDEO_UPLOAD_MAX_BYTES / 1024 / 1024) }} MiB. MP4/M4V: H.264/AAC; WebM: VP8/VP9, Opus/Vorbis.
                 </small>
+                <div v-if="videoUploadProgress !== null" role="status">
+                  <progress :value="videoUploadProgress" max="100" style="width: 100%"></progress>
+                  <small>{{ videoUploadProgress < 100 ? `Đang tải video: ${videoUploadProgress}%` : 'Đã gửi video, đang kiểm tra định dạng…' }}</small>
+                </div>
                 <small v-if="lessonForm.videoFile" class="selected-video-note">
                   Đã chọn: {{ lessonForm.videoFile.name }}
                 </small>
@@ -1317,7 +1322,8 @@ import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from "vue"
 import { useRoute, useRouter } from "vue-router";
 import { useCourseStore } from "../stores/courseStore";
 import { useNavigationStore } from "../stores/navigationStore";
-import { adminApi } from "../api/adminApi";
+import { validateVideoUpload } from "../utils/videoAccess";
+import { adminApi, VIDEO_UPLOAD_MAX_BYTES } from "../api/adminApi";
 import type {
   AdminUser,
   CourseDocument,
@@ -1435,6 +1441,7 @@ const activeSessions = ref([
 
 // Reactive states
 const loading = ref(false);
+const videoUploadProgress = ref<number | null>(null);
 const users = ref<AdminUser[]>([]);
 const enrollmentRequests = ref<EnrollmentRequest[]>([]);
 const pendingEnrollmentCount = computed(
@@ -2404,9 +2411,9 @@ const handleVideoFileChange = (event: Event) => {
   const file = input.files?.[0];
   if (!file) return;
 
-  const extension = file.name.split(".").pop()?.toLowerCase();
-  if (!["mp4", "webm", "ogg", "mov", "m4v"].includes(extension || "")) {
-    alert("Chỉ hỗ trợ file MP4, WebM, OGG, MOV hoặc M4V.");
+  const error = validateVideoUpload(file, VIDEO_UPLOAD_MAX_BYTES);
+  if (error) {
+    showToast(error, "error");
     input.value = "";
     return;
   }
@@ -2496,12 +2503,15 @@ const removeLessonDocument = (index: number) => {
 };
 
 const saveLesson = async () => {
+  if (loading.value) return;
   loading.value = true;
+  videoUploadProgress.value = null;
   try {
     const videoUrl =
       lessonForm.value.videoSource === "UPLOAD" && lessonForm.value.videoFile
-        ? await adminApi.uploadVideo(lessonForm.value.videoFile)
+        ? await adminApi.uploadVideo(lessonForm.value.videoFile, percent => { videoUploadProgress.value = percent; })
         : lessonForm.value.videoUrl.trim();
+    videoUploadProgress.value = null;
     const documents = await Promise.all(
       lessonForm.value.documents.map(async (document, index) => {
         const uploaded = document.file
@@ -2537,9 +2547,11 @@ const saveLesson = async () => {
     await courseStore.fetchTopics(true);
     showToast(lessonModal.value.isEdit ? "Cập nhật bài học thành công." : "Tạo bài học thành công.");
   } catch (err) {
-    showToast("Không thể lưu bài học. Vui lòng kiểm tra dữ liệu và thử lại.", "error");
+    const serverMessage = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
+    showToast(serverMessage || (err instanceof Error ? err.message : "Không thể lưu bài học. Vui lòng kiểm tra dữ liệu và thử lại."), "error");
     console.error(err);
   } finally {
+    videoUploadProgress.value = null;
     loading.value = false;
   }
 };

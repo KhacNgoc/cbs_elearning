@@ -72,6 +72,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/session").authenticated()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/ws/**").permitAll()
+                .requestMatchers("/uploads/videos/**").denyAll()
                 .requestMatchers("/api/videos/stream").permitAll()
                 .requestMatchers("/uploads/documents/**").permitAll()
                 .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")

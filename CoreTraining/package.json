@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:video": "node --test src/utils/videoAccess.test.mjs src/utils/videoPlayer.test.mjs"
   },
   "dependencies": {
     "@aiden0z/pptx-renderer": "^1.2.4",

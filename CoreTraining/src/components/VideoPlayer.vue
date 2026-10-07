@@ -16,20 +16,25 @@
       <video
         v-else
         ref="videoElement"
-        :src="resolvedVideoUrl"
+        :src="resolvedVideoUrl || undefined"
         class="video-element"
         @timeupdate="onTimeUpdate"
         @loadedmetadata="onLoadedMetadata"
         @durationchange="syncDuration"
         @loadeddata="syncDuration"
         @ended="onVideoEnded"
+        @error="onVideoError"
         @play="isPlaying = true"
         @pause="isPlaying = false"
         preload="metadata"
       ></video>
       
+      <div v-if="!youtubeEmbedUrl && (videoError || accessLoading)" class="video-status" role="status">
+        <p>{{ videoError || 'Đang tải video…' }}</p>
+        <button v-if="videoError" type="button" @click="retryVideo">Thử lại</button>
+      </div>
       <!-- Big Play Button Overlay -->
-      <div v-if="!youtubeEmbedUrl && !isPlaying" class="play-overlay" @click="togglePlay">
+      <div v-if="!youtubeEmbedUrl && resolvedVideoUrl && !isPlaying && !videoError && !accessLoading" class="play-overlay" @click="togglePlay">
         <div class="big-play-btn">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="play-svg"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         </div>
@@ -102,7 +107,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onBeforeUnmount } from 'vue';
+import { VideoAccessSession } from '../utils/videoAccess';
 import { axiosClient } from '../api/axiosClient';
 import type { LessonProgressRequest } from '../types';
 
@@ -145,6 +151,13 @@ const lastPlaybackPosition = ref(props.initialPositionSeconds);
 const isMuted = ref(false);
 const volume = ref(1);
 const authorizedStreamUrl = ref('');
+const videoError = ref('');
+const accessLoading = ref(false);
+let accessSession: VideoAccessSession | undefined;
+let pendingRestore = { position: props.initialPositionSeconds, playing: false };
+let restoring = true;
+const protectedVideo = computed(() => props.videoUrl.startsWith('/uploads/videos/'));
+
 
 const youtubeVideoId = computed(() => {
   const value = props.videoUrl.trim();
@@ -171,32 +184,81 @@ const youtubeEmbedUrl = computed(() =>
 );
 
 const resolvedVideoUrl = computed(() => {
+  if (!props.videoUrl.trim()) return '';
   if (/^(https?:|blob:|data:)/i.test(props.videoUrl)) return props.videoUrl;
   if (props.videoUrl.startsWith('/uploads/videos/')) return authorizedStreamUrl.value;
   const apiBaseUrl = import.meta.env.VITE_API_URL || '';
   return `${apiBaseUrl}${props.videoUrl.startsWith('/') ? '' : '/'}${props.videoUrl}`;
 });
 
-const requestVideoAccess = async () => {
-  authorizedStreamUrl.value = '';
-  if (!props.videoUrl.startsWith('/uploads/videos/')) return;
-  const response = await axiosClient.get<{ streamUrl: string }>(
-    `/api/videos/access/${encodeURIComponent(props.lessonId)}`
-  );
-  const apiBaseUrl = import.meta.env.VITE_API_URL || '';
-  authorizedStreamUrl.value = `${apiBaseUrl}${response.data.streamUrl}`;
+const showVideoError = () => {
+  accessLoading.value = false;
+  videoError.value = 'Không thể phát video. Quyền truy cập có thể đã hết hạn hoặc kết nối bị gián đoạn.';
+};
+
+const retryVideo = () => {
+  videoError.value = '';
+  accessLoading.value = true;
+  if (accessSession) accessSession.retry();
+  else {
+    videoElement.value?.load();
+    accessLoading.value = false;
+  }
+};
+
+const onVideoError = () => {
+  if (!resolvedVideoUrl.value || videoError.value) return;
+  if (accessSession) accessSession.recover();
+  else showVideoError();
 };
 
 watch(
   () => [props.lessonId, props.videoUrl],
   () => {
+    accessSession?.stop();
+    accessSession = undefined;
+    authorizedStreamUrl.value = '';
+    videoError.value = '';
+    accessLoading.value = false;
+    isPlaying.value = false;
+    duration.value = 0;
     currentTime.value = props.initialPositionSeconds;
     watchedSeconds.value = props.initialWatchedSeconds;
     lastPlaybackPosition.value = props.initialPositionSeconds;
-    void requestVideoAccess();
+    pendingRestore = { position: props.initialPositionSeconds, playing: false };
+    restoring = true;
+    if (!protectedVideo.value) return;
+    const lessonId = props.lessonId;
+    accessLoading.value = true;
+    accessSession = new VideoAccessSession(
+      async signal => {
+        const response = await axiosClient.get<{ streamUrl: string; expiresAt: number }>(
+          `/api/videos/access/${encodeURIComponent(lessonId)}`, { signal },
+        );
+        return response.data;
+      },
+      access => {
+        if (authorizedStreamUrl.value && !restoring) {
+          const video = videoElement.value;
+          pendingRestore = {
+            position: video?.currentTime ?? currentTime.value,
+            playing: video ? !video.paused && !video.ended : isPlaying.value,
+          };
+        }
+        restoring = true;
+        const apiBaseUrl = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+        authorizedStreamUrl.value = `${apiBaseUrl}${access.streamUrl}`;
+        videoError.value = '';
+        accessLoading.value = false;
+      },
+      showVideoError,
+    );
+    void accessSession.load();
   },
-  { immediate: true }
+  { immediate: true },
 );
+
+onBeforeUnmount(() => accessSession?.stop());
 
 const progressPercent = computed(() => {
   if (duration.value <= 0) return 0;
@@ -219,7 +281,7 @@ const syncDuration = () => {
 };
 
 const togglePlay = () => {
-  if (!videoElement.value) return;
+  if (!videoElement.value || !resolvedVideoUrl.value || videoError.value) return;
   if (isPlaying.value) {
     videoElement.value.pause();
     isPlaying.value = false;
@@ -258,10 +320,11 @@ const toggleFullscreen = () => {
 };
 
 const onTimeUpdate = () => {
+  if (restoring) return;
   if (videoElement.value) {
     const nextPosition = videoElement.value.currentTime;
     const elapsed = nextPosition - lastPlaybackPosition.value;
-    if (isPlaying.value && elapsed > 0 && elapsed <= 2) watchedSeconds.value += elapsed;
+    if (!restoring && isPlaying.value && elapsed > 0 && elapsed <= 2) watchedSeconds.value += elapsed;
     currentTime.value = nextPosition;
     lastPlaybackPosition.value = nextPosition;
     syncDuration();
@@ -271,18 +334,19 @@ const onTimeUpdate = () => {
 };
 
 const onLoadedMetadata = () => {
-  if (videoElement.value) {
-    volume.value = videoElement.value.volume;
-    if (props.initialPositionSeconds > 0) {
-      videoElement.value.currentTime = Math.min(
-        props.initialPositionSeconds,
-        videoElement.value.duration || props.initialPositionSeconds
-      );
-      currentTime.value = videoElement.value.currentTime;
-      lastPlaybackPosition.value = currentTime.value;
-    }
-  }
+  const video = videoElement.value;
+  if (!video) return;
+  video.volume = volume.value;
+  video.muted = isMuted.value;
   syncDuration();
+  const position = pendingRestore.position;
+  video.currentTime = Math.max(0, Math.min(position, duration.value || position));
+  currentTime.value = video.currentTime;
+  lastPlaybackPosition.value = currentTime.value;
+  restoring = false;
+  if (pendingRestore.playing) {
+    void video.play().catch(() => { isPlaying.value = false; });
+  }
 };
 
 const onVideoEnded = () => {
@@ -305,7 +369,8 @@ const seek = (event: MouseEvent) => {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
   const clickX = event.clientX - rect.left;
   const percent = clickX / rect.width;
-  videoElement.value.currentTime = percent * duration.value;
+  videoElement.value.currentTime = Math.max(0, Math.min(1, percent)) * duration.value;
+  lastPlaybackPosition.value = videoElement.value.currentTime;
 };
 
 const seekTo = (seconds: number) => {
@@ -315,6 +380,7 @@ const seekTo = (seconds: number) => {
     : seconds;
   videoElement.value.currentTime = Math.max(0, Math.min(seconds, upperBound));
   currentTime.value = videoElement.value.currentTime;
+  lastPlaybackPosition.value = currentTime.value;
   emit('time-update', currentTime.value);
 };
 
@@ -348,11 +414,13 @@ const formatTime = (timeInSeconds: number) => {
 };
 
 const openExternal = () => {
-  window.open(resolvedVideoUrl.value, '_blank');
+  if (resolvedVideoUrl.value) window.open(resolvedVideoUrl.value, '_blank', 'noopener,noreferrer');
 };
 </script>
 
 <style scoped>
+.video-status { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1rem; background: #111d; text-align: center; }
+.video-status button { padding: .5rem 1rem; cursor: pointer; }
 .video-container {
   display: flex;
   flex-direction: column;

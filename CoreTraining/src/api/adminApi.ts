@@ -1,7 +1,12 @@
+import { validateVideoUpload, MAX_VIDEO_UPLOAD_BYTES } from "../utils/videoAccess";
 import { axiosClient, isMockApi, mockDelay, QUIZ_GENERATION_TIMEOUT_MS } from "./axiosClient";
 import type { Topic, Lesson, LessonDocument, Question } from "../types";
 import { mockDbTopics, setMockDbTopics } from "./courseApi";
 import { mockDbQuestions, setMockDbQuestions } from "./quizApi";
+
+const configuredVideoMaxBytes = Number(import.meta.env.VITE_VIDEO_MAX_UPLOAD_BYTES);
+export const VIDEO_UPLOAD_MAX_BYTES = Number.isFinite(configuredVideoMaxBytes) && configuredVideoMaxBytes > 0
+  ? configuredVideoMaxBytes : MAX_VIDEO_UPLOAD_BYTES;
 
 const normalizeUploadedPath = (value: string): string => {
   const uploadsIndex = value.indexOf("/uploads/");
@@ -375,8 +380,13 @@ export const adminApi = {
     };
   },
 
-  async uploadVideo(file: File): Promise<string> {
-    if (isMockApi()) return URL.createObjectURL(file);
+  async uploadVideo(file: File, onProgress?: (percent: number) => void): Promise<string> {
+    const validationError = validateVideoUpload(file, VIDEO_UPLOAD_MAX_BYTES);
+    if (validationError) throw new Error(validationError);
+    if (isMockApi()) {
+      onProgress?.(100);
+      return URL.createObjectURL(file);
+    }
 
     const formData = new FormData();
     formData.append("file", file);
@@ -385,7 +395,14 @@ export const adminApi = {
       formData,
       {
         headers: { "Content-Type": "multipart/form-data" },
-        timeout: 120_000,
+        timeout: (() => {
+          const configured = Number(import.meta.env.VITE_VIDEO_UPLOAD_TIMEOUT_MS);
+          return Number.isFinite(configured) && configured > 0 ? configured : 1_800_000;
+        })(),
+        onUploadProgress: event => {
+          const total = event.total || file.size;
+          onProgress?.(Math.min(100, Math.round(event.loaded / total * 100)));
+        },
       },
     );
     return normalizeUploadedPath(response.data.videoUrl);

@@ -9,6 +9,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -19,11 +20,14 @@ import java.util.UUID;
 @Service
 public class VideoStorageService {
 
-    private static final Set<String> ALLOWED_EXTENSIONS = Set.of("mp4", "webm", "ogg", "mov", "m4v");
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of("mp4", "webm", "m4v");
     private final Path storageDirectory;
+    private final VideoMediaValidator mediaValidator;
 
-    public VideoStorageService(@Value("${app.storage.videos-directory:uploads/videos}") String storageDirectory) {
+    public VideoStorageService(@Value("${app.storage.videos-directory:uploads/videos}") String storageDirectory,
+                               VideoMediaValidator mediaValidator) {
         this.storageDirectory = Path.of(storageDirectory).toAbsolutePath().normalize();
+        this.mediaValidator = mediaValidator;
     }
 
     @PostConstruct
@@ -39,7 +43,7 @@ public class VideoStorageService {
         String originalName = StringUtils.cleanPath(file.getOriginalFilename() == null ? "video" : file.getOriginalFilename());
         String extension = getExtension(originalName);
         if (!ALLOWED_EXTENSIONS.contains(extension)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chỉ hỗ trợ file MP4, WebM, OGG, MOV hoặc M4V");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chỉ hỗ trợ MP4/M4V (H.264/AAC) hoặc WebM (VP8/VP9, Opus/Vorbis)");
         }
 
         String storedName = UUID.randomUUID() + "." + extension;
@@ -48,9 +52,18 @@ public class VideoStorageService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tên file không hợp lệ");
         }
 
-        try {
-            Files.copy(file.getInputStream(), destination, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException exception) {
+        try (InputStream input = file.getInputStream()) {
+            Files.copy(input, destination, StandardCopyOption.REPLACE_EXISTING);
+            mediaValidator.validate(destination, extension);
+        } catch (IOException | RuntimeException exception) {
+            try {
+                Files.deleteIfExists(destination);
+            } catch (IOException cleanupException) {
+                exception.addSuppressed(cleanupException);
+            }
+            if (exception instanceof ResponseStatusException responseException) {
+                throw responseException;
+            }
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Không thể lưu file video", exception);
         }
         return "/uploads/videos/" + storedName;

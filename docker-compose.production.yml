@@ -1,0 +1,27 @@
+# Apply behind an HTTPS reverse proxy on the host. See VIDEO_DEPLOYMENT.md.
+services:
+  backend:
+    environment:
+      JWT_COOKIE_SECURE: "true"
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+  frontend:
+    build:
+      args:
+        VITE_API_URL: ""
+    ports: !override
+      - "127.0.0.1:5173:80"
+  postgres:
+    ports: !override
+      - "127.0.0.1:5432:5432"
+  pgadmin:
+    ports: !override
+      - "127.0.0.1:5050:80"
+  rag-service:
+    ports: !override
+      - "127.0.0.1:8001:8001"
+  qdrant:
+    ports: !override
+      - "127.0.0.1:6333:6333"
+  ollama:
+    ports: !override
+      - "127.0.0.1:11434:11434"

@@ -12,6 +12,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -110,6 +112,27 @@ public class GlobalExceptionHandler {
                 .traceId(currentTraceId())
                 .build();
         return new ResponseEntity<>(errorResponse, HttpStatus.UNAUTHORIZED);
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ErrorResponse> handleResponseStatusException(ResponseStatusException ex, WebRequest request) {
+        HttpStatus status = HttpStatus.resolve(ex.getStatusCode().value());
+        String error = status == null ? "Request failed" : status.getReasonPhrase();
+        ErrorResponse body = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(ex.getStatusCode().value())
+                .error(error)
+                .message(ex.getReason() == null ? error : ex.getReason())
+                .path(request.getDescription(false).replace("uri=", ""))
+                .traceId(currentTraceId())
+                .build();
+        return ResponseEntity.status(ex.getStatusCode()).body(body);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException ex, WebRequest request) {
+        return handleResponseStatusException(new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,
+                "File hoặc tổng dung lượng tải lên vượt quá giới hạn cho phép"), request);
     }
 
     @ExceptionHandler(Exception.class)
