@@ -128,7 +128,7 @@ def split_text(text: str, chunk_size: int = 1100, overlap: int = 180) -> list[st
 def relevance_score(question: str, full_text: str, vector_score: float) -> float:
     query_terms = {
         term for term in re.findall(r"\w+", question.lower(), flags=re.UNICODE)
-        if len(term) > 2 and term not in QUERY_STOP_WORDS
+        if term not in QUERY_STOP_WORDS
     }
     if not query_terms:
         return vector_score
