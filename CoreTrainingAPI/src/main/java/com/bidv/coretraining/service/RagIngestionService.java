@@ -28,13 +28,13 @@ public class RagIngestionService {
 
     @Async
     public void ingestAsync(String documentId) {
-        CourseDocument document = documentRepository.findWithTopicById(documentId).orElseThrow();
+        CourseDocument document = documentRepository.findWithCourseById(documentId).orElseThrow();
         document.setStatus(DocumentStatus.INDEXING);
         documentRepository.save(document);
         try {
             MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
             body.add("document_id", document.getId());
-            body.add("course_id", document.getTopic().getId());
+            body.add("course_id", document.getCourse().getId());
             body.add("file", new FileSystemResource(document.getStoragePath()) {
                 @Override
                 public String getFilename() {

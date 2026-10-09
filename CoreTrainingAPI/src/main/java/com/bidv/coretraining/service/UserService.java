@@ -8,6 +8,6 @@ public interface UserService {
     UserProgressDto getUserProgress(String username);
     UserProgressDto completeLesson(String username, String lessonId);
     UserProgressDto resetLesson(String username, String lessonId);
-    UserProgressDto registerTopic(String username, String topicId);
+    UserProgressDto registerCourse(String username, String courseId);
     void changePassword(String username, String newPassword);
 }

@@ -52,7 +52,7 @@ public class RagConversationSummaryService {
 
     @Async("ragSummaryExecutor")
     @Transactional
-    public void updateAsync(String conversationId, Long userId, String topicId) {
+    public void updateAsync(String conversationId, Long userId, String courseId) {
         try {
             RagConversation conversation = conversationRepository.findById(conversationId).orElse(null);
             if (conversation == null) return;
@@ -82,10 +82,10 @@ public class RagConversationSummaryService {
             conversation.setUpdatedAt(LocalDateTime.now());
             conversationRepository.save(conversation);
             log.info("Conversation summary updated conversationId={} userId={} courseId={} summarizedMessages={}",
-                    conversationId, userId, topicId, messagesToSummarize.size());
+                    conversationId, userId, courseId, messagesToSummarize.size());
         } catch (RuntimeException exception) {
             log.warn("Conversation summary update failed conversationId={} userId={} courseId={} errorType={}",
-                    conversationId, userId, topicId, exception.getClass().getSimpleName());
+                    conversationId, userId, courseId, exception.getClass().getSimpleName());
         }
     }
 

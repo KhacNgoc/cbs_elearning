@@ -17,6 +17,7 @@
         :initial-position-seconds="initialPositionSeconds" :initial-watched-seconds="initialWatchedSeconds"
         @time-update="$emit('time-update', $event)" @progress-update="$emit('progress-update', $event)"
         @ended="$emit('video-ended', $event)" @add-note="$emit('add-note', $event)" />
+      <article v-else-if="lesson.textBody" class="lesson-text-viewer"><h2>{{lesson.title}}</h2><p>{{lesson.textBody}}</p></article>
       <div v-else class="empty-lesson-media">
         <FileText :size="34" />
         <strong>Bài học chưa có nội dung</strong>
@@ -61,6 +62,7 @@ const resolveDocumentUrl = (url: string) => {
 </script>
 
 <style scoped>
+.lesson-text-viewer{min-height:420px;padding:2rem;background:white;color:var(--text-main)}.lesson-text-viewer h2{font-size:1.3rem;margin-bottom:1rem}.lesson-text-viewer p{white-space:pre-wrap;line-height:1.8}
 .empty-lesson-media {
   min-height: 420px;
   display: flex;
@@ -81,4 +83,7 @@ const resolveDocumentUrl = (url: string) => {
 .empty-lesson-media span {
   font-size: 0.85rem;
 }
+.lesson-text-viewer{height:100%;min-height:0;overflow:auto;overflow-wrap:anywhere}
+.empty-lesson-media{height:100%;min-height:0;padding:1rem}
+@media(max-width:600px){.lesson-text-viewer{padding:1rem}.lesson-text-viewer h2{font-size:1.1rem}}
 </style>

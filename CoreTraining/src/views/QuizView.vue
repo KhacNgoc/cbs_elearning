@@ -1,10 +1,10 @@
 <template>
-  <div class="quiz-view animate-fade-in" v-if="topic">
+  <div class="quiz-view animate-fade-in" v-if="course">
     <!-- Quiz Header -->
     <div class="quiz-header-bar">
       <div class="header-left">
         <h1 class="quiz-title">Kiểm tra kiến thức</h1>
-        <p class="quiz-subtitle">Đánh giá nhanh năng lực nghiệp vụ phân hệ {{ topic.name }}</p>
+        <p class="quiz-subtitle">Đánh giá nhanh năng lực nghiệp vụ phân hệ {{ course.name }}</p>
       </div>
       <div class="header-right card">
         <span class="score-label">ĐIỂM CAO NHẤT</span>
@@ -167,7 +167,7 @@ import type { QuizReview } from '../api/quizApi';
 import { Award, CheckCircle2, Shield, Medal, XCircle } from 'lucide-vue-next';
 
 const props = defineProps({
-  topicId: {
+  courseId: {
     type: String,
     required: true
   }
@@ -178,8 +178,8 @@ const courseStore = useCourseStore();
 const quizStore = useQuizStore();
 const userStore = useUserStore();
 
-const topic = computed(() => {
-  return courseStore.topics.find(t => t.id === props.topicId);
+const course = computed(() => {
+  return courseStore.courses.find(t => t.id === props.courseId);
 });
 
 const totalQuestions = computed(() => quizStore.quizQuestions.length);
@@ -187,61 +187,61 @@ const currentQuestion = computed(() => quizStore.currentQuestion);
 const selectedAnswers = computed(() => quizStore.selectedAnswers);
 const quizResult = computed(() => quizStore.quizResult);
 const lessonId = computed(() => typeof route.query.lessonId === 'string' ? route.query.lessonId : undefined);
-const activeLesson = computed(() => topic.value?.lessons.find(item => item.id === lessonId.value));
-const passingScore = computed(() => activeLesson.value?.quizPassingScore ?? topic.value?.quizPassingScore ?? 80);
+const activeLesson = computed(() => course.value?.lessons.find(item => item.id === lessonId.value));
+const passingScore = computed(() => activeLesson.value?.quizPassingScore ?? course.value?.quizPassingScore ?? 80);
 const isReviewMode = ref(false);
 const review = ref<QuizReview | null>(null);
 
 const highScore = computed(() => {
   if (lessonId.value) return userStore.lessonQuizScores[lessonId.value] ?? null;
-  return userStore.quizScores[props.topicId] ?? null;
+  return userStore.quizScores[props.courseId] ?? null;
 });
 const highScoreTotal = computed(() => {
   if (lessonId.value) return userStore.lessonQuizTotals[lessonId.value] ?? totalQuestions.value;
-  return userStore.quizTotals[props.topicId] ?? totalQuestions.value;
+  return userStore.quizTotals[props.courseId] ?? totalQuestions.value;
 });
 
 // Capture recently unlocked badge if any
 const unlockedBadge = ref<any | null>(null);
 
 onMounted(async () => {
-  if (courseStore.topics.length === 0) {
-    await courseStore.fetchTopics();
+  if (courseStore.courses.length === 0) {
+    await courseStore.fetchCourses();
   }
-  if (userStore.mandatoryTopics.length === 0) {
+  if (userStore.mandatoryCourses.length === 0) {
     await userStore.fetchProgress();
   }
   await openQuizOrReview();
 });
 
-watch([() => props.topicId, lessonId], async () => {
+watch([() => props.courseId, lessonId], async () => {
   await openQuizOrReview();
 });
 
 const startNewQuiz = () => {
-  if (!userStore.isTopicAccessible(props.topicId)) {
-    alert("Bạn cần đăng ký học chủ đề nghiệp vụ này trước khi thi!");
+  if (!userStore.isCourseAccessible(props.courseId)) {
+    alert("Bạn cần đăng ký học khóa học nghiệp vụ này trước khi thi!");
     router.push('/');
     return;
   }
   isReviewMode.value = false;
   review.value = null;
   unlockedBadge.value = null;
-  quizStore.startQuiz(props.topicId, lessonId.value);
+  quizStore.startQuiz(props.courseId, lessonId.value);
 };
 
 const openQuizOrReview = async () => {
   const score = lessonId.value
     ? userStore.lessonQuizScores[lessonId.value]
-    : userStore.quizScores[props.topicId];
+    : userStore.quizScores[props.courseId];
   const total = lessonId.value
     ? userStore.lessonQuizTotals[lessonId.value]
-    : userStore.quizTotals[props.topicId];
+    : userStore.quizTotals[props.courseId];
   const passed = score !== undefined && total > 0
     && Math.round(score / total * 100) >= passingScore.value;
   if (passed) {
     try {
-      review.value = await quizApi.getQuizReview(props.topicId, lessonId.value);
+      review.value = await quizApi.getQuizReview(props.courseId, lessonId.value);
       isReviewMode.value = true;
       quizStore.stopTimer();
       return;
@@ -266,7 +266,7 @@ const retakeQuiz = () => {
 
 const showReview = async () => {
   try {
-    review.value = await quizApi.getQuizReview(props.topicId, lessonId.value);
+    review.value = await quizApi.getQuizReview(props.courseId, lessonId.value);
     isReviewMode.value = true;
   } catch (error) {
     console.error('Không thể tải chi tiết bài làm:', error);
@@ -290,7 +290,7 @@ watch(() => quizStore.isQuizFinished, (finished) => {
     else if (percent >= 80) badgeType = 'bronze';
 
     if (badgeType) {
-      const badgeId = `${props.topicId}_${badgeType}`;
+      const badgeId = `${props.courseId}_${badgeType}`;
       // Look up if we just unlocked this badge in userStore
       const badge = userStore.unlockedBadges.find(b => b.id === badgeId);
       if (badge) {

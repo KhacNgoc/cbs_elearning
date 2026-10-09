@@ -10,7 +10,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class QuizSettingsDto {
-    private String topicId;
+    private String courseId;
     private String lessonId;
     private Integer passingScore;
+    private Boolean requiredForProgress;
 }

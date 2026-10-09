@@ -71,7 +71,7 @@
               </div>
               <div class="cabinet-badge-text">
                 <h4>{{ badge.title }}</h4>
-                <p>Nghiệp vụ {{ badge.topicName }}</p>
+                <p>Nghiệp vụ {{ badge.courseName }}</p>
                 <span class="unlocked-date">Mở khóa: {{ badge.unlockedAt }}</span>
               </div>
             </div>

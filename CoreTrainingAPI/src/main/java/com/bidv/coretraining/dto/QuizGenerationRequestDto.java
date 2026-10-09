@@ -8,7 +8,7 @@ import lombok.Data;
 @Data
 public class QuizGenerationRequestDto {
     @NotBlank
-    private String topicId;
+    private String courseId;
     private String lessonId;
     @Min(0) @Max(10)
     private int singleChoiceCount = 5;

@@ -13,7 +13,7 @@ class ConversationMessage(BaseModel):
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
     course_id: str | None = None
-    topic_name: str | None = Field(default=None, max_length=500)
+    course_name: str | None = Field(default=None, max_length=500)
     page: int | None = Field(default=None, ge=1)
     conversation_summary: str = Field(default="", max_length=20000)
     recent_messages: list[ConversationMessage] = Field(default_factory=list, max_length=30)
@@ -67,7 +67,7 @@ class ChatResponse(BaseModel):
 
 class QuizGenerationRequest(BaseModel):
     course_id: str = Field(min_length=1, max_length=200)
-    topic_name: str = Field(min_length=1, max_length=500)
+    course_name: str = Field(min_length=1, max_length=500)
     lesson_name: str | None = Field(default=None, max_length=500)
     single_choice_count: int = Field(default=5, ge=0, le=10)
     multiple_choice_count: int = Field(default=0, ge=0, le=10)

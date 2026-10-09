@@ -40,4 +40,6 @@ public class LessonProgress {
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @Builder.Default @Column(nullable=false) private boolean contentCompleted = false;
 }

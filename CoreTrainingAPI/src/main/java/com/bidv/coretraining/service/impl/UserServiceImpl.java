@@ -7,14 +7,14 @@ import com.bidv.coretraining.entity.Lesson;
 import com.bidv.coretraining.entity.User;
 import com.bidv.coretraining.entity.UserQuizScore;
 import com.bidv.coretraining.entity.EnrollmentStatus;
-import com.bidv.coretraining.entity.TopicEnrollmentRequest;
+import com.bidv.coretraining.entity.CourseEnrollmentRequest;
 import com.bidv.coretraining.entity.NotificationType;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
 import com.bidv.coretraining.repository.LessonRepository;
 import com.bidv.coretraining.repository.QuestionRepository;
 import com.bidv.coretraining.repository.UserRepository;
 import com.bidv.coretraining.repository.UserQuizScoreRepository;
-import com.bidv.coretraining.repository.TopicEnrollmentRequestRepository;
+import com.bidv.coretraining.repository.CourseEnrollmentRequestRepository;
 import com.bidv.coretraining.service.UserService;
 import com.bidv.coretraining.service.NotificationService;
 import com.bidv.coretraining.service.LessonProgressService;
@@ -32,9 +32,9 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final LessonRepository lessonRepository;
     private final QuestionRepository questionRepository;
-    private final com.bidv.coretraining.repository.TopicRepository topicRepository;
+    private final com.bidv.coretraining.repository.CourseRepository courseRepository;
     private final UserMapper userMapper;
-    private final TopicEnrollmentRequestRepository enrollmentRequestRepository;
+    private final CourseEnrollmentRequestRepository enrollmentRequestRepository;
     private final NotificationService notificationService;
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
     private final LessonProgressService lessonProgressService;
@@ -42,9 +42,9 @@ public class UserServiceImpl implements UserService {
 
     public UserServiceImpl(UserRepository userRepository, LessonRepository lessonRepository,
                            QuestionRepository questionRepository,
-                           com.bidv.coretraining.repository.TopicRepository topicRepository,
+                           com.bidv.coretraining.repository.CourseRepository courseRepository,
                            UserMapper userMapper,
-                           TopicEnrollmentRequestRepository enrollmentRequestRepository,
+                           CourseEnrollmentRequestRepository enrollmentRequestRepository,
                            NotificationService notificationService,
                            org.springframework.security.crypto.password.PasswordEncoder passwordEncoder,
                            LessonProgressService lessonProgressService,
@@ -52,7 +52,7 @@ public class UserServiceImpl implements UserService {
         this.userRepository = userRepository;
         this.lessonRepository = lessonRepository;
         this.questionRepository = questionRepository;
-        this.topicRepository = topicRepository;
+        this.courseRepository = courseRepository;
         this.userMapper = userMapper;
         this.enrollmentRequestRepository = enrollmentRequestRepository;
         this.notificationService = notificationService;
@@ -97,7 +97,9 @@ public class UserServiceImpl implements UserService {
         Lesson lesson = lessonRepository.findById(lessonId)
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
 
-        if (questionRepository.existsByLessonId(lessonId)
+        com.bidv.coretraining.service.LearningPolicy.assertLessonAccess(user,lesson);
+        lessonProgressService.completeContent(username,lessonId);
+        if (lesson.isQuizRequired()
                 && !hasPassedLessonQuiz(user, lesson)) {
             throw new com.bidv.coretraining.exception.BadRequestException(
                     "Bạn cần đạt tối thiểu " + lesson.getQuizPassingScore()
@@ -105,12 +107,9 @@ public class UserServiceImpl implements UserService {
         }
 
         if (!user.getCompletedLessons().contains(lesson)) {
-            if (requiresTopicQuizBeforeCourseCompletion(user, lesson)) {
-                throw new com.bidv.coretraining.exception.BadRequestException(
-                        "Bạn cần hoàn thành bài kiểm tra tổng kết để hoàn thành khóa học");
-            }
             user.getCompletedLessons().add(lesson);
             user.setPoints(user.getPoints() + 100);
+            com.bidv.coretraining.service.LearningPolicy.recordCourseCompletion(user,lesson.getCourse());
             user = userRepository.save(user);
         }
 
@@ -120,17 +119,7 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public UserProgressDto resetLesson(String username, String lessonId) {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
-        Lesson lesson = lessonRepository.findById(lessonId)
-                .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
-
-        if (user.getCompletedLessons().remove(lesson)) {
-            user.setPoints(Math.max(0, user.getPoints() - 100));
-            user = userRepository.save(user);
-        }
-        lessonProgressService.resetProgress(user.getId(), lessonId);
-        return buildUserProgressDto(user);
+        throw new com.bidv.coretraining.exception.BadRequestException("Bài đã hoàn thành vẫn có thể học lại; không xóa thành tích đã ghi nhận");
     }
 
     private boolean hasPassedLessonQuiz(User user, Lesson lesson) {
@@ -141,47 +130,47 @@ public class UserServiceImpl implements UserService {
                 .orElse(false);
     }
 
-    private boolean requiresTopicQuizBeforeCourseCompletion(User user, Lesson lesson) {
-        com.bidv.coretraining.entity.Topic topic = lesson.getTopic();
-        if (!questionRepository.existsByTopicIdAndLessonIsNull(topic.getId())
-                || hasPassedTopicQuiz(user, topic)) {
+    private boolean requiresCourseQuizBeforeCourseCompletion(User user, Lesson lesson) {
+        com.bidv.coretraining.entity.Course course = lesson.getCourse();
+        if (!questionRepository.existsByCourseIdAndLessonIsNull(course.getId())
+                || hasPassedCourseQuiz(user, course)) {
             return false;
         }
-        return topic.getLessons().stream()
+        return course.getLessons().stream()
                 .allMatch(candidate -> candidate.getId().equals(lesson.getId())
                         || user.getCompletedLessons().stream()
                         .anyMatch(completed -> completed.getId().equals(candidate.getId())));
     }
 
-    private boolean hasPassedTopicQuiz(User user, com.bidv.coretraining.entity.Topic topic) {
+    private boolean hasPassedCourseQuiz(User user, com.bidv.coretraining.entity.Course course) {
         return userQuizScoreRepository
-                .findByUserIdAndTopicIdAndLessonIsNull(user.getId(), topic.getId())
+                .findByUserIdAndCourseIdAndLessonIsNull(user.getId(), course.getId())
                 .filter(score -> score.getTotal() != null && score.getTotal() > 0)
                 .map(score -> Math.round((float) score.getScore() / score.getTotal() * 100)
-                        >= topic.getQuizPassingScore())
+                        >= course.getQuizPassingScore())
                 .orElse(false);
     }
 
     @Override
     @Transactional
-    public UserProgressDto registerTopic(String username, String topicId) {
+    public UserProgressDto registerCourse(String username, String courseId) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
-        com.bidv.coretraining.entity.Topic topic = topicRepository.findById(topicId)
-                .orElseThrow(() -> new ResourceNotFoundException("Topic", "id", topicId));
+        com.bidv.coretraining.entity.Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course", "id", courseId));
 
-        if (user.getRegisteredTopics().contains(topic)
+        if (user.getRegisteredCourses().contains(course)
                 || (user.getUserGroup() != null
-                && user.getUserGroup().getMandatoryTopics().contains(topic))) {
+                && user.getUserGroup().getMandatoryCourses().contains(course))) {
             return buildUserProgressDto(user);
         }
-        if (enrollmentRequestRepository.existsByUserIdAndTopicIdAndStatus(
-                user.getId(), topicId, EnrollmentStatus.PENDING)) {
+        if (enrollmentRequestRepository.existsByUserIdAndCourseIdAndStatus(
+                user.getId(), courseId, EnrollmentStatus.PENDING)) {
             return buildUserProgressDto(user);
         }
-        TopicEnrollmentRequest request = TopicEnrollmentRequest.builder()
+        CourseEnrollmentRequest request = CourseEnrollmentRequest.builder()
                 .user(user)
-                .topic(topic)
+                .course(course)
                 .status(EnrollmentStatus.PENDING)
                 .requestedAt(java.time.LocalDateTime.now())
                 .build();
@@ -189,7 +178,7 @@ public class UserServiceImpl implements UserService {
         notificationService.createForAdmins(
                 NotificationType.ENROLLMENT_REQUEST,
                 "Yêu cầu đăng ký khóa học mới",
-                user.getFullName() + " đã yêu cầu đăng ký khóa học " + topic.getName(),
+                user.getFullName() + " đã yêu cầu đăng ký khóa học " + course.getName(),
                 "/admin?tab=enrollments");
 
         return buildUserProgressDto(user);
@@ -212,30 +201,30 @@ public class UserServiceImpl implements UserService {
                 lessonQuizScores.put(lessonId, score.getScore());
                 lessonQuizTotals.put(lessonId, score.getTotal());
             } else {
-                String topicId = score.getTopic().getId();
-                quizScores.put(topicId, score.getScore());
-                quizTotals.put(topicId, score.getTotal());
+                String courseId = score.getCourse().getId();
+                quizScores.put(courseId, score.getScore());
+                quizTotals.put(courseId, score.getTotal());
             }
         }
 
         String groupId = null;
         String groupName = null;
-        java.util.List<String> mandatoryTopics = new ArrayList<>();
+        java.util.List<String> mandatoryCourses = new ArrayList<>();
         if (user.getUserGroup() != null) {
             groupId = user.getUserGroup().getId();
             groupName = user.getUserGroup().getName();
-            mandatoryTopics = user.getUserGroup().getMandatoryTopics().stream()
-                    .map(com.bidv.coretraining.entity.Topic::getId)
+            mandatoryCourses = user.getUserGroup().getMandatoryCourses().stream()
+                    .map(com.bidv.coretraining.entity.Course::getId)
                     .collect(Collectors.toList());
         }
 
-        java.util.List<String> registeredTopics = user.getRegisteredTopics().stream()
-                .map(com.bidv.coretraining.entity.Topic::getId)
+        java.util.List<String> registeredCourses = user.getRegisteredCourses().stream()
+                .map(com.bidv.coretraining.entity.Course::getId)
                 .collect(Collectors.toList());
-        java.util.List<String> pendingTopics = enrollmentRequestRepository
+        java.util.List<String> pendingCourses = enrollmentRequestRepository
                 .findByUserIdAndStatus(user.getId(), EnrollmentStatus.PENDING)
                 .stream()
-                .map(request -> request.getTopic().getId())
+                .map(request -> request.getCourse().getId())
                 .collect(Collectors.toList());
 
         return UserProgressDto.builder()
@@ -249,9 +238,9 @@ public class UserServiceImpl implements UserService {
                 .unlockedBadges(userMapper.toUserBadgeDtoList(new ArrayList<>(user.getUnlockedBadges())))
                 .groupId(groupId)
                 .groupName(groupName)
-                .mandatoryTopics(mandatoryTopics)
-                .registeredTopics(registeredTopics)
-                .pendingTopics(pendingTopics)
+                .mandatoryCourses(mandatoryCourses)
+                .registeredCourses(registeredCourses)
+                .pendingCourses(pendingCourses)
                 .mustChangePassword(user.isMustChangePassword())
                 .build();
     }

@@ -5,24 +5,24 @@ import com.bidv.coretraining.dto.*;
 import java.util.List;
 
 public interface AdminService {
-    // Topic CRUD
-    TopicDto createTopic(TopicDto topicDto);
-    TopicDto updateTopic(String id, TopicDto topicDto);
-    void deleteTopic(String id);
+    // Course CRUD
+    CourseDto createCourse(CourseDto courseDto);
+    CourseDto updateCourse(String id, CourseDto courseDto);
+    void deleteCourse(String id);
 
     // Lesson CRUD
     LessonDto createLesson(LessonDto lessonDto);
     LessonDto updateLesson(String id, LessonDto lessonDto);
     void deleteLesson(String id);
-    List<LessonDto> reorderLessons(String topicId, List<String> lessonIds);
+    List<LessonDto> reorderLessons(String courseId, List<String> lessonIds);
 
     // Question CRUD
-    List<QuestionDto> getQuizQuestions(String topicId, String lessonId);
+    List<QuestionDto> getQuizQuestions(String courseId, String lessonId);
     QuestionDto createQuestion(QuestionDto questionDto);
     QuestionDto updateQuestion(Long id, QuestionDto questionDto);
     void deleteQuestion(Long id);
     QuizSettingsDto updateQuizSettings(QuizSettingsDto settings);
-    void deleteQuiz(String topicId, String lessonId);
+    void deleteQuiz(String courseId, String lessonId);
 
     // User CRUD
     List<UserDto> getAllUsers();

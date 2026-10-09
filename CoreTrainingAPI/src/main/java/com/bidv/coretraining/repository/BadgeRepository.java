@@ -8,5 +8,5 @@ import java.util.List;
 
 @Repository
 public interface BadgeRepository extends JpaRepository<Badge, String> {
-    List<Badge> findByTopicId(String topicId);
+    List<Badge> findByCourseId(String courseId);
 }

@@ -3,13 +3,13 @@ package com.bidv.coretraining.service.impl;
 import com.bidv.coretraining.dto.*;
 import com.bidv.coretraining.entity.Comment;
 import com.bidv.coretraining.entity.Lesson;
-import com.bidv.coretraining.entity.Topic;
+import com.bidv.coretraining.entity.Course;
 import com.bidv.coretraining.entity.User;
 import com.bidv.coretraining.entity.VideoNote;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
 import com.bidv.coretraining.repository.CommentRepository;
 import com.bidv.coretraining.repository.LessonRepository;
-import com.bidv.coretraining.repository.TopicRepository;
+import com.bidv.coretraining.repository.CourseRepository;
 import com.bidv.coretraining.repository.UserRepository;
 import com.bidv.coretraining.repository.VideoNoteRepository;
 import com.bidv.coretraining.service.CourseService;
@@ -25,7 +25,7 @@ import java.util.List;
 @Service
 public class CourseServiceImpl implements CourseService {
 
-    private final TopicRepository topicRepository;
+    private final CourseRepository courseRepository;
     private final LessonRepository lessonRepository;
     private final CommentRepository commentRepository;
     private final UserRepository userRepository;
@@ -33,11 +33,11 @@ public class CourseServiceImpl implements CourseService {
     private final CourseMapper courseMapper;
     private final NotificationService notificationService;
 
-    public CourseServiceImpl(TopicRepository topicRepository, LessonRepository lessonRepository,
+    public CourseServiceImpl(CourseRepository courseRepository, LessonRepository lessonRepository,
                              CommentRepository commentRepository, UserRepository userRepository,
                              VideoNoteRepository videoNoteRepository, CourseMapper courseMapper,
                              NotificationService notificationService) {
-        this.topicRepository = topicRepository;
+        this.courseRepository = courseRepository;
         this.lessonRepository = lessonRepository;
         this.commentRepository = commentRepository;
         this.userRepository = userRepository;
@@ -48,17 +48,24 @@ public class CourseServiceImpl implements CourseService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<TopicDto> getAllTopics() {
-        List<Topic> topics = topicRepository.findAll();
-        return courseMapper.toTopicDtoList(topics);
+    public List<CourseDto> getAllCourses() {
+        boolean admin=org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream().anyMatch(a->a.getAuthority().equals("ROLE_ADMIN"));
+        List<Course> courses = courseRepository.findAll().stream().filter(c->admin || "PUBLISHED".equals(c.getStatus())).toList();
+        List<CourseDto> result=courseMapper.toCourseDtoList(courses);
+        if(!admin)result.forEach(c->c.getLessons().forEach(com.bidv.coretraining.service.TrainingStructureService::outlineOnly));
+        return result;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public TopicDto getTopicById(String id) {
-        Topic topic = topicRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Topic", "id", id));
-        return courseMapper.toTopicDto(topic);
+    public CourseDto getCourseById(String id) {
+        Course course = courseRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Course", "id", id));
+        boolean admin=org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream().anyMatch(a->a.getAuthority().equals("ROLE_ADMIN"));
+        if(!admin && !"PUBLISHED".equals(course.getStatus()))throw new ResourceNotFoundException("Course","id",id);
+        CourseDto result=courseMapper.toCourseDto(course);
+        if(!admin)result.getLessons().forEach(com.bidv.coretraining.service.TrainingStructureService::outlineOnly);
+        return result;
     }
 
     @Override

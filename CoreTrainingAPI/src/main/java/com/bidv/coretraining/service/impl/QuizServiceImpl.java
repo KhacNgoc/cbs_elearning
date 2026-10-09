@@ -20,7 +20,7 @@ import java.util.Map;
 public class QuizServiceImpl implements QuizService {
 
     private final QuestionRepository questionRepository;
-    private final TopicRepository topicRepository;
+    private final CourseRepository courseRepository;
     private final LessonRepository lessonRepository;
     private final UserRepository userRepository;
     private final UserQuizScoreRepository userQuizScoreRepository;
@@ -28,13 +28,13 @@ public class QuizServiceImpl implements QuizService {
     private final UserBadgeRepository userBadgeRepository;
     private final QuizMapper quizMapper;
 
-    public QuizServiceImpl(QuestionRepository questionRepository, TopicRepository topicRepository,
+    public QuizServiceImpl(QuestionRepository questionRepository, CourseRepository courseRepository,
                            LessonRepository lessonRepository,
                            UserRepository userRepository, UserQuizScoreRepository userQuizScoreRepository,
                            BadgeRepository badgeRepository, UserBadgeRepository userBadgeRepository,
                            QuizMapper quizMapper) {
         this.questionRepository = questionRepository;
-        this.topicRepository = topicRepository;
+        this.courseRepository = courseRepository;
         this.lessonRepository = lessonRepository;
         this.userRepository = userRepository;
         this.userQuizScoreRepository = userQuizScoreRepository;
@@ -43,106 +43,21 @@ public class QuizServiceImpl implements QuizService {
         this.quizMapper = quizMapper;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired private com.bidv.coretraining.service.TrainingStructureService structure;
+    @org.springframework.beans.factory.annotation.Autowired private com.bidv.coretraining.service.LessonProgressService progress;
+    @org.springframework.beans.factory.annotation.Autowired private QuizAttemptRepository attempts;
+    @org.springframework.beans.factory.annotation.Autowired private com.fasterxml.jackson.databind.ObjectMapper json;
+
     @Override
     @Transactional(readOnly = true)
-    public List<QuizQuestionDto> getQuestionsForTopic(String topicId) {
-        if (!topicRepository.existsById(topicId)) {
-            throw new ResourceNotFoundException("Topic", "id", topicId);
-        }
-        List<Question> questions = questionRepository.findByTopicIdAndLessonIsNull(topicId);
-        return questions.stream().map(this::toQuizQuestionDto).toList();
+    public List<QuizQuestionDto> getQuestionsForCourse(String courseId) {
+        throw new BadRequestException("Bài kiểm tra thuộc bài học; hãy chọn bài học trong chương");
     }
 
     @Override
     @Transactional
-    public QuizResultDto submitQuiz(String topicId, QuizSubmitRequest request, String username) {
-        Topic topic = topicRepository.findById(topicId)
-                .orElseThrow(() -> new ResourceNotFoundException("Topic", "id", topicId));
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
-
-        List<Question> questions = questionRepository.findByTopicIdAndLessonIsNull(topicId);
-        Map<Long, List<Integer>> submittedAnswers = request.getSelectedAnswers() == null
-                ? Map.of() : request.getSelectedAnswers();
-        int totalQuestions = questions.size();
-        if (totalQuestions == 0) {
-            return QuizResultDto.builder().score(0).total(0).percent(0)
-                    .passingScore(topic.getQuizPassingScore()).passed(false).build();
-        }
-
-        int correctCount = 0;
-        for (Question question : questions) {
-            List<Integer> selectedAnswers = submittedAnswers.get(question.getId());
-            if (answersMatch(selectedAnswers, correctAnswers(question))) {
-                correctCount++;
-            }
-        }
-
-        int percent = Math.round(((float) correctCount / totalQuestions) * 100);
-        int passingScore = topic.getQuizPassingScore();
-
-        // Update high score
-        Optional<UserQuizScore> existingScoreOpt =
-                userQuizScoreRepository.findByUserIdAndTopicIdAndLessonIsNull(user.getId(), topicId);
-        int previousHighScore = 0;
-
-        if (existingScoreOpt.isPresent()) {
-            UserQuizScore existingScore = existingScoreOpt.get();
-            previousHighScore = existingScore.getScore();
-            if (correctCount >= previousHighScore) {
-                existingScore.setScore(correctCount);
-                existingScore.setTotal(totalQuestions);
-                existingScore.setTakenAt(LocalDateTime.now());
-                saveSelectedAnswers(existingScore, submittedAnswers);
-                userQuizScoreRepository.save(existingScore);
-
-                // Add points for score improvement
-                if (correctCount > previousHighScore) {
-                    int improvedQuestions = correctCount - previousHighScore;
-                    user.setPoints(user.getPoints() + improvedQuestions * 50);
-                }
-            }
-        } else {
-            UserQuizScore quizScore = UserQuizScore.builder()
-                    .user(user)
-                    .topic(topic)
-                    .score(correctCount)
-                    .total(totalQuestions)
-                    .takenAt(LocalDateTime.now())
-                    .build();
-            saveSelectedAnswers(quizScore, submittedAnswers);
-            userQuizScoreRepository.save(quizScore);
-
-            // Add points for initial attempt
-            user.setPoints(user.getPoints() + correctCount * 50);
-        }
-
-        // Check and unlock badges
-        checkAndUnlockBadges(user, topic, correctCount, totalQuestions);
-
-        // Passing the topic-level assessment completes the whole course/topic.
-        // Only newly completed lessons receive the normal completion points.
-        if (percent >= passingScore) {
-            int newlyCompletedLessons = 0;
-            for (Lesson lesson : topic.getLessons()) {
-                if (user.getCompletedLessons().add(lesson)) {
-                    newlyCompletedLessons++;
-                }
-            }
-            if (newlyCompletedLessons > 0) {
-                user.setPoints(user.getPoints() + newlyCompletedLessons * 100);
-            }
-        }
-
-        userRepository.save(user);
-
-        return QuizResultDto.builder()
-                .score(correctCount)
-                .total(totalQuestions)
-                .percent(percent)
-                .passingScore(passingScore)
-                .passed(percent >= passingScore)
-                .build();
+    public QuizResultDto submitQuiz(String courseId, QuizSubmitRequest request, String username) {
+        throw new BadRequestException("Bài kiểm tra thuộc bài học; hãy chọn bài học trong chương");
     }
 
     @Override
@@ -151,6 +66,7 @@ public class QuizServiceImpl implements QuizService {
         if (!lessonRepository.existsById(lessonId)) {
             throw new ResourceNotFoundException("Lesson", "id", lessonId);
         }
+        structure.requireLesson(lessonId,org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getName());
         return questionRepository.findByLessonId(lessonId).stream()
                 .map(this::toQuizQuestionDto).toList();
     }
@@ -162,6 +78,8 @@ public class QuizServiceImpl implements QuizService {
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
+        com.bidv.coretraining.service.LearningPolicy.assertLessonAccess(user,lesson);
+        if(lesson.getQuiz()==null)throw new BadRequestException("Bài học chưa có kiểm tra");
         List<Question> questions = questionRepository.findByLessonId(lessonId);
         Map<Long, List<Integer>> submittedAnswers = request.getSelectedAnswers() == null
                 ? Map.of() : request.getSelectedAnswers();
@@ -187,7 +105,7 @@ public class QuizServiceImpl implements QuizService {
         } else if (total > 0) {
             UserQuizScore quizScore = UserQuizScore.builder()
                     .user(user)
-                    .topic(lesson.getTopic())
+                    .course(lesson.getCourse())
                     .lesson(lesson)
                     .score(score)
                     .total(total)
@@ -195,51 +113,58 @@ public class QuizServiceImpl implements QuizService {
                     .build();
             saveSelectedAnswers(quizScore, submittedAnswers);
             userQuizScoreRepository.save(quizScore);
+            user.getQuizScores().add(quizScore);
         }
+        try { attempts.save(QuizAttempt.builder().user(user).quiz(lesson.getQuiz()).revision(lesson.getQuiz().getRevision())
+                .score(score).total(total).passingScore(passingScore).passed(total>0 && percent>=passingScore)
+                .takenAt(LocalDateTime.now()).answersJson(json.writeValueAsString(submittedAnswers))
+                .questionsJson(json.writeValueAsString(questions.stream().map(q->Map.of("id",q.getId(),"text",q.getText(),"options",q.getOptions(),"correctAnswers",correctAnswers(q))).toList())).build());
+        } catch(com.fasterxml.jackson.core.JsonProcessingException e){throw new IllegalStateException("Không thể lưu đề kiểm tra",e);}
         if (total > 0 && percent >= passingScore
                 && !user.getCompletedLessons().contains(lesson)
-                && !requiresTopicQuizBeforeCourseCompletion(user, lesson)) {
+                && progress.contentCompleted(user,lessonId)) {
             user.getCompletedLessons().add(lesson);
             user.setPoints(user.getPoints() + 100);
+            com.bidv.coretraining.service.LearningPolicy.recordCourseCompletion(user,lesson.getCourse());
             userRepository.save(user);
         }
         return QuizResultDto.builder().score(score).total(total).percent(percent)
                 .passingScore(passingScore).passed(total > 0 && percent >= passingScore).build();
     }
 
-    private boolean requiresTopicQuizBeforeCourseCompletion(User user, Lesson lesson) {
-        Topic topic = lesson.getTopic();
-        if (!questionRepository.existsByTopicIdAndLessonIsNull(topic.getId())
-                || hasPassedTopicQuiz(user, topic)) {
+    private boolean requiresCourseQuizBeforeCourseCompletion(User user, Lesson lesson) {
+        Course course = lesson.getCourse();
+        if (!questionRepository.existsByCourseIdAndLessonIsNull(course.getId())
+                || hasPassedCourseQuiz(user, course)) {
             return false;
         }
-        return topic.getLessons().stream()
+        return course.getLessons().stream()
                 .allMatch(candidate -> candidate.getId().equals(lesson.getId())
                         || user.getCompletedLessons().stream()
                         .anyMatch(completed -> completed.getId().equals(candidate.getId())));
     }
 
-    private boolean hasPassedTopicQuiz(User user, Topic topic) {
+    private boolean hasPassedCourseQuiz(User user, Course course) {
         return userQuizScoreRepository
-                .findByUserIdAndTopicIdAndLessonIsNull(user.getId(), topic.getId())
+                .findByUserIdAndCourseIdAndLessonIsNull(user.getId(), course.getId())
                 .filter(score -> score.getTotal() != null && score.getTotal() > 0)
                 .map(score -> Math.round((float) score.getScore() / score.getTotal() * 100)
-                        >= topic.getQuizPassingScore())
+                        >= course.getQuizPassingScore())
                 .orElse(false);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public QuizReviewDto getTopicQuizReview(String topicId, String username) {
+    public QuizReviewDto getCourseQuizReview(String courseId, String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
-        Topic topic = topicRepository.findById(topicId)
-                .orElseThrow(() -> new ResourceNotFoundException("Topic", "id", topicId));
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course", "id", courseId));
         UserQuizScore score = userQuizScoreRepository
-                .findByUserIdAndTopicIdAndLessonIsNull(user.getId(), topicId)
-                .orElseThrow(() -> new ResourceNotFoundException("Quiz attempt", "topicId", topicId));
-        return buildReview(score, questionRepository.findByTopicIdAndLessonIsNull(topicId),
-                topic.getQuizPassingScore());
+                .findByUserIdAndCourseIdAndLessonIsNull(user.getId(), courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Quiz attempt", "courseId", courseId));
+        return buildReview(score, questionRepository.findByCourseIdAndLessonIsNull(courseId),
+                course.getQuizPassingScore());
     }
 
     @Override
@@ -257,9 +182,7 @@ public class QuizServiceImpl implements QuizService {
     private QuizReviewDto buildReview(UserQuizScore score, List<Question> questions, int passingScore) {
         int percent = score.getTotal() == 0 ? 0
                 : Math.round((float) score.getScore() / score.getTotal() * 100);
-        if (percent < passingScore) {
-            throw new BadRequestException("Chỉ có thể xem lại bài kiểm tra đã đạt");
-        }
+
         if ((score.getSelectedAnswerSets() == null || score.getSelectedAnswerSets().isEmpty())
                 && (score.getSelectedAnswers() == null || score.getSelectedAnswers().isEmpty())) {
             throw new BadRequestException("Lần làm bài cũ chưa có dữ liệu đáp án để xem lại");
@@ -283,7 +206,7 @@ public class QuizServiceImpl implements QuizService {
                 .total(score.getTotal())
                 .percent(percent)
                 .passingScore(passingScore)
-                .passed(true)
+                .passed(percent>=passingScore)
                 .questions(reviewQuestions)
                 .build();
     }
@@ -291,7 +214,7 @@ public class QuizServiceImpl implements QuizService {
     private QuizQuestionDto toQuizQuestionDto(Question question) {
         return QuizQuestionDto.builder()
                 .id(question.getId())
-                .topicId(question.getTopic().getId())
+                .courseId(question.getCourse().getId())
                 .lessonId(question.getLesson() == null ? null : question.getLesson().getId())
                 .text(question.getText())
                 .options(question.getOptions())
@@ -348,7 +271,7 @@ public class QuizServiceImpl implements QuizService {
         return legacy == null ? List.of() : List.of(legacy);
     }
 
-    private void checkAndUnlockBadges(User user, Topic topic, int score, int total) {
+    private void checkAndUnlockBadges(User user, Course course, int score, int total) {
         float ratio = (float) score / total;
         String badgeType = null;
         String badgeTitle = "";
@@ -357,23 +280,23 @@ public class QuizServiceImpl implements QuizService {
 
         if (ratio >= 1.0f) {
             badgeType = "gold";
-            badgeTitle = "Huy hiệu Vàng " + topic.getName();
+            badgeTitle = "Huy hiệu Vàng " + course.getName();
             badgeIcon = "Award";
             badgePoints = 300;
         } else if (ratio > 0.9f) {
             badgeType = "silver";
-            badgeTitle = "Huy hiệu Bạc " + topic.getName();
+            badgeTitle = "Huy hiệu Bạc " + course.getName();
             badgeIcon = "Medal";
             badgePoints = 200;
         } else if (ratio >= 0.8f) {
             badgeType = "bronze";
-            badgeTitle = "Huy hiệu Đồng " + topic.getName();
+            badgeTitle = "Huy hiệu Đồng " + course.getName();
             badgeIcon = "Shield";
             badgePoints = 100;
         }
 
         if (badgeType != null) {
-            String badgeId = topic.getId() + "_" + badgeType;
+            String badgeId = course.getId() + "_" + badgeType;
             final String finalBadgeTitle = badgeTitle;
             final String finalBadgeIcon = badgeIcon;
             
@@ -383,7 +306,7 @@ public class QuizServiceImpl implements QuizService {
                         .id(badgeId)
                         .title(finalBadgeTitle)
                         .type(badgeId.contains("gold") ? "gold" : (badgeId.contains("silver") ? "silver" : "bronze"))
-                        .topic(topic)
+                        .course(course)
                         .icon(finalBadgeIcon)
                         .build();
                 return badgeRepository.save(newBadge);

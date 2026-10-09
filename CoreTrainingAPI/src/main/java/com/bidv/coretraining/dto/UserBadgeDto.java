@@ -13,8 +13,8 @@ public class UserBadgeDto {
     private String id;
     private String title;
     private String type; // bronze, silver, gold
-    private String topicId;
-    private String topicName;
+    private String courseId;
+    private String courseName;
     private String unlockedAt; // YYYY-MM-DD
     private String icon;
 }

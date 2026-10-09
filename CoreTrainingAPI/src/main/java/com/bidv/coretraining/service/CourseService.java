@@ -4,15 +4,15 @@ import com.bidv.coretraining.dto.CommentDto;
 import com.bidv.coretraining.dto.CommentRequest;
 import com.bidv.coretraining.dto.CommentReplyRequest;
 import com.bidv.coretraining.dto.LessonDto;
-import com.bidv.coretraining.dto.TopicDto;
+import com.bidv.coretraining.dto.CourseDto;
 import com.bidv.coretraining.dto.VideoNoteDto;
 import com.bidv.coretraining.dto.VideoNoteRequest;
 
 import java.util.List;
 
 public interface CourseService {
-    List<TopicDto> getAllTopics();
-    TopicDto getTopicById(String id);
+    List<CourseDto> getAllCourses();
+    CourseDto getCourseById(String id);
     LessonDto getLessonById(String id);
     CommentDto addCommentToLesson(String lessonId, CommentRequest commentRequest, String username);
     CommentDto replyToComment(String lessonId, Long commentId, CommentReplyRequest request, String username);

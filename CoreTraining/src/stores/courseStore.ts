@@ -1,13 +1,13 @@
 import { defineStore } from 'pinia';
-import type { Topic, Lesson } from '../types';
+import type { Course, Lesson } from '../types';
 import { courseApi } from '../api/courseApi';
 
-let topicsRequest: Promise<void> | null = null;
+let coursesRequest: Promise<void> | null = null;
 let lessonRequestId = 0;
 
 export const useCourseStore = defineStore('course', {
   state: () => ({
-    topics: [] as Topic[],
+    courses: [] as Course[],
     currentLessonId: null as string | null,
     currentLessonData: null as Lesson | null,
     isLoading: false
@@ -15,29 +15,29 @@ export const useCourseStore = defineStore('course', {
 
   getters: {
     allLessons(): Lesson[] {
-      return this.topics.flatMap(topic => topic.lessons);
+      return this.courses.flatMap(course => course.lessons);
     },
     currentLesson(): Lesson | null {
       return this.currentLessonData;
     },
-    currentTopic(): Topic | null {
+    currentCourse(): Course | null {
       const lesson = this.currentLesson;
       if (!lesson) return null;
-      return this.topics.find(topic => topic.id === lesson.topicId) || null;
+      return this.courses.find(course => course.id === lesson.courseId) || null;
     }
   },
 
   actions: {
-    async fetchTopics(force = false) {
-      if (this.topics.length > 0 && !force) return;
-      if (topicsRequest && !force) return topicsRequest;
+    async fetchCourses(force = false) {
+      if (this.courses.length > 0 && !force) return;
+      if (coursesRequest && !force) return coursesRequest;
       this.isLoading = true;
-      topicsRequest = (async () => {
-        this.topics = await courseApi.getAllTopics();
+      coursesRequest = (async () => {
+        this.courses = await courseApi.getAllCourses();
       })();
-      try { await topicsRequest; }
-      catch (error) { console.error('Failed to load topics:', error); }
-      finally { topicsRequest = null; this.isLoading = false; }
+      try { await coursesRequest; }
+      catch (error) { console.error('Failed to load courses:', error); }
+      finally { coursesRequest = null; this.isLoading = false; }
     },
 
     async fetchLessonDetail(lessonId: string) {
@@ -48,16 +48,16 @@ export const useCourseStore = defineStore('course', {
         const lesson = await courseApi.getLessonById(lessonId);
         if (requestId !== lessonRequestId) return;
         this.currentLessonData = lesson;
-        // Keep the topic outline in sync with the detailed lesson response.
-        // The sidebar reads from `topics`, while the learning page reads from
+        // Keep the course outline in sync with the detailed lesson response.
+        // The sidebar reads from `courses`, while the learning page reads from
         // `currentLessonData`; without this merge a newly-created quiz can
         // appear in one place but not the other until a full page refresh.
         if (this.currentLessonData) {
-          const topic = this.topics.find(item => item.id === this.currentLessonData?.topicId);
-          const lessonIndex = topic?.lessons.findIndex(item => item.id === lessonId) ?? -1;
-          if (topic && lessonIndex >= 0) {
-            topic.lessons[lessonIndex] = {
-              ...topic.lessons[lessonIndex],
+          const course = this.courses.find(item => item.id === this.currentLessonData?.courseId);
+          const lessonIndex = course?.lessons.findIndex(item => item.id === lessonId) ?? -1;
+          if (course && lessonIndex >= 0) {
+            course.lessons[lessonIndex] = {
+              ...course.lessons[lessonIndex],
               ...this.currentLessonData
             };
           }

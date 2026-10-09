@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import type { LessonProgressRequest, UserProgress } from '../types';
-import { mockTopics } from '../data/mockData';
+import { useCourseStore } from './courseStore';
 import { authApi } from '../api/authApi';
 import type { LoginRequest } from '../api/authApi';
 import { courseApi } from '../api/courseApi';
@@ -23,9 +23,9 @@ export const useUserStore = defineStore('user', {
     unlockedBadges: [],
     groupId: '',
     groupName: '',
-    mandatoryTopics: [],
-    registeredTopics: [],
-    pendingTopics: [],
+    mandatoryCourses: [],
+    registeredCourses: [],
+    pendingCourses: [],
     isAuthenticated: !!localStorage.getItem('username'),
     role: localStorage.getItem('userRole') || '',
     username: localStorage.getItem('username') || '',
@@ -35,7 +35,7 @@ export const useUserStore = defineStore('user', {
 
   getters: {
     totalLessonsCount(): number {
-      return mockTopics.reduce((acc, topic) => acc + topic.lessons.length, 0);
+      return useCourseStore().courses.reduce((acc, course) => acc + course.lessons.length, 0);
     },
     completedLessonsCount(): number {
       return this.completedLessons.length;
@@ -45,29 +45,29 @@ export const useUserStore = defineStore('user', {
       if (total === 0) return 0;
       return Math.round((this.completedLessons.length / total) * 100);
     },
-    getTopicProgressPercent: (state) => (topicId: string): number => {
-      const topic = mockTopics.find(t => t.id === topicId);
-      if (!topic || topic.lessons.length === 0) return 0;
-      
-      const completedInTopic = topic.lessons.filter(lesson => 
+    getCourseProgressPercent: (state) => (courseId: string): number => {
+      const course = useCourseStore().courses.find(t => t.id === courseId);
+      if (!course || course.lessons.length === 0) return 0;
+
+      const completedInCourse = course.lessons.filter(lesson =>
         state.completedLessons.includes(lesson.id)
       ).length;
-      
-      return Math.round((completedInTopic / topic.lessons.length) * 100);
+
+      return Math.round((completedInCourse / course.lessons.length) * 100);
     },
-    getTopicQuizScore: (state) => (topicId: string): { score: number, total: number, percent: number } | null => {
-      if (state.quizScores[topicId] === undefined) return null;
-      const score = state.quizScores[topicId];
-      const total = state.quizTotals[topicId] || 5;
+    getCourseQuizScore: (state) => (courseId: string): { score: number, total: number, percent: number } | null => {
+      if (state.quizScores[courseId] === undefined) return null;
+      const score = state.quizScores[courseId];
+      const total = state.quizTotals[courseId] || 5;
       return {
         score,
         total,
         percent: Math.round((score / total) * 100)
       };
     },
-    isTopicAccessible: (state) => (topicId: string): boolean => {
+    isCourseAccessible: (state) => (courseId: string): boolean => {
       if (state.role === 'ROLE_ADMIN') return true;
-      return state.mandatoryTopics.includes(topicId) || state.registeredTopics.includes(topicId);
+      return state.mandatoryCourses.includes(courseId) || state.registeredCourses.includes(courseId);
     }
   },
 
@@ -80,7 +80,7 @@ export const useUserStore = defineStore('user', {
         localStorage.setItem('username', res.username);
         localStorage.setItem('fullName', res.fullName);
         localStorage.setItem('mustChangePassword', res.mustChangePassword ? 'true' : 'false');
-        
+
         this.isAuthenticated = true;
         this.role = res.role;
         this.username = res.username;
@@ -92,7 +92,7 @@ export const useUserStore = defineStore('user', {
           fullName: res.fullName,
           mustChangePassword: res.mustChangePassword,
         });
-        
+
         await this.fetchProgress();
         router.push(this.mustChangePassword ? '/change-password' : '/');
       } catch (error) {
@@ -113,7 +113,7 @@ export const useUserStore = defineStore('user', {
       localStorage.removeItem('username');
       localStorage.removeItem('fullName');
       localStorage.removeItem('mustChangePassword');
-      
+
       this.isAuthenticated = false;
       this.role = '';
       this.username = '';
@@ -129,10 +129,11 @@ export const useUserStore = defineStore('user', {
       this.unlockedBadges = [];
       this.groupId = '';
       this.groupName = '';
-      this.mandatoryTopics = [];
-      this.registeredTopics = [];
-      this.pendingTopics = [];
-      
+      this.mandatoryCourses = [];
+      this.registeredCourses = [];
+      this.pendingCourses = [];
+
+      useCourseStore().$reset();
       router.push('/login');
     },
 
@@ -145,7 +146,7 @@ export const useUserStore = defineStore('user', {
           courseApi.getMyProgress(),
           userApi.getMyProfile()
         ]);
-        
+
         this.completedLessons = progress.completedLessons || [];
         this.quizScores = progress.quizScores || {};
         this.quizTotals = progress.quizTotals || {};
@@ -156,11 +157,11 @@ export const useUserStore = defineStore('user', {
         this.unlockedBadges = progress.unlockedBadges || [];
         this.groupId = progress.groupId || '';
         this.groupName = progress.groupName || '';
-        this.mandatoryTopics = progress.mandatoryTopics || [];
-        this.registeredTopics = progress.registeredTopics || [];
-        this.pendingTopics = progress.pendingTopics || [];
+        this.mandatoryCourses = progress.mandatoryCourses || [];
+        this.registeredCourses = progress.registeredCourses || [];
+        this.pendingCourses = progress.pendingCourses || [];
         this.mustChangePassword = progress.mustChangePassword || false;
-        
+
         this.fullName = profile.fullName || '';
         localStorage.setItem('fullName', this.fullName);
         localStorage.setItem('mustChangePassword', this.mustChangePassword ? 'true' : 'false');
@@ -184,7 +185,7 @@ export const useUserStore = defineStore('user', {
         const updatedProgress = await courseApi.markComplete(lessonId);
         this.completedLessons = updatedProgress.completedLessons;
         this.points = updatedProgress.points;
-        
+
         // Save mock complete to local cache
         localStorage.setItem('mockCompletedLessons', JSON.stringify(this.completedLessons));
       } catch (error) {
@@ -219,17 +220,17 @@ export const useUserStore = defineStore('user', {
       }
     },
 
-    async registerTopic(topicId: string) {
+    async registerCourse(courseId: string) {
       if (!this.isAuthenticated) return;
       try {
-        const updatedProgress = await courseApi.registerTopic(topicId);
-        this.registeredTopics = updatedProgress.registeredTopics || [];
-        this.pendingTopics = updatedProgress.pendingTopics || [];
-        this.mandatoryTopics = updatedProgress.mandatoryTopics || [];
+        const updatedProgress = await courseApi.registerCourse(courseId);
+        this.registeredCourses = updatedProgress.registeredCourses || [];
+        this.pendingCourses = updatedProgress.pendingCourses || [];
+        this.mandatoryCourses = updatedProgress.mandatoryCourses || [];
         this.groupId = updatedProgress.groupId || '';
         this.groupName = updatedProgress.groupName || '';
       } catch (error) {
-        console.error('Failed to register topic:', error);
+        console.error('Failed to register course:', error);
         throw error;
       }
     }

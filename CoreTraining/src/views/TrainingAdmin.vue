@@ -1,0 +1,216 @@
+<template>
+  <main class="training-admin">
+    <div v-if="error" class="notice error" role="alert">{{ error }} <button @click="error = ''" aria-label="Đóng thông báo"><X :size="16" /></button></div>
+    <header class="page-heading">
+      <div class="heading-with-back">
+        <AdminBackButton v-if="backTo" :to="backTo" :label="backLabel" />
+        <div class="heading-copy">
+        <nav class="breadcrumb" aria-label="Đường dẫn"><RouterLink to="/admin/courses">Khóa học</RouterLink><template v-if="course"> / <RouterLink :to="`/admin/courses/${course.id}`">{{ course.name }}</RouterLink></template><span v-if="chapter"> / {{ chapter.title }}</span></nav>
+        <h1>{{ title }}</h1>
+        <p v-if="course">{{ course.domainName }} / {{ course.programName }} <span class="status">{{ statusLabel(course.status) }}</span></p>
+        <p v-else>Tổ chức đào tạo theo lĩnh vực, chương trình, khóa và chương.</p>
+        </div>
+      </div>
+      <div class="tools" v-if="course && !chapter">
+        <button class="btn btn-secondary" @click="router.push(`/courses/${course.id}`)"><Eye :size="17" /> Xem trước</button>
+        <button v-if="course.status === 'DRAFT'" class="btn btn-primary" :disabled="busy" @click="changeStatus('PUBLISHED')">Kiểm tra và xuất bản</button>
+        <button v-else class="btn btn-secondary" :disabled="busy" @click="changeStatus('DRAFT')">Chuyển về nháp</button>
+        <button class="btn btn-secondary" :disabled="busy" @click="changeStatus('ARCHIVED')">Lưu trữ</button>
+      </div>
+      <button v-if="chapter && canEditCourse" class="btn btn-secondary" @click="openForm('chapter', chapter)"><Pencil :size="16" /> Sửa chương</button>
+    </header>
+
+    <div v-if="mode === 'catalog'" class="catalog-layout">
+      <section class="card catalog-domains"><div class="section-heading"><h2>Lĩnh vực đào tạo</h2><button class="btn btn-secondary" @click="openForm('domain')"><Plus :size="16" /> Thêm</button></div>
+        <div class="domain-list">
+          <div v-for="domain in paginatedDomains" :key="domain.id" class="domain-item" :class="{active: domain.id === domainId}">
+            <button class="domain-row" :aria-pressed="domain.id === domainId" @click="domainId = domain.id"><span><strong>{{ domain.name }}</strong><small>{{ programs.filter(p => p.domainId === domain.id).length }} chương trình</small></span></button>
+            <button class="domain-edit" :aria-label="`Sửa lĩnh vực ${domain.name}`" @click="openForm('domain', domain)"><Pencil :size="15" /></button>
+          </div>
+        <p v-if="!domains.length" class="empty">Tạo lĩnh vực đầu tiên để tổ chức chương trình đào tạo.</p>
+        </div>
+        <footer class="pagination domain-pagination" aria-label="Phân trang lĩnh vực"><span>{{ domains.length }} lĩnh vực · {{ domainPage }}/{{ domainPageCount }}</span><div><button :disabled="domainPage <= 1" @click="domainPage--" aria-label="Trang lĩnh vực trước" title="Trang trước"><ChevronLeft :size="18" /></button><button :disabled="domainPage >= domainPageCount" @click="domainPage++" aria-label="Trang lĩnh vực sau" title="Trang sau"><ChevronRight :size="18" /></button></div></footer>
+      </section>
+      <section class="card"><div class="section-heading"><h2>Chương trình đào tạo</h2><button class="btn btn-primary" :disabled="!domainId" @click="openForm('program')"><Plus :size="16" /> Thêm chương trình</button></div>
+        <div class="search-box"><Search :size="18" /><input v-model="query" placeholder="Tìm mã hoặc tên chương trình..." /></div>
+        <div class="table-scroll"><table class="admin-table"><thead><tr><th>Chương trình</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody><tr v-for="program in paginatedPrograms" :key="program.id"><td><strong>{{ program.name }}</strong><small>{{ program.code }}</small></td><td>{{ statusLabel(program.status) }}</td><td><button class="row-edit" @click="openForm('program', program)">Sửa</button></td></tr></tbody></table></div>
+        <p v-if="!filteredPrograms.length" class="empty">Chưa có chương trình phù hợp.</p>
+        <footer class="pagination" aria-label="Phân trang chương trình"><span>{{ filteredPrograms.length }} chương trình · Trang {{ programPage }} / {{ programPageCount }}</span><div><button :disabled="programPage <= 1" @click="programPage--" aria-label="Trang chương trình trước" title="Trang trước"><ChevronLeft :size="18" /></button><button :disabled="programPage >= programPageCount" @click="programPage++" aria-label="Trang chương trình sau" title="Trang sau"><ChevronRight :size="18" /></button></div></footer>
+      </section>
+    </div>
+
+    <section v-else class="card list-card">
+      <div class="section-heading"><h2>{{ chapter ? 'Danh sách bài học' : course ? 'Danh sách chương' : 'Danh sách khóa học' }}</h2><button v-if="course && !chapter && canEditCourse" class="btn btn-secondary" @click="openForm('course', course)">Thông tin khóa</button></div>
+      <p v-if="course && !canEditCourse" class="readonly-notice">Khóa học đang ở chế độ chỉ xem. Chuyển khóa về bản nháp để chỉnh sửa nội dung.</p>
+      <div class="table-toolbar">
+        <div class="search-box"><Search :size="18" /><input v-model="query" :placeholder="chapter ? 'Tìm mã hoặc tên bài học...' : course ? 'Tìm mã hoặc tên chương...' : 'Tìm mã hoặc tên khóa...'" /></div>
+        <select v-model="statusFilter" aria-label="Lọc trạng thái"><option value="">Tất cả trạng thái</option><option value="DRAFT">Bản nháp</option><option value="PUBLISHED">Đã xuất bản</option><option value="ARCHIVED">Đã lưu trữ</option></select>
+        <select v-if="!course" v-model="programFilter" aria-label="Lọc chương trình"><option value="">Tất cả chương trình</option><option v-for="program in programs" :key="program.id" :value="program.id">{{ program.name }}</option></select>
+        <button v-if="!course || canEditCourse" class="btn btn-primary" @click="openForm(chapter ? 'lesson' : course ? 'chapter' : 'course')"><Plus :size="17" /> {{ chapter ? 'Thêm bài học' : course ? 'Thêm chương' : 'Tạo khóa học' }}</button>
+      </div>
+      <div v-if="loading" class="empty">Đang tải dữ liệu...</div>
+      <div v-else class="table-scroll"><table class="admin-table"><thead><tr><th v-if="course">STT</th><th>{{ chapter ? 'Bài học' : course ? 'Chương' : 'Khóa học' }}</th><th>{{ chapter ? 'Kiểm tra' : course ? 'Bài học' : 'Chương trình' }}</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+        <tbody><tr v-for="row in paginated" :key="row.id">
+          <td v-if="course">{{ orderOf(row) + 1 }}</td>
+          <td><button class="name-link" @click="openRow(row)">{{ rowName(row) }}</button><small>{{ 'code' in row ? row.code : row.id }}</small></td>
+          <td v-if="chapter"><span class="status" :class="{amber: (row as Lesson).quizRequired}">{{ !(row as Lesson).hasQuiz ? 'Chưa có kiểm tra' : (row as Lesson).quizRequired ? 'Bắt buộc' : 'Tùy chọn' }}</span></td>
+          <td v-else-if="course">{{ (row as Chapter).lessons.length }}</td><td v-else>{{ (row as Course).programName }}</td>
+          <td><span class="status">{{ statusLabel(row.status) }}</span></td>
+          <td><div v-if="canEditRow(row)" class="row-actions"><button v-if="course" class="order-button" :disabled="busy || query !== '' || statusFilter !== '' || orderOf(row) === 0" @click="move(row, -1)" aria-label="Di chuyển lên"><ArrowUp :size="14" /></button><button v-if="course" class="order-button" :disabled="busy || query !== '' || statusFilter !== '' || orderOf(row) === rows.length - 1" @click="move(row, 1)" aria-label="Di chuyển xuống"><ArrowDown :size="14" /></button><button class="row-edit" @click="editRow(row)">Sửa</button><button class="row-delete" :disabled="busy" @click="askDelete(row)">Xóa</button></div><span v-else class="readonly-label">Chỉ xem</span></td>
+        </tr></tbody></table></div>
+      <div v-if="!loading && !filtered.length" class="empty"><BookOpen :size="30" /><p>{{ query ? 'Không tìm thấy kết quả phù hợp.' : chapter ? 'Chương chưa có bài. Thêm bài học đầu tiên để bắt đầu soạn.' : course ? 'Khóa chưa có chương. Thêm chương đầu tiên.' : 'Tạo khóa đầu tiên và gán chương trình đào tạo.' }}</p></div>
+      <footer class="pagination"><span>{{ filtered.length }} mục · Trang {{ page }} / {{ pageCount }}</span><div><button :disabled="page <= 1" @click="page--" aria-label="Trang trước" title="Trang trước"><ChevronLeft :size="18" /></button><button :disabled="page >= pageCount" @click="page++" aria-label="Trang sau" title="Trang sau"><ChevronRight :size="18" /></button></div></footer>
+    </section>
+
+    <Teleport to="body"><div v-if="formKind" class="training-modal-overlay" @click.self="closeForm"><section class="training-modal card" role="dialog" aria-modal="true" aria-labelledby="training-form-title"><header><h2 id="training-form-title">{{ formTitle }}</h2><button :disabled="busy" @click="closeForm" aria-label="Đóng"><X :size="20" /></button></header>
+      <p>{{ formKind === 'lesson' ? `${course?.name} / ${chapter?.title}` : formKind === 'chapter' ? `Khóa: ${course?.name}` : 'Thông tin đào tạo' }}</p>
+      <form @submit.prevent="save"><label>Mã {{ formKind === 'lesson' ? 'bài học' : '' }} *<input v-model="form.code" required :disabled="formKind === 'lesson' && !!form.id" /></label><label>Tên *<input v-model="form.name" required /></label>
+        <label v-if="formKind === 'course'">Chương trình đào tạo *<select v-model="form.programId" required><option value="" disabled>Chọn chương trình</option><option v-for="program in programs.filter(p => p.status === 'ACTIVE')" :key="program.id" :value="program.id">{{ domains.find(d => d.id === program.domainId)?.name }} / {{ program.name }}</option></select></label>
+        <label v-if="formKind === 'program'">Lĩnh vực *<select v-model="form.domainId" required><option v-for="domain in domains" :key="domain.id" :value="domain.id">{{ domain.name }}</option></select></label>
+        <label>{{ formKind === 'lesson' ? 'Gợi ý nghiệp vụ' : 'Mô tả' }}<textarea v-model="form.description" rows="3" /></label>
+        <label v-if="['domain','program'].includes(formKind)">Trạng thái<select v-model="form.status"><option value="ACTIVE">Đang sử dụng</option><option value="ARCHIVED">Lưu trữ</option></select></label>
+        <p v-if="formKind === 'lesson'">Tạo bài xong sẽ mở trang soạn với hai tab Nội dung bài học và Bài kiểm tra.</p>
+        <p v-if="formError" class="error" role="alert">{{ formError }}</p>
+        <footer><button class="btn btn-secondary" :disabled="busy" type="button" @click="closeForm">Hủy</button><button class="btn btn-primary" :disabled="busy">{{ busy ? 'Đang lưu...' : formKind === 'lesson' ? 'Tạo và soạn bài' : formKind === 'chapter' && !form.id ? 'Lưu và mở chương' : formKind === 'course' && !form.id ? 'Lưu nháp và soạn nội dung' : 'Lưu thay đổi' }}</button></footer>
+      </form></section></div></Teleport>
+    <ConfirmModal :open="!!deleteTarget" title="Xóa nội dung?" :message="deleteMessage" :loading="busy" confirm-label="Xóa" @cancel="deleteTarget = null" @confirm="remove" />
+  </main>
+</template>
+
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { Search, Plus, Pencil, X, BookOpen, Eye, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-vue-next';
+import { trainingApi } from '../api/trainingApi';
+import { adminApi } from '../api/adminApi';
+import type { Course, Chapter, Lesson, TrainingDomain, TrainingProgram } from '../types';
+import ConfirmModal from '../components/ConfirmModal.vue';
+import AdminBackButton from '../components/AdminBackButton.vue';
+import { showToast } from '../utils/toast';
+type Row = Course | Chapter | Lesson;
+type FormKind = 'domain' | 'program' | 'course' | 'chapter' | 'lesson';
+const route=useRoute(), router=useRouter();
+const loading=ref(false), busy=ref(false), error=ref(''), formError=ref('');
+const domains=ref<TrainingDomain[]>([]), programs=ref<TrainingProgram[]>([]), courses=ref<Course[]>([]), chapters=ref<Chapter[]>([]);
+const course=ref<Course|null>(null), chapter=ref<Chapter|null>(null), domainId=ref(''), query=ref(''), statusFilter=ref(''), programFilter=ref(''), page=ref(1);
+const mode=computed(()=>route.path.endsWith('/catalog')?'catalog':route.params.chapterId?'chapter':route.params.courseId?'course':'list');
+const backTo=computed(()=>mode.value==='chapter'?`/admin/courses/${route.params.courseId}`:mode.value==='course'?'/admin/courses':'');
+const backLabel=computed(()=>mode.value==='chapter'?'Quay lại khóa học':'Quay lại danh sách khóa học');
+const title=computed(()=>mode.value==='catalog'?'Danh mục đào tạo':chapter.value?.title || course.value?.name || 'Khóa học');
+const rows=computed<Row[]>(()=>chapter.value?.lessons || (course.value ? chapters.value : courses.value));
+const canEditCourse=computed(()=>course.value?.status==='DRAFT');
+const canEditRow=(row:Row)=>course.value ? canEditCourse.value : row.status==='DRAFT';
+const rowName=(r:Row)=>'name' in r?r.name:r.title;
+const orderOf=(r:Row)=>rows.value.findIndex(item=>item.id===r.id);
+const filtered=computed(()=>rows.value.filter(r=>(`${rowName(r)} ${'code' in r?r.code:r.id}`).toLocaleLowerCase('vi').includes(query.value.toLocaleLowerCase('vi')) && (!statusFilter.value || r.status===statusFilter.value) && (course.value || !programFilter.value || (r as Course).programId===programFilter.value)));
+const filteredPrograms=computed(()=>programs.value.filter(p=>p.domainId===domainId.value && `${p.code} ${p.name}`.toLocaleLowerCase('vi').includes(query.value.toLocaleLowerCase('vi'))));
+const domainPage=ref(1), programPage=ref(1);
+const domainPageCount=computed(()=>Math.max(1,Math.ceil(domains.value.length/8)));
+const programPageCount=computed(()=>Math.max(1,Math.ceil(filteredPrograms.value.length/10)));
+const paginatedDomains=computed(()=>domains.value.slice((domainPage.value-1)*8,domainPage.value*8));
+const paginatedPrograms=computed(()=>filteredPrograms.value.slice((programPage.value-1)*10,programPage.value*10));
+watch([query,domainId],()=>programPage.value=1);
+watch(domainPageCount,count=>domainPage.value=Math.min(domainPage.value,count));
+watch(programPageCount,count=>programPage.value=Math.min(programPage.value,count));
+const pageCount=computed(()=>Math.max(1,Math.ceil(filtered.value.length/10)));
+const paginated=computed(()=>filtered.value.slice((page.value-1)*10,page.value*10));
+watch([query,statusFilter,programFilter],()=>page.value=1);
+watch(pageCount,count=>page.value=Math.min(page.value,count));
+const statusLabel=(status?:string)=>({DRAFT:'Bản nháp',PUBLISHED:'Đã xuất bản',ARCHIVED:'Đã lưu trữ',ACTIVE:'Đang sử dụng'}[status || 'DRAFT'] || status);
+function serverError(e:unknown){return (e as {response?:{data?:{message?:string}}}).response?.data?.message || (e instanceof Error?e.message:'Không thể thực hiện. Vui lòng thử lại.');}
+async function load(){loading.value=true;error.value='';try{const catalog=await trainingApi.catalog();domains.value=catalog.domains;programs.value=catalog.programs;domainId.value ||= domains.value[0]?.id || '';courses.value=await trainingApi.courses();course.value=courses.value.find(c=>c.id===route.params.courseId) || null;chapter.value=null;chapters.value=[];if(course.value){chapters.value=await trainingApi.chapters(course.value.id);if(route.params.chapterId){chapter.value=await trainingApi.chapter(String(route.params.chapterId));if(chapter.value.courseId!==course.value.id)throw new Error('Chương không thuộc khóa này');}}}catch(e){error.value=serverError(e);}finally{loading.value=false;}}
+watch(()=>route.path,()=>{query.value='';statusFilter.value='';page.value=1;void load();},{immediate:true});
+const formKind=ref<FormKind|null>(null); const form=ref({id:'',code:'',name:'',description:'',programId:'',domainId:'',status:'ACTIVE',version:undefined as number|undefined});
+const formTitle=computed(()=>`${form.value.id?'Sửa':'Tạo'} ${{domain:'lĩnh vực',program:'chương trình',course:'khóa học',chapter:'chương',lesson:'bài học'}[formKind.value || 'course']}`);
+function openForm(kind:FormKind,r?:Partial<Row|TrainingDomain|TrainingProgram>){formError.value='';formKind.value=kind;const item=r as Partial<Course & Chapter & Lesson & TrainingProgram> | undefined;form.value={id:item?.id || '',code:item?.code || (kind==='lesson'?item?.id || '':''),name:item?.name || item?.title || '',description:item?.description || item?.hint || '',programId:item?.programId || '',domainId:item?.domainId || domainId.value,status:item?.status || 'ACTIVE',version:item?.version};}
+function closeForm(){if(!busy.value)formKind.value=null;}
+function openRow(r:Row){if(chapter.value)router.push(`/admin/lessons/${r.id}/edit`);else if(course.value)router.push(`/admin/courses/${course.value.id}/chapters/${r.id}`);else router.push(`/admin/courses/${r.id}`);}
+function editRow(r:Row){if(chapter.value)openRow(r);else openForm(course.value?'chapter':'course',r);}
+async function save(){
+  if(busy.value || !formKind.value)return;
+  busy.value=true;formError.value='';
+  const f=form.value,kind=formKind.value;
+  let destination='';
+  try{
+    if(kind==='domain')await trainingApi.saveDomain({...f,id:f.id || undefined});
+    else if(kind==='program')await trainingApi.saveProgram({...f,id:f.id || undefined});
+    else if(kind==='course'){
+      const saved=await trainingApi.saveCourse({...f,id:f.id || undefined,iconName:'BookOpen'});
+      destination=`/admin/courses/${saved.id}`;
+    }else if(kind==='chapter'){
+      const saved=await trainingApi.saveChapter(course.value!.id,{...f,id:f.id || undefined,title:f.name});
+      if(!f.id)destination=`/admin/courses/${course.value!.id}/chapters/${saved.id}`;
+    }else if(kind==='lesson'){
+      const saved=await adminApi.createLesson({id:f.code,title:f.name,courseId:course.value!.id,chapterId:chapter.value!.id,hint:f.description,videoUrl:'',videoSource:'URL',documents:[],procedureSteps:[]});
+      destination=`/admin/lessons/${saved.id}/edit`;
+    }
+    formKind.value=null;
+    const label={domain:'lĩnh vực đào tạo',program:'chương trình đào tạo',course:'khóa học',chapter:'chương',lesson:'bài học'}[kind];
+    showToast(`${f.id?'Cập nhật':'Tạo'} ${label} thành công.`);
+    if(destination && destination!==route.path)await router.push(destination);
+    else await load();
+  }catch(e){formError.value=serverError(e);showToast(formError.value,'error');}
+  finally{busy.value=false;}
+}
+const deleteTarget=ref<Row|null>(null);const deleteMessage=computed(()=>{const r=deleteTarget.value;if(!r)return '';const count='lessons' in r?r.lessons.length:0;return `Xóa “${rowName(r)}”? ${count ? `${count} bài học và nội dung trực thuộc cũng sẽ bị xóa. `:''}Thao tác không thể hoàn tác.`;});
+function askDelete(r:Row){deleteTarget.value=r;}
+async function remove(){if(!deleteTarget.value)return;busy.value=true;try{const name=rowName(deleteTarget.value);if(chapter.value)await trainingApi.deleteLesson(deleteTarget.value.id);else if(course.value)await trainingApi.deleteChapter(deleteTarget.value.id);else await adminApi.deleteCourse(deleteTarget.value.id);deleteTarget.value=null;showToast(`Đã xóa “${name}”.`);await load();page.value=Math.min(page.value,pageCount.value);}catch(e){deleteTarget.value=null;error.value=serverError(e);showToast(error.value,'error');}finally{busy.value=false;}}
+async function move(row:Row,offset:number){busy.value=true;try{const ids=rows.value.map(r=>r.id),i=ids.indexOf(row.id);const [id]=ids.splice(i,1);ids.splice(i+offset,0,id!);if(chapter.value)await trainingApi.reorderLessons(chapter.value.id,ids);else await trainingApi.reorderChapters(course.value!.id,ids);showToast('Đã cập nhật thứ tự.');await load();}catch(e){error.value=serverError(e);showToast(error.value,'error');}finally{busy.value=false;}}
+async function changeStatus(status:string){busy.value=true;try{await trainingApi.setStatus(course.value!.id,status);showToast(status==='PUBLISHED'?'Đã xuất bản khóa học.':status==='ARCHIVED'?'Đã lưu trữ khóa học.':'Đã chuyển khóa học về bản nháp.');await load();}catch(e){error.value=serverError(e);showToast(error.value,'error');}finally{busy.value=false;}}
+</script>
+
+<style scoped>
+.training-admin{padding:2rem;min-width:0}.page-heading,.section-heading,.tools,.table-toolbar,.pagination,.row-actions{display:flex;align-items:center;justify-content:space-between;gap:1rem}.page-heading{margin-bottom:1.6rem;align-items:flex-start}.page-heading h1{font-size:1.5rem;margin:.6rem 0}.page-heading p,.breadcrumb{font-size:.85rem;color:var(--text-muted)}.breadcrumb a{color:var(--primary-color)}.section-heading{margin-bottom:1.25rem}.section-heading h2{font-size:1.125rem}.card{padding:1.5rem}.catalog-layout{display:grid;grid-template-columns:280px 1fr;gap:1.25rem}.domain-row{width:100%;display:flex;justify-content:space-between;align-items:center;padding:1rem;border:0;border-radius:12px;background:white;text-align:left;color:var(--text-main);cursor:pointer}.domain-row.active{background:var(--primary-light);color:var(--primary-color)}small{display:block;color:var(--text-muted);font-size:.75rem;margin-top:.35rem}.search-box{display:flex;align-items:center;gap:.6rem;flex:1;min-width:160px;border:1px solid var(--border-color);border-radius:8px;padding:.6rem .8rem;color:var(--text-muted);background:white}.search-box input{width:100%;border:0;outline:0}.table-toolbar{margin-bottom:1.5rem;flex-wrap:wrap}.table-toolbar select{padding:.6rem;border:1px solid var(--border-color);border-radius:8px;color:var(--text-main);background:white}.table-scroll{overflow-x:auto}.admin-table{width:100%;border-collapse:collapse;font-size:.875rem}.admin-table th{background:var(--bg-main);color:var(--text-muted);font-size:.75rem;text-align:left;padding:1rem}.admin-table td{padding:1rem;border-bottom:1px solid var(--border-color);vertical-align:middle}.name-link{background:none;border:0;color:var(--primary-color);font-weight:700;cursor:pointer;text-align:left;font-size:inherit}.row-actions{gap:.45rem;justify-content:flex-start;white-space:nowrap}.row-edit,.row-delete,.order-button{padding:.4rem .7rem;border:1px solid var(--primary-color);border-radius:6px;background:white;color:var(--primary-color);cursor:pointer}.row-delete{border-color:#f0b7b7;color:#b91c1c}.order-button{padding:.3rem;color:var(--text-muted);border-color:var(--border-color)}button:disabled{opacity:.45;cursor:not-allowed}.status{padding:.35rem .6rem;border-radius:6px;font-size:.75rem;background:var(--primary-light);color:var(--primary-color);white-space:nowrap}.status.amber{background:#fff5de;color:#805b00}.empty{padding:2rem;text-align:center;color:var(--text-muted)}.empty svg{margin:auto}.pagination{padding-top:1.25rem;font-size:.8rem;color:var(--text-muted)}.pagination button{padding:.4rem .75rem;margin-left:.5rem;border:1px solid var(--border-color);background:white;border-radius:6px}.notice{padding:.8rem 1rem;background:var(--primary-light);color:var(--primary-color);border-radius:8px;margin-bottom:1rem;display:flex;justify-content:space-between}.notice.error,.error{color:#b91c1c;background:#fff1f2}.notice button,.training-modal header button{border:0;background:none;cursor:pointer}.training-modal-overlay{position:fixed;inset:0;background:#0f172a66;z-index:2000;display:flex;align-items:center;justify-content:center;padding:1.5rem}.training-modal{width:540px;max-height:90vh;overflow-y:auto}.training-modal header,.training-modal footer{display:flex;justify-content:space-between;align-items:center;gap:1rem}.training-modal h2{font-size:1.25rem}.training-modal p{font-size:.85rem;color:var(--text-muted);margin:1rem 0}.training-modal label{display:flex;flex-direction:column;gap:.5rem;margin:1rem 0;font-size:.875rem;font-weight:600}.training-modal input,.training-modal textarea,.training-modal select{border:1px solid var(--border-color);border-radius:8px;padding:.7rem;width:100%;font-weight:400}.training-modal footer{justify-content:flex-end;margin-top:1.5rem}@media(max-width:1000px){.catalog-layout{grid-template-columns:1fr}.page-heading{flex-direction:column}.training-admin{padding:1rem}.tools{flex-wrap:wrap}}
+/* Keep the catalog panels within the available admin workspace. */
+.training-admin{height:100%;display:flex;flex-direction:column;min-height:0;overflow:auto}
+.page-heading,.notice{flex-shrink:0}
+.catalog-layout{flex:1;min-height:0;grid-template-columns:minmax(240px,280px) minmax(0,1fr)}
+.catalog-layout>.card,.list-card{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
+.list-card{flex:1}
+.section-heading,.table-toolbar,.pagination{flex-shrink:0}
+.catalog-layout .search-box{flex:0 0 auto;min-width:0}
+.search-box input{min-width:0}
+.table-scroll,.domain-list{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain}
+.admin-table th{position:sticky;top:0;z-index:1}
+.admin-table td{overflow-wrap:anywhere}
+.pagination{margin-top:auto;border-top:1px solid var(--border-color);gap:.75rem;flex-wrap:nowrap;min-height:57px}
+.pagination>span{min-width:0;overflow-wrap:anywhere}
+.pagination>div{display:flex;gap:.5rem;flex-shrink:0}
+.pagination button{display:grid;place-items:center;margin:0;padding:0;width:36px;height:36px;cursor:pointer;color:var(--primary-color)}
+.domain-pagination{align-items:center;flex-direction:row;font-size:.75rem;gap:.5rem}
+.domain-item{display:flex;align-items:center;border-radius:12px;margin-bottom:.5rem}
+.domain-item.active{background:var(--primary-light);color:var(--primary-color)}
+.domain-row{flex:1;min-width:0;background:transparent;color:inherit;overflow-wrap:anywhere}
+.domain-edit{display:grid;place-items:center;flex-shrink:0;width:36px;height:36px;margin-right:.5rem;border:0;border-radius:8px;background:transparent;color:var(--primary-color);cursor:pointer}
+.domain-item:hover{background:var(--primary-light)}
+.row-edit:hover:not(:disabled),.order-button:hover:not(:disabled),.pagination button:hover:not(:disabled),.domain-edit:hover{background:var(--primary-light);border-color:var(--primary-color)}
+.row-delete:hover:not(:disabled){background:#fff1f2;border-color:#b91c1c}
+.name-link:hover{text-decoration:underline;text-underline-offset:3px}
+.section-heading h2{min-width:0;overflow-wrap:anywhere}
+.section-heading .btn{flex-shrink:0}
+@media(max-width:1000px){
+  .training-admin{height:auto;min-height:100%;overflow:visible}
+  .catalog-layout{grid-template-columns:1fr;flex:none}
+  .catalog-layout>.card{min-height:360px;max-height:600px}
+  .catalog-layout>.catalog-domains{min-height:260px;max-height:420px}
+  .domain-pagination{flex-direction:row;align-items:center}
+  .list-card{min-height:420px;max-height:800px;flex:none}
+}
+@media(max-width:560px){
+  .card{padding:1rem}
+  .section-heading{align-items:flex-start;flex-wrap:wrap}
+  .table-toolbar{align-items:stretch;gap:.75rem}
+  .table-toolbar .search-box,.table-toolbar select,.table-toolbar>.btn{width:100%;min-width:0}
+  .admin-table{min-width:480px}
+  .tools{width:100%;gap:.5rem}
+  .tools .btn{flex:1;padding:.65rem .75rem}
+  .training-modal-overlay{padding:.75rem}
+  .training-modal{width:100%;max-height:calc(100dvh - 1.5rem)}
+}
+.readonly-notice{padding:.75rem 1rem;margin-bottom:1rem;border-radius:8px;background:#fff5de;color:#805b00;flex-shrink:0}
+.readonly-label{color:var(--text-muted);font-size:.8rem}
+.heading-with-back{display:flex;align-items:flex-start;gap:1rem;min-width:0}
+.heading-copy{min-width:0}
+.heading-copy h1,.heading-copy .breadcrumb{overflow-wrap:anywhere}
+@media(max-width:560px){.heading-with-back{gap:.75rem}}
+</style>

@@ -22,17 +22,20 @@ public class NavigationDataInitializer implements ApplicationRunner {
         seed("profile", "Hồ sơ", "/profile", "UserCircle", "MAIN", 30, false, "ROLE_USER", "ROLE_ADMIN");
         seed("lesson", "Bài học", "/lesson", "BookOpen", "MAIN", 40, false, "ROLE_USER", "ROLE_ADMIN");
         seed("quiz", "Bài kiểm tra", "/quiz", "HelpCircle", "MAIN", 50, false, "ROLE_USER", "ROLE_ADMIN");
+        seed("course.outline", "Nội dung khóa học", "/courses/:courseId", "BookOpen", "MAIN", 45, false, "ROLE_USER", "ROLE_ADMIN");
         seed("admin", "Quản trị", "/admin", "Settings", "MAIN", 60, true, "ROLE_ADMIN");
         seed("admin.overview", "Tổng quan", "/admin", "Settings", "ADMIN", 100, true, "ROLE_ADMIN");
         seed("admin.users", "Thành viên", "/admin?tab=users", "Users", "ADMIN", 110, true, "ROLE_ADMIN");
         seed("admin.enrollments", "Duyệt đăng ký", "/admin?tab=enrollments", "ClipboardCheck", "ADMIN", 120, true, "ROLE_ADMIN");
-        seed("admin.lessons", "Bài học", "/admin?tab=lessons", "BookOpen", "ADMIN", 130, true, "ROLE_ADMIN");
-        seed("admin.lesson.topic", "Quản lý bài học theo chủ đề", "/admin/lessons/:topicId", "BookOpen", "ADMIN", 135, false, "ROLE_ADMIN");
+        seed("admin.catalog", "Danh mục đào tạo", "/admin/catalog", "BookOpen", "ADMIN", 105, true, "ROLE_ADMIN");
+        seed("admin.courses", "Khóa học", "/admin/courses", "BookOpen", "ADMIN", 106, true, "ROLE_ADMIN");
+        seed("admin.lessons", "Bài học", "/admin/courses", "BookOpen", "ADMIN", 130, false, "ROLE_ADMIN");
+        seed("admin.lesson.course", "Quản lý bài học theo khóa học", "/admin/lessons/:courseId", "BookOpen", "ADMIN", 135, false, "ROLE_ADMIN");
         seed("admin.exams", "Đề thi trắc nghiệm", "/admin?tab=exams", "HelpCircle", "ADMIN", 140, true, "ROLE_ADMIN");
         seed("admin.documents", "Tài liệu AI", "/admin?tab=documents", "FileText", "ADMIN", 145, true, "ROLE_ADMIN");
         seed("admin.quiz.create", "Tạo bài kiểm tra", "/admin/quizzes/new", "Plus", "ADMIN", 150, false, "ROLE_ADMIN");
         seed("admin.quiz.lesson", "Chi tiết kiểm tra bài học", "/admin/quizzes/lesson/:scopeId", "HelpCircle", "ADMIN", 160, false, "ROLE_ADMIN");
-        seed("admin.quiz.topic", "Chi tiết kiểm tra chủ đề", "/admin/quizzes/topic/:scopeId", "HelpCircle", "ADMIN", 170, false, "ROLE_ADMIN");
+        seed("admin.quiz.course", "Chi tiết kiểm tra khóa học", "/admin/quizzes/course/:scopeId", "HelpCircle", "ADMIN", 170, false, "ROLE_ADMIN");
     }
 
     private void seed(String id, String label, String route, String icon, String area,

@@ -12,8 +12,8 @@ public interface UserMapper {
     @Mapping(source = "badge.id", target = "id")
     @Mapping(source = "badge.title", target = "title")
     @Mapping(source = "badge.type", target = "type")
-    @Mapping(source = "badge.topic.id", target = "topicId")
-    @Mapping(source = "badge.topic.name", target = "topicName")
+    @Mapping(source = "badge.course.id", target = "courseId")
+    @Mapping(source = "badge.course.name", target = "courseName")
     @Mapping(source = "unlockedAt", target = "unlockedAt", dateFormat = "yyyy-MM-dd")
     @Mapping(source = "badge.icon", target = "icon")
     UserBadgeDto toUserBadgeDto(UserBadge userBadge);

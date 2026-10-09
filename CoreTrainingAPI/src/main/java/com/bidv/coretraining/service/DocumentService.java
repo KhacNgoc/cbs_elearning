@@ -3,11 +3,11 @@ package com.bidv.coretraining.service;
 import com.bidv.coretraining.dto.CourseDocumentDto;
 import com.bidv.coretraining.entity.CourseDocument;
 import com.bidv.coretraining.entity.DocumentStatus;
-import com.bidv.coretraining.entity.Topic;
+import com.bidv.coretraining.entity.Course;
 import com.bidv.coretraining.exception.BadRequestException;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
 import com.bidv.coretraining.repository.CourseDocumentRepository;
-import com.bidv.coretraining.repository.TopicRepository;
+import com.bidv.coretraining.repository.CourseRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,29 +23,29 @@ import java.util.UUID;
 @Service
 public class DocumentService {
     private final CourseDocumentRepository documentRepository;
-    private final TopicRepository topicRepository;
+    private final CourseRepository courseRepository;
     private final RagIngestionService ragIngestionService;
     private final Path uploadDirectory;
 
-    public DocumentService(CourseDocumentRepository documentRepository, TopicRepository topicRepository, RagIngestionService ragIngestionService,
+    public DocumentService(CourseDocumentRepository documentRepository, CourseRepository courseRepository, RagIngestionService ragIngestionService,
                            @Value("${app.upload-directory}") String uploadDirectory) {
         this.documentRepository = documentRepository;
-        this.topicRepository = topicRepository;
+        this.courseRepository = courseRepository;
         this.ragIngestionService = ragIngestionService;
         this.uploadDirectory = Path.of(uploadDirectory);
     }
 
-    public CourseDocumentDto upload(String topicId, MultipartFile file) {
+    public CourseDocumentDto upload(String courseId, MultipartFile file) {
         if (file.isEmpty() || file.getOriginalFilename() == null) throw new BadRequestException("Tệp tải lên không hợp lệ");
         String lowerName = file.getOriginalFilename().toLowerCase();
         if (!lowerName.endsWith(".pdf") && !lowerName.endsWith(".docx")) throw new BadRequestException("Chỉ hỗ trợ PDF hoặc DOCX");
-        Topic topic = topicRepository.findById(topicId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khóa học: " + topicId));
+        Course course = courseRepository.findById(courseId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khóa học: " + courseId));
         try {
             Files.createDirectories(uploadDirectory);
             String id = UUID.randomUUID().toString();
             Path destination = uploadDirectory.resolve(id + (lowerName.endsWith(".pdf") ? ".pdf" : ".docx"));
             file.transferTo(destination);
-            CourseDocument document = documentRepository.save(CourseDocument.builder().id(id).topic(topic).fileName(file.getOriginalFilename())
+            CourseDocument document = documentRepository.save(CourseDocument.builder().id(id).course(course).fileName(file.getOriginalFilename())
                     .storagePath(destination.toAbsolutePath().toString()).contentType(file.getContentType() == null ? "application/octet-stream" : file.getContentType())
                     .sizeBytes(file.getSize()).status(DocumentStatus.PENDING).createdAt(LocalDateTime.now()).build());
             ragIngestionService.ingestAsync(id);
@@ -56,10 +56,10 @@ public class DocumentService {
     }
 
     @Transactional(readOnly = true)
-    public List<CourseDocumentDto> list(String topicId) {
-        if (!topicRepository.existsById(topicId)) {
-            throw new ResourceNotFoundException("Không tìm thấy khóa học: " + topicId);
+    public List<CourseDocumentDto> list(String courseId) {
+        if (!courseRepository.existsById(courseId)) {
+            throw new ResourceNotFoundException("Không tìm thấy khóa học: " + courseId);
         }
-        return documentRepository.findByTopicIdOrderByCreatedAtDesc(topicId).stream().map(CourseDocumentDto::from).toList();
+        return documentRepository.findByCourseIdOrderByCreatedAtDesc(courseId).stream().map(CourseDocumentDto::from).toList();
     }
 }

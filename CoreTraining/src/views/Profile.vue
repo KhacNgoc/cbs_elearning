@@ -79,21 +79,21 @@
             <div>
               <span class="profile-eyebrow">Hành trình học tập</span>
               <h2>Khóa học đã tham gia</h2>
-              <p>Theo dõi tiến độ từng chủ đề nghiệp vụ được phân công hoặc đã đăng ký.</p>
+              <p>Theo dõi tiến độ từng khóa học nghiệp vụ được phân công hoặc đã đăng ký.</p>
             </div>
             <span class="course-total">{{ joinedCourses.length }} khóa học</span>
           </div>
 
           <div v-if="joinedCourses.length" class="course-list">
-            <article v-for="course in joinedCourses" :key="course.topic.id" class="profile-course-card card">
+            <article v-for="course in joinedCourses" :key="course.course.id" class="profile-course-card card">
               <div class="course-icon">
-                <component :is="getTopicIcon(course.topic.iconName)" :size="23" />
+                <component :is="getCourseIcon(course.course.iconName)" :size="23" />
               </div>
               <div class="course-content">
                 <div class="course-title-row">
                   <div>
                     <span class="course-kind">{{ course.kind }}</span>
-                    <h3>{{ course.topic.name }}</h3>
+                    <h3>{{ course.course.name }}</h3>
                   </div>
                   <span class="course-status" :class="course.statusClass">{{ course.status }}</span>
                 </div>
@@ -112,7 +112,7 @@
                     Điểm đánh giá: <strong>{{ course.quiz.score }}/{{ course.quiz.total }}</strong>
                   </span>
                   <span v-else class="quiz-empty"><ClipboardList :size="16" />Chưa thực hiện đánh giá</span>
-                  <button @click="continueCourse(course.topic)">
+                  <button @click="continueCourse(course.course)">
                     {{ course.percent > 0 ? 'Tiếp tục học' : 'Bắt đầu học' }}
                     <ArrowRight :size="16" />
                   </button>
@@ -145,7 +145,7 @@ import {
 import { useCourseStore } from '../stores/courseStore';
 import { useUserStore } from '../stores/userStore';
 import { userApi } from '../api/userApi';
-import type { Topic, UserProfile } from '../types';
+import type { Course, UserProfile } from '../types';
 
 const router = useRouter();
 const courseStore = useCourseStore();
@@ -159,7 +159,7 @@ onMounted(async () => {
     const [profileData] = await Promise.all([
       userApi.getMyProfile(),
       userStore.fetchProgress(),
-      courseStore.fetchTopics()
+      courseStore.fetchCourses()
     ]);
     profile.value = profileData;
   } catch (error) {
@@ -178,42 +178,42 @@ const roleLabel = computed(() =>
 );
 
 const joinedCourses = computed(() => {
-  const explicitTopicIds = new Set([
-    ...userStore.mandatoryTopics,
-    ...userStore.registeredTopics
+  const explicitCourseIds = new Set([
+    ...userStore.mandatoryCourses,
+    ...userStore.registeredCourses
   ]);
 
-  return courseStore.topics
-    .filter(topic => {
+  return courseStore.courses
+    .filter(course => {
       if (userStore.role === 'ROLE_ADMIN') return true;
-      const hasCompletedLesson = topic.lessons.some(lesson =>
+      const hasCompletedLesson = course.lessons.some(lesson =>
         userStore.completedLessons.includes(lesson.id)
       );
-      return explicitTopicIds.has(topic.id)
+      return explicitCourseIds.has(course.id)
         || hasCompletedLesson
-        || userStore.quizScores[topic.id] !== undefined;
+        || userStore.quizScores[course.id] !== undefined;
     })
-    .map(topic => {
-      const completed = topic.lessons.filter(lesson =>
+    .map(course => {
+      const completed = course.lessons.filter(lesson =>
         userStore.completedLessons.includes(lesson.id)
       ).length;
-      const total = topic.lessons.length;
+      const total = course.lessons.length;
       const percent = total ? Math.round(completed / total * 100) : 0;
-      const quizScore = userStore.quizScores[topic.id];
+      const quizScore = userStore.quizScores[course.id];
       const quiz = quizScore === undefined ? null : {
         score: quizScore,
-        total: userStore.quizTotals[topic.id] || 0
+        total: userStore.quizTotals[course.id] || 0
       };
 
       return {
-        topic,
+        course,
         completed,
         total,
         percent,
         quiz,
         kind: userStore.role === 'ROLE_ADMIN'
           ? 'Khóa học hệ thống'
-          : userStore.mandatoryTopics.includes(topic.id)
+          : userStore.mandatoryCourses.includes(course.id)
             ? 'Khóa học bắt buộc'
             : 'Khóa học đã đăng ký',
         status: percent === 100 ? 'Đã hoàn thành' : percent > 0 ? 'Đang học' : 'Chưa bắt đầu',
@@ -228,17 +228,17 @@ const overallCourseProgress = computed(() => {
   return totalLessons ? Math.round(completedLessons / totalLessons * 100) : 0;
 });
 
-const getTopicIcon = (iconName: string) => {
+const getCourseIcon = (iconName: string) => {
   const icons: Record<string, typeof Users> = {
     Users, Coins, ArrowLeftRight, PiggyBank, Wallet, BookOpen, CreditCard
   };
   return icons[iconName] || BookOpen;
 };
 
-const continueCourse = (topic: Topic) => {
-  const nextLesson = topic.lessons.find(lesson =>
+const continueCourse = (course: Course) => {
+  const nextLesson = course.lessons.find(lesson =>
     !userStore.completedLessons.includes(lesson.id)
-  ) || topic.lessons[0];
+  ) || course.lessons[0];
   if (nextLesson) router.push(`/lesson/${nextLesson.id}`);
 };
 </script>

@@ -1,14 +1,15 @@
 <template>
   <div
-    v-if="lesson"
+    v-if="lesson && chapter"
     class="learning-page"
     :class="{ 'sidebar-visible': sidebarOpen }"
   >
     <LessonLearningHeader
-      :topic-name="topic?.name"
+      :course-name="`${fullCourse?.name} / ${chapter?.title}`"
+      :back-to="`/courses/${fullCourse?.id}`"
       :lesson-title="lesson.title"
       :completed-count="completedCount"
-      :total-lessons="topic?.lessons.length || 0"
+      :total-lessons="course?.lessons.length || 0"
       :completed="isCompleted"
       @complete="markAsCompleted"
       @open-content="sidebarOpen = true"
@@ -19,7 +20,7 @@
         :lesson="lesson"
         :selected-document="selectedDocument"
         :current-index="currentLessonIndex"
-        :total-lessons="topic?.lessons.length || 0"
+        :total-lessons="course?.lessons.length || 0"
         :initial-position-seconds="currentLessonProgress?.lastPositionSeconds || 0"
         :initial-watched-seconds="currentLessonProgress?.watchedSeconds || 0"
         @adjacent="goToAdjacentLesson"
@@ -31,7 +32,7 @@
         @add-note="openNoteComposer"
       />
       <LessonCourseSidebar
-        :topic="topic"
+        :course="course"
         :active-lesson-id="lesson.id"
         :completed-lessons="userStore.completedLessons"
         :completed-count="completedCount"
@@ -40,14 +41,14 @@
         :selected-document-id="selectedDocument?.id"
         :lesson-quiz-scores="userStore.lessonQuizScores"
         :lesson-quiz-totals="userStore.lessonQuizTotals"
-        :topic-quiz-scores="userStore.quizScores"
-        :topic-quiz-totals="userStore.quizTotals"
+        :course-quiz-scores="userStore.quizScores"
+        :course-quiz-totals="userStore.quizTotals"
         @close="sidebarOpen = false"
         @select="switchLesson"
         @toggle-completion="toggleLessonCompletion"
         @select-document="showDocument"
         @quiz="startQuiz"
-        @topic-quiz="startTopicQuiz"
+        @course-quiz="startCourseQuiz"
       />
       <button
         v-if="!sidebarOpen"
@@ -64,10 +65,11 @@
       ></div>
     </div>
 
+    <section v-if="lesson.textBody && lesson.videoUrl" class="lesson-text-content"><h2>Nội dung bài học</h2><p>{{lesson.textBody}}</p></section>
     <section class="lesson-information">
       <LessonOverview
         :lesson="lesson"
-        :topic-name="topic?.name"
+        :course-name="fullCourse?.name"
         :completed="isCompleted"
       >
         <LessonVideoNotes
@@ -94,6 +96,7 @@
       </LessonOverview>
     </section>
 
+    <footer v-if="chapterComplete" class="chapter-completion-footer"><span><strong>{{nextChapter ? 'Đã hoàn thành chương' : 'Đã hoàn thành khóa học'}}</strong> · Tất cả bài học và kiểm tra bắt buộc đã hoàn thành</span><button class="btn btn-primary" @click="advanceChapter">{{nextChapter ? 'Sang chương tiếp theo' : 'Xem kết quả khóa học'}} <ChevronRight :size="17" /></button></footer>
     <Transition name="quiz-gate">
       <div
         v-if="quizGateOpen"
@@ -116,17 +119,17 @@
           </button>
           <div class="quiz-gate-icon"><AlertTriangle :size="28" /></div>
           <span class="quiz-gate-eyebrow">
-            {{ quizPromptKind === "topic" ? "Bài kiểm tra tổng kết" : "Bài học có bài kiểm tra" }}
+            {{ quizPromptKind === "course" ? "Bài kiểm tra tổng kết" : "Bài học có bài kiểm tra" }}
           </span>
           <h2 id="quiz-gate-title">
-            {{ quizPromptKind === "topic"
+            {{ quizPromptKind === "course"
               ? "Bạn cần làm bài kiểm tra để hoàn thành khóa học"
               : "Bạn có muốn làm bài kiểm tra ngay không?" }}
           </h2>
-          <p v-if="quizPromptKind === 'topic'">
+          <p v-if="quizPromptKind === 'course'">
             Đây là bài học cuối cùng chưa hoàn thành của khóa
-            <strong>{{ topic?.name }}</strong>. Bạn cần đạt tối thiểu
-            {{ topic?.quizPassingScore ?? 80 }}% bài kiểm tra tổng kết để hoàn thành khóa học.
+            <strong>{{ course?.name }}</strong>. Bạn cần đạt tối thiểu
+            {{ course?.quizPassingScore ?? 80 }}% bài kiểm tra tổng kết để hoàn thành khóa học.
           </p>
           <p v-else>
             Bài <strong>{{ quizPromptLesson?.title }}</strong> có bài kiểm tra. Kết quả bài
@@ -137,7 +140,7 @@
               Để sau
             </button>
             <button class="quiz-gate-primary" @click="continueToQuiz">
-              {{ quizPromptKind === "topic" ? "Làm bài kiểm tra tổng" : "Làm bài kiểm tra" }}
+              {{ quizPromptKind === "course" ? "Làm bài kiểm tra tổng" : "Làm bài kiểm tra" }}
               <ChevronRight :size="17" />
             </button>
           </div>
@@ -155,8 +158,9 @@ import { AlertTriangle, ChevronLeft, ChevronRight, X } from "lucide-vue-next";
 import { useCourseStore } from "../stores/courseStore";
 import { useUserStore } from "../stores/userStore";
 import { axiosClient } from "../api/axiosClient";
+import { trainingApi } from "../api/trainingApi";
 import { courseApi } from "../api/courseApi";
-import type { LessonDocument, LessonProgressRequest, VideoNote } from "../types";
+import type { CourseOutline, LessonDocument, LessonProgressRequest, VideoNote } from "../types";
 import LessonLearningHeader from "../components/lesson/LessonLearningHeader.vue";
 import LessonCourseSidebar from "../components/lesson/LessonCourseSidebar.vue";
 import LessonMediaStage from "../components/lesson/LessonMediaStage.vue";
@@ -184,7 +188,7 @@ const notesLoading = ref(false);
 const noteSaving = ref(false);
 const quizGateOpen = ref(false);
 const quizPromptLessonId = ref<string | null>(null);
-const quizPromptKind = ref<"lesson" | "topic">("lesson");
+const quizPromptKind = ref<"lesson" | "course">("lesson");
 const currentProgressSnapshot = ref<LessonProgressRequest>({
   lastPositionSeconds: 0,
   watchedSeconds: 0,
@@ -193,9 +197,15 @@ const currentProgressSnapshot = ref<LessonProgressRequest>({
 let progressSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 const lesson = computed(() => courseStore.currentLesson);
-const topic = computed(() => courseStore.currentTopic);
+const outline=ref<CourseOutline|null>(null);
+const fullCourse=computed(()=>courseStore.currentCourse);
+const chapter=computed(()=>outline.value?.chapters.find(c=>c.id===lesson.value?.chapterId));
+const course=computed(()=>fullCourse.value && chapter.value ? {...fullCourse.value,name:chapter.value.title,lessons:chapter.value.lessons,hasQuiz:false} : fullCourse.value);
+const chapterComplete=computed(()=>!!chapter.value?.lessons.length && chapter.value.lessons.every(l=>userStore.completedLessons.includes(l.id)));
+const nextChapter=computed(()=>{const list=outline.value?.chapters || [];return list[list.findIndex(c=>c.id===chapter.value?.id)+1];});
+
 const quizPromptLesson = computed(() =>
-  topic.value?.lessons.find(item => item.id === quizPromptLessonId.value) || lesson.value,
+  course.value?.lessons.find(item => item.id === quizPromptLessonId.value) || lesson.value,
 );
 const currentLessonProgress = computed(() =>
   lesson.value ? userStore.lessonProgress?.[lesson.value.id] : undefined,
@@ -205,18 +215,18 @@ const isCompleted = computed(() =>
 );
 const completedCount = computed(
   () =>
-    topic.value?.lessons.filter((item) =>
+    course.value?.lessons.filter((item) =>
       userStore.completedLessons.includes(item.id),
     ).length || 0,
 );
 const courseProgress = computed(() =>
-  topic.value?.lessons.length
-    ? Math.round((completedCount.value / topic.value.lessons.length) * 100)
+  course.value?.lessons.length
+    ? Math.round((completedCount.value / course.value.lessons.length) * 100)
     : 0,
 );
 const currentLessonIndex = computed(
   () =>
-    topic.value?.lessons.findIndex((item) => item.id === lesson.value?.id) ??
+    course.value?.lessons.findIndex((item) => item.id === lesson.value?.id) ??
     -1,
 );
 
@@ -228,9 +238,18 @@ const loadLessonData = async (lessonId: string) => {
     loadVideoNotes(lessonId),
   ]);
 
-  // Guard check: topic accessibility
-  if (topic.value && !userStore.isTopicAccessible(topic.value.id)) {
-    alert("Bạn cần đăng ký học chủ đề nghiệp vụ này trước!");
+  if(lesson.value) {
+    outline.value=await trainingApi.outline(lesson.value.courseId);
+    const activeChapter=outline.value.chapters.find(c=>c.id===lesson.value?.chapterId);
+    const activeIndex=activeChapter?.lessons.findIndex(l=>l.id===lesson.value?.id) ?? -1;
+    if(activeChapter && activeIndex>=0)activeChapter.lessons[activeIndex]=lesson.value;
+    if(!lesson.value.videoUrl && !lesson.value.textBody && lesson.value.documents.length)
+      selectedDocument.value=lesson.value.documents[0] || null;
+  }
+
+  // Guard check: course accessibility
+  if (course.value && !userStore.isCourseAccessible(course.value.id)) {
+    alert("Bạn cần đăng ký học khóa học nghiệp vụ này trước!");
     router.push("/");
     return;
   }
@@ -274,8 +293,8 @@ const loadVideoNotes = async (lessonId: string) => {
 
 onMounted(async () => {
   await Promise.all([
-    userStore.mandatoryTopics.length === 0 ? userStore.fetchProgress() : Promise.resolve(),
-    courseStore.fetchTopics(),
+    userStore.mandatoryCourses.length === 0 ? userStore.fetchProgress() : Promise.resolve(),
+    courseStore.fetchCourses(),
   ]);
   await loadLessonData(props.id);
   selectInitialContent();
@@ -327,8 +346,8 @@ const handleVideoEnded = async (progress: LessonProgressRequest) => {
     progressSaveTimer = null;
   }
   const finishedLessonId = lesson.value.id;
-  const hasQuiz = Boolean(lesson.value.hasQuiz);
-  const nextLesson = topic.value?.lessons[currentLessonIndex.value + 1];
+  const hasQuiz = Boolean(lesson.value.hasQuiz && lesson.value.quizRequired);
+  const nextLesson = course.value?.lessons[currentLessonIndex.value + 1];
   const wasCompleted = userStore.completedLessons.includes(finishedLessonId);
   currentProgressSnapshot.value = progress;
   await userStore.saveLessonProgress(finishedLessonId, progress);
@@ -342,7 +361,7 @@ const handleVideoEnded = async (progress: LessonProgressRequest) => {
     return;
   }
 
-  if (promptForRequiredTopicQuiz(finishedLessonId)) return;
+  if (promptForRequiredCourseQuiz(finishedLessonId)) return;
   const completed = await completeLessonWithFeedback(finishedLessonId);
   if (completed && nextLesson) {
     await router.push(`/lesson/${nextLesson.id}`);
@@ -352,6 +371,8 @@ const handleVideoEnded = async (progress: LessonProgressRequest) => {
 const switchLesson = async (lessonId: string): Promise<boolean> => {
   if (!lesson.value) return false;
   if (lessonId === lesson.value.id) return true;
+  const index=course.value?.lessons.findIndex(l=>l.id===lessonId) ?? -1;
+  if(userStore.role!=="ROLE_ADMIN" && course.value?.lessons.slice(0,index).some(l=>!userStore.completedLessons.includes(l.id))){alert("Hoàn thành các bài trước và kiểm tra bắt buộc để tiếp tục");return false;}
   await persistCurrentProgress();
   await router.push(`/lesson/${lessonId}`);
   return true;
@@ -390,7 +411,7 @@ const downloadDocument = async (
   }
 };
 const goToAdjacentLesson = (offset: number) => {
-  const nextLesson = topic.value?.lessons[currentLessonIndex.value + offset];
+  const nextLesson = course.value?.lessons[currentLessonIndex.value + offset];
   if (nextLesson) switchLesson(nextLesson.id);
 };
 const markAsCompleted = async () => {
@@ -398,27 +419,27 @@ const markAsCompleted = async () => {
   await toggleLessonCompletion(lesson.value.id);
 };
 const hasPassedLessonQuiz = (lessonId: string) => {
-  const targetLesson = topic.value?.lessons.find(item => item.id === lessonId);
+  const targetLesson = course.value?.lessons.find(item => item.id === lessonId);
   if (!targetLesson) return false;
   const score = userStore.lessonQuizScores[lessonId];
   const total = userStore.lessonQuizTotals[lessonId];
   return score !== undefined && total > 0
     && Math.round(score / total * 100) >= (targetLesson.quizPassingScore ?? 80);
 };
-const hasPassedTopicQuiz = () => {
-  if (!topic.value) return false;
-  const score = userStore.quizScores[topic.value.id];
-  const total = userStore.quizTotals[topic.value.id];
+const hasPassedCourseQuiz = () => {
+  if (!course.value) return false;
+  const score = userStore.quizScores[course.value.id];
+  const total = userStore.quizTotals[course.value.id];
   return score !== undefined && total > 0
-    && Math.round(score / total * 100) >= (topic.value.quizPassingScore ?? 80);
+    && Math.round(score / total * 100) >= (course.value.quizPassingScore ?? 80);
 };
-const promptForRequiredTopicQuiz = (lessonId: string) => {
-  if (!topic.value?.hasQuiz || hasPassedTopicQuiz()) return false;
-  const wouldCompleteCourse = topic.value.lessons.every(item =>
+const promptForRequiredCourseQuiz = (lessonId: string) => {
+  if (!course.value?.hasQuiz || hasPassedCourseQuiz()) return false;
+  const wouldCompleteCourse = course.value.lessons.every(item =>
     item.id === lessonId || userStore.completedLessons.includes(item.id),
   );
   if (!wouldCompleteCourse) return false;
-  quizPromptKind.value = "topic";
+  quizPromptKind.value = "course";
   quizPromptLessonId.value = null;
   quizGateOpen.value = true;
   return true;
@@ -437,55 +458,48 @@ const completeLessonWithFeedback = async (lessonId: string) => {
   }
 };
 const toggleLessonCompletion = async (lessonId: string) => {
-  const targetLesson = topic.value?.lessons.find(item => item.id === lessonId);
+  const targetLesson = course.value?.lessons.find(item => item.id === lessonId);
   if (!targetLesson) return;
 
-  if (userStore.completedLessons.includes(lessonId)) {
-    if (progressSaveTimer && lesson.value?.id === lessonId) {
-      clearTimeout(progressSaveTimer);
-      progressSaveTimer = null;
-    }
-    await userStore.resetLesson(lessonId);
-    if (lesson.value?.id === lessonId) {
-      currentProgressSnapshot.value = {
-        lastPositionSeconds: 0,
-        watchedSeconds: 0,
-        durationSeconds: 0,
-      };
-      currentVideoTime.value = 0;
-      mediaStage.value?.resetProgress();
-    }
+  if(userStore.completedLessons.includes(lessonId)) return;
+
+  try {
+    await persistCurrentProgress();
+    await axiosClient.post(`/api/users/me/lessons/${lessonId}/content-complete`);
+  } catch(error) {
+    const message=(error as {response?:{data?:{message?:string}}}).response?.data?.message;
+    alert(message || 'Hãy học xong nội dung trước khi hoàn thành bài.');
     return;
   }
-
-  if (targetLesson.hasQuiz && !hasPassedLessonQuiz(lessonId)) {
+  if (targetLesson.hasQuiz && targetLesson.quizRequired && !hasPassedLessonQuiz(lessonId)) {
     quizPromptKind.value = "lesson";
     quizPromptLessonId.value = lessonId;
     quizGateOpen.value = true;
     return;
   }
-  if (promptForRequiredTopicQuiz(lessonId)) return;
+  if (promptForRequiredCourseQuiz(lessonId)) return;
   await completeLessonWithFeedback(lessonId);
 };
 const startQuiz = (lessonId = lesson.value?.id) => {
-  const targetLesson = topic.value?.lessons.find(item => item.id === lessonId);
-  if (topic.value && targetLesson?.hasQuiz) {
+  const targetLesson = course.value?.lessons.find(item => item.id === lessonId);
+  if (course.value && targetLesson?.hasQuiz) {
     router.push({
-      path: `/quiz/${topic.value.id}`,
+      path: `/quiz/${course.value.id}`,
       query: { lessonId: targetLesson.id },
     });
-  } else if (topic.value) {
-    router.push(`/quiz/${topic.value.id}`);
+  } else if (course.value) {
+    router.push(`/quiz/${course.value.id}`);
   }
 };
-const startTopicQuiz = () => {
-  if (topic.value) router.push(`/quiz/${topic.value.id}`);
+const advanceChapter=async()=>{await persistCurrentProgress();if(nextChapter.value){const target=nextChapter.value.lessons.find(l=>!userStore.completedLessons.includes(l.id)) || nextChapter.value.lessons[0];if(target)router.push(`/lesson/${target.id}`);}else router.push(`/courses/${fullCourse.value?.id}`);};
+const startCourseQuiz = () => {
+  if (course.value) router.push(`/quiz/${course.value.id}`);
 };
 const continueToQuiz = () => {
-  if (quizPromptKind.value === "topic") {
+  if (quizPromptKind.value === "course") {
     quizGateOpen.value = false;
     quizPromptLessonId.value = null;
-    startTopicQuiz();
+    startCourseQuiz();
     return;
   }
   const targetLessonId = quizPromptLessonId.value || lesson.value?.id;
@@ -1054,15 +1068,15 @@ const deleteComment = async (commentId: number) => {
   align-items: center;
   cursor: pointer;
 }
-.topic-quiz-box {
+.course-quiz-box {
   margin-top: 0;
   background: #eaf5f1;
   border-color: #b8d8cc;
 }
-.topic-quiz-box > div {
+.course-quiz-box > div {
   color: var(--primary-color);
 }
-.topic-quiz-box p {
+.course-quiz-box p {
   color: #476158;
 }
 .sidebar-reopen {
@@ -2007,4 +2021,18 @@ const deleteComment = async (commentId: number) => {
     height: 18px;
   }
 }
+.learning-page .outline-action:hover:not(:disabled),
+.learning-page .mobile-content-button:hover,
+.learning-page .sidebar-reopen:hover{background:#294c40;border-color:#8ae2c2}
+.learning-page .sidebar-close:hover,.learning-page .lesson-check:hover,
+.learning-page .document-library-close:hover{background:var(--primary-light);color:var(--primary-color)}
+.learning-page .lesson-row-copy:hover strong{text-decoration:underline;text-underline-offset:3px}
+.learning-page .quiz-box button:hover{background:#eadca8;border-radius:6px}
+.learning-page .submit-button:hover:not(:disabled),.learning-page .quiz-gate-primary:hover{background:var(--primary-hover);box-shadow:0 3px 10px #005b4133}
+.learning-page .quiz-gate-secondary:hover{background:var(--primary-light)}
+.header-copy{overflow:hidden}.course-name{min-width:0;max-width:45%;overflow:hidden;text-overflow:ellipsis}
+.chapter-completion-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;padding:1.25rem}
+@media(min-width:769px) and (max-width:900px){.learning-page{margin:-2rem}}
+@media(max-width:900px){.learning-stage{height:clamp(420px,calc(100dvh - 185px),620px)}}
+@media(max-width:600px){.learning-stage{height:min(440px,calc(100dvh - 170px));min-height:340px}.quiz-gate-actions{flex-wrap:wrap}.quiz-gate-actions button{flex:1}.chapter-completion-footer .btn{width:100%}}
 </style>

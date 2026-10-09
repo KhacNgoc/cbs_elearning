@@ -50,8 +50,8 @@
           <div class="chat-course-filter">
             <label for="chat-course">Khóa học</label>
             <select id="chat-course" v-model="selectedCourseId" :disabled="sending" @change="loadHistory">
-              <option v-for="topic in accessibleTopics" :key="topic.id" :value="topic.id">
-                {{ topic.name }}
+              <option v-for="course in accessibleCourses" :key="course.id" :value="course.id">
+                {{ course.name }}
               </option>
             </select>
           </div>
@@ -209,8 +209,8 @@ const clearLongWaitTimer = () => {
   longWait.value = false;
 };
 
-const accessibleTopics = computed(() =>
-  courseStore.topics.filter(topic => userStore.isTopicAccessible(topic.id)),
+const accessibleCourses = computed(() =>
+  courseStore.courses.filter(course => userStore.isCourseAccessible(course.id)),
 );
 
 const scrollToLatest = async () => {
@@ -220,13 +220,13 @@ const scrollToLatest = async () => {
 
 const selectCourseFromContext = () => {
   const contextualCourseId = route.name === "LessonDetail"
-    ? courseStore.currentTopic?.id
+    ? courseStore.currentCourse?.id
     : undefined;
-  const nextCourseId = contextualCourseId && accessibleTopics.value.some(topic => topic.id === contextualCourseId)
+  const nextCourseId = contextualCourseId && accessibleCourses.value.some(course => course.id === contextualCourseId)
     ? contextualCourseId
-    : accessibleTopics.value.some(topic => topic.id === selectedCourseId.value)
+    : accessibleCourses.value.some(course => course.id === selectedCourseId.value)
       ? selectedCourseId.value
-      : accessibleTopics.value[0]?.id || "";
+      : accessibleCourses.value[0]?.id || "";
   const changed = nextCourseId !== selectedCourseId.value;
   selectedCourseId.value = nextCourseId;
   if (changed) messages.value = [];
@@ -417,7 +417,7 @@ watch(
 );
 
 watch(
-  () => [route.name, courseStore.currentTopic?.id, accessibleTopics.value.map(topic => topic.id).join(",")],
+  () => [route.name, courseStore.currentCourse?.id, accessibleCourses.value.map(course => course.id).join(",")],
   () => {
     const changed = selectCourseFromContext();
     if (open.value && changed) void loadHistory();

@@ -37,7 +37,12 @@ export interface LessonDocument {
 export interface Lesson {
   id: string;
   title: string;
-  topicId: string;
+  courseId: string;
+  chapterId?: string;
+  status?: string;
+  version?: number;
+  textBody?: string;
+  quizRequired?: boolean;
   lessonOrder?: number;
   hint: string;
   documents: LessonDocument[];
@@ -49,18 +54,31 @@ export interface Lesson {
   comments: Comment[];
 }
 
-export interface Topic {
+export interface Course {
   id: string;
   name: string;
+  code?: string;
+  programId?: string;
+  programName?: string;
+  domainName?: string;
+  description?: string;
+  status?: string;
+  version?: number;
+  chapterCount?: number;
   iconName: string;
   hasQuiz?: boolean;
   quizPassingScore?: number;
   lessons: Lesson[];
 }
 
+export interface TrainingDomain { id: string; code: string; name: string; description?: string; status: string }
+export interface TrainingProgram extends TrainingDomain { domainId: string }
+export interface Chapter { id: string; courseId: string; code: string; title: string; description?: string; chapterOrder: number; status: string; version?: number; lessons: Lesson[]; locked: boolean; completed: boolean }
+export interface CourseOutline { course: Course; chapters: Chapter[]; completed: boolean; resumeLessonId?: string }
+
 export interface Question {
   id: number;
-  topicId: string;
+  courseId: string;
   lessonId?: string;
   text: string;
   options: string[];
@@ -75,16 +93,16 @@ export interface Badge {
   id: string;
   title: string;
   type: 'bronze' | 'silver' | 'gold';
-  topicId: string;
-  topicName: string;
+  courseId: string;
+  courseName: string;
   unlockedAt: string;
   icon: string;
 }
 
 export interface UserProgress {
   completedLessons: string[]; // List of completed lesson IDs
-  quizScores: Record<string, number>; // topicId -> max score achieved (e.g. 3)
-  quizTotals: Record<string, number>; // topicId -> total questions (e.g. 5)
+  quizScores: Record<string, number>; // courseId -> max score achieved (e.g. 3)
+  quizTotals: Record<string, number>; // courseId -> total questions (e.g. 5)
   lessonQuizScores: Record<string, number>; // lessonId -> max score achieved
   lessonQuizTotals: Record<string, number>; // lessonId -> total questions
   lessonProgress?: Record<string, LessonProgress>;
@@ -92,10 +110,10 @@ export interface UserProgress {
   unlockedBadges: Badge[];
   groupId?: string;
   groupName?: string;
-  mandatoryTopics: string[];
-  registeredTopics: string[];
+  mandatoryCourses: string[];
+  registeredCourses: string[];
   mustChangePassword?: boolean;
-  pendingTopics: string[];
+  pendingCourses: string[];
 }
 
 export interface LessonProgress {

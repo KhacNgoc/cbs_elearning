@@ -31,8 +31,8 @@ ChartJS.register(
 
 const userStore = useUserStore();
 
-// Mapped topics in order corresponding to Image 3 (7 segments of radar)
-const topicsOrder = [
+// Mapped courses in order corresponding to Image 3 (7 segments of radar)
+const coursesOrder = [
   { id: 'TIEN_VAY', label: 'TIẾN VAY' },
   { id: 'CHUYEN_TIEN', label: 'CHUYỂN TIỀN' },
   { id: 'TIEN_GUI', label: 'TIỀN GỬI' },
@@ -43,18 +43,18 @@ const topicsOrder = [
 ];
 
 const chartData = computed(() => {
-  const dataValues = topicsOrder.map(topic => {
-    const quiz = userStore.getTopicQuizScore(topic.id);
+  const dataValues = coursesOrder.map(course => {
+    const quiz = userStore.getCourseQuizScore(course.id);
     // If no quiz, base it slightly on study progress (max 20%) to show some shape, or 0%
     if (quiz) {
       return quiz.percent;
     }
-    const progress = userStore.getTopicProgressPercent(topic.id);
+    const progress = userStore.getCourseProgressPercent(course.id);
     return Math.round(progress * 0.2); // Up to 20% just by studying lessons
   });
 
   return {
-    labels: topicsOrder.map(t => t.label),
+    labels: coursesOrder.map(t => t.label),
     datasets: [
       {
         label: 'Năng lực nghiệp vụ (%)',

@@ -76,13 +76,14 @@ public class VideoAccessService {
         if ("ROLE_ADMIN".equals(user.getRole())) {
             return;
         }
-        boolean registered = user.getRegisteredTopics().stream()
-                .anyMatch(topic -> topic.getId().equals(lesson.getTopic().getId()));
+        LearningPolicy.assertLessonAccess(user,lesson);
+        boolean registered = user.getRegisteredCourses().stream()
+                .anyMatch(course -> course.getId().equals(lesson.getCourse().getId()));
         boolean mandatory = user.getUserGroup() != null
-                && user.getUserGroup().getMandatoryTopics().stream()
-                .anyMatch(topic -> topic.getId().equals(lesson.getTopic().getId()));
+                && user.getUserGroup().getMandatoryCourses().stream()
+                .anyMatch(course -> course.getId().equals(lesson.getCourse().getId()));
         if (!registered && !mandatory) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Bạn chưa được cấp quyền học chủ đề này");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Bạn chưa được cấp quyền học khóa học này");
         }
     }
 

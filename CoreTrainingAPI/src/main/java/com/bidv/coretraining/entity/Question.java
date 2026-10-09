@@ -20,12 +20,15 @@ public class Question {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "topic_id", nullable = false)
-    private Topic topic;
+    @JoinColumn(name = "course_id", nullable = false)
+    private Course course;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "lesson_id")
     private Lesson lesson;
+
+    @ManyToOne(fetch=FetchType.LAZY, optional=false)
+    @JoinColumn(name="quiz_id", nullable=false) private Quiz quiz;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String text;
@@ -41,7 +44,7 @@ public class Question {
     private Integer correctAnswer; // 0-indexed index of options
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "question_type", nullable = false, columnDefinition = "VARCHAR(32) DEFAULT 'SINGLE_CHOICE'")
+    @Column(name = "question_type", nullable = false, length = 32)
     @Builder.Default
     private QuestionType type = QuestionType.SINGLE_CHOICE;
 

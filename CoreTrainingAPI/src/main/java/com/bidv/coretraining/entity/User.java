@@ -54,12 +54,12 @@ public class User {
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
-        name = "user_registered_topics",
+        name = "user_registered_courses",
         joinColumns = @JoinColumn(name = "user_id"),
-        inverseJoinColumns = @JoinColumn(name = "topic_id")
+        inverseJoinColumns = @JoinColumn(name = "course_id")
     )
     @Builder.Default
-    private Set<Topic> registeredTopics = new HashSet<>();
+    private Set<Course> registeredCourses = new HashSet<>();
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
@@ -69,6 +69,11 @@ public class User {
     )
     @Builder.Default
     private Set<Lesson> completedLessons = new HashSet<>();
+
+    @ElementCollection
+    @CollectionTable(name="user_completed_courses", joinColumns=@JoinColumn(name="user_id"))
+    @MapKeyColumn(name="course_id") @Column(name="completed_at") @Builder.Default
+    private java.util.Map<String,java.time.LocalDateTime> completedCourses = new java.util.HashMap<>();
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default

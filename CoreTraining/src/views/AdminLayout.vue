@@ -38,9 +38,11 @@ const iconRegistry = { BookOpen, ClipboardCheck, FileText, HelpCircle, Settings,
 const navigationIcon = (name: string) => iconRegistry[name as keyof typeof iconRegistry] || Settings;
 
 const activeSection = computed(() =>
-  route.path.includes("/admin/quizzes")
+  route.path.startsWith("/admin/catalog") ? "admin.catalog"
+    : route.path.startsWith("/admin/courses") || route.path.endsWith("/edit") ? "admin.courses"
+    : route.path.includes("/admin/quizzes")
     ? "admin.exams"
-    : route.name === "AdminTopicLessons" || route.path.startsWith("/admin/lessons")
+    : route.name === "AdminCourseLessons" || route.path.startsWith("/admin/lessons")
       ? "admin.lessons"
     : typeof route.query.tab === "string"
       ? `admin.${route.query.tab}`
@@ -180,18 +182,39 @@ onMounted(() => navigationStore.load());
   box-shadow: none;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .admin-shell {
     height: calc(100% + 2rem);
     margin: -1rem;
     overflow: hidden;
+    flex-direction: column;
   }
 
   .admin-shell-sidebar {
+    width: 100%;
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  .admin-shell-sidebar nav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: .65rem;
+    gap: .5rem;
+  }
+
+  .admin-shell-sidebar button {
+    flex-shrink: 0;
+    padding: .7rem .85rem;
+    white-space: nowrap;
+  }
+
+  .admin-shell-footer {
     display: none;
   }
 
   .admin-shell-content {
+    min-height: 0;
     overflow-y: auto;
   }
 }

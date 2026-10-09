@@ -95,16 +95,16 @@
 
           <!-- Charts Row 2: Bar Chart & Active Sessions List -->
           <div class="charts-row split-grid">
-            <!-- Bar Chart: Avg Score by Topic -->
+            <!-- Bar Chart: Avg Score by Course -->
             <div class="chart-card card bar-chart-card">
-              <h3 class="card-title">ĐIỂM THI THỬ TRUNG BÌNH THEO CHỦ ĐỀ</h3>
+              <h3 class="card-title">ĐIỂM THI THỬ TRUNG BÌNH THEO KHÓA HỌC</h3>
               <p class="card-subtitle">
                 Kết quả kiểm tra trung bình (%) của các học viên
               </p>
               <div class="chart-container">
                 <Bar
-                  :data="topicScoreChartData"
-                  :options="topicScoreChartOptions"
+                  :data="courseScoreChartData"
+                  :options="courseScoreChartOptions"
                 />
               </div>
             </div>
@@ -138,7 +138,7 @@
                     <span class="session-detail">{{ session.detail }}</span>
                   </div>
                   <div class="session-meta">
-                    <span class="session-topic-tag">{{ session.topic }}</span>
+                    <span class="session-course-tag">{{ session.course }}</span>
                     <span class="session-time">{{ session.time }}</span>
                   </div>
                 </div>
@@ -146,25 +146,25 @@
             </div>
           </div>
 
-          <!-- Topics Table Summary -->
-          <div class="topics-summary card">
+          <!-- Courses Table Summary -->
+          <div class="courses-summary card">
             <div class="card-header-row">
               <div class="header-left">
                 <h3 class="card-title">PHÂN BỔ BÀI HỌC VÀ CÂU HỎI</h3>
                 <p class="card-subtitle">
-                  Danh sách các chủ đề đào tạo nghiệp vụ ngân hàng
+                  Danh sách các khóa học đào tạo nghiệp vụ ngân hàng
                 </p>
               </div>
-              <button class="btn btn-primary btn-sm" @click="openTopicModal()">
-                <Plus class="btn-icon-sm" /> THÊM CHỦ ĐỀ
+              <button class="btn btn-primary btn-sm" @click="openCourseModal()">
+                <Plus class="btn-icon-sm" /> THÊM KHÓA HỌC
               </button>
             </div>
 
             <table class="admin-table">
               <thead>
                 <tr>
-                  <th>Mã chủ đề</th>
-                  <th>Tên chủ đề</th>
+                  <th>Mã khóa học</th>
+                  <th>Tên khóa học</th>
                   <th>Icon hiển thị</th>
                   <th>Số bài học</th>
                   <th>Số câu hỏi thi</th>
@@ -172,33 +172,35 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="topic in courseStore.topics" :key="topic.id">
+                <tr v-for="course in courseStore.courses" :key="course.id">
                   <td>
-                    <span class="code-badge">{{ topic.id }}</span>
+                    <span class="code-badge">{{ course.id }}</span>
                   </td>
                   <td>
-                    <strong>{{ topic.name }}</strong>
+                    <strong>{{ course.name }}</strong>
                   </td>
                   <td>
                     <span class="icon-label"
                       ><Settings class="inline-icon" />
-                      {{ topic.iconName }}</span
+                      {{ course.iconName }}</span
                     >
                   </td>
-                  <td>{{ topic.lessons.length }} bài học</td>
-                  <td>{{ getQuestionCountForTopic(topic.id) }} câu hỏi</td>
+                  <td>{{ course.lessons.length }} bài học</td>
+                  <td>{{ getQuestionCountForCourse(course.id) }} câu hỏi</td>
                   <td class="actions-col">
                     <button
                       class="action-btn edit"
-                      title="Sửa chủ đề"
-                      @click="openTopicModal(topic)"
+                      title="Sửa khóa học"
+                      v-if="course.status === 'DRAFT'"
+                      @click="openCourseModal(course)"
                     >
                       <Edit />
                     </button>
                     <button
                       class="action-btn delete"
-                      title="Xóa chủ đề"
-                      @click="handleDeleteTopic(topic.id)"
+                      title="Xóa khóa học"
+                      v-if="course.status === 'DRAFT'"
+                      @click="handleDeleteCourse(course.id)"
                     >
                       <Trash2 />
                     </button>
@@ -328,7 +330,7 @@
               <div class="header-left">
                 <h3 class="card-title">DUYỆT ĐĂNG KÝ KHÓA HỌC</h3>
                 <p class="card-subtitle">
-                  Phê duyệt hoặc từ chối yêu cầu đăng ký chủ đề tự chọn.
+                  Phê duyệt hoặc từ chối yêu cầu đăng ký khóa học tự chọn.
                 </p>
               </div>
               <span class="pending-count"
@@ -352,8 +354,8 @@
                     ><br /><small>{{ request.username }}</small>
                   </td>
                   <td>
-                    <strong>{{ request.topicName }}</strong
-                    ><br /><small>{{ request.topicId }}</small>
+                    <strong>{{ request.courseName }}</strong
+                    ><br /><small>{{ request.courseId }}</small>
                   </td>
                   <td>{{ formatEnrollmentDate(request.requestedAt) }}</td>
                   <td>
@@ -414,29 +416,29 @@
             <div class="card-header-row">
               <div class="header-left">
                 <button
-                  v-if="lessonTopic"
+                  v-if="lessonCourse"
                   class="lesson-back-button"
-                  @click="backToLessonTopics"
+                  @click="backToLessonCourses"
                 >
-                  <ArrowLeft :size="18" /> Danh sách chủ đề
+                  <ArrowLeft :size="18" /> Danh sách khóa học
                 </button>
                 <h3 class="card-title">
                   {{
-                    lessonTopic
-                      ? `BÀI HỌC — ${lessonTopic.name}`
-                      : "QUẢN LÝ BÀI HỌC THEO CHỦ ĐỀ"
+                    lessonCourse
+                      ? `BÀI HỌC — ${lessonCourse.name}`
+                      : "QUẢN LÝ BÀI HỌC THEO KHÓA HỌC"
                   }}
                 </h3>
                 <p class="card-subtitle">
                   {{
-                    lessonTopic
-                      ? "Kéo thả bài học để thay đổi thứ tự hiển thị trong chủ đề."
-                      : "Chọn một chủ đề để thêm, cập nhật và sắp xếp bài học."
+                    lessonCourse
+                      ? "Kéo thả bài học để thay đổi thứ tự hiển thị trong khóa học."
+                      : "Chọn một khóa học để thêm, cập nhật và sắp xếp bài học."
                   }}
                 </p>
               </div>
               <button
-                v-if="lessonTopic"
+                v-if="lessonCourse?.status === 'DRAFT'"
                 class="btn btn-primary"
                 @click="openLessonModal()"
               >
@@ -444,26 +446,26 @@
               </button>
             </div>
 
-            <div v-if="!lessonTopic" class="lesson-topic-grid">
+            <div v-if="!lessonCourse" class="lesson-course-grid">
               <button
-                v-for="topic in courseStore.topics"
-                :key="topic.id"
-                class="lesson-topic-card"
-                @click="openTopicLessons(topic.id)"
+                v-for="course in courseStore.courses"
+                :key="course.id"
+                class="lesson-course-card"
+                @click="openCourseLessons(course.id)"
               >
-                <div class="lesson-topic-icon">
+                <div class="lesson-course-icon">
                   <BookOpen :size="22" />
                 </div>
-                <div class="lesson-topic-copy">
-                  <strong>{{ topic.name }}</strong>
-                  <small>{{ topic.lessons.length }} bài học</small>
+                <div class="lesson-course-copy">
+                  <strong>{{ course.name }}</strong>
+                  <small>{{ course.lessons.length }} bài học</small>
                 </div>
                 <ArrowRight :size="20" />
               </button>
             </div>
 
             <table
-              v-else-if="currentTopicLessons.length > 0"
+              v-else-if="currentCourseLessons.length > 0"
               class="admin-table lesson-order-table"
             >
               <thead>
@@ -479,7 +481,7 @@
               </thead>
               <tbody>
                 <tr
-                  v-for="(lesson, index) in currentTopicLessons"
+                  v-for="(lesson, index) in currentCourseLessons"
                   :key="lesson.id"
                   draggable="true"
                   :class="{
@@ -518,6 +520,7 @@
                     <button
                       class="action-btn edit"
                       title="Sửa bài học"
+                      v-if="lessonCourse?.status === 'DRAFT'"
                       @click="openLessonModal(lesson)"
                     >
                       <Edit />
@@ -525,6 +528,7 @@
                     <button
                       class="action-btn delete"
                       title="Xóa bài học"
+                      v-if="lessonCourse?.status === 'DRAFT'"
                       @click="handleDeleteLesson(lesson.id)"
                     >
                       <Trash2 />
@@ -533,9 +537,9 @@
                 </tr>
               </tbody>
             </table>
-            <div class="empty-state-box" v-else-if="lessonTopic">
+            <div class="empty-state-box" v-else-if="lessonCourse">
               <p>
-                Chủ đề này chưa có bài học nào. Bấm nút "Thêm bài học" ở góc
+                Khóa học này chưa có bài học nào. Bấm nút "Thêm bài học" ở góc
                 trên để bắt đầu cấu hình.
               </p>
             </div>
@@ -559,17 +563,17 @@
               </div>
             </div>
 
-            <!-- Select Topic Filter -->
-            <div class="topic-selector-row">
-              <label for="exam-topic-select">Chọn chủ đề cấu hình: </label>
+            <!-- Select Course Filter -->
+            <div class="course-selector-row">
+              <label for="exam-course-select">Chọn khóa học cấu hình: </label>
               <select
-                id="exam-topic-select"
-                v-model="selectedTopicId"
+                id="exam-course-select"
+                v-model="selectedCourseId"
                 class="form-control select-control"
               >
-                <option :value="ALL_TOPICS">Tất cả chủ đề</option>
+                <option :value="ALL_COURSES">Tất cả khóa học</option>
                 <option
-                  v-for="t in courseStore.topics"
+                  v-for="t in courseStore.courses"
                   :key="t.id"
                   :value="t.id"
                 >
@@ -602,7 +606,7 @@
                 </div>
                 <div class="quiz-definition-copy">
                   <span class="q-scope-tag">{{
-                    quiz.lessonId ? "Bài học" : "Toàn chủ đề"
+                    quiz.lessonId ? "Bài học" : "Toàn khóa học"
                   }}</span>
                   <h4>{{ quiz.title }}</h4>
                   <p>
@@ -618,7 +622,7 @@
                 {{
                   quizSearchQuery
                     ? "Không tìm thấy bài kiểm tra phù hợp."
-                    : "Chủ đề này chưa có bài kiểm tra."
+                    : "Khóa học này chưa có bài kiểm tra."
                 }}
               </p>
               <button
@@ -633,12 +637,12 @@
         </div>
 
         <div v-if="activeTab === 'documents'" class="tab-pane animate-fade-in">
-          <div class="topics-summary card rag-documents-manager">
+          <div class="courses-summary card rag-documents-manager">
             <div class="card-header-row">
               <div class="header-left">
                 <h3 class="card-title">TÀI LIỆU TRI THỨC AI</h3>
                 <p class="card-subtitle">
-                  Tải PDF hoặc DOCX theo từng chủ đề. Tài liệu sẽ được gửi tới
+                  Tải PDF hoặc DOCX theo từng khóa học. Tài liệu sẽ được gửi tới
                   dịch vụ embedding và lưu vector trong Qdrant.
                 </p>
               </div>
@@ -650,10 +654,10 @@
 
             <div class="rag-document-controls">
               <div class="form-group">
-                <label class="form-label">Chủ đề nhận tài liệu</label>
-                <select v-model="selectedTopicId" class="form-input" @change="loadDocuments()">
-                  <option v-for="topic in courseStore.topics" :key="topic.id" :value="topic.id">
-                    {{ topic.id }} — {{ topic.name }}
+                <label class="form-label">Khóa học nhận tài liệu</label>
+                <select v-model="selectedCourseId" class="form-input" @change="loadDocuments()">
+                  <option v-for="course in courseStore.courses" :key="course.id" :value="course.id">
+                    {{ course.id }} — {{ course.name }}
                   </option>
                 </select>
               </div>
@@ -663,7 +667,7 @@
                   <strong>Upload và embedding tài liệu</strong>
                   <small>Định dạng PDF/DOCX, tối đa theo cấu hình máy chủ.</small>
                 </div>
-                <button class="btn btn-primary" :disabled="documentUploading || !selectedTopicId || selectedTopicId === ALL_TOPICS"
+                <button class="btn btn-primary" :disabled="documentUploading || !selectedCourseId || selectedCourseId === ALL_COURSES"
                   @click="ragFileInput?.click()">
                   <LoaderCircle v-if="documentUploading" :size="16" class="spin-icon" />
                   <Upload v-else :size="16" />
@@ -704,7 +708,7 @@
                   </td>
                 </tr>
                 <tr v-if="!documentListLoading && courseDocuments.length === 0">
-                  <td colspan="6" class="rag-empty-cell">Chủ đề này chưa có tài liệu được embedding.</td>
+                  <td colspan="6" class="rag-empty-cell">Khóa học này chưa có tài liệu được embedding.</td>
                 </tr>
               </tbody>
             </table>
@@ -741,8 +745,8 @@
           </div>
           <div>
             <small>Khóa học</small>
-            <strong>{{ rejectEnrollmentModal.request.topicName }}</strong>
-            <span>{{ rejectEnrollmentModal.request.topicId }}</span>
+            <strong>{{ rejectEnrollmentModal.request.courseName }}</strong>
+            <span>{{ rejectEnrollmentModal.request.courseId }}</span>
           </div>
         </div>
         <form @submit.prevent="confirmRejectEnrollment">
@@ -792,31 +796,31 @@
       </section>
     </div>
 
-    <!-- MODAL 1: TOPIC FORM -->
+    <!-- MODAL 1: COURSE FORM -->
     <div
       class="modal-overlay"
-      v-if="topicModal.show"
-      @click.self="topicModal.show = false"
+      v-if="courseModal.show"
+      @click.self="courseModal.show = false"
     >
       <div class="modal-content card animate-scale-in">
-        <h3>{{ topicModal.isEdit ? "CẬP NHẬT CHỦ ĐỀ" : "TẠO CHỦ ĐỀ MỚI" }}</h3>
-        <form @submit.prevent="saveTopic">
+        <h3>{{ courseModal.isEdit ? "CẬP NHẬT KHÓA HỌC" : "TẠO KHÓA HỌC MỚI" }}</h3>
+        <form @submit.prevent="saveCourse">
           <div class="form-group">
             <label
-              >Mã chủ đề (In hoa, không dấu, ví dụ: 'CIF', 'TIEN_GUI')</label
+              >Mã khóa học (In hoa, không dấu, ví dụ: 'CIF', 'TIEN_GUI')</label
             >
             <input
-              v-model="topicForm.id"
+              v-model="courseForm.id"
               type="text"
               class="form-control"
               required
-              :disabled="topicModal.isEdit"
+              :disabled="courseModal.isEdit"
             />
           </div>
           <div class="form-group">
-            <label>Tên chủ đề hiển thị</label>
+            <label>Tên khóa học hiển thị</label>
             <input
-              v-model="topicForm.name"
+              v-model="courseForm.name"
               type="text"
               class="form-control"
               required
@@ -828,7 +832,7 @@
               'PiggyBank')</label
             >
             <input
-              v-model="topicForm.iconName"
+              v-model="courseForm.iconName"
               type="text"
               class="form-control"
               required
@@ -838,7 +842,7 @@
             <button
               type="button"
               class="btn btn-secondary"
-              @click="topicModal.show = false"
+              @click="courseModal.show = false"
             >
               Hủy
             </button>
@@ -949,15 +953,15 @@
           <div ref="lessonModalBodyRef" class="lesson-modal-body">
             <div class="form-row">
               <div class="form-group col">
-                <label>Chủ đề trực thuộc</label>
+                <label>Khóa học trực thuộc</label>
                 <select
-                  v-model="lessonForm.topicId"
+                  v-model="lessonForm.courseId"
                   class="form-control"
                   disabled
                   required
                 >
                   <option
-                    v-for="t in courseStore.topics"
+                    v-for="t in courseStore.courses"
                     :key="t.id"
                     :value="t.id"
                   >
@@ -1215,14 +1219,14 @@
         <form @submit.prevent="saveQuestion">
           <div class="form-row">
             <div class="form-group col">
-              <label>1. Chọn chủ đề</label>
+              <label>1. Chọn khóa học</label>
               <select
-                v-model="questionForm.topicId"
+                v-model="questionForm.courseId"
                 class="form-control"
                 required
               >
                 <option
-                  v-for="t in courseStore.topics"
+                  v-for="t in courseStore.courses"
                   :key="t.id"
                   :value="t.id"
                 >
@@ -1233,9 +1237,9 @@
             <div class="form-group col">
               <label>2. Phạm vi bài kiểm tra</label>
               <select v-model="questionForm.lessonId" class="form-control">
-                <option value="">Bài kiểm tra chung của chủ đề</option>
+                <option value="">Bài kiểm tra chung của khóa học</option>
                 <option
-                  v-for="lesson in questionTopicLessons"
+                  v-for="lesson in questionCourseLessons"
                   :key="lesson.id"
                   :value="lesson.id"
                 >
@@ -1329,7 +1333,7 @@ import type {
   CourseDocument,
   EnrollmentRequest,
 } from "../api/adminApi";
-import type { Topic, Lesson, LessonDocument, Question } from "../types";
+import type { Course, Lesson, LessonDocument, Question } from "../types";
 import ConfirmModal from "../components/ConfirmModal.vue";
 import {
   Settings,
@@ -1396,7 +1400,7 @@ const allowedAdminTabs = computed(() =>
     .filter((id) => !id.includes(".")),
 );
 const requestedAdminTab =
-  route.name === "AdminTopicLessons"
+  route.name === "AdminCourseLessons"
     ? "lessons"
     : typeof route.query.tab === "string"
       ? route.query.tab
@@ -1410,7 +1414,7 @@ const activeSessions = ref([
     fullName: "Nguyễn Văn An",
     action: "Đang học bài",
     detail: "LN02. Quy trình giải ngân thông thường",
-    topic: "TIỀN VAY",
+    course: "TIỀN VAY",
     time: "Vừa xong",
   },
   {
@@ -1418,7 +1422,7 @@ const activeSessions = ref([
     fullName: "Trần Thị Bình",
     action: "Đang thi thử",
     detail: "Đề đánh giá năng lực CIF",
-    topic: "CIF",
+    course: "CIF",
     time: "2 phút trước",
   },
   {
@@ -1426,7 +1430,7 @@ const activeSessions = ref([
     fullName: "Lê Hoàng Phúc",
     action: "Đang xem",
     detail: "Bảng xếp hạng vinh danh",
-    topic: "HỆ THỐNG",
+    course: "HỆ THỐNG",
     time: "5 phút trước",
   },
   {
@@ -1434,7 +1438,7 @@ const activeSessions = ref([
     fullName: "Phạm Minh Đức",
     action: "Đang học bài",
     detail: "CT01. Quy trình chuyển tiền trong nước",
-    topic: "CHUYỂN TIỀN",
+    course: "CHUYỂN TIỀN",
     time: "12 phút trước",
   },
 ]);
@@ -1459,9 +1463,9 @@ const documentUploading = ref(false);
 const documentListLoading = ref(false);
 const ragFileInput = ref<HTMLInputElement | null>(null);
 let documentPollingTimer: ReturnType<typeof setTimeout> | null = null;
-const ALL_TOPICS = "__ALL__";
-const selectedTopicId = ref(
-  typeof route.params.topicId === "string" ? route.params.topicId : ALL_TOPICS,
+const ALL_COURSES = "__ALL__";
+const selectedCourseId = ref(
+  typeof route.params.courseId === "string" ? route.params.courseId : ALL_COURSES,
 );
 const draggedLessonId = ref<string | null>(null);
 const dragOverLessonId = ref<string | null>(null);
@@ -1490,8 +1494,8 @@ const confirmationModal = ref<{
   submitting: false,
   action: null,
 });
-const topicModal = ref({ show: false, isEdit: false });
-const topicForm = ref({ id: "", name: "", iconName: "" });
+const courseModal = ref({ show: false, isEdit: false });
+const courseForm = ref({ id: "", name: "", iconName: "" });
 
 const userModal = ref({
   show: false,
@@ -1515,7 +1519,7 @@ type LessonDocumentForm = LessonDocument & { file?: File };
 const lessonForm = ref({
   id: "",
   title: "",
-  topicId: "",
+  courseId: "",
   hint: "",
   videoSource: "UPLOAD" as "UPLOAD" | "URL",
   videoUrl: "",
@@ -1530,7 +1534,7 @@ const questionModal = ref({
 });
 const questionForm = ref({
   text: "",
-  topicId: "",
+  courseId: "",
   lessonId: "",
   correctAnswer: 0,
   options: [] as string[],
@@ -1539,7 +1543,7 @@ const optionsInputs = ref(["", "", "", ""]);
 
 // Statistics Computeds
 const totalLessonsCount = computed(() => {
-  return courseStore.topics.reduce((acc, t) => acc + t.lessons.length, 0);
+  return courseStore.courses.reduce((acc, t) => acc + t.lessons.length, 0);
 });
 
 const totalQuestionsCount = computed(() => {
@@ -1556,22 +1560,22 @@ const filteredUsers = computed(() => {
   );
 });
 
-const currentTopicLessons = computed(() => {
-  if (selectedTopicId.value === ALL_TOPICS) {
-    return courseStore.topics.flatMap((topic) => topic.lessons);
+const currentCourseLessons = computed(() => {
+  if (selectedCourseId.value === ALL_COURSES) {
+    return courseStore.courses.flatMap((course) => course.lessons);
   }
-  const topic = courseStore.topics.find((t) => t.id === selectedTopicId.value);
-  return topic ? topic.lessons : [];
+  const course = courseStore.courses.find((t) => t.id === selectedCourseId.value);
+  return course ? course.lessons : [];
 });
-const lessonTopic = computed(() =>
-  typeof route.params.topicId === "string"
-    ? courseStore.topics.find((topic) => topic.id === route.params.topicId)
+const lessonCourse = computed(() =>
+  typeof route.params.courseId === "string"
+    ? courseStore.courses.find((course) => course.id === route.params.courseId)
     : undefined,
 );
 
 type QuizDefinition = {
   key: string;
-  topicId: string;
+  courseId: string;
   lessonId?: string;
   title: string;
   questionCount: number;
@@ -1580,37 +1584,37 @@ type QuizDefinition = {
 
 const quizDefinitions = computed<QuizDefinition[]>(() => {
   const definitions: QuizDefinition[] = [];
-  const topics =
-    selectedTopicId.value === ALL_TOPICS
-      ? courseStore.topics
-      : courseStore.topics.filter(
-          (topic) => topic.id === selectedTopicId.value,
+  const courses =
+    selectedCourseId.value === ALL_COURSES
+      ? courseStore.courses
+      : courseStore.courses.filter(
+          (course) => course.id === selectedCourseId.value,
         );
-  for (const topic of topics) {
-    const topicQuestions = questions.value.filter(
-      (question) => question.topicId === topic.id && !question.lessonId,
+  for (const course of courses) {
+    const courseQuestions = questions.value.filter(
+      (question) => question.courseId === course.id && !question.lessonId,
     );
-    if (topicQuestions.length) {
+    if (courseQuestions.length) {
       definitions.push({
-        key: `topic:${topic.id}`,
-        topicId: topic.id,
-        title: `Bài kiểm tra tổng hợp — ${topic.name}`,
-        questionCount: topicQuestions.length,
-        passingScore: topic.quizPassingScore ?? 80,
+        key: `course:${course.id}`,
+        courseId: course.id,
+        title: `Bài kiểm tra tổng hợp — ${course.name}`,
+        questionCount: courseQuestions.length,
+        passingScore: course.quizPassingScore ?? 80,
       });
     }
-    for (const lesson of topic.lessons) {
+    for (const lesson of course.lessons) {
       const count = questions.value.filter(
         (question) => question.lessonId === lesson.id,
       ).length;
       if (count) {
         definitions.push({
           key: `lesson:${lesson.id}`,
-          topicId: topic.id,
+          courseId: course.id,
           lessonId: lesson.id,
           title:
-            selectedTopicId.value === ALL_TOPICS
-              ? `${lesson.title} — ${topic.name}`
+            selectedCourseId.value === ALL_COURSES
+              ? `${lesson.title} — ${course.name}`
               : lesson.title,
           questionCount: count,
           passingScore: lesson.quizPassingScore ?? 80,
@@ -1641,10 +1645,10 @@ const navigationRoute = (id: string, params: Record<string, string> = {}) => {
   );
 };
 
-const openTopicLessons = (topicId: string) =>
-  router.push(navigationRoute("admin.lesson.topic", { topicId }));
+const openCourseLessons = (courseId: string) =>
+  router.push(navigationRoute("admin.lesson.course", { courseId }));
 
-const backToLessonTopics = () => router.push(navigationRoute("admin.lessons"));
+const backToLessonCourses = () => router.push(navigationRoute("admin.lessons"));
 
 const startLessonDrag = (lessonId: string, event: DragEvent) => {
   draggedLessonId.value = lessonId;
@@ -1665,68 +1669,68 @@ const endLessonDrag = () => {
 
 const dropLessonAt = async (targetLessonId: string) => {
   const sourceLessonId = draggedLessonId.value;
-  const topic = lessonTopic.value;
+  const course = lessonCourse.value;
   endLessonDrag();
-  if (!sourceLessonId || !topic || sourceLessonId === targetLessonId) return;
+  if (!sourceLessonId || !course || sourceLessonId === targetLessonId) return;
 
-  const sourceIndex = topic.lessons.findIndex(
+  const sourceIndex = course.lessons.findIndex(
     (lesson) => lesson.id === sourceLessonId,
   );
-  const targetIndex = topic.lessons.findIndex(
+  const targetIndex = course.lessons.findIndex(
     (lesson) => lesson.id === targetLessonId,
   );
   if (sourceIndex < 0 || targetIndex < 0) return;
 
-  const previousLessons = [...topic.lessons];
-  const reorderedLessons = [...topic.lessons];
+  const previousLessons = [...course.lessons];
+  const reorderedLessons = [...course.lessons];
   const [movedLesson] = reorderedLessons.splice(sourceIndex, 1);
   reorderedLessons.splice(targetIndex, 0, movedLesson);
-  topic.lessons = reorderedLessons.map((lesson, index) => ({
+  course.lessons = reorderedLessons.map((lesson, index) => ({
     ...lesson,
     lessonOrder: index,
   }));
 
   try {
-    topic.lessons = await adminApi.reorderLessons(
-      topic.id,
-      topic.lessons.map((lesson) => lesson.id),
+    course.lessons = await adminApi.reorderLessons(
+      course.id,
+      course.lessons.map((lesson) => lesson.id),
     );
     showToast("Đã lưu thứ tự bài học.");
   } catch (error) {
-    topic.lessons = previousLessons;
+    course.lessons = previousLessons;
     console.error("Failed to reorder lessons:", error);
     alert("Không thể lưu thứ tự bài học. Vui lòng thử lại.");
   }
 };
 
 const createQuiz = () => {
-  const topicId =
-    selectedTopicId.value === ALL_TOPICS ? undefined : selectedTopicId.value;
+  const courseId =
+    selectedCourseId.value === ALL_COURSES ? undefined : selectedCourseId.value;
   router.push({
     path: navigationRoute("admin.quiz.create"),
-    query: topicId ? { topicId } : {},
+    query: courseId ? { courseId } : {},
   });
 };
 
 const openQuizDefinition = (quiz: QuizDefinition) =>
   router.push(
-    navigationRoute(quiz.lessonId ? "admin.quiz.lesson" : "admin.quiz.topic", {
-      scopeId: quiz.lessonId || quiz.topicId,
+    navigationRoute(quiz.lessonId ? "admin.quiz.lesson" : "admin.quiz.course", {
+      scopeId: quiz.lessonId || quiz.courseId,
     }),
   );
 
-const questionTopicLessons = computed(
+const questionCourseLessons = computed(
   () =>
-    courseStore.topics.find((topic) => topic.id === questionForm.value.topicId)
+    courseStore.courses.find((course) => course.id === questionForm.value.courseId)
       ?.lessons || [],
 );
 
 watch(
-  () => questionForm.value.topicId,
+  () => questionForm.value.courseId,
   () => {
     if (
       questionForm.value.lessonId &&
-      !questionTopicLessons.value.some(
+      !questionCourseLessons.value.some(
         (lesson) => lesson.id === questionForm.value.lessonId,
       )
     ) {
@@ -1735,12 +1739,12 @@ watch(
   },
 );
 
-// Watch topic changes to adjust selectedTopicId if it gets empty
+// Watch course changes to adjust selectedCourseId if it gets empty
 watch(
-  () => courseStore.topics,
-  (newTopics) => {
-    if (newTopics.length > 0 && !selectedTopicId.value) {
-      selectedTopicId.value = newTopics[0].id;
+  () => courseStore.courses,
+  (newCourses) => {
+    if (newCourses.length > 0 && !selectedCourseId.value) {
+      selectedCourseId.value = newCourses[0].id;
     }
   },
   { immediate: true },
@@ -1753,14 +1757,14 @@ const clearDocumentPolling = () => {
 
 const loadDocuments = async (silent = false) => {
   clearDocumentPolling();
-  if (!selectedTopicId.value || selectedTopicId.value === ALL_TOPICS) {
+  if (!selectedCourseId.value || selectedCourseId.value === ALL_COURSES) {
     courseDocuments.value = [];
     return;
   }
   if (!silent) documentListLoading.value = true;
   try {
     courseDocuments.value = await adminApi.getCourseDocuments(
-      selectedTopicId.value,
+      selectedCourseId.value,
     );
     if (courseDocuments.value.some(document => ["PENDING", "INDEXING"].includes(document.status))) {
       documentPollingTimer = setTimeout(() => {
@@ -1778,7 +1782,7 @@ const loadDocuments = async (silent = false) => {
 const uploadDocument = async (event: Event) => {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
-  if (!file || !selectedTopicId.value || selectedTopicId.value === ALL_TOPICS)
+  if (!file || !selectedCourseId.value || selectedCourseId.value === ALL_COURSES)
     return;
   const extension = file.name.split(".").pop()?.toLowerCase();
   if (!extension || !["pdf", "docx"].includes(extension)) {
@@ -1789,7 +1793,7 @@ const uploadDocument = async (event: Event) => {
   documentUploading.value = true;
   documentUploadMessage.value = "Đang tải tài liệu lên máy chủ...";
   try {
-    await adminApi.uploadCourseDocument(selectedTopicId.value, file);
+    await adminApi.uploadCourseDocument(selectedCourseId.value, file);
     documentUploadMessage.value =
       "Đã nhận tài liệu. Hệ thống đang embedding và đồng bộ vào Qdrant.";
     await loadDocuments();
@@ -1814,18 +1818,18 @@ const formatDocumentDate = (value?: string) => value
   : "-";
 
 watch(
-  () => [route.name, route.query.tab, route.params.topicId],
-  async ([routeName, tab, topicId]) => {
-    if (routeName === "AdminTopicLessons" && typeof topicId === "string") {
+  () => [route.name, route.query.tab, route.params.courseId],
+  async ([routeName, tab, courseId]) => {
+    if (routeName === "AdminCourseLessons" && typeof courseId === "string") {
       activeTab.value = "lessons";
-      selectedTopicId.value = topicId;
+      selectedCourseId.value = courseId;
       return;
     }
     activeTab.value =
       typeof tab === "string" && allowedAdminTabs.value.includes(tab)
         ? tab
         : "overview";
-    if (activeTab.value === "lessons") selectedTopicId.value = ALL_TOPICS;
+    if (activeTab.value === "lessons") selectedCourseId.value = ALL_COURSES;
     if (activeTab.value === "enrollments") {
       try {
         enrollmentRequests.value = await adminApi.getEnrollmentRequests();
@@ -1841,10 +1845,10 @@ watch(
     }
     if (activeTab.value === "documents") {
       if (
-        selectedTopicId.value === ALL_TOPICS &&
-        courseStore.topics.length > 0
+        selectedCourseId.value === ALL_COURSES &&
+        courseStore.courses.length > 0
       ) {
-        selectedTopicId.value = courseStore.topics[0].id;
+        selectedCourseId.value = courseStore.courses[0].id;
       }
       void loadDocuments();
     } else {
@@ -1860,9 +1864,9 @@ const getAvatarColor = (username: string) => {
   return user ? user.avatarColor : "#64748b";
 };
 
-// Get questions count per topic
-const getQuestionCountForTopic = (topicId: string) => {
-  return questions.value.filter((q) => q.topicId === topicId).length;
+// Get questions count per course
+const getQuestionCountForCourse = (courseId: string) => {
+  return questions.value.filter((q) => q.courseId === courseId).length;
 };
 
 // ==========================================
@@ -1971,8 +1975,8 @@ const competencyChartOptions = {
   },
 };
 
-// 3. Bar Chart: Average Score by Topic
-const topicScoreChartData = computed(() => {
+// 3. Bar Chart: Average Score by Course
+const courseScoreChartData = computed(() => {
   // Let's calculate actual averages based on simulated points or actual answers
   // We can calculate dynamic averages. If no scores exist, provide mock representative data.
   const scores: Record<string, { sum: number; count: number }> = {};
@@ -1980,7 +1984,7 @@ const topicScoreChartData = computed(() => {
   users.value.forEach((u) => {
     // If the mock system has quiz scores in localstorage or user record
     // We can simulate averages based on user points to keep it dynamic!
-    courseStore.topics.forEach((t) => {
+    courseStore.courses.forEach((t) => {
       if (!scores[t.id]) scores[t.id] = { sum: 0, count: 0 };
 
       // Let's create a dynamic mock score calculation based on the user's points
@@ -1988,7 +1992,7 @@ const topicScoreChartData = computed(() => {
         60 + Math.round((u.points / 3000) * 40),
         100,
       );
-      // Add minor random variance per topic
+      // Add minor random variance per course
       const randomVariance = (u.username.charCodeAt(0) % 15) - 7;
       const finalScore = Math.max(
         50,
@@ -2000,8 +2004,8 @@ const topicScoreChartData = computed(() => {
     });
   });
 
-  const labels = courseStore.topics.map((t) => t.name);
-  const dataValues = courseStore.topics.map((t) => {
+  const labels = courseStore.courses.map((t) => t.name);
+  const dataValues = courseStore.courses.map((t) => {
     const entry = scores[t.id];
     return entry && entry.count > 0 ? Math.round(entry.sum / entry.count) : 75;
   });
@@ -2020,7 +2024,7 @@ const topicScoreChartData = computed(() => {
   };
 });
 
-const topicScoreChartOptions = {
+const courseScoreChartOptions = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
@@ -2142,9 +2146,9 @@ const confirmModalAction = async () => {
 // LOAD ALL DATA
 // ==========================================
 const loadQuestions = async () => {
-  const requests = courseStore.topics.flatMap((topic) => [
-    adminApi.getQuizQuestions(topic.id),
-    ...topic.lessons.map((lesson) => adminApi.getQuizQuestions(topic.id, lesson.id)),
+  const requests = courseStore.courses.flatMap((course) => [
+    adminApi.getQuizQuestions(course.id),
+    ...course.lessons.map((lesson) => adminApi.getQuizQuestions(course.id, lesson.id)),
   ]);
   const results = await Promise.allSettled(requests);
   questions.value = results.flatMap((result) =>
@@ -2155,7 +2159,7 @@ const loadQuestions = async () => {
 const loadAllData = async () => {
   loading.value = true;
   try {
-    await courseStore.fetchTopics();
+    await courseStore.fetchCourses();
     const tasks: Promise<unknown>[] = [];
     if (["overview", "users"].includes(activeTab.value)) {
       tasks.push(adminApi.getAllUsers().then((value) => (users.value = value)));
@@ -2166,12 +2170,12 @@ const loadAllData = async () => {
     if (["overview", "exams"].includes(activeTab.value)) tasks.push(loadQuestions());
     await Promise.all(tasks);
 
-    if (courseStore.topics.length > 0 && !selectedTopicId.value) {
-      selectedTopicId.value = courseStore.topics[0].id;
+    if (courseStore.courses.length > 0 && !selectedCourseId.value) {
+      selectedCourseId.value = courseStore.courses[0].id;
     }
-    if (activeTab.value === "documents" && courseStore.topics.length > 0) {
-      if (selectedTopicId.value === ALL_TOPICS) {
-        selectedTopicId.value = courseStore.topics[0].id;
+    if (activeTab.value === "documents" && courseStore.courses.length > 0) {
+      if (selectedCourseId.value === ALL_COURSES) {
+        selectedCourseId.value = courseStore.courses[0].id;
       }
       await loadDocuments();
     }
@@ -2189,55 +2193,55 @@ onMounted(() => {
 onBeforeUnmount(clearDocumentPolling);
 
 // ==========================================
-// TOPIC ACTIONS
+// COURSE ACTIONS
 // ==========================================
-const openTopicModal = (topic?: Topic) => {
-  if (topic) {
-    topicModal.value = { show: true, isEdit: true };
-    topicForm.value = {
-      id: topic.id,
-      name: topic.name,
-      iconName: topic.iconName,
+const openCourseModal = (course?: Course) => {
+  if (course) {
+    courseModal.value = { show: true, isEdit: true };
+    courseForm.value = {
+      id: course.id,
+      name: course.name,
+      iconName: course.iconName,
     };
   } else {
-    topicModal.value = { show: true, isEdit: false };
-    topicForm.value = { id: "", name: "", iconName: "Settings" };
+    courseModal.value = { show: true, isEdit: false };
+    courseForm.value = { id: "", name: "", iconName: "Settings" };
   }
 };
 
-const saveTopic = async () => {
+const saveCourse = async () => {
   loading.value = true;
   try {
-    if (topicModal.value.isEdit) {
-      await adminApi.updateTopic(
-        topicForm.value.id,
-        topicForm.value as unknown as Topic,
+    if (courseModal.value.isEdit) {
+      await adminApi.updateCourse(
+        courseForm.value.id,
+        courseForm.value as unknown as Course,
       );
     } else {
-      await adminApi.createTopic(topicForm.value as unknown as Topic);
+      await adminApi.createCourse(courseForm.value as unknown as Course);
     }
-    topicModal.value.show = false;
-    await courseStore.fetchTopics(true);
-    showToast(topicModal.value.isEdit ? "Cập nhật chủ đề thành công." : "Tạo chủ đề thành công.");
+    courseModal.value.show = false;
+    await courseStore.fetchCourses(true);
+    showToast(courseModal.value.isEdit ? "Cập nhật khóa học thành công." : "Tạo khóa học thành công.");
   } catch (err) {
-    showToast("Không thể lưu chủ đề. Vui lòng thử lại.", "error");
+    showToast("Không thể lưu khóa học. Vui lòng thử lại.", "error");
     console.error(err);
   } finally {
     loading.value = false;
   }
 };
 
-const handleDeleteTopic = (id: string) => {
+const handleDeleteCourse = (id: string) => {
   openConfirmationModal(
-    "Xóa chủ đề?",
-    "Tất cả bài học và câu hỏi trực thuộc chủ đề này cũng sẽ bị xóa. Thao tác không thể hoàn tác.",
+    "Xóa khóa học?",
+    "Tất cả bài học và câu hỏi trực thuộc khóa học này cũng sẽ bị xóa. Thao tác không thể hoàn tác.",
     async () => {
       loading.value = true;
       try {
-        await adminApi.deleteTopic(id);
+        await adminApi.deleteCourse(id);
         await loadAllData();
       } catch (err) {
-        alert("Xóa chủ đề thất bại!");
+        alert("Xóa khóa học thất bại!");
         console.error(err);
         throw err;
       } finally {
@@ -2367,7 +2371,7 @@ const openLessonModal = (lesson?: Lesson) => {
     lessonForm.value = {
       id: lesson.id,
       title: lesson.title,
-      topicId: lesson.topicId,
+      courseId: lesson.courseId,
       hint: lesson.hint,
       videoSource:
         lesson.videoSource ||
@@ -2381,10 +2385,10 @@ const openLessonModal = (lesson?: Lesson) => {
     lessonForm.value = {
       id: "",
       title: "",
-      topicId:
-        selectedTopicId.value === ALL_TOPICS
-          ? courseStore.topics[0]?.id || ""
-          : selectedTopicId.value,
+      courseId:
+        selectedCourseId.value === ALL_COURSES
+          ? courseStore.courses[0]?.id || ""
+          : selectedCourseId.value,
       hint: "",
       videoSource: "UPLOAD",
       videoUrl: "",
@@ -2544,7 +2548,7 @@ const saveLesson = async () => {
     }
 
     lessonModal.value.show = false;
-    await courseStore.fetchTopics(true);
+    await courseStore.fetchCourses(true);
     showToast(lessonModal.value.isEdit ? "Cập nhật bài học thành công." : "Tạo bài học thành công.");
   } catch (err) {
     const serverMessage = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
@@ -2584,7 +2588,7 @@ const openQuestionModal = (question?: Question) => {
     questionModal.value = { show: true, isEdit: true, editId: question.id };
     questionForm.value = {
       text: question.text,
-      topicId: question.topicId,
+      courseId: question.courseId,
       lessonId: question.lessonId || "",
       correctAnswer: question.correctAnswer,
       options: [],
@@ -2599,10 +2603,10 @@ const openQuestionModal = (question?: Question) => {
     questionModal.value = { show: true, isEdit: false, editId: null };
     questionForm.value = {
       text: "",
-      topicId:
-        selectedTopicId.value === ALL_TOPICS
-          ? courseStore.topics[0]?.id || ""
-          : selectedTopicId.value,
+      courseId:
+        selectedCourseId.value === ALL_COURSES
+          ? courseStore.courses[0]?.id || ""
+          : selectedCourseId.value,
       lessonId: "",
       correctAnswer: 0,
       options: [],
@@ -2652,16 +2656,16 @@ const saveQuestion = async () => {
 const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
 
 const downloadQuestionTemplate = () => {
-  const topicId =
-    selectedTopicId.value === ALL_TOPICS
-      ? courseStore.topics[0]?.id || "CIF"
-      : selectedTopicId.value || courseStore.topics[0]?.id || "CIF";
+  const courseId =
+    selectedCourseId.value === ALL_COURSES
+      ? courseStore.courses[0]?.id || "CIF"
+      : selectedCourseId.value || courseStore.courses[0]?.id || "CIF";
   const lessonId =
-    courseStore.topics.find((topic) => topic.id === topicId)?.lessons[0]?.id ||
+    courseStore.courses.find((course) => course.id === courseId)?.lessons[0]?.id ||
     "";
   const rows = [
     [
-      "topicId",
+      "courseId",
       "lessonId",
       "question",
       "optionA",
@@ -2671,9 +2675,9 @@ const downloadQuestionTemplate = () => {
       "correctAnswer",
     ],
     [
-      topicId,
+      courseId,
       "",
-      "Câu hỏi mẫu cho chủ đề?",
+      "Câu hỏi mẫu cho khóa học?",
       "Đáp án A",
       "Đáp án B",
       "Đáp án C",
@@ -2681,7 +2685,7 @@ const downloadQuestionTemplate = () => {
       "A",
     ],
     [
-      topicId,
+      courseId,
       lessonId,
       "Câu hỏi mẫu cho bài học?",
       "Đáp án A",
@@ -2738,7 +2742,7 @@ const importQuestionsFromCsv = async (event: Event) => {
   try {
     const rows = parseCsv((await file.text()).replace(/^\uFEFF/, ""));
     const expected = [
-      "topicId",
+      "courseId",
       "lessonId",
       "question",
       "optionA",
@@ -2756,18 +2760,18 @@ const importQuestionsFromCsv = async (event: Event) => {
     const errors: string[] = [];
     const payloads = rows.slice(1).map((row, index) => {
       const line = index + 2;
-      const [topicId, lessonId, text, ...rest] = row;
+      const [courseId, lessonId, text, ...rest] = row;
       const options = rest.slice(0, 4);
       const answerText = (rest[4] || "").toUpperCase();
       const correctAnswer = ["A", "B", "C", "D"].indexOf(answerText);
-      const topic = courseStore.topics.find((item) => item.id === topicId);
-      if (!topic)
-        errors.push(`Dòng ${line}: topicId "${topicId}" không tồn tại.`);
+      const course = courseStore.courses.find((item) => item.id === courseId);
+      if (!course)
+        errors.push(`Dòng ${line}: courseId "${courseId}" không tồn tại.`);
       if (
         lessonId &&
-        !topic?.lessons.some((lesson) => lesson.id === lessonId)
+        !course?.lessons.some((lesson) => lesson.id === lessonId)
       ) {
-        errors.push(`Dòng ${line}: lessonId "${lessonId}" không thuộc chủ đề.`);
+        errors.push(`Dòng ${line}: lessonId "${lessonId}" không thuộc khóa học.`);
       }
       if (!text?.trim()) errors.push(`Dòng ${line}: thiếu nội dung câu hỏi.`);
       if (options.length !== 4 || options.some((option) => !option?.trim())) {
@@ -2776,7 +2780,7 @@ const importQuestionsFromCsv = async (event: Event) => {
       if (correctAnswer < 0)
         errors.push(`Dòng ${line}: correctAnswer phải là A, B, C hoặc D.`);
       return {
-        topicId,
+        courseId,
         lessonId: lessonId || undefined,
         text,
         options,
@@ -3171,7 +3175,7 @@ void handleDeleteQuestion;
   font-size: 0.75rem;
 }
 
-.session-topic-tag {
+.session-course-tag {
   background-color: var(--primary-light);
   color: var(--primary-color);
   font-weight: 700;
@@ -3215,23 +3219,23 @@ void handleDeleteQuestion;
   margin-left: auto;
 }
 
-.topic-selector-row {
+.course-selector-row {
   display: flex;
   align-items: center;
   gap: 0.65rem;
   margin-bottom: 1rem;
 }
 
-.topic-selector-row label {
+.course-selector-row label {
   flex: 0 0 auto;
   font-weight: 500;
 }
 
-.topic-selector-row .select-control {
+.course-selector-row .select-control {
   width: 170px;
 }
 
-.topics-summary,
+.courses-summary,
 .users-manager,
 .lessons-manager,
 .exams-manager {
@@ -3660,12 +3664,12 @@ void handleDeleteQuestion;
 .lesson-back-button:hover {
   text-decoration: underline;
 }
-.lesson-topic-grid {
+.lesson-course-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 1rem;
 }
-.lesson-topic-card {
+.lesson-course-card {
   display: flex;
   align-items: center;
   gap: 0.85rem;
@@ -3682,12 +3686,12 @@ void handleDeleteQuestion;
     box-shadow 0.2s ease,
     transform 0.2s ease;
 }
-.lesson-topic-card:hover {
+.lesson-course-card:hover {
   border-color: var(--primary-color);
   box-shadow: 0 6px 16px rgb(0 103 79 / 12%);
   transform: translateY(-2px);
 }
-.lesson-topic-icon {
+.lesson-course-icon {
   display: grid;
   place-items: center;
   flex: 0 0 44px;
@@ -3696,14 +3700,14 @@ void handleDeleteQuestion;
   background: var(--primary-light);
   color: var(--primary-color);
 }
-.lesson-topic-copy {
+.lesson-course-copy {
   display: flex;
   flex: 1;
   flex-direction: column;
   align-items: flex-start;
   gap: 0.25rem;
 }
-.lesson-topic-copy small {
+.lesson-course-copy small {
   color: var(--text-muted);
 }
 .lesson-order-table tbody tr {
@@ -4091,12 +4095,12 @@ void handleDeleteQuestion;
     margin-left: 0;
   }
 
-  .topic-selector-row {
+  .course-selector-row {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .topic-selector-row .select-control {
+  .course-selector-row .select-control {
     width: 100%;
   }
 

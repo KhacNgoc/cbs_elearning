@@ -50,7 +50,7 @@
         </div>
       </section>
     </Transition>
-    <Transition name="toast">
+    <Teleport to="body"><Transition name="toast">
       <div
         v-if="toast"
         class="system-toast"
@@ -64,7 +64,7 @@
         <span>{{ toast.message }}</span>
         <button aria-label="Đóng" @click="toast = null"><X :size="16" /></button>
       </div>
-    </Transition>
+    </Transition></Teleport>
   </div>
 </template>
 
@@ -351,7 +351,7 @@ onBeforeUnmount(() => {
   background: #eff6ff;
   color: #1d4ed8;
   box-shadow: var(--shadow-lg);
-  z-index: 500;
+  z-index: 3000;
   font-size: 0.82rem;
 }
 .system-toast--success {
@@ -359,6 +359,8 @@ onBeforeUnmount(() => {
   background: #ecfdf5;
   color: #047857;
 }
+.system-toast > svg { flex-shrink: 0; }
+.system-toast > span { min-width: 0; overflow-wrap: anywhere; white-space: pre-line; }
 .system-toast--warning {
   border-color: #fde68a;
   background: #fffbeb;

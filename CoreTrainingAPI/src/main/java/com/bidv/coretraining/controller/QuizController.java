@@ -44,24 +44,24 @@ public class QuizController {
         return ResponseEntity.ok(quizService.getLessonQuizReview(lessonId, userDetails.getUsername()));
     }
 
-    @GetMapping("/{topicId}/questions")
-    public ResponseEntity<List<QuizQuestionDto>> getQuestionsForTopic(@PathVariable String topicId) {
-        return ResponseEntity.ok(quizService.getQuestionsForTopic(topicId));
+    @GetMapping("/{courseId}/questions")
+    public ResponseEntity<List<QuizQuestionDto>> getQuestionsForCourse(@PathVariable String courseId) {
+        return ResponseEntity.ok(quizService.getQuestionsForCourse(courseId));
     }
 
-    @PostMapping("/{topicId}/submit")
+    @PostMapping("/{courseId}/submit")
     public ResponseEntity<QuizResultDto> submitQuiz(
-            @PathVariable String topicId,
+            @PathVariable String courseId,
             @RequestBody QuizSubmitRequest request,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
-        QuizResultDto response = quizService.submitQuiz(topicId, request, userDetails.getUsername());
+        QuizResultDto response = quizService.submitQuiz(courseId, request, userDetails.getUsername());
         return ResponseEntity.ok(response);
     }
 
-    @GetMapping("/{topicId}/review")
-    public ResponseEntity<QuizReviewDto> getTopicQuizReview(
-            @PathVariable String topicId,
+    @GetMapping("/{courseId}/review")
+    public ResponseEntity<QuizReviewDto> getCourseQuizReview(
+            @PathVariable String courseId,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
-        return ResponseEntity.ok(quizService.getTopicQuizReview(topicId, userDetails.getUsername()));
+        return ResponseEntity.ok(quizService.getCourseQuizReview(courseId, userDetails.getUsername()));
     }
 }

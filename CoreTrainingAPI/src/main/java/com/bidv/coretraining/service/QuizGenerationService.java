@@ -3,12 +3,12 @@ package com.bidv.coretraining.service;
 import com.bidv.coretraining.dto.QuizGenerationRequestDto;
 import com.bidv.coretraining.dto.QuizGenerationResponseDto;
 import com.bidv.coretraining.entity.Lesson;
-import com.bidv.coretraining.entity.Topic;
+import com.bidv.coretraining.entity.Course;
 import com.bidv.coretraining.exception.BadRequestException;
 import com.bidv.coretraining.exception.RagServiceUnavailableException;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
 import com.bidv.coretraining.repository.LessonRepository;
-import com.bidv.coretraining.repository.TopicRepository;
+import com.bidv.coretraining.repository.CourseRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -23,18 +23,18 @@ import java.util.Map;
 @Service
 @Slf4j
 public class QuizGenerationService {
-    private final TopicRepository topicRepository;
+    private final CourseRepository courseRepository;
     private final LessonRepository lessonRepository;
     private final RestTemplate restTemplate;
     private final String ragUrl;
 
     public QuizGenerationService(
-            TopicRepository topicRepository,
+            CourseRepository courseRepository,
             LessonRepository lessonRepository,
             @Value("${app.rag-url}") String ragUrl,
             @Value("${app.rag.connect-timeout-ms:5000}") int connectTimeoutMs,
             @Value("${app.rag.quiz-read-timeout-ms:300000}") int readTimeoutMs) {
-        this.topicRepository = topicRepository;
+        this.courseRepository = courseRepository;
         this.lessonRepository = lessonRepository;
         this.ragUrl = ragUrl;
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
@@ -48,23 +48,23 @@ public class QuizGenerationService {
         if (total < 1 || total > 20) {
             throw new BadRequestException("Tổng số câu hỏi phải nằm trong khoảng từ 1 đến 20");
         }
-        Topic topic = topicRepository.findById(request.getTopicId())
-                .orElseThrow(() -> new ResourceNotFoundException("Topic", "id", request.getTopicId()));
+        Course course = courseRepository.findById(request.getCourseId())
+                .orElseThrow(() -> new ResourceNotFoundException("Course", "id", request.getCourseId()));
 
         String lessonName = null;
         if (request.getLessonId() != null && !request.getLessonId().isBlank()) {
             Lesson lesson = lessonRepository.findById(request.getLessonId())
                     .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", request.getLessonId()));
-            if (!lesson.getTopic().getId().equals(topic.getId())) {
-                throw new BadRequestException("Bài học không thuộc chủ đề đã chọn");
+            if (!lesson.getCourse().getId().equals(course.getId())) {
+                throw new BadRequestException("Bài học không thuộc khóa học đã chọn");
             }
             // Deliberately send only the lesson title. Hint and procedure steps are not retrieval context.
             lessonName = lesson.getTitle();
         }
 
         Map<String, Object> ragRequest = new LinkedHashMap<>();
-        ragRequest.put("course_id", topic.getId());
-        ragRequest.put("topic_name", topic.getName());
+        ragRequest.put("course_id", course.getId());
+        ragRequest.put("course_name", course.getName());
         if (lessonName != null) ragRequest.put("lesson_name", lessonName);
         ragRequest.put("single_choice_count", request.getSingleChoiceCount());
         ragRequest.put("multiple_choice_count", request.getMultipleChoiceCount());
@@ -77,13 +77,13 @@ public class QuizGenerationService {
             }
             return result;
         } catch (HttpStatusCodeException exception) {
-            log.error("RAG quiz generation failed topicId={} lessonId={} status={} response={}",
-                    topic.getId(), request.getLessonId(), exception.getStatusCode(),
+            log.error("RAG quiz generation failed courseId={} lessonId={} status={} response={}",
+                    course.getId(), request.getLessonId(), exception.getStatusCode(),
                     exception.getResponseBodyAsString());
             throw new RagServiceUnavailableException("Dịch vụ tạo câu hỏi tạm thời không khả dụng", exception);
         } catch (RestClientException exception) {
-            log.error("RAG quiz generation request failed topicId={} lessonId={} errorType={} message={}",
-                    topic.getId(), request.getLessonId(), exception.getClass().getSimpleName(),
+            log.error("RAG quiz generation request failed courseId={} lessonId={} errorType={} message={}",
+                    course.getId(), request.getLessonId(), exception.getClass().getSimpleName(),
                     exception.getMessage());
             throw new RagServiceUnavailableException("Dịch vụ tạo câu hỏi tạm thời không khả dụng", exception);
         }

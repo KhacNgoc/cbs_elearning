@@ -59,11 +59,18 @@ public class UserController {
                 userDetails.getUsername(), lessonId, request));
     }
 
-    @PostMapping("/me/register-topic/{topicId}")
-    public ResponseEntity<UserProgressDto> registerTopic(
-            @PathVariable String topicId,
+    @PostMapping("/me/lessons/{lessonId}/content-complete")
+    public ResponseEntity<UserProgressDto> completeContent(@PathVariable String lessonId,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
-        UserProgressDto response = userService.registerTopic(userDetails.getUsername(), topicId);
+        lessonProgressService.completeContent(userDetails.getUsername(), lessonId);
+        return ResponseEntity.ok(userService.getUserProgress(userDetails.getUsername()));
+    }
+
+    @PostMapping("/me/register-course/{courseId}")
+    public ResponseEntity<UserProgressDto> registerCourse(
+            @PathVariable String courseId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        UserProgressDto response = userService.registerCourse(userDetails.getUsername(), courseId);
         return ResponseEntity.ok(response);
     }
 

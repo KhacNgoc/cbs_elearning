@@ -1,11 +1,11 @@
 import { axiosClient, isMockApi, mockDelay } from './axiosClient';
 import type { Question, QuizQuestion } from '../types';
 import { mockQuestions } from '../data/mockData';
-import { mockDbTopics } from './courseApi';
+import { mockDbCourses } from './courseApi';
 
 export let mockDbQuestions = JSON.parse(JSON.stringify(mockQuestions)) as Question[];
-mockDbTopics.forEach(topic => {
-  topic.hasQuiz = mockDbQuestions.some(question => question.topicId === topic.id && !question.lessonId);
+mockDbCourses.forEach(course => {
+  course.hasQuiz = mockDbQuestions.some(question => question.courseId === course.id && !question.lessonId);
 });
 export const setMockDbQuestions = (newQuestions: Question[]) => {
   mockDbQuestions = newQuestions;
@@ -38,28 +38,28 @@ export interface QuizReview extends QuizSubmitResponse {
 }
 
 export const quizApi = {
-  async getQuizQuestions(topicId: string, lessonId?: string): Promise<QuizQuestion[]> {
+  async getQuizQuestions(courseId: string, lessonId?: string): Promise<QuizQuestion[]> {
     if (isMockApi()) {
       await mockDelay(300);
       const filtered = mockDbQuestions.filter(q =>
-        lessonId ? q.lessonId === lessonId : q.topicId === topicId && !q.lessonId
+        lessonId ? q.lessonId === lessonId : q.courseId === courseId && !q.lessonId
       );
       // Hide correctAnswer field from the returned payload to simulate backend anti-cheat logic
       return filtered.map(({ correctAnswer, correctAnswers, ...q }) => q);
     }
     const url = lessonId
       ? `/api/quizzes/lessons/${lessonId}/questions`
-      : `/api/quizzes/${topicId}/questions`;
+      : `/api/quizzes/${courseId}/questions`;
     const response = await axiosClient.get<QuizQuestion[]>(url);
     return response.data;
   },
 
-  async submitQuiz(topicId: string, data: QuizSubmitRequest, lessonId?: string): Promise<QuizSubmitResponse> {
+  async submitQuiz(courseId: string, data: QuizSubmitRequest, lessonId?: string): Promise<QuizSubmitResponse> {
     if (isMockApi()) {
       await mockDelay(400);
       
       const filteredOriginals = mockDbQuestions.filter(q =>
-        lessonId ? q.lessonId === lessonId : q.topicId === topicId && !q.lessonId
+        lessonId ? q.lessonId === lessonId : q.courseId === courseId && !q.lessonId
       );
       let score = 0;
       
@@ -77,7 +77,7 @@ export const quizApi = {
       // Save score & badge to LocalStorage in Mock Mode
       const scoreStorageKey = lessonId ? 'mockLessonQuizScores' : 'mockQuizScores';
       const totalStorageKey = lessonId ? 'mockLessonQuizTotals' : 'mockQuizTotals';
-      const scoreScopeId = lessonId || topicId;
+      const scoreScopeId = lessonId || courseId;
       const currentScores = JSON.parse(localStorage.getItem(scoreStorageKey) || '{}');
       const currentTotals = JSON.parse(localStorage.getItem(totalStorageKey) || '{}');
       
@@ -93,14 +93,14 @@ export const quizApi = {
         localStorage.setItem(answerStorageKey, JSON.stringify(savedAnswers));
       }
 
-      const lesson = mockDbTopics.flatMap(topic => topic.lessons).find(item => item.id === lessonId);
-      const currentTopic = mockDbTopics.find(topic => topic.id === topicId);
-      const passingScore = lessonId ? (lesson?.quizPassingScore ?? 80) : (currentTopic?.quizPassingScore ?? 80);
+      const lesson = mockDbCourses.flatMap(course => course.lessons).find(item => item.id === lessonId);
+      const currentCourse = mockDbCourses.find(course => course.id === courseId);
+      const passingScore = lessonId ? (lesson?.quizPassingScore ?? 80) : (currentCourse?.quizPassingScore ?? 80);
       if (percent >= passingScore) {
         const completed = JSON.parse(localStorage.getItem('mockCompletedLessons') || '[]') as string[];
         const completedLessonIds = lessonId
           ? [lessonId]
-          : (currentTopic?.lessons.map(item => item.id) ?? []);
+          : (currentCourse?.lessons.map(item => item.id) ?? []);
         for (const completedLessonId of completedLessonIds) {
           if (!completed.includes(completedLessonId)) completed.push(completedLessonId);
         }
@@ -114,17 +114,17 @@ export const quizApi = {
       else if (percent >= 80) badgeType = 'bronze';
 
       if (badgeType) {
-        const badgeId = `${topicId}_${badgeType}`;
+        const badgeId = `${courseId}_${badgeType}`;
         const unlockedBadges = JSON.parse(localStorage.getItem('mockUnlockedBadges') || '[]');
         const alreadyHas = unlockedBadges.some((b: any) => b.id === badgeId);
         
         if (!alreadyHas) {
           unlockedBadges.push({
             id: badgeId,
-            title: badgeType === 'gold' ? `Huy hiệu Vàng ${topicId}` : (badgeType === 'silver' ? `Huy hiệu Bạc ${topicId}` : `Huy hiệu Đồng ${topicId}`),
+            title: badgeType === 'gold' ? `Huy hiệu Vàng ${courseId}` : (badgeType === 'silver' ? `Huy hiệu Bạc ${courseId}` : `Huy hiệu Đồng ${courseId}`),
             type: badgeType,
-            topicId,
-            topicName: topicId,
+            courseId,
+            courseName: courseId,
             unlockedAt: new Date().toISOString().split('T')[0],
             icon: badgeType === 'gold' ? 'Award' : (badgeType === 'silver' ? 'Medal' : 'Shield')
           });
@@ -143,18 +143,18 @@ export const quizApi = {
     
     const url = lessonId
       ? `/api/quizzes/lessons/${lessonId}/submit`
-      : `/api/quizzes/${topicId}/submit`;
+      : `/api/quizzes/${courseId}/submit`;
     const response = await axiosClient.post<QuizSubmitResponse>(url, data);
     return response.data;
   },
 
-  async getQuizReview(topicId: string, lessonId?: string): Promise<QuizReview> {
+  async getQuizReview(courseId: string, lessonId?: string): Promise<QuizReview> {
     if (isMockApi()) {
       await mockDelay(250);
       const questions = mockDbQuestions.filter(question =>
-        lessonId ? question.lessonId === lessonId : question.topicId === topicId && !question.lessonId
+        lessonId ? question.lessonId === lessonId : question.courseId === courseId && !question.lessonId
       );
-      const scoreScopeId = lessonId || topicId;
+      const scoreScopeId = lessonId || courseId;
       const scoreStorageKey = lessonId ? 'mockLessonQuizScores' : 'mockQuizScores';
       const totalStorageKey = lessonId ? 'mockLessonQuizTotals' : 'mockQuizTotals';
       const answerStorageKey = lessonId ? 'mockLessonQuizAnswers' : 'mockQuizAnswers';
@@ -162,9 +162,9 @@ export const quizApi = {
       const total = JSON.parse(localStorage.getItem(totalStorageKey) || '{}')[scoreScopeId];
       const selectedAnswers = JSON.parse(localStorage.getItem(answerStorageKey) || '{}')[scoreScopeId];
       if (score === undefined || !selectedAnswers) throw new Error('Không có dữ liệu bài làm để xem lại');
-      const lesson = mockDbTopics.flatMap(topic => topic.lessons).find(item => item.id === lessonId);
-      const topic = mockDbTopics.find(item => item.id === topicId);
-      const passingScore = lessonId ? (lesson?.quizPassingScore ?? 80) : (topic?.quizPassingScore ?? 80);
+      const lesson = mockDbCourses.flatMap(course => course.lessons).find(item => item.id === lessonId);
+      const course = mockDbCourses.find(item => item.id === courseId);
+      const passingScore = lessonId ? (lesson?.quizPassingScore ?? 80) : (course?.quizPassingScore ?? 80);
       const percent = total ? Math.round(score / total * 100) : 0;
       if (percent < passingScore) throw new Error('Bài kiểm tra chưa đạt');
       return {
@@ -186,7 +186,7 @@ export const quizApi = {
     }
     const url = lessonId
       ? `/api/quizzes/lessons/${lessonId}/review`
-      : `/api/quizzes/${topicId}/review`;
+      : `/api/quizzes/${courseId}/review`;
     const response = await axiosClient.get<QuizReview>(url);
     return response.data;
   }

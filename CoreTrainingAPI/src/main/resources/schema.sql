@@ -1,370 +1,1666 @@
--- BIDV Core Training (WebCSR) - PostgreSQL Database Schema DDL
-CREATE DATABASE IF NOT EXISTS coretraining
+--
+-- PostgreSQL database dump
+--
 
--- 1. Create topics table
-CREATE TABLE IF NOT EXISTS topics (
-    id VARCHAR(255) PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    icon_name VARCHAR(255),
-    quiz_passing_score INTEGER NOT NULL DEFAULT 80
-);
-ALTER TABLE topics ADD COLUMN IF NOT EXISTS quiz_passing_score INTEGER NOT NULL DEFAULT 80;
+\restrict ZR3rFblNovnqnSCmHZgC0x28tDjb17Zb0qW8hDuj93EKsD12KsokhR9VP1L6SSU
 
--- 2. Create user_groups table
-CREATE TABLE IF NOT EXISTS user_groups (
-    id VARCHAR(255) PRIMARY KEY,
-    name VARCHAR(255) NOT NULL
-);
+-- Dumped from database version 15.18
+-- Dumped by pg_dump version 15.18
 
--- 3. Create group_mandatory_topics join table
-CREATE TABLE IF NOT EXISTS group_mandatory_topics (
-    group_id VARCHAR(255) NOT NULL,
-    topic_id VARCHAR(255) NOT NULL,
-    PRIMARY KEY (group_id, topic_id),
-    CONSTRAINT fk_group_mandatory_groups FOREIGN KEY (group_id) REFERENCES user_groups(id) ON DELETE CASCADE,
-    CONSTRAINT fk_group_mandatory_topics FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
-);
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
 
--- 4. Create users table
-CREATE TABLE IF NOT EXISTS users (
-    id BIGSERIAL PRIMARY KEY,
-    username VARCHAR(255) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL,
-    full_name VARCHAR(255) NOT NULL,
-    avatar_color VARCHAR(255),
-    role VARCHAR(255) NOT NULL,
-    points INTEGER NOT NULL DEFAULT 0,
-    group_id VARCHAR(255),
-    CONSTRAINT fk_users_group FOREIGN KEY (group_id) REFERENCES user_groups(id) ON DELETE SET NULL
-);
+--
+-- Name: public; Type: SCHEMA; Schema: -; Owner: -
+--
 
--- 5. Create user_registered_topics join table
-CREATE TABLE IF NOT EXISTS user_registered_topics (
-    user_id BIGINT NOT NULL,
-    topic_id VARCHAR(255) NOT NULL,
-    PRIMARY KEY (user_id, topic_id),
-    CONSTRAINT fk_user_reg_users FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_user_reg_topics FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
-);
+-- *not* creating schema, since initdb creates it
 
--- 6. Create lessons table
-CREATE TABLE IF NOT EXISTS lessons (
-    id VARCHAR(255) PRIMARY KEY,
-    title VARCHAR(255) NOT NULL,
-    hint TEXT,
-    video_url VARCHAR(255),
-    video_source VARCHAR(20),
-    quiz_passing_score INTEGER NOT NULL DEFAULT 80,
-    lesson_order INTEGER NOT NULL DEFAULT 0,
-    topic_id VARCHAR(255) NOT NULL,
-    CONSTRAINT fk_lessons_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
+
+--
+-- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON SCHEMA public IS '';
+
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: badges; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.badges (
+    id character varying(255) NOT NULL,
+    icon character varying(255) NOT NULL,
+    title character varying(255) NOT NULL,
+    type character varying(255) NOT NULL,
+    course_id character varying(255) NOT NULL
 );
 
-ALTER TABLE lessons ADD COLUMN IF NOT EXISTS video_source VARCHAR(20);
-ALTER TABLE lessons ADD COLUMN IF NOT EXISTS quiz_passing_score INTEGER NOT NULL DEFAULT 80;
-ALTER TABLE lessons ADD COLUMN IF NOT EXISTS lesson_order INTEGER NOT NULL DEFAULT 0;
-UPDATE lessons
-SET video_source = CASE
-    WHEN video_url LIKE '%/uploads/%' THEN 'UPLOAD'
-    ELSE 'URL'
-END
-WHERE video_source IS NULL;
 
--- 7. Create lesson_documents table
-CREATE TABLE IF NOT EXISTS lesson_documents (
-    id BIGSERIAL PRIMARY KEY,
-    lesson_id VARCHAR(255) NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    document_type VARCHAR(20) NOT NULL,
-    file_url TEXT NOT NULL,
-    original_file_name VARCHAR(255),
-    file_size BIGINT,
-    document_order INTEGER NOT NULL,
-    CONSTRAINT fk_lesson_documents_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE,
-    CONSTRAINT chk_lesson_documents_type CHECK (document_type IN ('PDF', 'WORD', 'POWERPOINT'))
+--
+-- Name: chapters; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.chapters (
+    id character varying(255) NOT NULL,
+    chapter_order integer,
+    code character varying(255) NOT NULL,
+    description character varying(255),
+    status character varying(255),
+    title character varying(255) NOT NULL,
+    version bigint,
+    course_id character varying(255) NOT NULL
 );
 
--- Keep existing databases in sync when POWERPOINT support is introduced.
-ALTER TABLE lesson_documents DROP CONSTRAINT IF EXISTS chk_lesson_documents_type;
-ALTER TABLE lesson_documents ADD CONSTRAINT chk_lesson_documents_type
-    CHECK (document_type IN ('PDF', 'WORD', 'POWERPOINT'));
 
--- 8. Create user_completed_lessons join table
-CREATE TABLE IF NOT EXISTS user_completed_lessons (
-    user_id BIGINT NOT NULL,
-    lesson_id VARCHAR(255) NOT NULL,
-    PRIMARY KEY (user_id, lesson_id),
-    CONSTRAINT fk_user_completed_users FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_user_completed_lessons FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
+--
+-- Name: comments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.comments (
+    id bigint NOT NULL,
+    avatar character varying(255) NOT NULL,
+    content text NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    rating integer,
+    reply_to_username character varying(255),
+    username character varying(255) NOT NULL,
+    lesson_id character varying(255) NOT NULL,
+    parent_comment_id bigint
 );
 
-CREATE TABLE IF NOT EXISTS lesson_progress (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    lesson_id VARCHAR(255) NOT NULL,
-    last_position_seconds DOUBLE PRECISION NOT NULL DEFAULT 0,
-    watched_seconds DOUBLE PRECISION NOT NULL DEFAULT 0,
-    duration_seconds DOUBLE PRECISION NOT NULL DEFAULT 0,
-    updated_at TIMESTAMP NOT NULL,
-    CONSTRAINT uk_lesson_progress_user_lesson UNIQUE (user_id, lesson_id),
-    CONSTRAINT fk_lesson_progress_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_lesson_progress_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
+
+--
+-- Name: comments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.comments ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.comments_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
 );
 
-CREATE TABLE IF NOT EXISTS rag_chat_messages (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    topic_id VARCHAR(255) NOT NULL,
-    question TEXT NOT NULL,
-    answer TEXT NOT NULL,
-    grounded BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMP NOT NULL,
-    CONSTRAINT fk_rag_chat_message_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_rag_chat_message_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
+
+--
+-- Name: course_documents; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.course_documents (
+    id character varying(255) NOT NULL,
+    content_type character varying(255) NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    error_message text,
+    file_name character varying(255) NOT NULL,
+    indexed_at timestamp(6) without time zone,
+    indexed_chunks integer,
+    size_bytes bigint NOT NULL,
+    status character varying(255) NOT NULL,
+    storage_path character varying(255) NOT NULL,
+    course_id character varying(255) NOT NULL,
+    CONSTRAINT course_documents_status_check CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'INDEXING'::character varying, 'INDEXED'::character varying, 'FAILED'::character varying])::text[])))
 );
 
-CREATE TABLE IF NOT EXISTS rag_chat_sources (
-    id BIGSERIAL PRIMARY KEY,
-    message_id BIGINT NOT NULL,
-    document_id VARCHAR(255) NOT NULL,
-    document_name VARCHAR(255) NOT NULL,
-    page INTEGER NOT NULL,
-    section VARCHAR(255) NOT NULL,
-    CONSTRAINT fk_rag_chat_source_message FOREIGN KEY (message_id) REFERENCES rag_chat_messages(id) ON DELETE CASCADE
+
+--
+-- Name: course_enrollment_requests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.course_enrollment_requests (
+    id bigint NOT NULL,
+    rejection_reason text,
+    requested_at timestamp(6) without time zone NOT NULL,
+    reviewed_at timestamp(6) without time zone,
+    reviewed_by character varying(255),
+    status character varying(20) NOT NULL,
+    course_id character varying(255) NOT NULL,
+    user_id bigint NOT NULL,
+    CONSTRAINT course_enrollment_requests_status_check CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'APPROVED'::character varying, 'REJECTED'::character varying])::text[])))
 );
 
-CREATE INDEX IF NOT EXISTS idx_rag_chat_history
-    ON rag_chat_messages (user_id, topic_id, created_at);
 
--- Context-aware RAG conversations. Kept separate from the legacy exchange table
--- so existing chat history remains intact while Hibernate ddl-auto=update rolls
--- this additive schema out in the current migration-less project.
-CREATE TABLE IF NOT EXISTS rag_conversations (
-    id VARCHAR(36) PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    topic_id VARCHAR(255) NOT NULL,
-    title VARCHAR(255),
-    summary TEXT,
-    last_summarized_message_id BIGINT,
-    created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP NOT NULL,
-    CONSTRAINT fk_rag_conversation_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_rag_conversation_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
+--
+-- Name: course_enrollment_requests_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.course_enrollment_requests ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.course_enrollment_requests_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
 );
 
-CREATE TABLE IF NOT EXISTS rag_conversation_messages (
-    id BIGSERIAL PRIMARY KEY,
-    conversation_id VARCHAR(36) NOT NULL,
-    role VARCHAR(16) NOT NULL,
-    content TEXT NOT NULL,
-    grounded BOOLEAN,
-    original_question TEXT,
-    standalone_question TEXT,
-    needs_clarification BOOLEAN,
-    created_at TIMESTAMP NOT NULL,
-    CONSTRAINT fk_rag_conversation_message FOREIGN KEY (conversation_id) REFERENCES rag_conversations(id) ON DELETE CASCADE
+
+--
+-- Name: courses; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.courses (
+    id character varying(255) NOT NULL,
+    code character varying(255) NOT NULL,
+    description text,
+    icon_name character varying(255),
+    name character varying(255) NOT NULL,
+    quiz_passing_score integer DEFAULT 80 NOT NULL,
+    status character varying(255),
+    thumbnail character varying(255),
+    version bigint,
+    program_id character varying(255) NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS rag_conversation_sources (
-    id BIGSERIAL PRIMARY KEY,
-    message_id BIGINT NOT NULL,
-    document_id VARCHAR(255) NOT NULL,
-    document_name VARCHAR(255) NOT NULL,
-    page INTEGER NOT NULL,
-    section VARCHAR(255) NOT NULL,
-    CONSTRAINT fk_rag_conversation_source FOREIGN KEY (message_id) REFERENCES rag_conversation_messages(id) ON DELETE CASCADE
+
+--
+-- Name: group_mandatory_courses; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.group_mandatory_courses (
+    group_id character varying(255) NOT NULL,
+    course_id character varying(255) NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_rag_conversation_owner_topic_updated
-    ON rag_conversations (user_id, topic_id, updated_at);
-CREATE INDEX IF NOT EXISTS idx_rag_conversation_message_order
-    ON rag_conversation_messages (conversation_id, id);
 
--- 9. Create procedure_sections table
-CREATE TABLE IF NOT EXISTS procedure_sections (
-    id BIGSERIAL PRIMARY KEY,
-    title VARCHAR(255) NOT NULL,
-    lesson_id VARCHAR(255) NOT NULL,
-    section_order INTEGER,
-    CONSTRAINT fk_procedure_sections_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
+--
+-- Name: lesson_contents; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lesson_contents (
+    id character varying(255) NOT NULL,
+    text_body text,
+    version bigint,
+    video_source character varying(255),
+    video_url text,
+    lesson_id character varying(255) NOT NULL,
+    CONSTRAINT lesson_contents_video_source_check CHECK (((video_source)::text = ANY ((ARRAY['UPLOAD'::character varying, 'URL'::character varying])::text[])))
 );
 
--- 10. Create procedure_steps table (ElementCollection)
-CREATE TABLE IF NOT EXISTS procedure_steps (
-    section_id BIGINT NOT NULL,
-    step_text TEXT,
-    step_order INTEGER NOT NULL,
-    PRIMARY KEY (section_id, step_order),
-    CONSTRAINT fk_procedure_steps_section FOREIGN KEY (section_id) REFERENCES procedure_sections(id) ON DELETE CASCADE
+
+--
+-- Name: lesson_documents; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lesson_documents (
+    id bigint NOT NULL,
+    document_order integer NOT NULL,
+    document_type character varying(20) NOT NULL,
+    file_size bigint,
+    file_url text NOT NULL,
+    name character varying(255) NOT NULL,
+    original_file_name character varying(255),
+    lesson_id character varying(255) NOT NULL,
+    CONSTRAINT lesson_documents_document_type_check CHECK (((document_type)::text = ANY ((ARRAY['PDF'::character varying, 'WORD'::character varying, 'POWERPOINT'::character varying])::text[])))
 );
 
--- 11. Create comments table
-CREATE TABLE IF NOT EXISTS comments (
-    id BIGSERIAL PRIMARY KEY,
-    username VARCHAR(255) NOT NULL,
-    avatar VARCHAR(255) NOT NULL,
-    rating INTEGER,
-    content TEXT NOT NULL,
-    created_at TIMESTAMP NOT NULL,
-    lesson_id VARCHAR(255) NOT NULL,
-    parent_comment_id BIGINT,
-    reply_to_username VARCHAR(255),
-    CONSTRAINT fk_comments_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE,
-    CONSTRAINT fk_comments_parent FOREIGN KEY (parent_comment_id) REFERENCES comments(id) ON DELETE CASCADE
+
+--
+-- Name: lesson_documents_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lesson_documents ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.lesson_documents_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
 );
 
-CREATE TABLE IF NOT EXISTS topic_enrollment_requests (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    topic_id VARCHAR(255) NOT NULL,
-    status VARCHAR(20) NOT NULL,
-    requested_at TIMESTAMP NOT NULL,
-    reviewed_at TIMESTAMP,
-    reviewed_by VARCHAR(255),
-    rejection_reason TEXT,
-    CONSTRAINT fk_enrollment_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_enrollment_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
+
+--
+-- Name: lesson_progress; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lesson_progress (
+    id bigint NOT NULL,
+    content_completed boolean NOT NULL,
+    duration_seconds double precision NOT NULL,
+    last_position_seconds double precision NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    watched_seconds double precision NOT NULL,
+    lesson_id character varying(255) NOT NULL,
+    user_id bigint NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS notifications (
-    id BIGSERIAL PRIMARY KEY,
-    recipient_id BIGINT NOT NULL,
-    type VARCHAR(40) NOT NULL,
-    title VARCHAR(255) NOT NULL,
-    message TEXT NOT NULL,
-    target_url VARCHAR(255),
-    is_read BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMP NOT NULL,
-    CONSTRAINT fk_notifications_recipient FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS idx_notifications_recipient_created
-    ON notifications (recipient_id, created_at DESC);
 
-CREATE TABLE IF NOT EXISTS navigation_items (
-    id VARCHAR(255) PRIMARY KEY,
-    label VARCHAR(255) NOT NULL,
-    route VARCHAR(255) NOT NULL,
-    icon VARCHAR(255) NOT NULL,
-    area VARCHAR(20) NOT NULL,
-    sort_order INTEGER NOT NULL,
-    visible BOOLEAN NOT NULL DEFAULT TRUE
-);
-CREATE TABLE IF NOT EXISTS navigation_item_roles (
-    navigation_id VARCHAR(255) NOT NULL,
-    role_name VARCHAR(255) NOT NULL,
-    PRIMARY KEY (navigation_id, role_name),
-    CONSTRAINT fk_navigation_role_item FOREIGN KEY (navigation_id) REFERENCES navigation_items(id) ON DELETE CASCADE
-);
-ALTER TABLE comments ALTER COLUMN rating DROP NOT NULL;
-ALTER TABLE comments ADD COLUMN IF NOT EXISTS parent_comment_id BIGINT;
-ALTER TABLE comments ADD COLUMN IF NOT EXISTS reply_to_username VARCHAR(255);
+--
+-- Name: lesson_progress_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
 
--- 12. Create private timestamped video notes
-CREATE TABLE IF NOT EXISTS video_notes (
-    id BIGSERIAL PRIMARY KEY,
-    timestamp_seconds INTEGER NOT NULL CHECK (timestamp_seconds >= 0),
-    content TEXT NOT NULL,
-    created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP NOT NULL,
-    lesson_id VARCHAR(255) NOT NULL,
-    user_id BIGINT NOT NULL,
-    CONSTRAINT fk_video_notes_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE,
-    CONSTRAINT fk_video_notes_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+ALTER TABLE public.lesson_progress ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.lesson_progress_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
 );
 
-CREATE INDEX IF NOT EXISTS idx_video_notes_lesson_user_time
-    ON video_notes (lesson_id, user_id, timestamp_seconds);
 
--- 13. Create questions table
-CREATE TABLE IF NOT EXISTS questions (
-    id BIGSERIAL PRIMARY KEY,
-    text TEXT NOT NULL,
-    correct_answer INTEGER NOT NULL,
-    question_type VARCHAR(32) NOT NULL DEFAULT 'SINGLE_CHOICE',
-    topic_id VARCHAR(255) NOT NULL,
-    lesson_id VARCHAR(255),
-    CONSTRAINT fk_questions_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE,
-    CONSTRAINT fk_questions_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
+--
+-- Name: lessons; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lessons (
+    id character varying(255) NOT NULL,
+    hint text,
+    lesson_order integer DEFAULT 0 NOT NULL,
+    status character varying(255),
+    title character varying(255) NOT NULL,
+    version bigint,
+    chapter_id character varying(255) NOT NULL,
+    course_id character varying(255) NOT NULL,
+    updated_at timestamp(6) without time zone
 );
 
-ALTER TABLE questions ADD COLUMN IF NOT EXISTS lesson_id VARCHAR(255);
-ALTER TABLE questions ADD COLUMN IF NOT EXISTS question_type VARCHAR(32) NOT NULL DEFAULT 'SINGLE_CHOICE';
 
--- 14. Create question_options table (ElementCollection)
-CREATE TABLE IF NOT EXISTS question_options (
-    question_id BIGINT NOT NULL,
-    option_text TEXT,
-    option_order INTEGER NOT NULL,
-    PRIMARY KEY (question_id, option_order),
-    CONSTRAINT fk_question_options_question FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+--
+-- Name: navigation_item_roles; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.navigation_item_roles (
+    navigation_id character varying(255) NOT NULL,
+    role_name character varying(255) NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS question_correct_answers (
-    question_id BIGINT NOT NULL,
-    answer_index INTEGER NOT NULL,
-    answer_order INTEGER NOT NULL,
-    PRIMARY KEY (question_id, answer_order),
-    CONSTRAINT fk_question_correct_answers_question FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+
+--
+-- Name: navigation_items; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.navigation_items (
+    id character varying(255) NOT NULL,
+    area character varying(20) NOT NULL,
+    icon character varying(255) NOT NULL,
+    label character varying(255) NOT NULL,
+    route character varying(255) NOT NULL,
+    sort_order integer NOT NULL,
+    visible boolean NOT NULL
 );
 
--- 15. Create badges table
-CREATE TABLE IF NOT EXISTS badges (
-    id VARCHAR(255) PRIMARY KEY,
-    title VARCHAR(255) NOT NULL,
-    type VARCHAR(255) NOT NULL,
-    icon VARCHAR(255) NOT NULL,
-    topic_id VARCHAR(255) NOT NULL,
-    CONSTRAINT fk_badges_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
+
+--
+-- Name: notifications; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.notifications (
+    id bigint NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    message text NOT NULL,
+    is_read boolean NOT NULL,
+    target_url character varying(255),
+    title character varying(255) NOT NULL,
+    type character varying(40) NOT NULL,
+    recipient_id bigint NOT NULL,
+    CONSTRAINT notifications_type_check CHECK (((type)::text = ANY ((ARRAY['COMMENT_REPLY'::character varying, 'ENROLLMENT_REQUEST'::character varying, 'ENROLLMENT_APPROVED'::character varying, 'ENROLLMENT_REJECTED'::character varying])::text[])))
 );
 
--- 16. Create user_badges table
-CREATE TABLE IF NOT EXISTS user_badges (
-    id BIGSERIAL PRIMARY KEY,
-    unlocked_at DATE NOT NULL,
-    user_id BIGINT NOT NULL,
-    badge_id VARCHAR(255) NOT NULL,
-    CONSTRAINT fk_user_badges_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_user_badges_badge FOREIGN KEY (badge_id) REFERENCES badges(id) ON DELETE CASCADE
+
+--
+-- Name: notifications_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.notifications ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.notifications_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
 );
 
--- 17. Create user_quiz_scores table
-CREATE TABLE IF NOT EXISTS user_quiz_scores (
-    id BIGSERIAL PRIMARY KEY,
-    score INTEGER NOT NULL,
-    total INTEGER NOT NULL,
-    taken_at TIMESTAMP NOT NULL,
-    user_id BIGINT NOT NULL,
-    topic_id VARCHAR(255) NOT NULL,
-    lesson_id VARCHAR(255),
-    CONSTRAINT fk_user_quiz_scores_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_user_quiz_scores_topic FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE,
-    CONSTRAINT fk_user_quiz_scores_lesson FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
-);
-ALTER TABLE user_quiz_scores ADD COLUMN IF NOT EXISTS lesson_id VARCHAR(255);
 
-CREATE TABLE IF NOT EXISTS user_quiz_score_answers (
-    quiz_score_id BIGINT NOT NULL,
-    question_id BIGINT NOT NULL,
-    selected_answer INTEGER NOT NULL,
-    PRIMARY KEY (quiz_score_id, question_id),
-    CONSTRAINT fk_quiz_score_answers_score FOREIGN KEY (quiz_score_id) REFERENCES user_quiz_scores(id) ON DELETE CASCADE,
-    CONSTRAINT fk_quiz_score_answers_question FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+--
+-- Name: password_reset_otps; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.password_reset_otps (
+    id bigint NOT NULL,
+    expiry_date timestamp(6) without time zone NOT NULL,
+    otp_code character varying(255) NOT NULL,
+    user_id bigint NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS user_quiz_score_answer_sets (
-    quiz_score_id BIGINT NOT NULL,
-    question_id BIGINT NOT NULL,
-    selected_answers VARCHAR(255) NOT NULL,
-    PRIMARY KEY (quiz_score_id, question_id),
-    CONSTRAINT fk_quiz_score_answer_sets_score FOREIGN KEY (quiz_score_id) REFERENCES user_quiz_scores(id) ON DELETE CASCADE,
-    CONSTRAINT fk_quiz_score_answer_sets_question FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+
+--
+-- Name: password_reset_otps_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.password_reset_otps ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.password_reset_otps_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
 );
 
--- 17. Create password_reset_otps table
-CREATE TABLE IF NOT EXISTS password_reset_otps (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL UNIQUE,
-    otp_code VARCHAR(255) NOT NULL,
-    expiry_date TIMESTAMP NOT NULL,
-    CONSTRAINT fk_reset_otp_users FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+
+--
+-- Name: procedure_sections; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.procedure_sections (
+    id bigint NOT NULL,
+    section_order integer,
+    title character varying(255) NOT NULL,
+    lesson_id character varying(255) NOT NULL
 );
+
+
+--
+-- Name: procedure_sections_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.procedure_sections ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.procedure_sections_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: procedure_steps; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.procedure_steps (
+    section_id bigint NOT NULL,
+    step_text text,
+    step_order integer NOT NULL
+);
+
+
+--
+-- Name: question_correct_answers; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.question_correct_answers (
+    question_id bigint NOT NULL,
+    answer_index integer NOT NULL,
+    answer_order integer NOT NULL
+);
+
+
+--
+-- Name: question_options; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.question_options (
+    question_id bigint NOT NULL,
+    option_text text,
+    option_order integer NOT NULL
+);
+
+
+--
+-- Name: questions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.questions (
+    id bigint NOT NULL,
+    correct_answer integer NOT NULL,
+    text text NOT NULL,
+    question_type character varying(32) NOT NULL,
+    course_id character varying(255) NOT NULL,
+    lesson_id character varying(255),
+    quiz_id character varying(255) NOT NULL,
+    CONSTRAINT questions_question_type_check CHECK (((question_type)::text = ANY ((ARRAY['SINGLE_CHOICE'::character varying, 'MULTIPLE_CHOICE'::character varying])::text[])))
+);
+
+
+--
+-- Name: questions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.questions ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.questions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: quiz_attempts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.quiz_attempts (
+    id character varying(255) NOT NULL,
+    answers_json text,
+    passed boolean NOT NULL,
+    passing_score integer,
+    questions_json text,
+    revision integer,
+    score integer,
+    taken_at timestamp(6) without time zone,
+    total integer,
+    version bigint,
+    quiz_id character varying(255) NOT NULL,
+    user_id bigint NOT NULL
+);
+
+
+--
+-- Name: quizzes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.quizzes (
+    id character varying(255) NOT NULL,
+    passing_score integer NOT NULL,
+    required_for_progress boolean NOT NULL,
+    revision integer,
+    title character varying(255),
+    version bigint,
+    lesson_id character varying(255) NOT NULL
+);
+
+
+--
+-- Name: rag_chat_messages; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.rag_chat_messages (
+    id bigint NOT NULL,
+    answer text NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    grounded boolean NOT NULL,
+    question text NOT NULL,
+    course_id character varying(255) NOT NULL,
+    user_id bigint NOT NULL
+);
+
+
+--
+-- Name: rag_chat_messages_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.rag_chat_messages ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.rag_chat_messages_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: rag_chat_sources; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.rag_chat_sources (
+    id bigint NOT NULL,
+    document_id character varying(255) NOT NULL,
+    document_name character varying(255) NOT NULL,
+    page integer NOT NULL,
+    section character varying(255) NOT NULL,
+    message_id bigint NOT NULL
+);
+
+
+--
+-- Name: rag_chat_sources_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.rag_chat_sources ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.rag_chat_sources_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: rag_conversation_messages; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.rag_conversation_messages (
+    id bigint NOT NULL,
+    content text NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    grounded boolean,
+    needs_clarification boolean,
+    original_question text,
+    role character varying(16) NOT NULL,
+    standalone_question text,
+    conversation_id character varying(36) NOT NULL
+);
+
+
+--
+-- Name: rag_conversation_messages_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.rag_conversation_messages ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.rag_conversation_messages_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: rag_conversation_sources; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.rag_conversation_sources (
+    id bigint NOT NULL,
+    document_id character varying(255) NOT NULL,
+    document_name character varying(255) NOT NULL,
+    page integer NOT NULL,
+    section character varying(255) NOT NULL,
+    message_id bigint NOT NULL
+);
+
+
+--
+-- Name: rag_conversation_sources_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.rag_conversation_sources ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.rag_conversation_sources_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: rag_conversations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.rag_conversations (
+    id character varying(36) NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    last_summarized_message_id bigint,
+    summary text,
+    title character varying(255),
+    updated_at timestamp(6) without time zone NOT NULL,
+    course_id character varying(255) NOT NULL,
+    user_id bigint NOT NULL
+);
+
+
+--
+-- Name: training_domains; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.training_domains (
+    id character varying(255) NOT NULL,
+    code character varying(255) NOT NULL,
+    description character varying(255),
+    name character varying(255) NOT NULL,
+    status character varying(255),
+    version bigint
+);
+
+
+--
+-- Name: training_programs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.training_programs (
+    id character varying(255) NOT NULL,
+    code character varying(255) NOT NULL,
+    description character varying(255),
+    name character varying(255) NOT NULL,
+    status character varying(255),
+    version bigint,
+    domain_id character varying(255) NOT NULL
+);
+
+
+--
+-- Name: user_badges; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_badges (
+    id bigint NOT NULL,
+    unlocked_at date NOT NULL,
+    badge_id character varying(255) NOT NULL,
+    user_id bigint NOT NULL
+);
+
+
+--
+-- Name: user_badges_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.user_badges ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.user_badges_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: user_completed_courses; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_completed_courses (
+    user_id bigint NOT NULL,
+    completed_at timestamp(6) without time zone,
+    course_id character varying(255) NOT NULL
+);
+
+
+--
+-- Name: user_completed_lessons; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_completed_lessons (
+    user_id bigint NOT NULL,
+    lesson_id character varying(255) NOT NULL
+);
+
+
+--
+-- Name: user_groups; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_groups (
+    id character varying(255) NOT NULL,
+    name character varying(255) NOT NULL
+);
+
+
+--
+-- Name: user_quiz_score_answer_sets; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_quiz_score_answer_sets (
+    quiz_score_id bigint NOT NULL,
+    selected_answers character varying(255) NOT NULL,
+    question_id bigint NOT NULL
+);
+
+
+--
+-- Name: user_quiz_score_answers; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_quiz_score_answers (
+    quiz_score_id bigint NOT NULL,
+    selected_answer integer NOT NULL,
+    question_id bigint NOT NULL
+);
+
+
+--
+-- Name: user_quiz_scores; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_quiz_scores (
+    id bigint NOT NULL,
+    score integer NOT NULL,
+    taken_at timestamp(6) without time zone NOT NULL,
+    total integer NOT NULL,
+    course_id character varying(255) NOT NULL,
+    lesson_id character varying(255),
+    user_id bigint NOT NULL
+);
+
+
+--
+-- Name: user_quiz_scores_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.user_quiz_scores ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.user_quiz_scores_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: user_registered_courses; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_registered_courses (
+    user_id bigint NOT NULL,
+    course_id character varying(255) NOT NULL
+);
+
+
+--
+-- Name: users; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.users (
+    id bigint NOT NULL,
+    avatar_color character varying(255),
+    email character varying(255),
+    employee_id character varying(255),
+    full_name character varying(255) NOT NULL,
+    must_change_password boolean DEFAULT true NOT NULL,
+    password character varying(255) NOT NULL,
+    points integer NOT NULL,
+    role character varying(255) NOT NULL,
+    username character varying(255) NOT NULL,
+    group_id character varying(255)
+);
+
+
+--
+-- Name: users_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.users ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.users_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: video_notes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.video_notes (
+    id bigint NOT NULL,
+    content text NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    timestamp_seconds integer NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    lesson_id character varying(255) NOT NULL,
+    user_id bigint NOT NULL
+);
+
+
+--
+-- Name: video_notes_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.video_notes ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.video_notes_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: badges badges_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.badges
+    ADD CONSTRAINT badges_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: chapters chapters_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chapters
+    ADD CONSTRAINT chapters_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: comments comments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.comments
+    ADD CONSTRAINT comments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: course_documents course_documents_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.course_documents
+    ADD CONSTRAINT course_documents_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: course_enrollment_requests course_enrollment_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.course_enrollment_requests
+    ADD CONSTRAINT course_enrollment_requests_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: courses courses_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.courses
+    ADD CONSTRAINT courses_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: group_mandatory_courses group_mandatory_courses_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.group_mandatory_courses
+    ADD CONSTRAINT group_mandatory_courses_pkey PRIMARY KEY (group_id, course_id);
+
+
+--
+-- Name: lesson_contents lesson_contents_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lesson_contents
+    ADD CONSTRAINT lesson_contents_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: lesson_documents lesson_documents_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lesson_documents
+    ADD CONSTRAINT lesson_documents_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: lesson_progress lesson_progress_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lesson_progress
+    ADD CONSTRAINT lesson_progress_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: lessons lessons_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lessons
+    ADD CONSTRAINT lessons_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: navigation_item_roles navigation_item_roles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.navigation_item_roles
+    ADD CONSTRAINT navigation_item_roles_pkey PRIMARY KEY (navigation_id, role_name);
+
+
+--
+-- Name: navigation_items navigation_items_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.navigation_items
+    ADD CONSTRAINT navigation_items_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: notifications notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notifications
+    ADD CONSTRAINT notifications_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: password_reset_otps password_reset_otps_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.password_reset_otps
+    ADD CONSTRAINT password_reset_otps_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: procedure_sections procedure_sections_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.procedure_sections
+    ADD CONSTRAINT procedure_sections_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: procedure_steps procedure_steps_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.procedure_steps
+    ADD CONSTRAINT procedure_steps_pkey PRIMARY KEY (section_id, step_order);
+
+
+--
+-- Name: question_correct_answers question_correct_answers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.question_correct_answers
+    ADD CONSTRAINT question_correct_answers_pkey PRIMARY KEY (question_id, answer_order);
+
+
+--
+-- Name: question_options question_options_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.question_options
+    ADD CONSTRAINT question_options_pkey PRIMARY KEY (question_id, option_order);
+
+
+--
+-- Name: questions questions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.questions
+    ADD CONSTRAINT questions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: quiz_attempts quiz_attempts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.quiz_attempts
+    ADD CONSTRAINT quiz_attempts_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: quizzes quizzes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.quizzes
+    ADD CONSTRAINT quizzes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: rag_chat_messages rag_chat_messages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rag_chat_messages
+    ADD CONSTRAINT rag_chat_messages_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: rag_chat_sources rag_chat_sources_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rag_chat_sources
+    ADD CONSTRAINT rag_chat_sources_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: rag_conversation_messages rag_conversation_messages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rag_conversation_messages
+    ADD CONSTRAINT rag_conversation_messages_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: rag_conversation_sources rag_conversation_sources_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rag_conversation_sources
+    ADD CONSTRAINT rag_conversation_sources_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: rag_conversations rag_conversations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rag_conversations
+    ADD CONSTRAINT rag_conversations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: training_domains training_domains_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.training_domains
+    ADD CONSTRAINT training_domains_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: training_programs training_programs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.training_programs
+    ADD CONSTRAINT training_programs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: password_reset_otps uk54nf04xn0b2a3xxlysc84u9d7; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.password_reset_otps
+    ADD CONSTRAINT uk54nf04xn0b2a3xxlysc84u9d7 UNIQUE (user_id);
+
+
+--
+-- Name: courses uk61og8rbqdd2y28rx2et5fdnxd; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.courses
+    ADD CONSTRAINT uk61og8rbqdd2y28rx2et5fdnxd UNIQUE (code);
+
+
+--
+-- Name: lesson_progress uk_lesson_progress_user_lesson; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lesson_progress
+    ADD CONSTRAINT uk_lesson_progress_user_lesson UNIQUE (user_id, lesson_id);
+
+
+--
+-- Name: lessons ukckgotjbb6upmpdxcbqubdp6pw; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lessons
+    ADD CONSTRAINT ukckgotjbb6upmpdxcbqubdp6pw UNIQUE (chapter_id, lesson_order);
+
+
+--
+-- Name: chapters ukkngnfw8piusng3irmpuxk2pec; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chapters
+    ADD CONSTRAINT ukkngnfw8piusng3irmpuxk2pec UNIQUE (course_id, chapter_order);
+
+
+--
+-- Name: training_programs ukngs339ifgl75e25yth77rmev; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.training_programs
+    ADD CONSTRAINT ukngs339ifgl75e25yth77rmev UNIQUE (code);
+
+
+--
+-- Name: quizzes ukqe2s9lw7k56o4dn543g5j4dw8; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.quizzes
+    ADD CONSTRAINT ukqe2s9lw7k56o4dn543g5j4dw8 UNIQUE (lesson_id);
+
+
+--
+-- Name: training_domains ukqvn6dwmf35uxc3kco6u3dpy9f; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.training_domains
+    ADD CONSTRAINT ukqvn6dwmf35uxc3kco6u3dpy9f UNIQUE (code);
+
+
+--
+-- Name: users ukr43af9ap4edm43mmtq01oddj6; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT ukr43af9ap4edm43mmtq01oddj6 UNIQUE (username);
+
+
+--
+-- Name: lesson_contents ukrs3ywbe8foajeat4ycmy9jra; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lesson_contents
+    ADD CONSTRAINT ukrs3ywbe8foajeat4ycmy9jra UNIQUE (lesson_id);
+
+
+--
+-- Name: chapters ukt86on6e8wbkxh5dy3kcojmbuq; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chapters
+    ADD CONSTRAINT ukt86on6e8wbkxh5dy3kcojmbuq UNIQUE (course_id, code);
+
+
+--
+-- Name: user_badges user_badges_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_badges
+    ADD CONSTRAINT user_badges_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_completed_courses user_completed_courses_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_completed_courses
+    ADD CONSTRAINT user_completed_courses_pkey PRIMARY KEY (user_id, course_id);
+
+
+--
+-- Name: user_completed_lessons user_completed_lessons_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_completed_lessons
+    ADD CONSTRAINT user_completed_lessons_pkey PRIMARY KEY (user_id, lesson_id);
+
+
+--
+-- Name: user_groups user_groups_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_groups
+    ADD CONSTRAINT user_groups_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_quiz_score_answer_sets user_quiz_score_answer_sets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_quiz_score_answer_sets
+    ADD CONSTRAINT user_quiz_score_answer_sets_pkey PRIMARY KEY (quiz_score_id, question_id);
+
+
+--
+-- Name: user_quiz_score_answers user_quiz_score_answers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_quiz_score_answers
+    ADD CONSTRAINT user_quiz_score_answers_pkey PRIMARY KEY (quiz_score_id, question_id);
+
+
+--
+-- Name: user_quiz_scores user_quiz_scores_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_quiz_scores
+    ADD CONSTRAINT user_quiz_scores_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_registered_courses user_registered_courses_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_registered_courses
+    ADD CONSTRAINT user_registered_courses_pkey PRIMARY KEY (user_id, course_id);
+
+
+--
+-- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: video_notes video_notes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.video_notes
+    ADD CONSTRAINT video_notes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: idx_notifications_recipient_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_notifications_recipient_created ON public.notifications USING btree (recipient_id, created_at);
+
+
+--
+-- Name: idx_rag_conversation_message_order; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_rag_conversation_message_order ON public.rag_conversation_messages USING btree (conversation_id, id);
+
+
+--
+-- Name: idx_rag_conversation_owner_course_updated; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_rag_conversation_owner_course_updated ON public.rag_conversations USING btree (user_id, course_id, updated_at);
+
+
+--
+-- Name: idx_video_notes_lesson_user_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_video_notes_lesson_user_time ON public.video_notes USING btree (lesson_id, user_id, timestamp_seconds);
+
+
+--
+-- Name: lessons fk17ucc7gjfjddsyi0gvstkqeat; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lessons
+    ADD CONSTRAINT fk17ucc7gjfjddsyi0gvstkqeat FOREIGN KEY (course_id) REFERENCES public.courses(id);
+
+
+--
+-- Name: user_registered_courses fk1d0v4iew8qc6qv2r3imurf8gw; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_registered_courses
+    ADD CONSTRAINT fk1d0v4iew8qc6qv2r3imurf8gw FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: question_correct_answers fk20d694wynxtnrdqn8d6g1brcp; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.question_correct_answers
+    ADD CONSTRAINT fk20d694wynxtnrdqn8d6g1brcp FOREIGN KEY (question_id) REFERENCES public.questions(id);
+
+
+--
+-- Name: rag_conversations fk24tqm1i0mlvhgkrj4ls51vo0r; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rag_conversations
+    ADD CONSTRAINT fk24tqm1i0mlvhgkrj4ls51vo0r FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: users fk2e2079vao3svqhmmjkbafth32; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT fk2e2079vao3svqhmmjkbafth32 FOREIGN KEY (group_id) REFERENCES public.user_groups(id);
+
+
+--
+-- Name: lesson_contents fk2reocawkagthur0w94okemcbm; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lesson_contents
+    ADD CONSTRAINT fk2reocawkagthur0w94okemcbm FOREIGN KEY (lesson_id) REFERENCES public.lessons(id);
+
+
+--
+-- Name: comments fk37jam8u2nwqw9enhv7nqn52e4; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.comments
+    ADD CONSTRAINT fk37jam8u2nwqw9enhv7nqn52e4 FOREIGN KEY (lesson_id) REFERENCES public.lessons(id);
+
+
+--
+-- Name: course_enrollment_requests fk3k2it4lp6pb3neyum4r14bhv9; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.course_enrollment_requests
+    ADD CONSTRAINT fk3k2it4lp6pb3neyum4r14bhv9 FOREIGN KEY (course_id) REFERENCES public.courses(id);
+
+
+--
+-- Name: rag_chat_messages fk4ltrv8syqhiyfhkyrf177aneg; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rag_chat_messages
+    ADD CONSTRAINT fk4ltrv8syqhiyfhkyrf177aneg FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: user_completed_lessons fk5lrkmdmxpr2yry491pfjvmri6; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_completed_lessons
+    ADD CONSTRAINT fk5lrkmdmxpr2yry491pfjvmri6 FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: user_quiz_scores fk5o0237nka3gtb4t48atbfmk5l; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_quiz_scores
+    ADD CONSTRAINT fk5o0237nka3gtb4t48atbfmk5l FOREIGN KEY (lesson_id) REFERENCES public.lessons(id);
+
+
+--
+-- Name: chapters fk6h1m0nrtdwj37570c0sp2tdcs; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chapters
+    ADD CONSTRAINT fk6h1m0nrtdwj37570c0sp2tdcs FOREIGN KEY (course_id) REFERENCES public.courses(id);
+
+
+--
+-- Name: courses fk6xrn4a6d9aqxt9hr6p1nde4fo; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.courses
+    ADD CONSTRAINT fk6xrn4a6d9aqxt9hr6p1nde4fo FOREIGN KEY (program_id) REFERENCES public.training_programs(id);
+
+
+--
+-- Name: questions fk6y78pbrt5dxp12ljsa8r1ey82; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.questions
+    ADD CONSTRAINT fk6y78pbrt5dxp12ljsa8r1ey82 FOREIGN KEY (course_id) REFERENCES public.courses(id);
+
+
+--
+-- Name: comments fk7h839m3lkvhbyv3bcdv7sm4fj; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.comments
+    ADD CONSTRAINT fk7h839m3lkvhbyv3bcdv7sm4fj FOREIGN KEY (parent_comment_id) REFERENCES public.comments(id);
+
+
+--
+-- Name: user_quiz_scores fk7my1bj6djkxwvv95kv99hv7gs; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_quiz_scores
+    ADD CONSTRAINT fk7my1bj6djkxwvv95kv99hv7gs FOREIGN KEY (course_id) REFERENCES public.courses(id);
+
+
+--
+-- Name: procedure_steps fk97pngv3vi1qfyfohmxq8urq2o; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.procedure_steps
+    ADD CONSTRAINT fk97pngv3vi1qfyfohmxq8urq2o FOREIGN KEY (section_id) REFERENCES public.procedure_sections(id);
+
+
+--
+-- Name: password_reset_otps fk9c75odu4o05pvbvhn2n9ia0tj; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.password_reset_otps
+    ADD CONSTRAINT fk9c75odu4o05pvbvhn2n9ia0tj FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: user_registered_courses fk9r7d9vljssxu96ebqkrerhmab; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_registered_courses
+    ADD CONSTRAINT fk9r7d9vljssxu96ebqkrerhmab FOREIGN KEY (course_id) REFERENCES public.courses(id);
+
+
+--
+-- Name: course_enrollment_requests fkae6cy3tk52vwkp5qt6gxnke05; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.course_enrollment_requests
+    ADD CONSTRAINT fkae6cy3tk52vwkp5qt6gxnke05 FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: course_documents fkb139ei1i1032qmdg5b1a80d7r; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.course_documents
+    ADD CONSTRAINT fkb139ei1i1032qmdg5b1a80d7r FOREIGN KEY (course_id) REFERENCES public.courses(id);
+
+
+--
+-- Name: quizzes fkbdv8uggpsin6pnkx0d80ryqey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.quizzes
+    ADD CONSTRAINT fkbdv8uggpsin6pnkx0d80ryqey FOREIGN KEY (lesson_id) REFERENCES public.lessons(id);
+
+
+--
+-- Name: group_mandatory_courses fkdioils1nvhyt118vfjjrm57ba; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.group_mandatory_courses
+    ADD CONSTRAINT fkdioils1nvhyt118vfjjrm57ba FOREIGN KEY (group_id) REFERENCES public.user_groups(id);
+
+
+--
+-- Name: rag_chat_sources fkdk7j2wq2ya1ewbq2rewk9tkq4; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rag_chat_sources
+    ADD CONSTRAINT fkdk7j2wq2ya1ewbq2rewk9tkq4 FOREIGN KEY (message_id) REFERENCES public.rag_chat_messages(id);
+
+
+--
+-- Name: video_notes fkdtu45r5upb94ymwl6od9lnvh4; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.video_notes
+    ADD CONSTRAINT fkdtu45r5upb94ymwl6od9lnvh4 FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: user_quiz_scores fkec65ylgj6cnyggf661vtpvpsf; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_quiz_scores
+    ADD CONSTRAINT fkec65ylgj6cnyggf661vtpvpsf FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: user_completed_lessons fkehug183822l45hn0i0r4nde3m; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_completed_lessons
+    ADD CONSTRAINT fkehug183822l45hn0i0r4nde3m FOREIGN KEY (lesson_id) REFERENCES public.lessons(id);
+
+
+--
+-- Name: training_programs fkehywxq8asnvvjanjlqlph3oo9; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.training_programs
+    ADD CONSTRAINT fkehywxq8asnvvjanjlqlph3oo9 FOREIGN KEY (domain_id) REFERENCES public.training_domains(id);
+
+
+--
+-- Name: rag_conversations fkelxy5xwr8wfr3t472hxnngh5q; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rag_conversations
+    ADD CONSTRAINT fkelxy5xwr8wfr3t472hxnngh5q FOREIGN KEY (course_id) REFERENCES public.courses(id);
+
+
+--
+-- Name: user_quiz_score_answer_sets fkenfo1t4rejmbtb4j5l0jojka3; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_quiz_score_answer_sets
+    ADD CONSTRAINT fkenfo1t4rejmbtb4j5l0jojka3 FOREIGN KEY (quiz_score_id) REFERENCES public.user_quiz_scores(id);
+
+
+--
+-- Name: quiz_attempts fkfwipvfipnnwsoacoyv5k7fbxc; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.quiz_attempts
+    ADD CONSTRAINT fkfwipvfipnnwsoacoyv5k7fbxc FOREIGN KEY (quiz_id) REFERENCES public.quizzes(id);
+
+
+--
+-- Name: lesson_progress fkhxwj6gbacmwi2768sceg602uf; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lesson_progress
+    ADD CONSTRAINT fkhxwj6gbacmwi2768sceg602uf FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: lesson_documents fkivbwcag296hton24n8esol7h1; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lesson_documents
+    ADD CONSTRAINT fkivbwcag296hton24n8esol7h1 FOREIGN KEY (lesson_id) REFERENCES public.lessons(id);
+
+
+--
+-- Name: procedure_sections fkjb1miamx24rudd9uoojhpf7y5; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.procedure_sections
+    ADD CONSTRAINT fkjb1miamx24rudd9uoojhpf7y5 FOREIGN KEY (lesson_id) REFERENCES public.lessons(id);
+
+
+--
+-- Name: video_notes fkjpqyf8cvyqvhtq0kqwivqxb5o; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.video_notes
+    ADD CONSTRAINT fkjpqyf8cvyqvhtq0kqwivqxb5o FOREIGN KEY (lesson_id) REFERENCES public.lessons(id);
+
+
+--
+-- Name: user_badges fkk6e00pguaij0uke6xr81gt045; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_badges
+    ADD CONSTRAINT fkk6e00pguaij0uke6xr81gt045 FOREIGN KEY (badge_id) REFERENCES public.badges(id);
+
+
+--
+-- Name: badges fkl9a9wv30pxdqkv9byjbnoibm5; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.badges
+    ADD CONSTRAINT fkl9a9wv30pxdqkv9byjbnoibm5 FOREIGN KEY (course_id) REFERENCES public.courses(id);
+
+
+--
+-- Name: user_quiz_score_answers fkm8uwxtsdqyosqp6f7ugcc1an5; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_quiz_score_answers
+    ADD CONSTRAINT fkm8uwxtsdqyosqp6f7ugcc1an5 FOREIGN KEY (quiz_score_id) REFERENCES public.user_quiz_scores(id);
+
+
+--
+-- Name: lessons fkmb78vk1f2oljr16oj1hpo45ma; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lessons
+    ADD CONSTRAINT fkmb78vk1f2oljr16oj1hpo45ma FOREIGN KEY (chapter_id) REFERENCES public.chapters(id);
+
+
+--
+-- Name: questions fkmoaj9c9k8ncsywujtcaujs6rt; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.questions
+    ADD CONSTRAINT fkmoaj9c9k8ncsywujtcaujs6rt FOREIGN KEY (lesson_id) REFERENCES public.lessons(id);
+
+
+--
+-- Name: questions fkn3gvco4b0kewxc0bywf1igfms; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.questions
+    ADD CONSTRAINT fkn3gvco4b0kewxc0bywf1igfms FOREIGN KEY (quiz_id) REFERENCES public.quizzes(id);
+
+
+--
+-- Name: navigation_item_roles fknf3mquh7uin630pcbtygacki4; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.navigation_item_roles
+    ADD CONSTRAINT fknf3mquh7uin630pcbtygacki4 FOREIGN KEY (navigation_id) REFERENCES public.navigation_items(id);
+
+
+--
+-- Name: rag_conversation_messages fko3sqa6jnyltpy3kjgd93tmdy; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rag_conversation_messages
+    ADD CONSTRAINT fko3sqa6jnyltpy3kjgd93tmdy FOREIGN KEY (conversation_id) REFERENCES public.rag_conversations(id);
+
+
+--
+-- Name: quiz_attempts fkpj4a9hw0iv1mo1ut6rppg594u; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.quiz_attempts
+    ADD CONSTRAINT fkpj4a9hw0iv1mo1ut6rppg594u FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: user_completed_courses fkpsj2m474uqvkj04c428p3s4s5; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_completed_courses
+    ADD CONSTRAINT fkpsj2m474uqvkj04c428p3s4s5 FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: notifications fkqqnsjxlwleyjbxlmm213jaj3f; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notifications
+    ADD CONSTRAINT fkqqnsjxlwleyjbxlmm213jaj3f FOREIGN KEY (recipient_id) REFERENCES public.users(id);
+
+
+--
+-- Name: lesson_progress fkqwr70bkn0j6gok1y4op9jns8y; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lesson_progress
+    ADD CONSTRAINT fkqwr70bkn0j6gok1y4op9jns8y FOREIGN KEY (lesson_id) REFERENCES public.lessons(id);
+
+
+--
+-- Name: user_badges fkr46ah81sjymsn035m4ojstn5s; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_badges
+    ADD CONSTRAINT fkr46ah81sjymsn035m4ojstn5s FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: rag_conversation_sources fkrhbw451h8rbeojcup641no9s; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rag_conversation_sources
+    ADD CONSTRAINT fkrhbw451h8rbeojcup641no9s FOREIGN KEY (message_id) REFERENCES public.rag_conversation_messages(id);
+
+
+--
+-- Name: group_mandatory_courses fkrwre98uv6fysh9rn57g89cmv3; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.group_mandatory_courses
+    ADD CONSTRAINT fkrwre98uv6fysh9rn57g89cmv3 FOREIGN KEY (course_id) REFERENCES public.courses(id);
+
+
+--
+-- Name: rag_chat_messages fks023e2fikpjtwhvd2vk1v2l9i; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rag_chat_messages
+    ADD CONSTRAINT fks023e2fikpjtwhvd2vk1v2l9i FOREIGN KEY (course_id) REFERENCES public.courses(id);
+
+
+--
+-- Name: question_options fksb9v00wdrgc9qojtjkv7e1gkp; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.question_options
+    ADD CONSTRAINT fksb9v00wdrgc9qojtjkv7e1gkp FOREIGN KEY (question_id) REFERENCES public.questions(id);
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict ZR3rFblNovnqnSCmHZgC0x28tDjb17Zb0qW8hDuj93EKsD12KsokhR9VP1L6SSU

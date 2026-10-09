@@ -15,11 +15,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByUsername(String username);
     List<User> findByRole(String role);
 
-    @Query("select count(topic) > 0 from User user join user.registeredTopics topic " +
-            "where user.username = :username and topic.id = :topicId")
-    boolean hasRegisteredTopic(@Param("username") String username, @Param("topicId") String topicId);
+    @Query("select count(course) > 0 from User user join user.registeredCourses course " +
+            "where user.username = :username and course.id = :courseId")
+    boolean hasRegisteredCourse(@Param("username") String username, @Param("courseId") String courseId);
 
-    @Query("select count(topic) > 0 from User user join user.userGroup userGroup " +
-            "join userGroup.mandatoryTopics topic where user.username = :username and topic.id = :topicId")
-    boolean hasMandatoryTopic(@Param("username") String username, @Param("topicId") String topicId);
+    @Query("select count(course) > 0 from User user join user.userGroup userGroup " +
+            "join userGroup.mandatoryCourses course where user.username = :username and course.id = :courseId")
+    boolean hasMandatoryCourse(@Param("username") String username, @Param("courseId") String courseId);
 }

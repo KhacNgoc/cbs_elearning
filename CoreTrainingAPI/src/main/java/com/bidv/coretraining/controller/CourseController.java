@@ -4,7 +4,7 @@ import com.bidv.coretraining.dto.CommentDto;
 import com.bidv.coretraining.dto.CommentRequest;
 import com.bidv.coretraining.dto.CommentReplyRequest;
 import com.bidv.coretraining.dto.LessonDto;
-import com.bidv.coretraining.dto.TopicDto;
+import com.bidv.coretraining.dto.CourseDto;
 import com.bidv.coretraining.dto.VideoNoteDto;
 import com.bidv.coretraining.dto.VideoNoteRequest;
 import com.bidv.coretraining.security.CustomUserDetails;
@@ -21,23 +21,25 @@ import java.util.List;
 public class CourseController {
 
     private final CourseService courseService;
+    @org.springframework.beans.factory.annotation.Autowired private com.bidv.coretraining.service.TrainingStructureService structure;
 
     public CourseController(CourseService courseService) {
         this.courseService = courseService;
     }
 
-    @GetMapping("/topics")
-    public ResponseEntity<List<TopicDto>> getAllTopics() {
-        return ResponseEntity.ok(courseService.getAllTopics());
+    @GetMapping("/courses")
+    public ResponseEntity<List<CourseDto>> getAllCourses() {
+        return ResponseEntity.ok(courseService.getAllCourses());
     }
 
-    @GetMapping("/topics/{id}")
-    public ResponseEntity<TopicDto> getTopicById(@PathVariable String id) {
-        return ResponseEntity.ok(courseService.getTopicById(id));
+    @GetMapping("/courses/{id}")
+    public ResponseEntity<CourseDto> getCourseById(@PathVariable String id) {
+        return ResponseEntity.ok(courseService.getCourseById(id));
     }
 
     @GetMapping("/lessons/{id}")
-    public ResponseEntity<LessonDto> getLessonById(@PathVariable String id) {
+    public ResponseEntity<LessonDto> getLessonById(@PathVariable String id, @AuthenticationPrincipal CustomUserDetails userDetails) {
+        structure.requireLesson(id,userDetails.getUsername());
         return ResponseEntity.ok(courseService.getLessonById(id));
     }
 

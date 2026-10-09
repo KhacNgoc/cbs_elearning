@@ -24,25 +24,25 @@ import java.util.stream.Collectors;
 @Service
 public class AdminServiceImpl implements AdminService {
 
-    private final TopicRepository topicRepository;
+    private final CourseRepository courseRepository;
     private final LessonRepository lessonRepository;
     private final QuestionRepository questionRepository;
     private final CourseMapper courseMapper;
     private final QuizMapper quizMapper;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final TopicEnrollmentRequestRepository enrollmentRequestRepository;
+    private final CourseEnrollmentRequestRepository enrollmentRequestRepository;
     private final NotificationService notificationService;
     private final UserGroupRepository userGroupRepository;
 
-    public AdminServiceImpl(TopicRepository topicRepository, LessonRepository lessonRepository,
+    public AdminServiceImpl(CourseRepository courseRepository, LessonRepository lessonRepository,
                             QuestionRepository questionRepository, CourseMapper courseMapper,
                             QuizMapper quizMapper, UserRepository userRepository,
                             PasswordEncoder passwordEncoder,
-                            TopicEnrollmentRequestRepository enrollmentRequestRepository,
+                            CourseEnrollmentRequestRepository enrollmentRequestRepository,
                             NotificationService notificationService,
                             UserGroupRepository userGroupRepository) {
-        this.topicRepository = topicRepository;
+        this.courseRepository = courseRepository;
         this.lessonRepository = lessonRepository;
         this.questionRepository = questionRepository;
         this.courseMapper = courseMapper;
@@ -55,55 +55,51 @@ public class AdminServiceImpl implements AdminService {
     }
 
 
-    // Topic CRUD
+    @org.springframework.beans.factory.annotation.Autowired private com.bidv.coretraining.service.TrainingStructureService structure;
+    @org.springframework.beans.factory.annotation.Autowired private ChapterRepository chapterRepository;
+
+    // Course CRUD
     @Override
     @Transactional
-    public TopicDto createTopic(TopicDto topicDto) {
-        Topic topic = Topic.builder()
-                .id(topicDto.getId())
-                .name(topicDto.getName())
-                .iconName(topicDto.getIconName())
-                .build();
-        Topic saved = topicRepository.save(topic);
-        return courseMapper.toTopicDto(saved);
+    public CourseDto createCourse(CourseDto courseDto) {
+        return structure.saveCourse(null,new com.bidv.coretraining.service.TrainingStructureService.CourseRequest(courseDto.getCode(),courseDto.getName(),courseDto.getProgramId(),courseDto.getDescription(),courseDto.getIconName(),courseDto.getVersion()));
     }
 
     @Override
     @Transactional
-    public TopicDto updateTopic(String id, TopicDto topicDto) {
-        Topic topic = topicRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Topic", "id", id));
-        topic.setName(topicDto.getName());
-        topic.setIconName(topicDto.getIconName());
-        Topic saved = topicRepository.save(topic);
-        return courseMapper.toTopicDto(saved);
+    public CourseDto updateCourse(String id, CourseDto courseDto) {
+        return structure.saveCourse(id,new com.bidv.coretraining.service.TrainingStructureService.CourseRequest(courseDto.getCode(),courseDto.getName(),courseDto.getProgramId(),courseDto.getDescription(),courseDto.getIconName(),courseDto.getVersion()));
     }
 
     @Override
     @Transactional
-    public void deleteTopic(String id) {
-        Topic topic = topicRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Topic", "id", id));
-        topicRepository.delete(topic);
+    public void deleteCourse(String id) {
+        structure.deleteCourse(id);
     }
 
     // Lesson CRUD
     @Override
     @Transactional
     public LessonDto createLesson(LessonDto lessonDto) {
-        Topic topic = topicRepository.findById(lessonDto.getTopicId())
-                .orElseThrow(() -> new ResourceNotFoundException("Topic", "id", lessonDto.getTopicId()));
-
+        if(lessonDto.getId()==null || lessonDto.getId().isBlank() || lessonDto.getTitle()==null || lessonDto.getTitle().isBlank())
+            throw new BadRequestException("Mã và tên bài học không được để trống");
+        Chapter chapter=structure.chapter(lessonDto.getChapterId());
+        Course course=chapter.getCourse();
+        if(!"DRAFT".equals(course.getStatus())) throw new BadRequestException("Chuyển khóa về bản nháp trước khi thêm bài");
+        if(lessonRepository.existsById(lessonDto.getId())) throw new BadRequestException("Mã bài học đã tồn tại");
         Lesson lesson = Lesson.builder()
                 .id(lessonDto.getId())
                 .title(lessonDto.getTitle())
-                .topic(topic)
-                .lessonOrder(nextLessonOrder(topic.getId()))
+                .course(course)
+                .chapter(chapter)
+                .lessonOrder(chapter.getLessons().stream().mapToInt(Lesson::getLessonOrder).max().orElse(-1)+1)
                 .hint(lessonDto.getHint())
-                .videoUrl(normalizeUploadedPath(lessonDto.getVideoUrl()))
-                .videoSource(resolveVideoSource(lessonDto))
                 .build();
 
+        lesson.ensureContent();
+        lesson.setVideoUrl(normalizeUploadedPath(lessonDto.getVideoUrl()));
+        lesson.setVideoSource(resolveVideoSource(lessonDto));
+        lesson.setTextBody(lessonDto.getTextBody());
         lesson.setDocuments(buildDocuments(lessonDto.getDocuments(), lesson));
 
         if (lessonDto.getProcedureSteps() != null) {
@@ -120,26 +116,25 @@ public class AdminServiceImpl implements AdminService {
             lesson.setProcedureSteps(sections);
         }
 
-        Lesson saved = lessonRepository.save(lesson);
+        Lesson saved = lessonRepository.saveAndFlush(lesson);
         return courseMapper.toLessonDto(saved);
     }
 
     @Override
     @Transactional
     public LessonDto updateLesson(String id, LessonDto lessonDto) {
+        if(lessonDto.getTitle()==null || lessonDto.getTitle().isBlank())throw new BadRequestException("Tên bài học không được để trống");
         Lesson lesson = lessonRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", id));
 
-        String previousTopicId = lesson.getTopic().getId();
-        if (!lesson.getTopic().getId().equals(lessonDto.getTopicId())) {
-            Topic topic = topicRepository.findById(lessonDto.getTopicId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Topic", "id", lessonDto.getTopicId()));
-            lesson.setTopic(topic);
-            lesson.setLessonOrder(nextLessonOrder(topic.getId()));
-        }
-
+        if(!"DRAFT".equals(lesson.getCourse().getStatus())) throw new BadRequestException("Chuyển khóa về bản nháp trước khi sửa nội dung");
+        if(lessonDto.getVersion()!=null && !java.util.Objects.equals(lesson.getVersion(),lessonDto.getVersion()))
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,"Bài học đã thay đổi. Tải lại trước khi lưu");
+        if(lessonDto.getChapterId()!=null && !lesson.getChapter().getId().equals(lessonDto.getChapterId())) throw new BadRequestException("Không đổi chương trong trình soạn nội dung");
         lesson.setTitle(lessonDto.getTitle());
+        lesson.setUpdatedAt(java.time.LocalDateTime.now());
         lesson.setHint(lessonDto.getHint());
+        lesson.setTextBody(lessonDto.getTextBody());
         lesson.setVideoUrl(normalizeUploadedPath(lessonDto.getVideoUrl()));
         lesson.setVideoSource(resolveVideoSource(lessonDto));
         lesson.getDocuments().clear();
@@ -159,11 +154,7 @@ public class AdminServiceImpl implements AdminService {
             }
         }
 
-        Lesson saved = lessonRepository.save(lesson);
-        if (!previousTopicId.equals(saved.getTopic().getId())) {
-            lessonRepository.flush();
-            normalizeLessonOrder(previousTopicId);
-        }
+        Lesson saved = lessonRepository.saveAndFlush(lesson);
         return courseMapper.toLessonDto(saved);
     }
 
@@ -186,27 +177,22 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional
     public void deleteLesson(String id) {
-        Lesson lesson = lessonRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", id));
-        String topicId = lesson.getTopic().getId();
-        lessonRepository.delete(lesson);
-        lessonRepository.flush();
-        normalizeLessonOrder(topicId);
+        structure.deleteLesson(id);
     }
 
     @Override
     @Transactional
-    public List<LessonDto> reorderLessons(String topicId, List<String> lessonIds) {
-        if (!topicRepository.existsById(topicId)) {
-            throw new ResourceNotFoundException("Topic", "id", topicId);
+    public List<LessonDto> reorderLessons(String courseId, List<String> lessonIds) {
+        if (!courseRepository.existsById(courseId)) {
+            throw new ResourceNotFoundException("Course", "id", courseId);
         }
-        List<Lesson> lessons = lessonRepository.findByTopicIdOrderByLessonOrderAscIdAsc(topicId);
+        List<Lesson> lessons = lessonRepository.findByCourseIdOrderByLessonOrderAscIdAsc(courseId);
         Set<String> existingIds = lessons.stream().map(Lesson::getId).collect(Collectors.toSet());
         if (lessonIds == null
                 || lessonIds.size() != lessons.size()
                 || Set.copyOf(lessonIds).size() != lessonIds.size()
                 || !existingIds.equals(Set.copyOf(lessonIds))) {
-            throw new IllegalArgumentException("Danh sách sắp xếp phải chứa đầy đủ và duy nhất các bài học của chủ đề");
+            throw new IllegalArgumentException("Danh sách sắp xếp phải chứa đầy đủ và duy nhất các bài học của khóa học");
         }
 
         java.util.Map<String, Lesson> lessonsById = lessons.stream()
@@ -221,16 +207,16 @@ public class AdminServiceImpl implements AdminService {
         );
     }
 
-    private int nextLessonOrder(String topicId) {
-        return lessonRepository.findByTopicIdOrderByLessonOrderAscIdAsc(topicId).stream()
+    private int nextLessonOrder(String courseId) {
+        return lessonRepository.findByCourseIdOrderByLessonOrderAscIdAsc(courseId).stream()
                 .map(Lesson::getLessonOrder)
                 .filter(java.util.Objects::nonNull)
                 .max(Integer::compareTo)
                 .orElse(-1) + 1;
     }
 
-    private void normalizeLessonOrder(String topicId) {
-        List<Lesson> lessons = lessonRepository.findByTopicIdOrderByLessonOrderAscIdAsc(topicId);
+    private void normalizeLessonOrder(String courseId) {
+        List<Lesson> lessons = lessonRepository.findByCourseIdOrderByLessonOrderAscIdAsc(courseId);
         for (int index = 0; index < lessons.size(); index++) {
             lessons.get(index).setLessonOrder(index);
         }
@@ -261,32 +247,38 @@ public class AdminServiceImpl implements AdminService {
     // Question CRUD
     @Override
     @Transactional(readOnly = true)
-    public List<QuestionDto> getQuizQuestions(String topicId, String lessonId) {
-        if (!topicRepository.existsById(topicId)) {
-            throw new ResourceNotFoundException("Topic", "id", topicId);
+    public List<QuestionDto> getQuizQuestions(String courseId, String lessonId) {
+        if (!courseRepository.existsById(courseId)) {
+            throw new ResourceNotFoundException("Course", "id", courseId);
         }
         if (lessonId != null && !lessonId.isBlank()) {
             Lesson lesson = lessonRepository.findById(lessonId)
                     .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
-            if (!lesson.getTopic().getId().equals(topicId)) {
-                throw new BadRequestException("Bài học không thuộc chủ đề đã chọn");
+            if (!lesson.getCourse().getId().equals(courseId)) {
+                throw new BadRequestException("Bài học không thuộc khóa học đã chọn");
             }
             return quizMapper.toQuestionDtoList(questionRepository.findByLessonId(lessonId));
         }
-        return quizMapper.toQuestionDtoList(questionRepository.findByTopicIdAndLessonIsNull(topicId));
+        return quizMapper.toQuestionDtoList(questionRepository.findByCourseIdAndLessonIsNull(courseId));
     }
 
     @Override
     @Transactional
     public QuestionDto createQuestion(QuestionDto questionDto) {
-        Topic topic = topicRepository.findById(questionDto.getTopicId())
-                .orElseThrow(() -> new ResourceNotFoundException("Topic", "id", questionDto.getTopicId()));
+        Course course = courseRepository.findById(questionDto.getCourseId())
+                .orElseThrow(() -> new ResourceNotFoundException("Course", "id", questionDto.getCourseId()));
 
         normalizeAndValidateQuestion(questionDto);
 
+        Lesson quizLesson=resolveQuestionLesson(questionDto,course);
+        if(quizLesson==null) throw new BadRequestException("Bài kiểm tra phải thuộc một bài học");
+        if(!"DRAFT".equals(course.getStatus())) throw new BadRequestException("Chuyển khóa về bản nháp trước khi soạn kiểm tra");
+        quizLesson.ensureQuiz();
+        lessonRepository.saveAndFlush(quizLesson);
         Question question = Question.builder()
-                .topic(topic)
-                .lesson(resolveQuestionLesson(questionDto, topic))
+                .quiz(quizLesson.getQuiz())
+                .course(course)
+                .lesson(resolveQuestionLesson(questionDto, course))
                 .text(questionDto.getText())
                 .options(questionDto.getOptions() != null ? questionDto.getOptions() : new ArrayList<>())
                 .correctAnswer(questionDto.getCorrectAnswer())
@@ -305,14 +297,16 @@ public class AdminServiceImpl implements AdminService {
                 .orElseThrow(() -> new ResourceNotFoundException("Question", "id", id));
 
         normalizeAndValidateQuestion(questionDto);
-        if (!question.getTopic().getId().equals(questionDto.getTopicId())) {
-            Topic topic = topicRepository.findById(questionDto.getTopicId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Topic", "id", questionDto.getTopicId()));
-            question.setTopic(topic);
+        if (!question.getCourse().getId().equals(questionDto.getCourseId())) {
+            Course course = courseRepository.findById(questionDto.getCourseId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Course", "id", questionDto.getCourseId()));
+            question.setCourse(course);
         }
 
+        if(!"DRAFT".equals(question.getCourse().getStatus())) throw new BadRequestException("Chuyển khóa về bản nháp trước khi sửa câu hỏi");
+        if(!java.util.Objects.equals(question.getLesson().getId(),questionDto.getLessonId())) throw new BadRequestException("Không đổi phạm vi câu hỏi");
         question.setText(questionDto.getText());
-        question.setLesson(resolveQuestionLesson(questionDto, question.getTopic()));
+        question.setLesson(resolveQuestionLesson(questionDto, question.getCourse()));
         question.setOptions(questionDto.getOptions() != null ? questionDto.getOptions() : new ArrayList<>());
         question.setCorrectAnswer(questionDto.getCorrectAnswer());
         question.setCorrectAnswers(questionDto.getCorrectAnswers());
@@ -360,14 +354,14 @@ public class AdminServiceImpl implements AdminService {
         questionDto.setType(type);
     }
 
-    private Lesson resolveQuestionLesson(QuestionDto questionDto, Topic topic) {
+    private Lesson resolveQuestionLesson(QuestionDto questionDto, Course course) {
         if (questionDto.getLessonId() == null || questionDto.getLessonId().isBlank()) {
             return null;
         }
         Lesson lesson = lessonRepository.findById(questionDto.getLessonId())
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", questionDto.getLessonId()));
-        if (!lesson.getTopic().getId().equals(topic.getId())) {
-            throw new IllegalArgumentException("Bài học không thuộc chủ đề đã chọn");
+        if (!lesson.getCourse().getId().equals(course.getId())) {
+            throw new IllegalArgumentException("Bài học không thuộc khóa học đã chọn");
         }
         return lesson;
     }
@@ -377,6 +371,7 @@ public class AdminServiceImpl implements AdminService {
     public void deleteQuestion(Long id) {
         Question question = questionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Question", "id", id));
+        if(!"DRAFT".equals(question.getCourse().getStatus()))throw new BadRequestException("Chuyển khóa về bản nháp trước khi xóa câu hỏi");
         questionRepository.delete(question);
     }
 
@@ -392,7 +387,7 @@ public class AdminServiceImpl implements AdminService {
     @Transactional
     public EnrollmentRequestDto reviewEnrollmentRequest(
             Long id, boolean approve, String rejectionReason, String reviewedBy) {
-        TopicEnrollmentRequest request = enrollmentRequestRepository.findById(id)
+        CourseEnrollmentRequest request = enrollmentRequestRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Enrollment request", "id", id));
         if (request.getStatus() != EnrollmentStatus.PENDING) {
             throw new BadRequestException("Yêu cầu đăng ký này đã được xử lý");
@@ -405,7 +400,7 @@ public class AdminServiceImpl implements AdminService {
         request.setReviewedBy(reviewedBy);
         request.setRejectionReason(approve ? null : rejectionReason.trim());
         if (approve) {
-            request.getUser().getRegisteredTopics().add(request.getTopic());
+            request.getUser().getRegisteredCourses().add(request.getCourse());
             userRepository.save(request.getUser());
         }
         EnrollmentRequestDto result = toEnrollmentRequestDto(enrollmentRequestRepository.save(request));
@@ -414,21 +409,21 @@ public class AdminServiceImpl implements AdminService {
                 approve ? NotificationType.ENROLLMENT_APPROVED : NotificationType.ENROLLMENT_REJECTED,
                 approve ? "Đăng ký khóa học đã được duyệt" : "Đăng ký khóa học bị từ chối",
                 approve
-                        ? "Bạn đã được ghi danh vào khóa học " + request.getTopic().getName()
-                        : "Khóa học " + request.getTopic().getName()
+                        ? "Bạn đã được ghi danh vào khóa học " + request.getCourse().getName()
+                        : "Khóa học " + request.getCourse().getName()
                             + " bị từ chối. Lý do: " + request.getRejectionReason(),
                 approve ? "/" : null);
         return result;
     }
 
-    private EnrollmentRequestDto toEnrollmentRequestDto(TopicEnrollmentRequest request) {
+    private EnrollmentRequestDto toEnrollmentRequestDto(CourseEnrollmentRequest request) {
         return EnrollmentRequestDto.builder()
                 .id(request.getId())
                 .userId(request.getUser().getId())
                 .username(request.getUser().getUsername())
                 .fullName(request.getUser().getFullName())
-                .topicId(request.getTopic().getId())
-                .topicName(request.getTopic().getName())
+                .courseId(request.getCourse().getId())
+                .courseName(request.getCourse().getName())
                 .status(request.getStatus())
                 .requestedAt(request.getRequestedAt())
                 .reviewedAt(request.getReviewedAt())
@@ -440,44 +435,25 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional
     public QuizSettingsDto updateQuizSettings(QuizSettingsDto settings) {
-        int passingScore = settings.getPassingScore() == null ? 80 : settings.getPassingScore();
-        if (passingScore < 1 || passingScore > 100) {
-            throw new IllegalArgumentException("Ngưỡng đạt phải nằm trong khoảng từ 1 đến 100");
-        }
-        if (settings.getLessonId() != null && !settings.getLessonId().isBlank()) {
-            Lesson lesson = lessonRepository.findById(settings.getLessonId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", settings.getLessonId()));
-            if (!lesson.getTopic().getId().equals(settings.getTopicId())) {
-                throw new IllegalArgumentException("Bài học không thuộc chủ đề đã chọn");
-            }
-            lesson.setQuizPassingScore(passingScore);
-            lessonRepository.save(lesson);
-        } else {
-            Topic topic = topicRepository.findById(settings.getTopicId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Topic", "id", settings.getTopicId()));
-            topic.setQuizPassingScore(passingScore);
-            topicRepository.save(topic);
-        }
-        settings.setPassingScore(passingScore);
-        return settings;
+        int passingScore=settings.getPassingScore()==null?80:settings.getPassingScore();
+        if(passingScore<1 || passingScore>100)throw new BadRequestException("Ngưỡng đạt phải từ 1 đến 100");
+        if(settings.getLessonId()==null)throw new BadRequestException("Kiểm tra phải gắn với bài học");
+        Lesson lesson=structure.lesson(settings.getLessonId());
+        if(!lesson.getCourse().getId().equals(settings.getCourseId()))throw new BadRequestException("Bài không thuộc khóa");
+        if(!"DRAFT".equals(lesson.getCourse().getStatus()))throw new BadRequestException("Chuyển khóa về bản nháp trước khi đổi kiểm tra");
+        lesson.ensureQuiz();lesson.getQuiz().setPassingScore(passingScore);
+        lesson.getQuiz().setRequiredForProgress(!Boolean.FALSE.equals(settings.getRequiredForProgress()));
+        lessonRepository.save(lesson);settings.setPassingScore(passingScore);return settings;
     }
 
     @Override
     @Transactional
-    public void deleteQuiz(String topicId, String lessonId) {
-        if (lessonId != null && !lessonId.isBlank()) {
-            Lesson lesson = lessonRepository.findById(lessonId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
-            if (!lesson.getTopic().getId().equals(topicId)) {
-                throw new IllegalArgumentException("Bài học không thuộc chủ đề đã chọn");
-            }
-            questionRepository.deleteByLessonId(lessonId);
-        } else {
-            if (!topicRepository.existsById(topicId)) {
-                throw new ResourceNotFoundException("Topic", "id", topicId);
-            }
-            questionRepository.deleteByTopicIdAndLessonIsNull(topicId);
-        }
+    public void deleteQuiz(String courseId, String lessonId) {
+        if(lessonId==null)throw new BadRequestException("Kiểm tra phải gắn với bài học");
+        Lesson lesson=structure.lesson(lessonId);
+        if(!lesson.getCourse().getId().equals(courseId))throw new BadRequestException("Bài không thuộc khóa");
+        if(!"DRAFT".equals(lesson.getCourse().getStatus()))throw new BadRequestException("Chuyển khóa về bản nháp trước khi xóa kiểm tra");
+        questionRepository.deleteByLessonId(lessonId);questionRepository.flush();lesson.setQuiz(null);lessonRepository.save(lesson);
     }
 
     // User CRUD implementation

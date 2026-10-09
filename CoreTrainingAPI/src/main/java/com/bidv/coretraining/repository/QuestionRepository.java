@@ -8,10 +8,10 @@ import java.util.List;
 
 @Repository
 public interface QuestionRepository extends JpaRepository<Question, Long> {
-    List<Question> findByTopicIdAndLessonIsNull(String topicId);
+    List<Question> findByCourseIdAndLessonIsNull(String courseId);
     List<Question> findByLessonId(String lessonId);
-    boolean existsByTopicIdAndLessonIsNull(String topicId);
+    boolean existsByCourseIdAndLessonIsNull(String courseId);
     boolean existsByLessonId(String lessonId);
     void deleteByLessonId(String lessonId);
-    void deleteByTopicIdAndLessonIsNull(String topicId);
+    void deleteByCourseIdAndLessonIsNull(String courseId);
 }

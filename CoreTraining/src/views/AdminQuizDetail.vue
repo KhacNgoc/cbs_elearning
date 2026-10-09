@@ -1,6 +1,6 @@
 <template>
   <main class="quiz-editor-page">
-    <header class="quiz-editor-header">
+    <header v-if="!embedded" class="quiz-editor-header">
       <button class="back-button" @click="router.push('/admin?tab=exams')">
         <ArrowLeft :size="19" />
         <span><strong>Quay lại</strong><small>Danh sách bài kiểm tra</small></span>
@@ -12,23 +12,24 @@
       </div>
     </header>
 
+    <p v-if="courseId && !canEdit && !embedded" class="readonly-notice">Khóa học đang ở chế độ chỉ xem. Chuyển khóa về bản nháp để chỉnh sửa bài kiểm tra.</p>
     <section class="editor-card settings-card">
       <div class="section-heading">
         <span>1</span>
-        <div><h2>Thông tin bài kiểm tra</h2><p>Chọn chủ đề và phạm vi áp dụng.</p></div>
+        <div><h2>Thông tin bài kiểm tra</h2><p>Chọn khóa học và phạm vi áp dụng.</p></div>
       </div>
       <div class="settings-grid">
         <label>
-          <span>Chủ đề</span>
-          <select v-model="topicId" :disabled="!isNew">
-            <option value="" disabled>Chọn chủ đề</option>
-            <option v-for="topic in courseStore.topics" :key="topic.id" :value="topic.id">{{ topic.name }}</option>
+          <span>Khóa học</span>
+          <select v-model="courseId" :disabled="!isNew">
+            <option value="" disabled>Chọn khóa học</option>
+            <option v-for="course in courseStore.courses" :key="course.id" :value="course.id">{{ course.name }}</option>
           </select>
         </label>
         <label>
           <span>Phạm vi</span>
-          <select v-model="lessonId" :disabled="!isNew || !topicId">
-            <option value="">Bài kiểm tra tổng hợp của chủ đề</option>
+          <select v-model="lessonId" :disabled="!isNew || !courseId">
+            <option value="" disabled>Chọn bài học để đính kèm kiểm tra</option>
             <option v-for="lesson in availableLessons" :key="lesson.id" :value="lesson.id">
               Bài học: {{ lesson.title }}
             </option>
@@ -37,19 +38,20 @@
         <label>
           <span>Ngưỡng điểm đạt</span>
           <div class="score-input">
-            <input v-model.number="passingScore" type="number" min="1" max="100" />
+            <input v-model.number="passingScore" :disabled="!canEdit" type="number" min="1" max="100" />
             <strong>%</strong>
           </div>
           <small>Học viên cần đạt tối thiểu mức này để hoàn thành bài kiểm tra.</small>
         </label>
       </div>
-      <div v-if="isNew" class="settings-action">
+      <label class="required-quiz-setting"><input v-model="requiredForProgress" :disabled="!canEdit" type="checkbox" /> Bắt buộc đạt để sang bài tiếp theo<small>Tắt tùy chọn: bài kiểm tra tự luyện, không chặn hoàn thành bài, chương hoặc khóa.</small></label>
+      <div v-if="isNew && canEdit" class="settings-action">
         <p>Phạm vi sẽ tự động áp dụng cho mọi câu hỏi được thêm hoặc import.</p>
-        <button class="primary-button" :disabled="!topicId" @click="confirmScope">
+        <button class="primary-button" :disabled="!courseId || !lessonId" @click="confirmScope">
           Tiếp tục soạn câu hỏi <ArrowRight :size="17" />
         </button>
       </div>
-      <div v-else class="settings-action">
+      <div v-else-if="canEdit" class="settings-action">
         <p>Thay đổi ngưỡng đạt sẽ áp dụng cho những lượt làm bài tiếp theo.</p>
         <button class="primary-button" :disabled="savingSettings" @click="saveSettings">
           {{ savingSettings ? "Đang lưu..." : "Lưu ngưỡng đạt" }}
@@ -62,7 +64,7 @@
         <div class="section-heading question-section-heading">
           <span>2</span>
           <div><h2>Danh sách câu hỏi</h2><p>{{ questions.length }} câu hỏi trong bài kiểm tra.</p></div>
-          <div class="question-tools">
+          <div v-if="canEdit" class="question-tools">
             <button class="ai-button" :disabled="generating" @click="showAiPanel = !showAiPanel">
               <Sparkles :size="16" /> {{ generating ? "Đang tạo..." : "Tạo bằng AI" }}
             </button>
@@ -80,11 +82,11 @@
           <input v-model="searchQuery" type="search" placeholder="Tìm theo nội dung câu hỏi hoặc đáp án..." />
         </div>
 
-        <section v-if="showAiPanel" class="ai-panel">
+        <section v-if="canEdit && showAiPanel" class="ai-panel">
           <div class="ai-panel-heading">
             <div>
-              <strong>Tạo bản nháp từ tài liệu của {{ lessonId ? "bài học" : "chủ đề" }}</strong>
-              <small>AI tìm kiếm trên toàn bộ tài liệu của topic. Tên lesson chỉ được dùng để định hướng tìm kiếm.</small>
+              <strong>Tạo bản nháp từ tài liệu của {{ lessonId ? "bài học" : "khóa học" }}</strong>
+              <small>AI tìm kiếm trên toàn bộ tài liệu của course. Tên lesson chỉ được dùng để định hướng tìm kiếm.</small>
             </div>
             <button aria-label="Đóng" @click="showAiPanel = false"><X :size="18" /></button>
           </div>
@@ -164,7 +166,7 @@
         </section>
 
         <Transition name="editor-expand">
-        <div v-if="showQuestionForm" class="question-editor">
+        <div v-if="canEdit && showQuestionForm" class="question-editor">
           <div class="question-editor-title">
             <div><strong>{{ editingId ? "Chỉnh sửa câu hỏi" : "Câu hỏi mới" }}</strong><small>Chọn loại câu hỏi và đánh dấu đầy đủ đáp án đúng.</small></div>
             <button aria-label="Đóng" @click="closeQuestionForm"><X :size="18" /></button>
@@ -220,7 +222,7 @@
                 </span>
               </div>
             </div>
-            <div class="question-actions">
+            <div v-if="canEdit" class="question-actions">
               <button title="Sửa câu hỏi" @click="editQuestion(question)"><Edit :size="17" /></button>
               <button class="danger" title="Xóa câu hỏi" @click="deleteQuestion(question)"><Trash2 :size="17" /></button>
             </div>
@@ -230,7 +232,7 @@
           {{ searchQuery ? "Không tìm thấy câu hỏi phù hợp." : "Bài kiểm tra chưa có câu hỏi. Hãy thêm thủ công hoặc import CSV." }}
         </div>
       </section>
-      <section class="danger-zone">
+      <section v-if="canEdit" class="danger-zone">
         <div>
           <strong>Xóa bài kiểm tra</strong>
           <p>Xóa toàn bộ {{ questions.length }} câu hỏi của bài kiểm tra này. Thao tác không thể hoàn tác.</p>
@@ -259,14 +261,19 @@ import { ArrowLeft, ArrowRight, CheckCircle2, Download, Edit, FileUp, LoaderCirc
 import { useCourseStore } from "../stores/courseStore";
 import { adminApi } from "../api/adminApi";
 import type { GeneratedQuizQuestion, QuizGenerationSource } from "../api/adminApi";
-import type { Question } from "../types";
+import type { Question, Lesson } from "../types";
 import ConfirmModal from "../components/ConfirmModal.vue";
+import { showToast } from "../utils/toast";
 
+const props=defineProps<{embedded?:boolean; lesson?:Lesson; readOnly?:boolean}>();
+const emit=defineEmits<{saved:[]}>();
+const requiredForProgress=ref(true);
 const route = useRoute();
 const router = useRouter();
 const courseStore = useCourseStore();
-const isNew = computed(() => route.name === "AdminQuizCreate");
-const topicId = ref("");
+const isNew = computed(() => !props.lesson && route.name === "AdminQuizCreate");
+const courseId = ref("");
+const canEdit = computed(() => !props.readOnly && courseStore.courses.find(course => course.id === courseId.value)?.status === 'DRAFT');
 const lessonId = ref("");
 const questions = ref<Question[]>([]);
 const searchQuery = ref("");
@@ -308,11 +315,11 @@ const form = reactive<{
   correctAnswers: number[];
 }>({ text: "", options: ["", "", "", ""], type: "SINGLE_CHOICE", correctAnswers: [0] });
 
-const availableLessons = computed(() => courseStore.topics.find((topic) => topic.id === topicId.value)?.lessons || []);
+const availableLessons = computed(() => courseStore.courses.find((course) => course.id === courseId.value)?.lessons || []);
 const pageTitle = computed(() => {
-  const topic = courseStore.topics.find((item) => item.id === topicId.value);
+  const course = courseStore.courses.find((item) => item.id === courseId.value);
   const lesson = availableLessons.value.find((item) => item.id === lessonId.value);
-  return lesson?.title || (topic ? `Bài kiểm tra tổng hợp — ${topic.name}` : "Bài kiểm tra mới");
+  return lesson?.title || (course ? `Bài kiểm tra tổng hợp — ${course.name}` : "Bài kiểm tra mới");
 });
 const filteredQuestions = computed(() => {
   const query = searchQuery.value.trim().toLocaleLowerCase("vi");
@@ -324,44 +331,48 @@ const filteredQuestions = computed(() => {
 const selectedDraftCount = computed(() => aiDrafts.value.filter(draft => draft.selected).length);
 
 onMounted(async () => {
-  if (!courseStore.topics.length) await courseStore.fetchTopics();
+  if(props.lesson){courseId.value=props.lesson.courseId;lessonId.value=props.lesson.id;passingScore.value=props.lesson.quizPassingScore ?? 80;requiredForProgress.value=props.lesson.quizRequired ?? true;await loadQuestions();return;}
+  if (!courseStore.courses.length) await courseStore.fetchCourses();
   if (isNew.value) {
-    topicId.value = typeof route.query.topicId === "string" ? route.query.topicId : courseStore.topics[0]?.id || "";
+    courseId.value = typeof route.query.courseId === "string" ? route.query.courseId : courseStore.courses[0]?.id || "";
   } else {
     const scopeId = String(route.params.scopeId || "");
     if (route.params.scopeType === "lesson") {
       lessonId.value = scopeId;
-      topicId.value = courseStore.topics.find((topic) => topic.lessons.some((lesson) => lesson.id === scopeId))?.id || "";
-    } else topicId.value = scopeId;
-    const topic = courseStore.topics.find((item) => item.id === topicId.value);
-    const lesson = topic?.lessons.find((item) => item.id === lessonId.value);
-    passingScore.value = lesson?.quizPassingScore ?? topic?.quizPassingScore ?? 80;
+      courseId.value = courseStore.courses.find((course) => course.lessons.some((lesson) => lesson.id === scopeId))?.id || "";
+    } else courseId.value = scopeId;
+    const course = courseStore.courses.find((item) => item.id === courseId.value);
+    const lesson = course?.lessons.find((item) => item.id === lessonId.value);
+    passingScore.value = lesson?.quizPassingScore ?? course?.quizPassingScore ?? 80;
     await loadQuestions();
   }
 });
 
-watch(topicId, () => {
+watch(courseId, () => {
   if (lessonId.value && !availableLessons.value.some((lesson) => lesson.id === lessonId.value)) lessonId.value = "";
 });
 
 const loadQuestions = async () => {
-  questions.value = await adminApi.getQuizQuestions(topicId.value, lessonId.value || undefined);
+  questions.value = await adminApi.getQuizQuestions(courseId.value, lessonId.value || undefined);
 };
 const confirmScope = () => router.replace(
   lessonId.value
     ? `/admin/quizzes/lesson/${encodeURIComponent(lessonId.value)}`
-    : `/admin/quizzes/topic/${encodeURIComponent(topicId.value)}`,
+    : `/admin/quizzes/course/${encodeURIComponent(courseId.value)}`,
 );
 const saveSettings = async () => {
   if (!Number.isInteger(passingScore.value) || passingScore.value < 1 || passingScore.value > 100) {
-    alert("Ngưỡng đạt phải là số nguyên từ 1 đến 100.");
+    showToast("Ngưỡng đạt phải là số nguyên từ 1 đến 100.", "warning");
     return;
   }
   savingSettings.value = true;
   try {
-    await adminApi.updateQuizSettings(topicId.value, lessonId.value || undefined, passingScore.value);
-    await courseStore.fetchTopics();
-    alert("Đã lưu ngưỡng điểm đạt.");
+    await adminApi.updateQuizSettings(courseId.value, lessonId.value || undefined, passingScore.value, requiredForProgress.value);
+    showToast("Đã lưu cấu hình bài kiểm tra.");
+    await courseStore.fetchCourses();
+    emit("saved");
+  } catch {
+    showToast("Không thể hoàn tất lưu cấu hình bài kiểm tra. Vui lòng thử lại.", "error");
   } finally {
     savingSettings.value = false;
   }
@@ -394,6 +405,7 @@ const confirmModalAction = async () => {
     confirmationModal.value.submitting = false;
     closeConfirmationModal();
   } catch {
+    showToast("Không thể hoàn tất thao tác xóa. Vui lòng thử lại.", "error");
     confirmationModal.value.submitting = false;
   }
 };
@@ -404,9 +416,10 @@ const deleteQuiz = () => {
     async () => {
       deletingQuiz.value = true;
       try {
-        await adminApi.deleteQuiz(topicId.value, lessonId.value || undefined);
-        await courseStore.fetchTopics();
-        router.push("/admin?tab=exams");
+        await adminApi.deleteQuiz(courseId.value, lessonId.value || undefined);
+        showToast("Đã xóa bài kiểm tra.");
+        await courseStore.fetchCourses();
+        if(props.embedded){await loadQuestions();emit("saved");}else router.push("/admin?tab=exams");
       } finally {
         deletingQuiz.value = false;
       }
@@ -448,7 +461,7 @@ const saveQuestion = async () => {
   }
   saving.value = true;
   const payload = {
-    topicId: topicId.value,
+    courseId: courseId.value,
     lessonId: lessonId.value || undefined,
     text,
     options,
@@ -459,9 +472,13 @@ const saveQuestion = async () => {
   try {
     if (editingId.value) await adminApi.updateQuestion(editingId.value, { ...payload, id: editingId.value });
     else await adminApi.createQuestion(payload);
+    showToast(editingId.value ? "Đã cập nhật câu hỏi." : "Đã thêm câu hỏi.");
     await loadQuestions();
-    await courseStore.fetchTopics();
+    emit("saved");
+    await courseStore.fetchCourses(true);
     closeQuestionForm();
+  } catch {
+    showToast("Không thể hoàn tất lưu câu hỏi. Vui lòng thử lại.", "error");
   } finally {
     saving.value = false;
   }
@@ -563,7 +580,7 @@ const generateQuestions = async () => {
   aiWarnings.value = [];
   try {
     const result = await adminApi.generateQuizQuestions({
-      topicId: topicId.value,
+      courseId: courseId.value,
       lessonId: lessonId.value || undefined,
       ...aiConfig,
     });
@@ -604,7 +621,7 @@ const saveAiDrafts = async () => {
   try {
     for (const draft of selected) {
       await adminApi.createQuestion({
-        topicId: topicId.value,
+        courseId: courseId.value,
         lessonId: lessonId.value || undefined,
         text: draft.text,
         options: draft.options,
@@ -614,9 +631,13 @@ const saveAiDrafts = async () => {
       });
     }
     await loadQuestions();
-    await courseStore.fetchTopics();
+    emit("saved");
+    await courseStore.fetchCourses(true);
+    showToast(`Đã thêm ${selected.length} câu hỏi AI vào bài kiểm tra.`);
     aiDrafts.value = [];
     showAiPanel.value = false;
+  } catch {
+    showToast("Chưa hoàn tất lưu câu hỏi AI. Kiểm tra danh sách câu hỏi trước khi thử lại.", "error");
   } finally {
     savingDrafts.value = false;
   }
@@ -627,8 +648,9 @@ const deleteQuestion = (question: Question) => {
     "Câu hỏi này sẽ bị xóa khỏi bài kiểm tra. Thao tác không thể hoàn tác.",
     async () => {
       await adminApi.deleteQuestion(question.id);
+      showToast("Đã xóa câu hỏi.");
       await loadQuestions();
-      await courseStore.fetchTopics();
+      await courseStore.fetchCourses();
     },
   );
 };
@@ -674,21 +696,23 @@ const importCsv = async (event: Event) => {
       const answer = ["A", "B", "C", "D"].indexOf((row[5] || "").toUpperCase());
       if (row.length < 6 || row.slice(0, 5).some((value) => !value)) errors.push(`Dòng ${index + 2}: thiếu câu hỏi hoặc đáp án.`);
       if (answer < 0) errors.push(`Dòng ${index + 2}: đáp án đúng phải là A, B, C hoặc D.`);
-      return { topicId: topicId.value, lessonId: lessonId.value || undefined, text: row[0], options: row.slice(1, 5), correctAnswer: answer };
+      return { courseId: courseId.value, lessonId: lessonId.value || undefined, text: row[0], options: row.slice(1, 5), correctAnswer: answer };
     });
     if (!payloads.length) errors.push("File không có dữ liệu.");
     if (errors.length) throw new Error(errors.slice(0, 12).join("\n"));
     await Promise.all(payloads.map((payload) => adminApi.createQuestion(payload)));
     await loadQuestions();
-    await courseStore.fetchTopics();
-    alert(`Đã import ${payloads.length} câu hỏi.`);
+    emit("saved");
+    await courseStore.fetchCourses(true);
+    showToast(`Đã nhập ${payloads.length} câu hỏi từ CSV.`);
   } catch (error) {
-    alert(error instanceof Error ? `File chưa đúng định dạng:\n${error.message}` : "Không thể đọc file.");
+    showToast(error instanceof Error ? error.message : "Không thể nhập câu hỏi từ file.", "error");
   } finally { input.value = ""; }
 };
 </script>
 
 <style scoped>
+.required-quiz-setting{display:block;margin:1rem 0;color:var(--primary-color);font-weight:600}.required-quiz-setting input{margin-right:.5rem}.required-quiz-setting small{display:block;margin-top:.5rem;font-weight:400;color:var(--text-muted)}
 .quiz-editor-page { width: min(1240px, calc(100% - 3rem)); min-height: 100%; margin: 0 auto; padding: 1.5rem; color: var(--text-color); }
 .quiz-editor-header { display: grid; grid-template-columns: 180px 1fr; gap: 1rem; align-items: start; margin-bottom: 1.2rem; }
 .back-button { display: flex; align-items: center; gap: .65rem; min-width: 170px; padding: .7rem .85rem; border: 1px solid var(--primary-color); border-radius: var(--radius-md); background: var(--primary-color); color: white; cursor: pointer; text-align: left; box-shadow: 0 5px 14px rgba(0,91,65,.18); }
@@ -799,4 +823,5 @@ select, textarea, .question-text-field input { width: 100%; padding: .7rem; bord
   .question-item-enter-active, .question-item-leave-active,
   .question-item-move { transition: none; }
 }
+.readonly-notice{padding:1rem;margin-bottom:1rem;border-radius:8px;background:#fff5de;color:#805b00;font-size:.875rem}
 </style>

@@ -6,7 +6,7 @@
         <span class="banner-tag">TỔNG QUAN HỌC TẬP</span>
         <h1>Xin chào, {{ username }} <span class="user-group-tag" v-if="userStore.groupName">({{ userStore.groupName }})</span></h1>
         <p class="last-lesson-info">
-          Bài học xem gần nhất: 
+          Bài học xem gần nhất:
           <span class="lesson-link" v-if="lastLesson" @click="goToLesson(lastLesson.id)">{{ lastLesson.title }}</span>
           <span v-else>Chưa xem bài nào</span>
         </p>
@@ -17,49 +17,49 @@
       </button>
     </div>
 
-    <!-- Main Content Section: Grid of Topics vs Progress & Analytics -->
+    <!-- Main Content Section: Grid of Courses vs Progress & Analytics -->
     <div class="dashboard-grid">
-      
-      <!-- Left Column: Topics Grid & Radar Chart -->
+
+      <!-- Left Column: Courses Grid & Radar Chart -->
       <div class="left-col">
-        <h2 class="section-title">CHỦ ĐỀ ĐÀO TẠO</h2>
-        
-        <!-- Grid of 7 banking topics -->
-        <div class="topics-grid">
-          <div 
-            v-for="topic in courseStore.topics" 
-            :key="topic.id" 
-            class="topic-card card card-hover"
-            :class="{ 'topic-locked': !userStore.isTopicAccessible(topic.id) }"
-            @click="handleTopicClick(topic)"
+        <h2 class="section-title">KHÓA HỌC ĐÀO TẠO</h2>
+
+        <!-- Grid of 7 banking courses -->
+        <div class="courses-grid">
+          <div
+            v-for="course in courseStore.courses"
+            :key="course.id"
+            class="course-card card card-hover"
+            :class="{ 'course-locked': !userStore.isCourseAccessible(course.id) }"
+            @click="handleCourseClick(course)"
           >
-            <div class="topic-icon-box">
-              <component :is="getIconComponent(topic.iconName)" class="topic-icon" />
+            <div class="course-icon-box">
+              <component :is="getIconComponent(course.iconName)" class="course-icon" />
             </div>
-            <div class="topic-details">
-              <div class="topic-header-row">
-                <h3>{{ topic.name }}</h3>
-                <span 
-                  v-if="userStore.mandatoryTopics.includes(topic.id)" 
+            <div class="course-details">
+              <div class="course-header-row">
+                <h3>{{ course.name }}</h3>
+                <span
+                  v-if="userStore.mandatoryCourses.includes(course.id)"
                   class="badge badge-mandatory"
                 >Bắt buộc</span>
-                <span 
-                  v-else-if="userStore.registeredTopics.includes(topic.id)" 
+                <span
+                  v-else-if="userStore.registeredCourses.includes(course.id)"
                   class="badge badge-optional"
                 >Đã đăng ký</span>
                 <span
-                  v-else-if="userStore.pendingTopics.includes(topic.id)"
+                  v-else-if="userStore.pendingCourses.includes(course.id)"
                   class="badge badge-pending"
                 >Chờ duyệt</span>
-                <span 
-                  v-else 
+                <span
+                  v-else
                   class="badge badge-locked"
                 >Chưa đăng ký</span>
               </div>
-              <span class="lesson-count">{{ topic.lessons.length }} bài học</span>
+              <span class="lesson-count">{{ course.lessons.length }} bài học</span>
             </div>
-            <div class="topic-action">
-              <Lock v-if="!userStore.isTopicAccessible(topic.id)" class="lock-icon" />
+            <div class="course-action">
+              <Lock v-if="!userStore.isCourseAccessible(course.id)" class="lock-icon" />
               <ChevronRight v-else class="arrow-icon" />
             </div>
           </div>
@@ -80,29 +80,29 @@
         <!-- Overall Progress Card -->
         <div class="progress-section card">
           <h3 class="card-title">TIẾN ĐỘ TỔNG THỂ</h3>
-          
+
           <div class="overall-progress-big">
             <span class="progress-pct">{{ userStore.overallProgressPercent }}%</span>
             <span class="progress-ratio">{{ userStore.completedLessonsCount }} / {{ userStore.totalLessonsCount }} ĐÃ HỌC</span>
           </div>
-          
+
           <ProgressBar :progress="userStore.overallProgressPercent" height="12px" class="main-prog-bar" />
-          
-          <div class="topic-progress-list">
-            <div v-for="topic in courseStore.topics" :key="topic.id" class="topic-prog-item">
-              <div class="topic-prog-header">
-                <span>{{ topic.name }}</span>
-                <span>{{ userStore.getTopicProgressPercent(topic.id) }}%</span>
+
+          <div class="course-progress-list">
+            <div v-for="course in courseStore.courses" :key="course.id" class="course-prog-item">
+              <div class="course-prog-header">
+                <span>{{ course.name }}</span>
+                <span>{{ userStore.getCourseProgressPercent(course.id) }}%</span>
               </div>
-              <ProgressBar :progress="userStore.getTopicProgressPercent(topic.id)" height="6px" />
+              <ProgressBar :progress="userStore.getCourseProgressPercent(course.id)" height="6px" />
               <div
-                class="topic-course-status"
-                :class="{ completed: userStore.getTopicProgressPercent(topic.id) === 100 }"
+                class="course-course-status"
+                :class="{ completed: userStore.getCourseProgressPercent(course.id) === 100 }"
               >
-                <CheckCircle2 v-if="userStore.getTopicProgressPercent(topic.id) === 100" :size="15" />
+                <CheckCircle2 v-if="userStore.getCourseProgressPercent(course.id) === 100" :size="15" />
                 <CircleDashed v-else :size="15" />
                 <span>
-                  {{ userStore.getTopicProgressPercent(topic.id) === 100
+                  {{ userStore.getCourseProgressPercent(course.id) === 100
                     ? 'Đã hoàn thành khóa học'
                     : 'Chưa hoàn thành khóa học' }}
                 </span>
@@ -118,11 +118,11 @@
             <span class="points-badge">{{ userStore.points }} PTS</span>
           </div>
           <p class="card-subtitle">Hoàn thành bài thi tối thiểu 80% để mở khóa</p>
-          
+
           <div class="badges-mini-grid" v-if="userStore.unlockedBadges.length > 0">
-            <div 
-              v-for="badge in userStore.unlockedBadges" 
-              :key="badge.id" 
+            <div
+              v-for="badge in userStore.unlockedBadges"
+              :key="badge.id"
               class="badge-mini-card"
               :class="badge.type"
             >
@@ -140,7 +140,7 @@
           <router-link to="/leaderboard" class="view-all-link">Bảng xếp hạng & Huy hiệu -></router-link>
         </div>
       </div>
-      
+
     </div>
 
     <Teleport to="body">
@@ -154,12 +154,12 @@
             <h2 id="register-course-title">Đăng ký học Nghiệp vụ</h2>
           </div>
           <div class="modal-body">
-            <p>Bạn có muốn đăng ký học thêm chủ đề nghiệp vụ <strong>{{ selectedTopicToRegister?.name }}</strong> không?</p>
+            <p>Bạn có muốn đăng ký học thêm khóa học nghiệp vụ <strong>{{ selectedCourseToRegister?.name }}</strong> không?</p>
             <p class="modal-note">Yêu cầu sẽ được gửi đến quản trị viên. Khóa học được mở sau khi được phê duyệt.</p>
           </div>
           <div class="modal-footer">
             <button class="btn btn-secondary" @click="showRegisterModal = false" :disabled="isRegistering">HỦY BỎ</button>
-            <button class="btn btn-primary btn-confirm" @click="handleRegisterTopic" :disabled="isRegistering">
+            <button class="btn btn-primary btn-confirm" @click="handleRegisterCourse" :disabled="isRegistering">
               <span v-if="isRegistering" class="spinner"></span>
               <span v-else>GỬI YÊU CẦU ĐĂNG KÝ</span>
             </button>
@@ -177,15 +177,15 @@ import { useCourseStore } from '../stores/courseStore';
 import { useUserStore } from '../stores/userStore';
 import ProgressBar from '../components/ProgressBar.vue';
 import RadarChart from '../components/RadarChart.vue';
-import { 
-  Coins, 
-  ArrowLeftRight, 
-  PiggyBank, 
-  Users, 
-  Wallet, 
-  BookOpen, 
-  CreditCard, 
-  ChevronRight, 
+import {
+  Coins,
+  ArrowLeftRight,
+  PiggyBank,
+  Users,
+  Wallet,
+  BookOpen,
+  CreditCard,
+  ChevronRight,
   Award,
   Shield,
   Medal,
@@ -199,13 +199,13 @@ const courseStore = useCourseStore();
 const userStore = useUserStore();
 
 const showRegisterModal = ref(false);
-const selectedTopicToRegister = ref<{ id: string, name: string } | null>(null);
+const selectedCourseToRegister = ref<{ id: string, name: string } | null>(null);
 const isRegistering = ref(false);
 
 onMounted(async () => {
   await Promise.all([
     userStore.fetchProgress(),
-    courseStore.fetchTopics()
+    courseStore.fetchCourses()
   ]);
 });
 
@@ -223,14 +223,14 @@ const resumeLearning = () => {
   if (lastLesson.value) {
     router.push(`/lesson/${lastLesson.value.id}`);
   } else {
-    // Go to first lesson of first topic that is accessible
-    const firstAccessibleTopic = courseStore.topics.find(t => userStore.isTopicAccessible(t.id));
-    if (firstAccessibleTopic && firstAccessibleTopic.lessons.length > 0) {
-      router.push(`/lesson/${firstAccessibleTopic.lessons[0].id}`);
+    // Go to first lesson of first course that is accessible
+    const firstAccessibleCourse = courseStore.courses.find(t => userStore.isCourseAccessible(t.id));
+    if (firstAccessibleCourse && firstAccessibleCourse.lessons.length > 0) {
+      router.push(`/lesson/${firstAccessibleCourse.lessons[0].id}`);
     } else {
-      const firstTopic = courseStore.topics[0];
-      if (firstTopic && firstTopic.lessons.length > 0) {
-        router.push(`/lesson/${firstTopic.lessons[0].id}`);
+      const firstCourse = courseStore.courses[0];
+      if (firstCourse && firstCourse.lessons.length > 0) {
+        router.push(`/lesson/${firstCourse.lessons[0].id}`);
       }
     }
   }
@@ -240,33 +240,33 @@ const goToLesson = (lessonId: string) => {
   router.push(`/lesson/${lessonId}`);
 };
 
-const goToTopicFirstLesson = (topic: any) => {
-  if (topic.lessons.length > 0) {
-    router.push(`/lesson/${topic.lessons[0].id}`);
+const goToCourseFirstLesson = (course: any) => {
+  if (course.lessons.length > 0) {
+    router.push(`/courses/${course.id}`);
   }
 };
-const handleTopicClick = (topic: any) => {
-  if (userStore.isTopicAccessible(topic.id)) {
-    goToTopicFirstLesson(topic);
-  } else if (userStore.pendingTopics.includes(topic.id)) {
+const handleCourseClick = (course: any) => {
+  if (userStore.isCourseAccessible(course.id)) {
+    goToCourseFirstLesson(course);
+  } else if (userStore.pendingCourses.includes(course.id)) {
     alert('Yêu cầu đăng ký khóa học đang chờ quản trị viên phê duyệt.');
   } else {
-    openRegisterConfirm(topic);
+    openRegisterConfirm(course);
   }
 };
 
-const openRegisterConfirm = (topic: any) => {
-  selectedTopicToRegister.value = topic;
+const openRegisterConfirm = (course: any) => {
+  selectedCourseToRegister.value = course;
   showRegisterModal.value = true;
 };
 
-const handleRegisterTopic = async () => {
-  if (!selectedTopicToRegister.value) return;
+const handleRegisterCourse = async () => {
+  if (!selectedCourseToRegister.value) return;
   isRegistering.value = true;
   try {
-    await userStore.registerTopic(selectedTopicToRegister.value.id);
+    await userStore.registerCourse(selectedCourseToRegister.value.id);
     showRegisterModal.value = false;
-    selectedTopicToRegister.value = null;
+    selectedCourseToRegister.value = null;
   } catch (error) {
     alert('Đăng ký không thành công. Vui lòng kiểm tra lại kết nối!');
   } finally {
@@ -404,13 +404,13 @@ const getBadgeIcon = (icon: string) => {
   margin-bottom: -0.5rem;
 }
 
-.topics-grid {
+.courses-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 0.85rem;
 }
 
-.topic-card {
+.course-card {
   display: flex;
   align-items: center;
   padding: 1.1rem 1.5rem;
@@ -418,7 +418,7 @@ const getBadgeIcon = (icon: string) => {
   cursor: pointer;
 }
 
-.topic-icon-box {
+.course-icon-box {
   width: 48px;
   height: 48px;
   border-radius: var(--radius-md);
@@ -429,16 +429,16 @@ const getBadgeIcon = (icon: string) => {
   color: var(--primary-color);
 }
 
-.topic-icon {
+.course-icon {
   width: 24px;
   height: 24px;
 }
 
-.topic-details {
+.course-details {
   flex: 1;
 }
 
-.topic-details h3 {
+.course-details h3 {
   font-size: 1.05rem;
   font-weight: 700;
   color: var(--text-main);
@@ -457,7 +457,7 @@ const getBadgeIcon = (icon: string) => {
   transition: var(--transition);
 }
 
-.topic-card:hover .arrow-icon {
+.course-card:hover .arrow-icon {
   color: var(--primary-color);
   transform: translateX(4px);
 }
@@ -520,19 +520,19 @@ const getBadgeIcon = (icon: string) => {
   margin-bottom: 1.5rem;
 }
 
-.topic-progress-list {
+.course-progress-list {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
 }
 
-.topic-prog-item {
+.course-prog-item {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
 }
 
-.topic-prog-header {
+.course-prog-header {
   display: flex;
   justify-content: space-between;
   font-size: 0.85rem;
@@ -540,7 +540,7 @@ const getBadgeIcon = (icon: string) => {
   color: var(--text-main);
 }
 
-.topic-course-status {
+.course-course-status {
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -553,7 +553,7 @@ const getBadgeIcon = (icon: string) => {
   font-weight: 600;
 }
 
-.topic-course-status.completed {
+.course-course-status.completed {
   background: #e8f5ef;
   color: var(--primary-color);
 }
@@ -704,8 +704,8 @@ const getBadgeIcon = (icon: string) => {
   margin-left: 0.5rem;
 }
 
-/* Badges for topic card */
-.topic-header-row {
+/* Badges for course card */
+.course-header-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -713,7 +713,7 @@ const getBadgeIcon = (icon: string) => {
   margin-bottom: 0.25rem;
 }
 
-.topic-header-row h3 {
+.course-header-row h3 {
   margin: 0;
 }
 
@@ -750,7 +750,7 @@ const getBadgeIcon = (icon: string) => {
 }
 
 /* Locked Card Styling */
-.topic-card.topic-locked {
+.course-card.course-locked {
   opacity: 0.85;
   background-color: var(--bg-main);
   border-color: var(--border-color);
@@ -759,14 +759,14 @@ const getBadgeIcon = (icon: string) => {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.topic-card.topic-locked:hover {
+.course-card.course-locked:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
   border-color: var(--primary-color);
   opacity: 1;
 }
 
-.topic-card.topic-locked:hover .lock-icon {
+.course-card.course-locked:hover .lock-icon {
   color: var(--primary-color);
   transform: scale(1.1);
 }

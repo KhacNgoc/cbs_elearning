@@ -1,11 +1,11 @@
 import { axiosClient, isMockApi, mockDelay } from './axiosClient';
-import type { Topic, Lesson, Comment, UserProgress, VideoNote, LessonProgress, LessonProgressRequest } from '../types';
-import { mockTopics } from '../data/mockData';
+import type { Course, Lesson, Comment, UserProgress, VideoNote, LessonProgress, LessonProgressRequest } from '../types';
+import { mockCourses } from '../data/mockData';
 
 // We maintain an in-memory database in mock mode so updates are reflected dynamically!
-export let mockDbTopics = JSON.parse(JSON.stringify(mockTopics)) as Topic[];
-export const setMockDbTopics = (newTopics: Topic[]) => {
-  mockDbTopics = newTopics;
+export let mockDbCourses = JSON.parse(JSON.stringify(mockCourses)) as Course[];
+export const setMockDbCourses = (newCourses: Course[]) => {
+  mockDbCourses = newCourses;
 };
 let mockDbCompleted: string[] = [];
 let mockDbPoints = 1000;
@@ -13,30 +13,30 @@ const mockVideoNotes: Record<string, VideoNote[]> = {};
 let mockVideoNoteId = 1;
 
 export const courseApi = {
-  async getAllTopics(): Promise<Topic[]> {
+  async getAllCourses(): Promise<Course[]> {
     if (isMockApi()) {
       await mockDelay(300);
-      return mockDbTopics;
+      return mockDbCourses;
     }
-    const response = await axiosClient.get<Topic[]>('/api/topics');
+    const response = await axiosClient.get<Course[]>('/api/courses');
     return response.data;
   },
 
-  async getTopicById(id: string): Promise<Topic> {
+  async getCourseById(id: string): Promise<Course> {
     if (isMockApi()) {
       await mockDelay(200);
-      const topic = mockDbTopics.find(t => t.id === id);
-      if (!topic) throw new Error(`Topic not found with id: ${id}`);
-      return topic;
+      const course = mockDbCourses.find(t => t.id === id);
+      if (!course) throw new Error(`Course not found with id: ${id}`);
+      return course;
     }
-    const response = await axiosClient.get<Topic>(`/api/topics/${id}`);
+    const response = await axiosClient.get<Course>(`/api/courses/${id}`);
     return response.data;
   },
 
   async getLessonById(id: string): Promise<Lesson> {
     if (isMockApi()) {
       await mockDelay(250);
-      const allLessons = mockDbTopics.flatMap(t => t.lessons);
+      const allLessons = mockDbCourses.flatMap(t => t.lessons);
       const lesson = allLessons.find(l => l.id === id);
       if (!lesson) throw new Error(`Lesson not found with id: ${id}`);
       return lesson;
@@ -49,7 +49,7 @@ export const courseApi = {
     const username = localStorage.getItem('username') || 'quantrh';
     if (isMockApi()) {
       await mockDelay(300);
-      const allLessons = mockDbTopics.flatMap(t => t.lessons);
+      const allLessons = mockDbCourses.flatMap(t => t.lessons);
       const lesson = allLessons.find(l => l.id === lessonId);
       if (!lesson) throw new Error(`Lesson not found with id: ${lessonId}`);
 
@@ -82,7 +82,7 @@ export const courseApi = {
     const username = localStorage.getItem('username') || 'quantrh';
     if (isMockApi()) {
       await mockDelay(200);
-      const lesson = mockDbTopics.flatMap(topic => topic.lessons).find(item => item.id === lessonId);
+      const lesson = mockDbCourses.flatMap(course => course.lessons).find(item => item.id === lessonId);
       const root = lesson?.comments.find(comment => comment.id === rootCommentId);
       if (!root) throw new Error(`Comment not found with id: ${rootCommentId}`);
       const target = replyToCommentId === rootCommentId
@@ -111,8 +111,8 @@ export const courseApi = {
   async deleteComment(lessonId: string, commentId: number): Promise<void> {
     if (isMockApi()) {
       await mockDelay(150);
-      const lesson = mockDbTopics
-        .flatMap(topic => topic.lessons)
+      const lesson = mockDbCourses
+        .flatMap(course => course.lessons)
         .find(item => item.id === lessonId);
       if (!lesson) throw new Error(`Lesson not found with id: ${lessonId}`);
 
@@ -212,7 +212,7 @@ export const courseApi = {
     if (isMockApi()) {
       await mockDelay(200);
       // Construct in-memory progress
-      const mockRegistered: string[] = JSON.parse(localStorage.getItem('mockRegisteredTopics') || '[]');
+      const mockRegistered: string[] = JSON.parse(localStorage.getItem('mockRegisteredCourses') || '[]');
       const storedCompleted: string[] = JSON.parse(localStorage.getItem('mockCompletedLessons') || '[]');
       for (const lessonId of storedCompleted) {
         if (!mockDbCompleted.includes(lessonId)) mockDbCompleted.push(lessonId);
@@ -228,9 +228,9 @@ export const courseApi = {
         unlockedBadges: JSON.parse(localStorage.getItem('mockUnlockedBadges') || '[]'),
         groupId: 'GDV',
         groupName: 'Giao dịch viên',
-        mandatoryTopics: ['CIF', 'TIEN_GUI', 'TELLER', 'THE'],
-        registeredTopics: mockRegistered,
-        pendingTopics: JSON.parse(localStorage.getItem('mockPendingTopics') || '[]')
+        mandatoryCourses: ['CIF', 'TIEN_GUI', 'TELLER', 'THE'],
+        registeredCourses: mockRegistered,
+        pendingCourses: JSON.parse(localStorage.getItem('mockPendingCourses') || '[]')
       };
     }
     const response = await axiosClient.get<UserProgress>('/api/users/me');
@@ -293,17 +293,17 @@ export const courseApi = {
     return response.data;
   },
 
-  async registerTopic(topicId: string): Promise<UserProgress> {
+  async registerCourse(courseId: string): Promise<UserProgress> {
     if (isMockApi()) {
       await mockDelay(300);
-      const pending: string[] = JSON.parse(localStorage.getItem('mockPendingTopics') || '[]');
-      if (!pending.includes(topicId)) {
-        pending.push(topicId);
-        localStorage.setItem('mockPendingTopics', JSON.stringify(pending));
+      const pending: string[] = JSON.parse(localStorage.getItem('mockPendingCourses') || '[]');
+      if (!pending.includes(courseId)) {
+        pending.push(courseId);
+        localStorage.setItem('mockPendingCourses', JSON.stringify(pending));
       }
       return this.getMyProgress();
     }
-    const response = await axiosClient.post<UserProgress>(`/api/users/me/register-topic/${topicId}`);
+    const response = await axiosClient.post<UserProgress>(`/api/users/me/register-course/${courseId}`);
     return response.data;
   },
 

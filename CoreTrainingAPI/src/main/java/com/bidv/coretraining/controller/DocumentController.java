@@ -24,12 +24,12 @@ public class DocumentController {
         this.ragChatService = ragChatService;
     }
 
-    @PostMapping("/admin/topics/{topicId}/documents")
-    public ResponseEntity<CourseDocumentDto> upload(@PathVariable String topicId, @RequestParam("file") MultipartFile file) {
-        return ResponseEntity.accepted().body(documentService.upload(topicId, file));
+    @PostMapping("/admin/courses/{courseId}/documents")
+    public ResponseEntity<CourseDocumentDto> upload(@PathVariable String courseId, @RequestParam("file") MultipartFile file) {
+        return ResponseEntity.accepted().body(documentService.upload(courseId, file));
     }
-    @GetMapping("/admin/topics/{topicId}/documents")
-    public ResponseEntity<List<CourseDocumentDto>> list(@PathVariable String topicId) { return ResponseEntity.ok(documentService.list(topicId)); }
+    @GetMapping("/admin/courses/{courseId}/documents")
+    public ResponseEntity<List<CourseDocumentDto>> list(@PathVariable String courseId) { return ResponseEntity.ok(documentService.list(courseId)); }
     @PostMapping("/rag/chat")
     public ResponseEntity<RagChatResponse> chat(
             @Valid @RequestBody RagChatRequest request,

@@ -1,6 +1,6 @@
-import type { Topic, Question, LeaderboardUser } from '../types';
+import type { Course, Question, LeaderboardUser } from '../types';
 
-export const mockTopics: Topic[] = [
+export const mockCourses: Course[] = [
   {
     id: 'TIEN_VAY',
     name: 'TIẾN VAY',
@@ -9,7 +9,7 @@ export const mockTopics: Topic[] = [
       {
         id: 'LN01',
         title: 'LN01. Tổng quan phân hệ cho vay (Loan)',
-        topicId: 'TIEN_VAY',
+        courseId: 'TIEN_VAY',
         hint: 'Menu: WebCSR -> Cho vay -> Truy vấn khoản vay',
         documents: [],
         videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-corporate-workers-discussing-a-project-41566-large.mp4',
@@ -47,7 +47,7 @@ export const mockTopics: Topic[] = [
       {
         id: 'LN02',
         title: 'LN02. Quy trình giải ngân khoản vay thông thường',
-        topicId: 'TIEN_VAY',
+        courseId: 'TIEN_VAY',
         hint: 'Menu: WebCSR -> Cho vay -> Giao dịch giải ngân',
         documents: [],
         videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-executives-working-on-a-business-plan-41559-large.mp4',
@@ -74,7 +74,7 @@ export const mockTopics: Topic[] = [
       {
         id: 'TR01',
         title: 'TR01. Quy trình chuyển tiền nhanh NAPAS 247',
-        topicId: 'CHUYEN_TIEN',
+        courseId: 'CHUYEN_TIEN',
         hint: 'Menu: WebCSR -> Chuyển tiền -> Chuyển tiền nhanh Napas 247',
         documents: [],
         videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-businessman-working-on-a-laptop-42289-large.mp4',
@@ -101,7 +101,7 @@ export const mockTopics: Topic[] = [
       {
         id: 'DEP01',
         title: 'DEP01. Quy trình mở sổ tiết kiệm tại quầy',
-        topicId: 'TIEN_GUI',
+        courseId: 'TIEN_GUI',
         hint: 'Menu: WebCSR -> Tiền gửi -> Mở tài khoản tiết kiệm có kỳ hạn',
         documents: [],
         videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-business-people-meeting-around-a-table-41558-large.mp4',
@@ -128,7 +128,7 @@ export const mockTopics: Topic[] = [
       {
         id: 'CIF03',
         title: 'CIF03. Quy trình tạo CIF Khách hàng tổ chức',
-        topicId: 'CIF',
+        courseId: 'CIF',
         hint: 'Menu: WebCSR -> Tìm kiếm khách hàng -> Thông tin khách hàng / Customer Information -> Tab Tín dụng/Tài chính (Credit/Financial) -> Tab phụ Hạn mức tín dụng khách hàng / Customer Limit',
         documents: [],
         videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-business-woman-using-a-tablet-at-the-office-41571-large.mp4',
@@ -173,7 +173,7 @@ export const mockTopics: Topic[] = [
       {
         id: 'CIF01',
         title: 'CIF01. Quy trình tạo CIF Khách hàng cá nhân',
-        topicId: 'CIF',
+        courseId: 'CIF',
         hint: 'Menu: WebCSR -> Tìm kiếm khách hàng -> Thông tin khách hàng cá nhân',
         documents: [],
         videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-startup-team-working-on-laptops-in-office-41553-large.mp4',
@@ -201,7 +201,7 @@ export const mockTopics: Topic[] = [
       {
         id: 'TEL01',
         title: 'TEL01. Quy trình quản lý quỹ đầu ngày và cuối ngày',
-        topicId: 'TELLER',
+        courseId: 'TELLER',
         hint: 'Menu: WebCSR -> Teller -> Quản lý két tiền mặt',
         documents: [],
         videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-business-team-in-a-meeting-working-41563-large.mp4',
@@ -228,7 +228,7 @@ export const mockTopics: Topic[] = [
       {
         id: 'GL01',
         title: 'GL01. Quy trình hạch toán bút toán thủ công',
-        topicId: 'GL',
+        courseId: 'GL',
         hint: 'Menu: WebCSR -> Sổ cái (GL) -> Tạo bút toán thủ công',
         documents: [],
         videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-group-of-businesspeople-discussing-charts-41565-large.mp4',
@@ -255,7 +255,7 @@ export const mockTopics: Topic[] = [
       {
         id: 'CARD01',
         title: 'CARD01. Quy trình phát hành thẻ ghi nợ nội địa',
-        topicId: 'THE',
+        courseId: 'THE',
         hint: 'Menu: WebCSR -> Thẻ -> Phát hành thẻ ghi nợ',
         documents: [],
         videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-colleagues-discussing-data-on-a-monitor-41567-large.mp4',
@@ -280,35 +280,35 @@ export const mockQuestions: Question[] = [
   // CIF Questions
   {
     id: 1,
-    topicId: 'CIF',
+    courseId: 'CIF',
     text: 'Mã phân hệ nào dùng để Quản lý Khách hàng trong Core Banking?',
     options: ['CIF', 'DEP', 'LN', 'GL'],
     correctAnswer: 0
   },
   {
     id: 2,
-    topicId: 'CIF',
+    courseId: 'CIF',
     text: 'Thông tin nào sau đây là BẮT BUỘC khi khởi tạo CIF cho Khách hàng doanh nghiệp?',
     options: ['Số điện thoại nhân viên', 'Mã số thuế doanh nghiệp', 'Mã chứng khoán niêm yết', 'Danh sách cổ đông liên kết'],
     correctAnswer: 1
   },
   {
     id: 3,
-    topicId: 'CIF',
+    courseId: 'CIF',
     text: 'Để tránh trùng lặp dữ liệu khách hàng cá nhân (trùng CIF), giao dịch viên cần làm gì trước khi tạo mới?',
     options: ['Tìm kiếm kỹ theo Số giấy tờ tùy thân', 'Tìm kiếm theo Tên không dấu', 'Tạo ngẫu nhiên một mã CIF mới', 'Liên hệ chi nhánh khác hỏi thông tin'],
     correctAnswer: 0
   },
   {
     id: 4,
-    topicId: 'CIF',
+    courseId: 'CIF',
     text: 'Trong quy trình tạo CIF Khách hàng tổ chức, bước phê duyệt cuối cùng do vai trò nào thực hiện?',
     options: ['Maker (Giao dịch viên)', 'Checker (Kiểm soát viên)', 'Thủ quỹ', 'Khách hàng'],
     correctAnswer: 1
   },
   {
     id: 5,
-    topicId: 'CIF',
+    courseId: 'CIF',
     text: 'Sau khi quét mã QR trên CCCD gắn chip của khách hàng cá nhân, hệ thống Core Banking sẽ làm gì?',
     options: ['Tự động cấp tín dụng cho khách hàng', 'Tự động gửi tin nhắn SMS chúc mừng', 'Tự động trích xuất và điền các thông tin cơ bản của khách hàng', 'Tự động phong tỏa tài khoản thanh toán'],
     correctAnswer: 2
@@ -317,14 +317,14 @@ export const mockQuestions: Question[] = [
   // TIEN_VAY Questions
   {
     id: 6,
-    topicId: 'TIEN_VAY',
+    courseId: 'TIEN_VAY',
     text: 'Ký hiệu phân hệ cho vay trong Core Banking của BIDV là gì?',
     options: ['DEP', 'LN', 'GL', 'TR'],
     correctAnswer: 1
   },
   {
     id: 7,
-    topicId: 'TIEN_VAY',
+    courseId: 'TIEN_VAY',
     text: 'Quy trình vòng đời cơ bản của một khoản vay trên Core Banking diễn ra như thế nào?',
     options: [
       'Giải ngân -> Tạo hồ sơ -> Tất toán -> Phê duyệt',
@@ -336,7 +336,7 @@ export const mockQuestions: Question[] = [
   },
   {
     id: 8,
-    topicId: 'TIEN_VAY',
+    courseId: 'TIEN_VAY',
     text: 'Bút toán hạch toán kế toán khi giải ngân khoản vay vào tài khoản thanh toán của khách hàng là:',
     options: [
       'Nợ TK Tiền gửi / Có TK Cho vay',
@@ -348,14 +348,14 @@ export const mockQuestions: Question[] = [
   },
   {
     id: 9,
-    topicId: 'TIEN_VAY',
+    courseId: 'TIEN_VAY',
     text: 'Ai là người chịu trách nhiệm nhập liệu thông tin khoản vay ban đầu trên hệ thống?',
     options: ['Checker', 'Maker (Cán bộ QTTD)', 'Thủ quỹ chi nhánh', 'Giám đốc Chi nhánh'],
     correctAnswer: 1
   },
   {
     id: 10,
-    topicId: 'TIEN_VAY',
+    courseId: 'TIEN_VAY',
     text: 'Điều kiện nào sau đây KHÔNG bắt buộc khi thực hiện giải ngân khoản vay thông thường?',
     options: [
       'Khoản vay đã được phê duyệt hợp lệ',
@@ -369,14 +369,14 @@ export const mockQuestions: Question[] = [
   // CHUYEN_TIEN Questions
   {
     id: 11,
-    topicId: 'CHUYEN_TIEN',
+    courseId: 'CHUYEN_TIEN',
     text: 'Hạn mức chuyển tiền nhanh NAPAS 247 tối đa cho một giao dịch tại quầy hiện nay là bao nhiêu?',
     options: ['100 triệu VND', '300 triệu VND', '499.999.999 VND', '1 tỷ VND'],
     correctAnswer: 2
   },
   {
     id: 12,
-    topicId: 'CHUYEN_TIEN',
+    courseId: 'CHUYEN_TIEN',
     text: 'Khi giao dịch viên nhập số tài khoản thụ hưởng trên màn hình NAPAS 247, hệ thống Core Banking sẽ thực hiện điều gì?',
     options: [
       'Tự động trừ tiền ngay lập tức',
@@ -388,14 +388,14 @@ export const mockQuestions: Question[] = [
   },
   {
     id: 13,
-    topicId: 'CHUYEN_TIEN',
+    courseId: 'CHUYEN_TIEN',
     text: 'Lỗi giao dịch trừ tiền tài khoản người chuyển nhưng tài khoản thụ hưởng chưa nhận được tiền thường được giải quyết qua quy trình nào?',
     options: ['Tra soát và đối soát định kỳ với Napas', 'Tự động hoàn tiền sau 5 phút', 'Yêu cầu khách hàng tự liên hệ ngân hàng nhận', 'Hạch toán bút toán thủ công ngay'],
     correctAnswer: 0
   },
   {
     id: 14,
-    topicId: 'CHUYEN_TIEN',
+    courseId: 'CHUYEN_TIEN',
     text: 'Phương thức thu phí chuyển tiền nào có thể được lựa chọn khi thực hiện giao dịch tại quầy?',
     options: [
       'Chỉ người chuyển trả phí',
@@ -407,7 +407,7 @@ export const mockQuestions: Question[] = [
   },
   {
     id: 15,
-    topicId: 'CHUYEN_TIEN',
+    courseId: 'CHUYEN_TIEN',
     text: 'Phân hệ nào xử lý luồng giao dịch chuyển tiền liên ngân hàng đi và đến?',
     options: ['GL', 'LN', 'TR (Transfer)', 'DEP'],
     correctAnswer: 2
@@ -416,7 +416,7 @@ export const mockQuestions: Question[] = [
   // TIEN_GUI Questions
   {
     id: 16,
-    topicId: 'TIEN_GUI',
+    courseId: 'TIEN_GUI',
     text: 'Sổ tiết kiệm trả lãi cuối kỳ có đặc điểm gì về lãi suất?',
     options: [
       'Lãi suất thay đổi hàng tháng',
@@ -428,14 +428,14 @@ export const mockQuestions: Question[] = [
   },
   {
     id: 17,
-    topicId: 'TIEN_GUI',
+    courseId: 'TIEN_GUI',
     text: 'Chứng từ nào là bắt buộc khi khách hàng cá nhân đến quầy yêu cầu mở sổ tiết kiệm?',
     options: ['Giấy tờ tùy thân hợp lệ (CCCD/Hộ chiếu)', 'Giấy xác nhận bảng lương', 'Giấy đăng ký tạm trú', 'Hóa đơn tiền điện nước'],
     correctAnswer: 0
   },
   {
     id: 18,
-    topicId: 'TIEN_GUI',
+    courseId: 'TIEN_GUI',
     text: 'Khi thực hiện in Thẻ tiết kiệm bàn giao cho khách hàng, phôi sổ tiết kiệm trắng được quản lý như thế nào?',
     options: [
       'Để tự do tại bàn làm việc của giao dịch viên',
@@ -447,7 +447,7 @@ export const mockQuestions: Question[] = [
   },
   {
     id: 19,
-    topicId: 'TIEN_GUI',
+    courseId: 'TIEN_GUI',
     text: 'Chỉ thị tái tục "Gốc quay vòng, lãi nhập gốc" (Rollover) có nghĩa là:',
     options: [
       'Đến hạn toàn bộ gốc và lãi chuyển sang tài khoản thanh toán',
@@ -459,7 +459,7 @@ export const mockQuestions: Question[] = [
   },
   {
     id: 20,
-    topicId: 'TIEN_GUI',
+    courseId: 'TIEN_GUI',
     text: 'Phân hệ nào xử lý các giao dịch mở và quản lý sổ tiết kiệm, tài khoản thanh toán?',
     options: ['LN', 'DEP (Deposit)', 'GL', 'TR'],
     correctAnswer: 1
@@ -468,7 +468,7 @@ export const mockQuestions: Question[] = [
   // TELLER Questions
   {
     id: 21,
-    topicId: 'TELLER',
+    courseId: 'TELLER',
     text: 'Khi phát hiện tồn quỹ thực tế tại két cuối ngày lệch so với số dư trên Core Banking, Teller phải làm gì đầu tiên?',
     options: [
       'Tự bỏ tiền túi bù vào nếu thiếu',
@@ -480,7 +480,7 @@ export const mockQuestions: Question[] = [
   },
   {
     id: 22,
-    topicId: 'TELLER',
+    courseId: 'TELLER',
     text: 'Quy trình bàn giao quỹ đầu ngày giữa Thủ quỹ chi nhánh và Giao dịch viên yêu cầu phải:',
     options: [
       'Ký biên bản khống trước khi kiểm tiền',
@@ -492,7 +492,7 @@ export const mockQuestions: Question[] = [
   },
   {
     id: 23,
-    topicId: 'TELLER',
+    courseId: 'TELLER',
     text: 'Mục đích chính của việc thiết lập hạn mức tồn quỹ két tiền mặt cho từng giao dịch viên là gì?',
     options: [
       'Hạn chế rủi ro thất thoát tiền mặt tại quầy giao dịch',
@@ -504,7 +504,7 @@ export const mockQuestions: Question[] = [
   },
   {
     id: 24,
-    topicId: 'TELLER',
+    courseId: 'TELLER',
     text: 'Thao tác nào Giao dịch viên phải làm cuối mỗi ngày làm việc?',
     options: [
       'Đăng xuất hệ thống và ra về ngay',
@@ -516,7 +516,7 @@ export const mockQuestions: Question[] = [
   },
   {
     id: 25,
-    topicId: 'TELLER',
+    courseId: 'TELLER',
     text: 'Báo cáo nào giúp giao dịch viên đối soát toàn bộ các giao dịch thu chi tiền mặt đã thực hiện trong ngày?',
     options: ['Báo cáo tài chính năm', 'Nhật ký giao dịch tiền mặt của Teller', 'Bảng cân đối kế toán chi nhánh', 'Sơ đồ tổ chức nhân sự'],
     correctAnswer: 1
@@ -525,7 +525,7 @@ export const mockQuestions: Question[] = [
   // GL Questions
   {
     id: 26,
-    topicId: 'GL',
+    courseId: 'GL',
     text: 'Bút toán thủ công (Manual Journal Entry) trong phân hệ GL được sử dụng trong trường hợp nào?',
     options: [
       'Rút tiền mặt tiết kiệm thông thường',
@@ -537,7 +537,7 @@ export const mockQuestions: Question[] = [
   },
   {
     id: 27,
-    topicId: 'GL',
+    courseId: 'GL',
     text: 'Quy tắc cơ bản nhất của kế toán kép trong hạch toán GL là gì?',
     options: [
       'Tổng số tiền phát sinh Nợ phải lớn hơn phát sinh Có',
@@ -549,14 +549,14 @@ export const mockQuestions: Question[] = [
   },
   {
     id: 28,
-    topicId: 'GL',
+    courseId: 'GL',
     text: 'Tài khoản GL loại 1 (đầu 1) trong hệ thống tài khoản kế toán ngân hàng biểu diễn loại tài sản nào?',
     options: ['Tài sản Có (Tiền mặt, tiền gửi tại NHNN, các khoản cho vay...)', 'Nợ phải trả', 'Vốn chủ sở hữu', 'Doanh nghiệp liên kết'],
     correctAnswer: 0
   },
   {
     id: 29,
-    topicId: 'GL',
+    courseId: 'GL',
     text: 'Bút toán hạch toán GL hợp lệ là bút toán:',
     options: [
       'Chỉ có 1 dòng ghi Nợ',
@@ -568,7 +568,7 @@ export const mockQuestions: Question[] = [
   },
   {
     id: 30,
-    topicId: 'GL',
+    courseId: 'GL',
     text: 'Ai chịu trách nhiệm phê duyệt bút toán GL điều chỉnh sai sót do Maker tạo ra?',
     options: ['Chính Maker đó', 'Kiểm soát viên (Checker) hoặc Trưởng phòng Kế toán tài chính', 'Khách hàng liên quan', 'Thủ quỹ chi nhánh'],
     correctAnswer: 1
@@ -577,14 +577,14 @@ export const mockQuestions: Question[] = [
   // THE Questions
   {
     id: 31,
-    topicId: 'THE',
+    courseId: 'THE',
     text: 'Thẻ ghi nợ nội địa (Debit Card) liên kết trực tiếp với loại tài khoản nào của khách hàng?',
     options: ['Tài khoản tiết kiệm có kỳ hạn', 'Tài khoản tiền gửi thanh toán (không kỳ hạn)', 'Tài khoản thẻ tín dụng', 'Tài khoản vay thấu chi'],
     correctAnswer: 1
   },
   {
     id: 32,
-    topicId: 'THE',
+    courseId: 'THE',
     text: 'Khi phát hành thẻ ghi nợ tại quầy, giao dịch viên bắt buộc phải thực hiện bước nào để đối chiếu chữ ký?',
     options: [
       'Yêu cầu khách hàng tự ký khống lên phôi thẻ',
@@ -596,7 +596,7 @@ export const mockQuestions: Question[] = [
   },
   {
     id: 33,
-    topicId: 'THE',
+    courseId: 'THE',
     text: 'Dịch vụ phát hành "Thẻ phi vật lý" nghĩa là gì?',
     options: [
       'In thẻ nhựa bằng chất liệu bảo vệ môi trường',
@@ -608,7 +608,7 @@ export const mockQuestions: Question[] = [
   },
   {
     id: 34,
-    topicId: 'THE',
+    courseId: 'THE',
     text: 'Trạng thái thẻ "Active" trên Core Banking biểu thị điều gì?',
     options: [
       'Thẻ đã bị khóa do nhập sai PIN quá 3 lần',
@@ -620,7 +620,7 @@ export const mockQuestions: Question[] = [
   },
   {
     id: 35,
-    topicId: 'THE',
+    courseId: 'THE',
     text: 'Khi khách hàng báo mất thẻ vật lý, giao dịch viên cần thực hiện giao dịch nào đầu tiên trên phân hệ Thẻ?',
     options: ['Phát hành lại thẻ mới', 'Tất toán tài khoản liên kết', 'Khóa thẻ tạm thời (Block/Suspend thẻ)', 'Thay đổi hạn mức thẻ'],
     correctAnswer: 2

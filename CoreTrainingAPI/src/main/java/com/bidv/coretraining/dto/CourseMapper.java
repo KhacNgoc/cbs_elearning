@@ -4,7 +4,7 @@ import com.bidv.coretraining.entity.Comment;
 import com.bidv.coretraining.entity.Lesson;
 import com.bidv.coretraining.entity.LessonDocument;
 import com.bidv.coretraining.entity.ProcedureSection;
-import com.bidv.coretraining.entity.Topic;
+import com.bidv.coretraining.entity.Course;
 import com.bidv.coretraining.entity.VideoSource;
 import org.mapstruct.AfterMapping;
 import org.mapstruct.Mapper;
@@ -20,16 +20,30 @@ public interface CourseMapper {
 
     @Mapping(
             target = "hasQuiz",
-            expression = "java(topic.getQuestions() != null && topic.getQuestions().stream().anyMatch(question -> question.getLesson() == null))"
+            expression = "java(course.getQuestions() != null && course.getQuestions().stream().anyMatch(question -> question.getLesson() == null))"
     )
-    TopicDto toTopicDto(Topic topic);
+    @Mapping(source="program.id", target="programId")
+    @Mapping(source="program.name", target="programName")
+    @Mapping(source="program.domain.name", target="domainName")
+    CourseDto toCourseDto(Course course);
 
-    List<TopicDto> toTopicDtoList(List<Topic> topics);
+    List<CourseDto> toCourseDtoList(List<Course> courses);
 
-    @Mapping(source = "topic.id", target = "topicId")
+    @AfterMapping
+    default void chapterOrder(Course course, @MappingTarget CourseDto dto) {
+        dto.setLessons(toLessonDtoList(course.getChapters().stream()
+                .sorted(Comparator.comparing(com.bidv.coretraining.entity.Chapter::getChapterOrder))
+                .flatMap(chapter -> chapter.getLessons().stream()
+                        .sorted(Comparator.comparing(Lesson::getLessonOrder)))
+                .toList()));
+    }
+
+    @Mapping(source = "course.id", target = "courseId")
+    @Mapping(source="chapter.id", target="chapterId")
+    @Mapping(target="quizRequired", expression="java(lesson.isQuizRequired())")
     @Mapping(
             target = "hasQuiz",
-            expression = "java(lesson.getQuizQuestions() != null && !lesson.getQuizQuestions().isEmpty())"
+            expression = "java(lesson.getQuiz() != null)"
     )
     @Mapping(target = "comments", qualifiedByName = "rootComments")
     LessonDto toLessonDto(Lesson lesson);

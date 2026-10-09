@@ -14,7 +14,7 @@ import java.util.List;
 @Builder
 public class QuizQuestionDto {
     private Long id;
-    private String topicId;
+    private String courseId;
     private String lessonId;
     private String text;
     private List<String> options;

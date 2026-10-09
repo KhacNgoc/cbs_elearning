@@ -9,9 +9,9 @@ import java.util.List;
 import java.util.Optional;
 
 public interface CourseDocumentRepository extends JpaRepository<CourseDocument, String> {
-    List<CourseDocument> findByTopicIdOrderByCreatedAtDesc(String topicId);
+    List<CourseDocument> findByCourseIdOrderByCreatedAtDesc(String courseId);
 
-    @EntityGraph(attributePaths = "topic")
+    @EntityGraph(attributePaths = "course")
     @Query("select document from CourseDocument document where document.id = :id")
-    Optional<CourseDocument> findWithTopicById(@Param("id") String id);
+    Optional<CourseDocument> findWithCourseById(@Param("id") String id);
 }

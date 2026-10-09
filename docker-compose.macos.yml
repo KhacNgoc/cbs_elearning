@@ -1,9 +1,9 @@
 services:
   ollama:
-    profiles: ["docker-ollama"]
+    profiles: !override ["docker-ollama"]
 
   ollama-init:
-    profiles: ["docker-ollama"]
+    profiles: !override ["docker-ollama"]
 
   rag-service:
     environment:

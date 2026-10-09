@@ -6,7 +6,7 @@ from app.schemas import GeneratedQuizQuestion, QuizGenerationRequest
 
 
 def quiz_retrieval_queries(request: QuizGenerationRequest) -> list[str]:
-    scope = f"Chủ đề: {request.topic_name}."
+    scope = f"Khóa học: {request.course_name}."
     if request.lesson_name:
         scope += f" Bài học: {request.lesson_name}."
     aspects = (

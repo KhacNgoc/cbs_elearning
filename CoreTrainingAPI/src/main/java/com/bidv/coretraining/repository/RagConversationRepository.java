@@ -6,5 +6,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 
 public interface RagConversationRepository extends JpaRepository<RagConversation, String> {
-    Optional<RagConversation> findFirstByUserIdAndTopicIdOrderByUpdatedAtDesc(Long userId, String topicId);
+    Optional<RagConversation> findFirstByUserIdAndCourseIdOrderByUpdatedAtDesc(Long userId, String courseId);
 }

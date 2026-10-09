@@ -53,7 +53,7 @@ Dựa trên bản tóm tắt hội thoại, lịch sử gần nhất và câu h�
 Quy tắc:
 - Không trả lời câu hỏi và không thêm thông tin ngoài hội thoại.
 - Thay thế đại từ, bước và nội dung tham chiếu bằng đối tượng cụ thể.
-- Nếu câu hỏi đã độc lập hoặc chuyển chủ đề, giữ nguyên; không gắn chủ đề cũ.
+- Nếu câu hỏi đã độc lập hoặc chuyển khóa học, giữ nguyên; không gắn khóa học cũ.
 - Ưu tiên đính chính mới nhất của người dùng.
 - Nếu không đủ thông tin xác định tham chiếu, needs_clarification phải là true.
 - Giữ nguyên ngôn ngữ và ý nghĩa của người dùng.
@@ -128,9 +128,9 @@ async def answer_chat(request: ChatRequest) -> ChatResponse:
     )
     retrieval_question = standalone_question
     if course_summary_intent:
-        topic_label = (request.topic_name or request.course_id or "khóa học").strip()
+        course_label = (request.course_name or request.course_id or "khóa học").strip()
         retrieval_question = (
-            f"{topic_label}: tổng quan, nội dung chính, nghiệp vụ, quy trình, "
+            f"{course_label}: tổng quan, nội dung chính, nghiệp vụ, quy trình, "
             "trách nhiệm và lưu ý quan trọng"
         )
 
@@ -266,7 +266,7 @@ Nếu không đủ căn cứ, chỉ trả lời: \"{config.REFUSAL_ANSWER}\"
 Trả JSON hợp lệ gồm answer và source_ids. source_ids chỉ chứa id nguồn thực sự dùng trong reference_documents.
 Ví dụ: {{"answer":"...","source_ids":["SOURCE_1"]}}."""
     user_prompt = f"""<course_scope knowledge_source="false" id="{request.course_id or ''}">
-{request.topic_name or request.course_id or '(không xác định)'}
+{request.course_name or request.course_id or '(không xác định)'}
 </course_scope>
 
 <standalone_retrieval_question>

@@ -6,7 +6,7 @@ import { useUserStore } from './userStore';
 
 export const useQuizStore = defineStore('quiz', {
   state: () => ({
-    currentTopicId: null as string | null,
+    currentCourseId: null as string | null,
     currentLessonId: null as string | null,
     currentQuestionIndex: 0,
     questions: [] as QuizQuestion[],
@@ -37,9 +37,9 @@ export const useQuizStore = defineStore('quiz', {
   },
 
   actions: {
-    async startQuiz(topicId: string, lessonId?: string) {
+    async startQuiz(courseId: string, lessonId?: string) {
       this.isLoading = true;
-      this.currentTopicId = topicId;
+      this.currentCourseId = courseId;
       this.currentLessonId = lessonId || null;
       this.currentQuestionIndex = 0;
       this.selectedAnswers = {};
@@ -50,10 +50,10 @@ export const useQuizStore = defineStore('quiz', {
       this.stopTimer();
       
       try {
-        this.questions = await quizApi.getQuizQuestions(topicId, lessonId);
+        this.questions = await quizApi.getQuizQuestions(courseId, lessonId);
         this.startTimer();
       } catch (error) {
-        console.error(`Failed to load quiz questions for ${topicId}:`, error);
+        console.error(`Failed to load quiz questions for ${courseId}:`, error);
         this.questions = [];
       } finally {
         this.isLoading = false;
@@ -95,11 +95,11 @@ export const useQuizStore = defineStore('quiz', {
     },
     async submitQuiz() {
       this.stopTimer();
-      if (!this.currentTopicId) return;
+      if (!this.currentCourseId) return;
 
       this.isLoading = true;
       try {
-        const res = await quizApi.submitQuiz(this.currentTopicId, {
+        const res = await quizApi.submitQuiz(this.currentCourseId, {
           selectedAnswers: this.selectedAnswers,
           timeElapsed: this.timeElapsed
         }, this.currentLessonId || undefined);

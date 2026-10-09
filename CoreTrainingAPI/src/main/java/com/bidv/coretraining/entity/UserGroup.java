@@ -23,11 +23,11 @@ public class UserGroup {
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
-        name = "group_mandatory_topics",
+        name = "group_mandatory_courses",
         joinColumns = @JoinColumn(name = "group_id"),
-        inverseJoinColumns = @JoinColumn(name = "topic_id")
+        inverseJoinColumns = @JoinColumn(name = "course_id")
     )
     @Builder.Default
     @com.fasterxml.jackson.annotation.JsonIgnore
-    private Set<Topic> mandatoryTopics = new HashSet<>();
+    private Set<Course> mandatoryCourses = new HashSet<>();
 }

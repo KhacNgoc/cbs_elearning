@@ -13,6 +13,10 @@ import { useNavigationStore } from '../stores/navigationStore';
 import { clearAuthSession, getCachedAuthSession, setCachedAuthSession } from '../utils/authSession';
 import { authApi } from '../api/authApi';
 
+import TrainingAdmin from '../views/TrainingAdmin.vue';
+import LessonEditor from '../views/LessonEditor.vue';
+import CourseOutline from '../views/CourseOutline.vue';
+
 const routes: Array<RouteRecordRaw> = [
   {
     path: '/login',
@@ -25,6 +29,7 @@ const routes: Array<RouteRecordRaw> = [
     component: Dashboard,
     meta: { requiresAuth: true, pageKey: 'dashboard' }
   },
+  {path:'/courses/:courseId',name:'CourseOutline',component:CourseOutline,meta:{requiresAuth:true,pageKey:'course.outline'}},
   {
     path: '/lesson/:id',
     name: 'LessonDetail',
@@ -33,7 +38,7 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true, pageKey: 'lesson' }
   },
   {
-    path: '/quiz/:topicId',
+    path: '/quiz/:courseId',
     name: 'QuizView',
     component: QuizView,
     props: true,
@@ -62,16 +67,21 @@ const routes: Array<RouteRecordRaw> = [
     component: AdminLayout,
     meta: { requiresAuth: true, requiresAdmin: true, pageKey: 'admin.overview' },
     children: [
+      {path:'catalog',name:'TrainingCatalog',component:TrainingAdmin,meta:{pageKey:'admin.catalog'}},
+      {path:'courses',name:'TrainingCourses',component:TrainingAdmin,meta:{pageKey:'admin.courses'}},
+      {path:'courses/:courseId',name:'TrainingCourseDetail',component:TrainingAdmin,meta:{pageKey:'admin.courses'}},
+      {path:'courses/:courseId/chapters/:chapterId',name:'TrainingChapterDetail',component:TrainingAdmin,meta:{pageKey:'admin.courses'}},
+      {path:'lessons/:lessonId/edit',name:'LessonEditor',component:LessonEditor,meta:{pageKey:'admin.courses'}},
       {
         path: '',
         name: 'AdminPortal',
         component: AdminPortal
       },
       {
-        path: 'lessons/:topicId',
-        name: 'AdminTopicLessons',
-        component: AdminPortal,
-        meta: { pageKey: 'admin.lessons' }
+        path: 'lessons/:courseId',
+        name: 'AdminCourseLessons',
+        redirect: to => `/admin/courses/${to.params.courseId}`,
+        meta: { pageKey: 'admin.courses' }
       },
       {
         path: 'quizzes/new',
@@ -80,7 +90,7 @@ const routes: Array<RouteRecordRaw> = [
         meta: { pageKey: 'admin.exams' }
       },
       {
-        path: 'quizzes/:scopeType(topic|lesson)/:scopeId',
+        path: 'quizzes/:scopeType(course|lesson)/:scopeId',
         name: 'AdminQuizDetail',
         component: AdminQuizDetail,
         meta: { pageKey: 'admin.exams' }

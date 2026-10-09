@@ -21,8 +21,26 @@ the utility modules.
 ## Run
 
 1. Copy `.env.example` to `.env` and set a PostgreSQL password.
-2. Run `docker compose up --build` from the repository root. The initial Ollama model download may take several minutes.
+2. Run `docker compose --profile chatbot up -d --build` from the repository root. The initial Ollama model download may take several minutes.
 3. Check `http://localhost:8001/health`.
+
+The `chatbot` profile includes Qdrant, Ollama, model initialization, and the RAG
+service. Plain `docker compose up -d --build` starts the core application without
+these services. Chat, AI question generation, and AI document processing require
+the chatbot services to be running.
+
+To start only the chatbot stack using production environment settings:
+
+```bash
+docker compose --env-file .env.production --profile chatbot up -d --build qdrant ollama ollama-init rag-service
+```
+
+Adding profiles does not stop containers that are already running. To stop only
+the chatbot stack without removing stored models or vector data:
+
+```bash
+docker compose --env-file .env.production --profile chatbot stop rag-service ollama-init ollama qdrant
+```
 
 On Apple Silicon, Ollama inside Docker is CPU-only. For low-latency quiz
 generation, run Ollama natively with Metal and apply the macOS Compose override:
@@ -32,7 +50,7 @@ OLLAMA_HOST=127.0.0.1:11435 OLLAMA_NUM_PARALLEL=5 ollama serve
 OLLAMA_HOST=http://127.0.0.1:11435 ollama pull qwen3:4b
 OLLAMA_HOST=http://127.0.0.1:11435 ollama pull nomic-embed-text
 docker compose --env-file .env.production \
-  -f docker-compose.yml -f docker-compose.macos.yml up -d --build
+  -f docker-compose.yml -f docker-compose.macos.yml --profile chatbot up -d --build
 ```
 
 The native Ollama process must remain running. The RAG service keeps the quiz

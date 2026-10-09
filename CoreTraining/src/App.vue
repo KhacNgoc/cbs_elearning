@@ -74,7 +74,7 @@ onMounted(async () => {
   if (userStore.isAuthenticated) {
     await Promise.all([
       userStore.fetchProgress(),
-      courseStore.fetchTopics(),
+      courseStore.fetchCourses(),
       navigationStore.load()
     ]);
   }
