@@ -15,6 +15,7 @@
       </div>
 
       <div class="nav-user-menu">
+        <div id="learning-chatbot-launcher"></div>
         <NotificationCenter />
         <router-link to="/profile" class="nav-user" title="Xem hồ sơ cá nhân">
           <div class="nav-user-avatar">{{ userAvatarLetter }}</div>
@@ -58,7 +59,7 @@ const courseStore = useCourseStore();
 const navigationStore = useNavigationStore();
 const iconRegistry = { BookOpen, ClipboardCheck, HelpCircle, Home, Settings, Trophy, UserCircle, Users };
 const navigationIcon = (name: string) => iconRegistry[name as keyof typeof iconRegistry] || Home;
-const showLearningChatbot = computed(() => userStore.isAuthenticated);
+const showLearningChatbot = computed(() => userStore.isAuthenticated && route.name !== 'ChangePassword');
 const chatbotLocked = computed(() => route.name === 'QuizView');
 
 const userAvatarLetter = computed(() => {
@@ -105,8 +106,14 @@ onMounted(async () => {
 
 .nav-user-menu {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 0.75rem;
+}
+
+#learning-chatbot-launcher {
+  display: flex;
+  align-items: center;
 }
 
 .nav-user {
@@ -140,5 +147,20 @@ onMounted(async () => {
 .logout-icon {
   width: 18px;
   height: 18px;
+}
+
+@media (max-width: 560px) {
+  .navbar {
+    flex-wrap: wrap;
+  }
+
+  .nav-links {
+    order: 3;
+    flex: 1 0 100%;
+  }
+
+  .nav-user-menu {
+    gap: 0.35rem;
+  }
 }
 </style>

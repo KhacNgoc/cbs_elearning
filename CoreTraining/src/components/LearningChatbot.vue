@@ -5,12 +5,14 @@
     :class="{ 'is-locked': locked, 'is-dragging': dragging }"
     :style="{ left: `${position.x}px`, top: `${position.y}px` }"
   >
-    <Transition name="chat-panel" @after-leave="finishClosing">
+    <Transition name="chat-panel">
       <section
         v-if="open"
+        id="learning-chatbot-panel"
         class="chat-panel"
         role="dialog"
         aria-labelledby="learning-chatbot-title"
+        @keydown.esc.stop="closeChat"
       >
         <header class="chat-header" @pointerdown="startDrag">
           <div class="chat-assistant">
@@ -26,6 +28,7 @@
             </div>
           </div>
           <button
+            ref="closeButton"
             class="chat-close"
             type="button"
             aria-label="Đóng trợ lý học tập"
@@ -137,21 +140,24 @@
       </section>
     </Transition>
 
+  </aside>
+  <Teleport defer to="#learning-chatbot-launcher">
     <button
-      v-if="showLauncher"
+      ref="launcherButton"
       class="chat-launcher"
+      :class="{ 'is-locked': locked, 'is-active': open }"
       type="button"
-      :aria-label="locked ? 'Trợ lý học tập đang bị khóa' : 'Mở trợ lý học tập'"
+      :aria-label="open ? 'Đóng trợ lý học tập' : locked ? 'Trợ lý học tập đang bị khóa' : 'Mở trợ lý học tập'"
       :aria-expanded="open"
-      @pointerdown="startDrag"
+      aria-controls="learning-chatbot-panel"
+      :title="locked ? 'Trợ lý tạm khóa trong bài thi' : 'Trợ lý học tập'"
       @click="toggleChat"
     >
-      <LockKeyhole v-if="locked" :size="23" />
-      <MessageCircleMore v-else :size="25" />
-      <span>{{ locked ? "Trợ lý đang khóa" : "Hỏi trợ lý" }}</span>
-      <i v-if="!locked" aria-hidden="true"></i>
+      <LockKeyhole v-if="locked" :size="20" aria-hidden="true" />
+      <MessageCircleMore v-else :size="20" aria-hidden="true" />
+      <span>Trợ lý</span>
     </button>
-  </aside>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -179,11 +185,11 @@ const route = useRoute();
 const courseStore = useCourseStore();
 const userStore = useUserStore();
 const open = ref(false);
-const showLauncher = ref(true);
+const launcherButton = ref<HTMLButtonElement | null>(null);
+const closeButton = ref<HTMLButtonElement | null>(null);
 const chatbotElement = ref<HTMLElement | null>(null);
 const dragging = ref(false);
 const position = ref({ x: 0, y: 0 });
-const launcherPosition = ref({ x: 0, y: 0 });
 const chatBody = ref<HTMLElement | null>(null);
 const selectedCourseId = ref("");
 const messages = ref<RagChatHistory[]>([]);
@@ -200,7 +206,6 @@ const quickPrompts = [
   "Những điều kiện nào cần lưu ý?",
 ];
 const dragOffset = { x: 0, y: 0 };
-let movedDuringDrag = false;
 let longWaitTimer: number | undefined;
 
 const clearLongWaitTimer = () => {
@@ -341,12 +346,6 @@ const moveChatbot = (event: PointerEvent) => {
   if (!dragging.value) return;
   const nextX = event.clientX - dragOffset.x;
   const nextY = event.clientY - dragOffset.y;
-  if (
-    Math.abs(nextX - position.value.x) > 2 ||
-    Math.abs(nextY - position.value.y) > 2
-  ) {
-    movedDuringDrag = true;
-  }
   position.value = { x: nextX, y: nextY };
   clampPosition();
 };
@@ -363,7 +362,6 @@ const startDrag = (event: PointerEvent) => {
   const rect = chatbotElement.value.getBoundingClientRect();
   dragOffset.x = event.clientX - rect.left;
   dragOffset.y = event.clientY - rect.top;
-  movedDuringDrag = false;
   dragging.value = true;
   window.addEventListener("pointermove", moveChatbot);
   window.addEventListener("pointerup", stopDrag);
@@ -371,28 +369,23 @@ const startDrag = (event: PointerEvent) => {
 };
 
 const toggleChat = async () => {
-  if (movedDuringDrag) {
-    movedDuringDrag = false;
+  if (open.value) {
+    void closeChat();
     return;
   }
-  launcherPosition.value = { ...position.value };
-  showLauncher.value = false;
   open.value = true;
   await nextTick();
   await placeAtBottomRight();
+  closeButton.value?.focus({ preventScroll: true });
   selectCourseFromContext();
   await loadHistory();
 };
 
-const closeChat = () => {
+const closeChat = async () => {
+  stopDrag();
   open.value = false;
-};
-
-const finishClosing = async () => {
-  position.value = { ...launcherPosition.value };
-  showLauncher.value = true;
   await nextTick();
-  clampPosition();
+  launcherButton.value?.focus({ preventScroll: true });
 };
 
 const placeAtBottomRight = async () => {
@@ -405,14 +398,13 @@ const placeAtBottomRight = async () => {
     y: window.innerHeight - rect.height - 20,
   };
   clampPosition();
-  if (!open.value) launcherPosition.value = { ...position.value };
 };
 
 watch(
   () => props.locked,
   () => {
+    stopDrag();
     open.value = false;
-    showLauncher.value = true;
   },
 );
 
@@ -426,7 +418,6 @@ watch(
 );
 
 onMounted(() => {
-  void placeAtBottomRight();
   window.addEventListener("resize", clampPosition);
 });
 
@@ -454,46 +445,41 @@ onBeforeUnmount(() => {
 }
 
 .chat-launcher {
-  position: relative;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
-  min-height: 54px;
-  padding: 0 20px;
-  border: 0;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #006747, #004c36);
-  color: #fff;
-  box-shadow: 0 14px 34px rgba(0, 76, 54, 0.28);
-  font-size: 0.94rem;
-  font-weight: 700;
+  justify-content: center;
+  gap: 6px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #c7dfd5;
+  border-radius: 12px;
+  background: #edf6f1;
+  color: #005b41;
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
-  touch-action: none;
   transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
-  animation: launcher-appear 0.18s ease-out both;
+    background-color 0.2s ease,
+    border-color 0.2s ease;
 }
 
-.chat-launcher:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 18px 38px rgba(0, 76, 54, 0.34);
+.chat-launcher:hover,
+.chat-launcher.is-active {
+  background: #d7e9e3;
+  border-color: #005b41;
 }
 
-.chat-launcher i {
-  position: absolute;
-  top: 1px;
-  right: 5px;
-  width: 10px;
-  height: 10px;
-  border: 2px solid #fff;
-  border-radius: 50%;
-  background: #35c786;
+.chat-launcher:focus-visible {
+  outline: 2px solid #005b41;
+  outline-offset: 3px;
 }
 
-.is-locked .chat-launcher {
-  background: #475569;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.2);
+.chat-launcher.is-locked {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #475569;
 }
 
 .chat-panel {
@@ -519,8 +505,7 @@ onBeforeUnmount(() => {
   touch-action: none;
 }
 
-.is-dragging .chat-header,
-.is-dragging .chat-launcher {
+.is-dragging .chat-header {
   cursor: grabbing;
 }
 
@@ -932,17 +917,6 @@ onBeforeUnmount(() => {
   transform: translateY(40px);
 }
 
-@keyframes launcher-appear {
-  from {
-    opacity: 0;
-    transform: scale(0.88);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
 @keyframes chat-spin {
   to { transform: rotate(360deg); }
 }
@@ -958,16 +932,18 @@ onBeforeUnmount(() => {
   border: 0;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 1024px) {
   .chat-launcher {
-    min-width: 54px;
-    padding: 0 15px;
+    width: 44px;
+    padding: 0;
   }
 
   .chat-launcher span {
     display: none;
   }
+}
 
+@media (max-width: 640px) {
   .chat-panel {
     width: calc(100vw - 28px);
     height: min(560px, calc(100vh - 88px));
@@ -981,8 +957,5 @@ onBeforeUnmount(() => {
     transition: none;
   }
 
-  .chat-launcher {
-    animation: none;
-  }
 }
 </style>

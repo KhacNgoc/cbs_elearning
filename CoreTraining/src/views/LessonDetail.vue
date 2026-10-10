@@ -65,7 +65,6 @@
       ></div>
     </div>
 
-    <section v-if="lesson.textBody && lesson.videoUrl" class="lesson-text-content"><h2>Nội dung bài học</h2><p>{{lesson.textBody}}</p></section>
     <section class="lesson-information">
       <LessonOverview
         :lesson="lesson"
