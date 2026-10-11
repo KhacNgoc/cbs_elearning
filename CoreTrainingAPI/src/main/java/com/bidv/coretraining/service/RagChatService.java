@@ -14,6 +14,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -94,6 +97,16 @@ public class RagChatService {
         try {
             ragResponse = restTemplate.postForObject(
                     ragUrl + "/chat", pythonRequest, RagServiceChatResponse.class);
+        } catch (HttpStatusCodeException exception) {
+            int status = exception.getStatusCode().value();
+            if (status == 502 || status == 504) {
+                throw new ResponseStatusException(
+                        status == 502 ? HttpStatus.BAD_GATEWAY : HttpStatus.GATEWAY_TIMEOUT,
+                        status == 502 ? "Trợ lý chưa tạo được câu trả lời hoàn chỉnh. Vui lòng thử lại."
+                                : "Trợ lý chưa hoàn tất câu trả lời trong thời gian cho phép. Vui lòng thử lại.",
+                        exception);
+            }
+            throw new RagServiceUnavailableException("Trợ lý học tập tạm thời không khả dụng", exception);
         } catch (RestClientException exception) {
             log.error("RAG chat unavailable conversationId={} userId={} courseId={} errorType={}",
                     conversation.getId(), user.getId(), course.getId(), exception.getClass().getSimpleName());

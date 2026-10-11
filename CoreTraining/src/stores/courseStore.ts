@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import type { Course, Lesson } from '../types';
 import { courseApi } from '../api/courseApi';
+import { showToast } from '../utils/toast';
 
 let coursesRequest: Promise<void> | null = null;
 let lessonRequestId = 0;
@@ -36,7 +37,7 @@ export const useCourseStore = defineStore('course', {
         this.courses = await courseApi.getAllCourses();
       })();
       try { await coursesRequest; }
-      catch (error) { console.error('Failed to load courses:', error); }
+      catch (error) { console.error('Failed to load courses:', error); showToast('Không thể tải danh sách khóa học. Vui lòng thử lại.', 'error'); }
       finally { coursesRequest = null; this.isLoading = false; }
     },
 
@@ -64,7 +65,10 @@ export const useCourseStore = defineStore('course', {
         }
       } catch (error) {
         console.error(`Failed to load lesson detail for ${lessonId}:`, error);
-        if (requestId === lessonRequestId) this.currentLessonData = null;
+        if (requestId === lessonRequestId) {
+          this.currentLessonData = null;
+          showToast('Không thể tải nội dung bài học. Vui lòng thử lại.', 'error');
+        }
       } finally {
         if (requestId === lessonRequestId) this.isLoading = false;
       }

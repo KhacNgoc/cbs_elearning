@@ -70,7 +70,7 @@ const routes: Array<RouteRecordRaw> = [
       {path:'catalog',name:'TrainingCatalog',component:TrainingAdmin,meta:{pageKey:'admin.catalog'}},
       {path:'courses',name:'TrainingCourses',component:TrainingAdmin,meta:{pageKey:'admin.courses'}},
       {path:'courses/:courseId',name:'TrainingCourseDetail',component:TrainingAdmin,meta:{pageKey:'admin.courses'}},
-      {path:'courses/:courseId/chapters/:chapterId',name:'TrainingChapterDetail',component:TrainingAdmin,meta:{pageKey:'admin.courses'}},
+      {path:'courses/:courseId/chapters/:chapterId',name:'TrainingChapterDetail',redirect:to=>({name:'TrainingCourseDetail',params:{courseId:to.params.courseId},query:{...to.query,chapter:String(to.params.chapterId)}}),meta:{pageKey:'admin.courses'}},
       {path:'lessons/:lessonId/edit',name:'LessonEditor',component:LessonEditor,meta:{pageKey:'admin.courses'}},
       {
         path: '',

@@ -8,6 +8,7 @@ import { userApi } from '../api/userApi';
 import router from '../router';
 import { isMockApi } from '../api/axiosClient';
 import { clearAuthSession, setCachedAuthSession } from '../utils/authSession';
+import { showToast } from '../utils/toast';
 
 let progressRequest: Promise<void> | null = null;
 
@@ -170,6 +171,7 @@ export const useUserStore = defineStore('user', {
         localStorage.setItem('mockCompletedLessons', JSON.stringify(this.completedLessons));
         } catch (error) {
           console.error('Failed to fetch user progress:', error);
+          showToast('Không thể tải thông tin và tiến độ học tập. Vui lòng thử lại.', 'error');
         }
       })();
       try {

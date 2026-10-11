@@ -46,7 +46,8 @@ public class Lesson {
     public VideoSource getVideoSource() { return content == null ? VideoSource.URL : content.getVideoSource(); }
     public String getTextBody() { return content == null ? null : content.getTextBody(); }
     public Integer getQuizPassingScore() { return quiz == null ? 80 : quiz.getPassingScore(); }
-    public boolean isQuizRequired() { return quiz != null && quiz.isRequiredForProgress(); }
+    public boolean hasQuiz() { return quiz != null && !quiz.getQuestions().isEmpty(); }
+    public boolean isQuizRequired() { return hasQuiz() && quiz.isRequiredForProgress(); }
     public void ensureContent() { if(content == null) content = LessonContent.builder().lesson(this).build(); }
     public void setVideoUrl(String value) { ensureContent(); content.setVideoUrl(value); }
     public void setVideoSource(VideoSource value) { ensureContent(); content.setVideoSource(value); }
@@ -62,6 +63,10 @@ public class Lesson {
     @OrderBy("documentOrder ASC")
     @Builder.Default
     private List<LessonDocument> documents = new ArrayList<>();
+
+    @OneToMany(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<LessonKnowledgeSource> knowledgeSources = new ArrayList<>();
 
     @OneToMany(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("sectionOrder ASC")

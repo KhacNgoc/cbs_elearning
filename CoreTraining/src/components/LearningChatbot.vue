@@ -292,12 +292,15 @@ const sendQuestion = async () => {
       sources: response.sources,
       createdAt: new Date().toISOString(),
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Failed to ask learning assistant:", error);
     question.value = content;
-    chatError.value = isTimeoutError(error)
+    const status = error?.response?.status;
+    chatError.value = isTimeoutError(error) || status === 504
       ? "Trợ lý chưa hoàn tất câu trả lời trong thời gian cho phép. Câu hỏi đã được giữ lại để bạn có thể thử lại."
-      : "Không thể kết nối tới trợ lý học tập. Vui lòng thử lại.";
+      : status === 502
+        ? "Trợ lý chưa tạo được câu trả lời hoàn chỉnh. Vui lòng thử lại."
+        : "Không thể kết nối tới trợ lý học tập. Vui lòng thử lại.";
   } finally {
     clearLongWaitTimer();
     pendingQuestion.value = "";

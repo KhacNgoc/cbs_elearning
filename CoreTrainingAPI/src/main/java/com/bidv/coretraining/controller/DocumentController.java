@@ -30,6 +30,12 @@ public class DocumentController {
     }
     @GetMapping("/admin/courses/{courseId}/documents")
     public ResponseEntity<List<CourseDocumentDto>> list(@PathVariable String courseId) { return ResponseEntity.ok(documentService.list(courseId)); }
+    @DeleteMapping("/admin/courses/{courseId}/documents/{documentId}")
+    public ResponseEntity<Void> delete(@PathVariable String courseId, @PathVariable String documentId) {
+        documentService.delete(courseId, documentId);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/rag/chat")
     public ResponseEntity<RagChatResponse> chat(
             @Valid @RequestBody RagChatRequest request,

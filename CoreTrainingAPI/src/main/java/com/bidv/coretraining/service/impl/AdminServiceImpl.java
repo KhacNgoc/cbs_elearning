@@ -441,7 +441,8 @@ public class AdminServiceImpl implements AdminService {
         Lesson lesson=structure.lesson(settings.getLessonId());
         if(!lesson.getCourse().getId().equals(settings.getCourseId()))throw new BadRequestException("Bài không thuộc khóa");
         if(!"DRAFT".equals(lesson.getCourse().getStatus()))throw new BadRequestException("Chuyển khóa về bản nháp trước khi đổi kiểm tra");
-        lesson.ensureQuiz();lesson.getQuiz().setPassingScore(passingScore);
+        if(!lesson.hasQuiz())throw new BadRequestException("Thêm ít nhất một câu hỏi trước khi lưu cấu hình bài kiểm tra");
+        lesson.getQuiz().setPassingScore(passingScore);
         lesson.getQuiz().setRequiredForProgress(!Boolean.FALSE.equals(settings.getRequiredForProgress()));
         lessonRepository.save(lesson);settings.setPassingScore(passingScore);return settings;
     }

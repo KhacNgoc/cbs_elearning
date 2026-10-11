@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr, model_validator
 
 
 class ConversationMessage(BaseModel):
@@ -65,13 +65,38 @@ class ChatResponse(BaseModel):
     rewriteReason: str = ""
 
 
+class QuizKnowledgeSource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    document_id: str = Field(min_length=1, max_length=200)
+    page_from: int | None = Field(default=None, ge=1)
+    page_to: int | None = Field(default=None, ge=1)
+    section: str | None = Field(default=None, min_length=1, max_length=2000)
+
+    @model_validator(mode="after")
+    def validate_range(self):
+        if (self.page_from is None) != (self.page_to is None):
+            raise ValueError("Both page bounds are required")
+        if self.page_from is not None:
+            if self.page_from > self.page_to or self.section is not None:
+                raise ValueError("Invalid or mixed source range")
+        return self
+
+
 class QuizGenerationRequest(BaseModel):
     course_id: str = Field(min_length=1, max_length=200)
     course_name: str = Field(min_length=1, max_length=500)
     lesson_name: str | None = Field(default=None, max_length=500)
+    lesson_id: str | None = Field(default=None, min_length=1, max_length=200)
+    sources: list[QuizKnowledgeSource] = Field(default_factory=list, max_length=50)
     single_choice_count: int = Field(default=5, ge=0, le=10)
     multiple_choice_count: int = Field(default=0, ge=0, le=10)
     option_count: int = Field(default=4, ge=3, le=6)
+
+    @model_validator(mode="after")
+    def require_lesson_sources(self):
+        if (self.lesson_id or self.lesson_name) and not self.sources:
+            raise ValueError("Lesson quizzes require explicitly assigned document sources")
+        return self
 
 
 class GeneratedQuizQuestion(BaseModel):
@@ -111,6 +136,14 @@ class QuizVerificationResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     accepted_question_indexes: list[int]
+
+
+class QuizQuestionReview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: StrictStr = Field(min_length=1, max_length=600)
+    correct_answers: list[int]
+    well_formed: StrictBool
 
 
 class QuizGenerationSource(BaseModel):

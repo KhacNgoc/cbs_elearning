@@ -8,6 +8,7 @@ import com.bidv.coretraining.exception.BadRequestException;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
 import com.bidv.coretraining.repository.CourseDocumentRepository;
 import com.bidv.coretraining.repository.CourseRepository;
+import com.bidv.coretraining.repository.LessonKnowledgeSourceRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,13 +26,16 @@ public class DocumentService {
     private final CourseDocumentRepository documentRepository;
     private final CourseRepository courseRepository;
     private final RagIngestionService ragIngestionService;
+    private final LessonKnowledgeSourceRepository knowledgeSources;
     private final Path uploadDirectory;
 
     public DocumentService(CourseDocumentRepository documentRepository, CourseRepository courseRepository, RagIngestionService ragIngestionService,
+                           LessonKnowledgeSourceRepository knowledgeSources,
                            @Value("${app.upload-directory}") String uploadDirectory) {
         this.documentRepository = documentRepository;
         this.courseRepository = courseRepository;
         this.ragIngestionService = ragIngestionService;
+        this.knowledgeSources = knowledgeSources;
         this.uploadDirectory = Path.of(uploadDirectory);
     }
 
@@ -61,5 +65,28 @@ public class DocumentService {
             throw new ResourceNotFoundException("Không tìm thấy khóa học: " + courseId);
         }
         return documentRepository.findByCourseIdOrderByCreatedAtDesc(courseId).stream().map(CourseDocumentDto::from).toList();
+    }
+
+    @Transactional
+    public void delete(String courseId, String documentId) {
+        CourseDocument document = documentRepository.findForDeletionById(documentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tài liệu"));
+        if (!document.getCourse().getId().equals(courseId)) {
+            throw new ResourceNotFoundException("Không tìm thấy tài liệu trong khóa học này");
+        }
+        if (document.getStatus() == DocumentStatus.PENDING || document.getStatus() == DocumentStatus.INDEXING) {
+            throw new BadRequestException("Tài liệu đang chờ hoặc đang embedding. Vui lòng chờ xử lý hoàn tất trước khi xóa.");
+        }
+        // Remove vectors first; keep the record available for retry if RAG is unavailable.
+        ragIngestionService.deleteIndex(documentId, courseId);
+        try {
+            Files.deleteIfExists(Path.of(document.getStoragePath()));
+        } catch (IOException error) {
+            throw new BadRequestException("Không thể xóa tệp tài liệu. Vui lòng thử lại.");
+        }
+        knowledgeSources.deleteByDocumentId(documentId);
+        knowledgeSources.flush();
+        documentRepository.delete(document);
+        documentRepository.flush();
     }
 }

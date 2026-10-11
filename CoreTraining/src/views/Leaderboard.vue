@@ -114,6 +114,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import { showToast } from '../utils/toast';
 import { useUserStore } from '../stores/userStore';
 import { leaderboardApi } from '../api/leaderboardApi';
 import type { LeaderboardUser } from '../types';
@@ -124,7 +125,11 @@ const leaderboardUsers = ref<LeaderboardUser[]>([]);
 
 onMounted(async () => {
   await userStore.fetchProgress();
-  leaderboardUsers.value = await leaderboardApi.getLeaderboard();
+  try {
+    leaderboardUsers.value = await leaderboardApi.getLeaderboard();
+  } catch {
+    showToast('Không thể tải bảng vinh danh. Vui lòng thử lại.', 'error');
+  }
 });
 
 // Dynamically construct and sort leaderboard based on user points from API

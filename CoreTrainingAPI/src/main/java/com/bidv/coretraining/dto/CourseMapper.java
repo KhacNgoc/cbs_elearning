@@ -40,10 +40,10 @@ public interface CourseMapper {
 
     @Mapping(source = "course.id", target = "courseId")
     @Mapping(source="chapter.id", target="chapterId")
-    @Mapping(target="quizRequired", expression="java(lesson.isQuizRequired())")
+    @Mapping(target="quizRequired", expression="java(lesson.getQuiz() != null && lesson.getQuiz().isRequiredForProgress())")
     @Mapping(
             target = "hasQuiz",
-            expression = "java(lesson.getQuiz() != null)"
+            expression = "java(lesson.hasQuiz())"
     )
     @Mapping(target = "comments", qualifiedByName = "rootComments")
     LessonDto toLessonDto(Lesson lesson);

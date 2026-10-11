@@ -46,12 +46,13 @@ export const useQuizStore = defineStore('quiz', {
       this.timeElapsed = 0;
       this.isQuizFinished = false;
       this.quizResult = null;
+      this.questions = [];
       
       this.stopTimer();
       
       try {
         this.questions = await quizApi.getQuizQuestions(courseId, lessonId);
-        this.startTimer();
+        if (this.questions.length > 0) this.startTimer();
       } catch (error) {
         console.error(`Failed to load quiz questions for ${courseId}:`, error);
         this.questions = [];
@@ -71,6 +72,7 @@ export const useQuizStore = defineStore('quiz', {
       }
     },
     async nextQuestion() {
+      if (!this.questions.length) return;
       if (this.currentQuestionIndex < this.questions.length - 1) {
         this.currentQuestionIndex++;
       } else {
@@ -95,7 +97,7 @@ export const useQuizStore = defineStore('quiz', {
     },
     async submitQuiz() {
       this.stopTimer();
-      if (!this.currentCourseId) return;
+      if (!this.currentCourseId || !this.questions.length) return;
 
       this.isLoading = true;
       try {

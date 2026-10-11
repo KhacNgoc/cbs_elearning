@@ -151,12 +151,6 @@ const closeOnOutside = (event: MouseEvent) => {
   if (root.value && !root.value.contains(event.target as Node))
     open.value = false;
 };
-const handleSystemError = (event: Event) =>
-  showToast(
-    (event as CustomEvent<string>).detail || "Hệ thống đang gặp sự cố.",
-    "error",
-  );
-
 const handleAppToast = (event: Event) => {
   const detail = (event as CustomEvent<{ message?: string; variant?: ToastVariant }>).detail;
   if (detail?.message) showToast(detail.message, detail.variant || "info");
@@ -164,7 +158,6 @@ const handleAppToast = (event: Event) => {
 
 onMounted(async () => {
   document.addEventListener("click", closeOnOutside);
-  window.addEventListener("system-error", handleSystemError);
   window.addEventListener("app-toast", handleAppToast);
   try {
     notifications.value = await notificationApi.getNotifications();
@@ -180,7 +173,6 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   socket?.stop();
   document.removeEventListener("click", closeOnOutside);
-  window.removeEventListener("system-error", handleSystemError);
   window.removeEventListener("app-toast", handleAppToast);
   if (toastTimer) window.clearTimeout(toastTimer);
 });

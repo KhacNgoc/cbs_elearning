@@ -17,6 +17,10 @@ logger = logging.getLogger("uvicorn.error")
 ollama_http_client: httpx.AsyncClient | None = None
 
 
+class ModelOutputTruncated(RuntimeError):
+    """The model exhausted its output budget before finishing."""
+
+
 def get_ollama_http_client() -> httpx.AsyncClient:
     global ollama_http_client
     if ollama_http_client is None or getattr(ollama_http_client, "is_closed", False):
@@ -63,7 +67,17 @@ async def ollama_chat(
     )
     if response.status_code != 200:
         raise RuntimeError(f"Ollama returned HTTP {response.status_code}")
-    return str(response.json()["message"]["content"])
+    result = response.json()
+    logger.info(
+        "Ollama generation model=%s done_reason=%s prompt_tokens=%s output_tokens=%s "
+        "load_ms=%.0f prompt_ms=%.0f generation_ms=%.0f total_ms=%.0f",
+        model, result.get("done_reason"), result.get("prompt_eval_count"), result.get("eval_count"),
+        result.get("load_duration", 0) / 1e6, result.get("prompt_eval_duration", 0) / 1e6,
+        result.get("eval_duration", 0) / 1e6, result.get("total_duration", 0) / 1e6,
+    )
+    if result.get("done_reason") == "length":
+        raise ModelOutputTruncated("Model output token limit reached")
+    return str(result["message"]["content"])
 
 
 async def embeddings(

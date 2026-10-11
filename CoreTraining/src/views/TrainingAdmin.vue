@@ -29,13 +29,13 @@
           </div>
         <p v-if="!domains.length" class="empty">Tạo lĩnh vực đầu tiên để tổ chức chương trình đào tạo.</p>
         </div>
-        <footer class="pagination domain-pagination" aria-label="Phân trang lĩnh vực"><span>{{ domains.length }} lĩnh vực · {{ domainPage }}/{{ domainPageCount }}</span><div><button :disabled="domainPage <= 1" @click="domainPage--" aria-label="Trang lĩnh vực trước" title="Trang trước"><ChevronLeft :size="18" /></button><button :disabled="domainPage >= domainPageCount" @click="domainPage++" aria-label="Trang lĩnh vực sau" title="Trang sau"><ChevronRight :size="18" /></button></div></footer>
+        <TablePagination v-model:page="domainPage" v-model:page-size="domainPageSize" :total="domains.length" :page-count="domainPageCount" unit="lĩnh vực" unit-label="Lĩnh vực" compact />
       </section>
       <section class="card"><div class="section-heading"><h2>Chương trình đào tạo</h2><button class="btn btn-primary" :disabled="!domainId" @click="openForm('program')"><Plus :size="16" /> Thêm chương trình</button></div>
         <div class="search-box"><Search :size="18" /><input v-model="query" placeholder="Tìm mã hoặc tên chương trình..." /></div>
         <div class="table-scroll"><table class="admin-table"><thead><tr><th>Chương trình</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody><tr v-for="program in paginatedPrograms" :key="program.id"><td><strong>{{ program.name }}</strong><small>{{ program.code }}</small></td><td>{{ statusLabel(program.status) }}</td><td><button class="row-edit" @click="openForm('program', program)">Sửa</button></td></tr></tbody></table></div>
         <p v-if="!filteredPrograms.length" class="empty">Chưa có chương trình phù hợp.</p>
-        <footer class="pagination" aria-label="Phân trang chương trình"><span>{{ filteredPrograms.length }} chương trình · Trang {{ programPage }} / {{ programPageCount }}</span><div><button :disabled="programPage <= 1" @click="programPage--" aria-label="Trang chương trình trước" title="Trang trước"><ChevronLeft :size="18" /></button><button :disabled="programPage >= programPageCount" @click="programPage++" aria-label="Trang chương trình sau" title="Trang sau"><ChevronRight :size="18" /></button></div></footer>
+        <TablePagination v-model:page="programPage" v-model:page-size="programPageSize" :total="filteredPrograms.length" :page-count="programPageCount" unit="chương trình" unit-label="Chương trình" />
       </section>
     </div>
 
@@ -43,12 +43,16 @@
       <div class="section-heading"><h2>{{ chapter ? 'Danh sách bài học' : course ? 'Danh sách chương' : 'Danh sách khóa học' }}</h2><button v-if="course && !chapter && canEditCourse" class="btn btn-secondary" @click="openForm('course', course)">Thông tin khóa</button></div>
       <p v-if="course && !canEditCourse" class="readonly-notice">Khóa học đang ở chế độ chỉ xem. Chuyển khóa về bản nháp để chỉnh sửa nội dung.</p>
       <div class="table-toolbar">
-        <div class="search-box"><Search :size="18" /><input v-model="query" :placeholder="chapter ? 'Tìm mã hoặc tên bài học...' : course ? 'Tìm mã hoặc tên chương...' : 'Tìm mã hoặc tên khóa...'" /></div>
+        <div class="search-box"><Search :size="18" /><input v-model="query" :placeholder="chapter ? 'Tìm mã hoặc tên bài học...' : course ? 'Tìm mã, tên chương hoặc bài học...' : 'Tìm mã hoặc tên khóa...'" /></div>
         <select v-model="statusFilter" aria-label="Lọc trạng thái"><option value="">Tất cả trạng thái</option><option value="DRAFT">Bản nháp</option><option value="PUBLISHED">Đã xuất bản</option><option value="ARCHIVED">Đã lưu trữ</option></select>
         <select v-if="!course" v-model="programFilter" aria-label="Lọc chương trình"><option value="">Tất cả chương trình</option><option v-for="program in programs" :key="program.id" :value="program.id">{{ program.name }}</option></select>
         <button v-if="!course || canEditCourse" class="btn btn-primary" @click="openForm(chapter ? 'lesson' : course ? 'chapter' : 'course')"><Plus :size="17" /> {{ chapter ? 'Thêm bài học' : course ? 'Thêm chương' : 'Tạo khóa học' }}</button>
       </div>
       <div v-if="loading" class="empty">Đang tải dữ liệu...</div>
+      <ChapterTreeTable v-else-if="course && !chapter" :key="course.id" :chapters="paginated as Chapter[]" :expanded-ids="expandedChapterIds"
+        :can-edit="canEditCourse" :busy="busy" :reorder-disabled="query !== '' || statusFilter !== ''" :total-chapters="chapters.length" :order-of="orderOf" :visible-lessons="visibleLessons"
+        @toggle="toggleChapter" @open-chapter="openRow" @open-lesson="openLesson" @edit-chapter="editRow" @delete-chapter="askDelete" @move-chapter="move"
+        @add-lesson="openLessonForm" @move-lesson="moveLesson" @delete-lesson="lesson => askDelete(lesson, 'lesson')" />
       <div v-else class="table-scroll"><table class="admin-table"><thead><tr><th v-if="course">STT</th><th>{{ chapter ? 'Bài học' : course ? 'Chương' : 'Khóa học' }}</th><th>{{ chapter ? 'Kiểm tra' : course ? 'Bài học' : 'Chương trình' }}</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
         <tbody><tr v-for="row in paginated" :key="row.id">
           <td v-if="course">{{ orderOf(row) + 1 }}</td>
@@ -59,11 +63,11 @@
           <td><div v-if="canEditRow(row)" class="row-actions"><button v-if="course" class="order-button" :disabled="busy || query !== '' || statusFilter !== '' || orderOf(row) === 0" @click="move(row, -1)" aria-label="Di chuyển lên"><ArrowUp :size="14" /></button><button v-if="course" class="order-button" :disabled="busy || query !== '' || statusFilter !== '' || orderOf(row) === rows.length - 1" @click="move(row, 1)" aria-label="Di chuyển xuống"><ArrowDown :size="14" /></button><button class="row-edit" @click="editRow(row)">Sửa</button><button class="row-delete" :disabled="busy" @click="askDelete(row)">Xóa</button></div><span v-else class="readonly-label">Chỉ xem</span></td>
         </tr></tbody></table></div>
       <div v-if="!loading && !filtered.length" class="empty"><BookOpen :size="30" /><p>{{ query ? 'Không tìm thấy kết quả phù hợp.' : chapter ? 'Chương chưa có bài. Thêm bài học đầu tiên để bắt đầu soạn.' : course ? 'Khóa chưa có chương. Thêm chương đầu tiên.' : 'Tạo khóa đầu tiên và gán chương trình đào tạo.' }}</p></div>
-      <footer class="pagination"><span>{{ filtered.length }} mục · Trang {{ page }} / {{ pageCount }}</span><div><button :disabled="page <= 1" @click="page--" aria-label="Trang trước" title="Trang trước"><ChevronLeft :size="18" /></button><button :disabled="page >= pageCount" @click="page++" aria-label="Trang sau" title="Trang sau"><ChevronRight :size="18" /></button></div></footer>
+      <TablePagination v-model:page="page" v-model:page-size="pageSize" :total="filtered.length" :page-count="pageCount" :unit="course && !chapter ? 'chương' : 'bản ghi'" :unit-label="course && !chapter ? 'Chương' : 'Bản ghi'" />
     </section>
 
     <Teleport to="body"><div v-if="formKind" class="training-modal-overlay" @click.self="closeForm"><section class="training-modal card" role="dialog" aria-modal="true" aria-labelledby="training-form-title"><header><h2 id="training-form-title">{{ formTitle }}</h2><button :disabled="busy" @click="closeForm" aria-label="Đóng"><X :size="20" /></button></header>
-      <p>{{ formKind === 'lesson' ? `${course?.name} / ${chapter?.title}` : formKind === 'chapter' ? `Khóa: ${course?.name}` : 'Thông tin đào tạo' }}</p>
+      <p>{{ formKind === 'lesson' ? `${course?.name} / ${lessonChapter?.title || chapter?.title}` : formKind === 'chapter' ? `Khóa: ${course?.name}` : 'Thông tin đào tạo' }}</p>
       <form @submit.prevent="save"><label>Mã {{ formKind === 'lesson' ? 'bài học' : '' }} *<input v-model="form.code" required :disabled="formKind === 'lesson' && !!form.id" /></label><label>Tên *<input v-model="form.name" required /></label>
         <label v-if="formKind === 'course'">Chương trình đào tạo *<select v-model="form.programId" required><option value="" disabled>Chọn chương trình</option><option v-for="program in programs.filter(p => p.status === 'ACTIVE')" :key="program.id" :value="program.id">{{ domains.find(d => d.id === program.domainId)?.name }} / {{ program.name }}</option></select></label>
         <label v-if="formKind === 'program'">Lĩnh vực *<select v-model="form.domainId" required><option v-for="domain in domains" :key="domain.id" :value="domain.id">{{ domain.name }}</option></select></label>
@@ -80,12 +84,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Search, Plus, Pencil, X, BookOpen, Eye, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-vue-next';
+import { Search, Plus, Pencil, X, BookOpen, Eye, ArrowUp, ArrowDown } from 'lucide-vue-next';
 import { trainingApi } from '../api/trainingApi';
 import { adminApi } from '../api/adminApi';
 import type { Course, Chapter, Lesson, TrainingDomain, TrainingProgram } from '../types';
 import ConfirmModal from '../components/ConfirmModal.vue';
 import AdminBackButton from '../components/AdminBackButton.vue';
+import ChapterTreeTable from '../components/ChapterTreeTable.vue';
+import TablePagination from '../components/TablePagination.vue';
 import { showToast } from '../utils/toast';
 type Row = Course | Chapter | Lesson;
 type FormKind = 'domain' | 'program' | 'course' | 'chapter' | 'lesson';
@@ -93,6 +99,15 @@ const route=useRoute(), router=useRouter();
 const loading=ref(false), busy=ref(false), error=ref(''), formError=ref('');
 const domains=ref<TrainingDomain[]>([]), programs=ref<TrainingProgram[]>([]), courses=ref<Course[]>([]), chapters=ref<Chapter[]>([]);
 const course=ref<Course|null>(null), chapter=ref<Chapter|null>(null), domainId=ref(''), query=ref(''), statusFilter=ref(''), programFilter=ref(''), page=ref(1);
+const pageSize = ref(10);
+const expandedChapterIds = ref(new Set<string>());
+const lessonChapter = ref<Chapter | null>(null);
+const focusApplied = ref(false);
+function toggleChapter(id: string) {
+  const expanded = new Set(expandedChapterIds.value);
+  if (expanded.has(id)) expanded.delete(id); else expanded.add(id);
+  expandedChapterIds.value = expanded;
+}
 const mode=computed(()=>route.path.endsWith('/catalog')?'catalog':route.params.chapterId?'chapter':route.params.courseId?'course':'list');
 const backTo=computed(()=>mode.value==='chapter'?`/admin/courses/${route.params.courseId}`:mode.value==='course'?'/admin/courses':'');
 const backLabel=computed(()=>mode.value==='chapter'?'Quay lại khóa học':'Quay lại danh sách khóa học');
@@ -102,29 +117,90 @@ const canEditCourse=computed(()=>course.value?.status==='DRAFT');
 const canEditRow=(row:Row)=>course.value ? canEditCourse.value : row.status==='DRAFT';
 const rowName=(r:Row)=>'name' in r?r.name:r.title;
 const orderOf=(r:Row)=>rows.value.findIndex(item=>item.id===r.id);
-const filtered=computed(()=>rows.value.filter(r=>(`${rowName(r)} ${'code' in r?r.code:r.id}`).toLocaleLowerCase('vi').includes(query.value.toLocaleLowerCase('vi')) && (!statusFilter.value || r.status===statusFilter.value) && (course.value || !programFilter.value || (r as Course).programId===programFilter.value)));
+const matchesText = (value: string) => value.toLocaleLowerCase('vi').includes(query.value.trim().toLocaleLowerCase('vi'));
+function visibleLessons(target: Chapter): Lesson[] {
+  const matchesChapter = matchesText(`${target.title} ${target.code}`);
+  return target.lessons.filter(lesson => (!statusFilter.value || lesson.status === statusFilter.value)
+    && (matchesChapter || matchesText(`${lesson.title} ${lesson.id}`)))
+    .sort((a,b)=>(a.lessonOrder ?? 0)-(b.lessonOrder ?? 0) || a.id.localeCompare(b.id));
+}
+const filtered=computed(()=>rows.value.filter(row => {
+  if (course.value && !chapter.value) {
+    const target = row as Chapter;
+    return (matchesText(`${target.title} ${target.code}`) && (!statusFilter.value || target.status === statusFilter.value))
+      || visibleLessons(target).length > 0;
+  }
+  return matchesText(`${rowName(row)} ${'code' in row ? row.code : row.id}`)
+    && (!statusFilter.value || row.status === statusFilter.value)
+    && (course.value || !programFilter.value || (row as Course).programId === programFilter.value);
+}));
 const filteredPrograms=computed(()=>programs.value.filter(p=>p.domainId===domainId.value && `${p.code} ${p.name}`.toLocaleLowerCase('vi').includes(query.value.toLocaleLowerCase('vi'))));
 const domainPage=ref(1), programPage=ref(1);
-const domainPageCount=computed(()=>Math.max(1,Math.ceil(domains.value.length/8)));
-const programPageCount=computed(()=>Math.max(1,Math.ceil(filteredPrograms.value.length/10)));
-const paginatedDomains=computed(()=>domains.value.slice((domainPage.value-1)*8,domainPage.value*8));
-const paginatedPrograms=computed(()=>filteredPrograms.value.slice((programPage.value-1)*10,programPage.value*10));
-watch([query,domainId],()=>programPage.value=1);
+const domainPageSize=ref(10), programPageSize=ref(10);
+const domainPageCount=computed(()=>Math.max(1,Math.ceil(domains.value.length/domainPageSize.value)));
+const programPageCount=computed(()=>Math.max(1,Math.ceil(filteredPrograms.value.length/programPageSize.value)));
+const paginatedDomains=computed(()=>domains.value.slice((domainPage.value-1)*domainPageSize.value,domainPage.value*domainPageSize.value));
+const paginatedPrograms=computed(()=>filteredPrograms.value.slice((programPage.value-1)*programPageSize.value,programPage.value*programPageSize.value));
+watch([query,domainId,programPageSize],()=>programPage.value=1);
+watch(domainPageSize,()=>domainPage.value=1);
 watch(domainPageCount,count=>domainPage.value=Math.min(domainPage.value,count));
 watch(programPageCount,count=>programPage.value=Math.min(programPage.value,count));
-const pageCount=computed(()=>Math.max(1,Math.ceil(filtered.value.length/10)));
-const paginated=computed(()=>filtered.value.slice((page.value-1)*10,page.value*10));
+const pageCount=computed(()=>Math.max(1,Math.ceil(filtered.value.length/pageSize.value)));
+const paginated=computed(()=>filtered.value.slice((page.value-1)*pageSize.value,page.value*pageSize.value));
+watch(pageSize,()=>page.value=1);
 watch([query,statusFilter,programFilter],()=>page.value=1);
+let expansionBeforeFilter = new Set<string>();
+watch([query,statusFilter], ([text,status], [previousText,previousStatus]) => {
+  if (!course.value || chapter.value) return;
+  const active = Boolean(text.trim() || status);
+  const wasActive = Boolean(previousText.trim() || previousStatus);
+  if (active && !wasActive) expansionBeforeFilter = new Set(expandedChapterIds.value);
+  if (active) expandedChapterIds.value = new Set(filtered.value.map(row => row.id));
+  else if (wasActive) expandedChapterIds.value = new Set(expansionBeforeFilter);
+});
 watch(pageCount,count=>page.value=Math.min(page.value,count));
 const statusLabel=(status?:string)=>({DRAFT:'Bản nháp',PUBLISHED:'Đã xuất bản',ARCHIVED:'Đã lưu trữ',ACTIVE:'Đang sử dụng'}[status || 'DRAFT'] || status);
 function serverError(e:unknown){return (e as {response?:{data?:{message?:string}}}).response?.data?.message || (e instanceof Error?e.message:'Không thể thực hiện. Vui lòng thử lại.');}
-async function load(){loading.value=true;error.value='';try{const catalog=await trainingApi.catalog();domains.value=catalog.domains;programs.value=catalog.programs;domainId.value ||= domains.value[0]?.id || '';courses.value=await trainingApi.courses();course.value=courses.value.find(c=>c.id===route.params.courseId) || null;chapter.value=null;chapters.value=[];if(course.value){chapters.value=await trainingApi.chapters(course.value.id);if(route.params.chapterId){chapter.value=await trainingApi.chapter(String(route.params.chapterId));if(chapter.value.courseId!==course.value.id)throw new Error('Chương không thuộc khóa này');}}}catch(e){error.value=serverError(e);}finally{loading.value=false;}}
-watch(()=>route.path,()=>{query.value='';statusFilter.value='';page.value=1;void load();},{immediate:true});
+async function load() {
+  loading.value = true;
+  error.value = '';
+  try {
+    const catalog = await trainingApi.catalog();
+    domains.value = catalog.domains;
+    programs.value = catalog.programs;
+    domainId.value ||= domains.value[0]?.id || '';
+    courses.value = await trainingApi.courses();
+    course.value = courses.value.find(item => item.id === route.params.courseId) || null;
+    chapter.value = null;
+    chapters.value = course.value ? await trainingApi.chapters(course.value.id) : [];
+    const focusId = typeof route.query.chapter === 'string' ? route.query.chapter : '';
+    if (focusId && !focusApplied.value) {
+      const index = chapters.value.findIndex(item => item.id === focusId);
+      if (index >= 0) {
+        expandedChapterIds.value = new Set([...expandedChapterIds.value, focusId]);
+        page.value = Math.floor(index / pageSize.value) + 1;
+        focusApplied.value = true;
+      }
+    }
+  } catch (failure) {
+    error.value = serverError(failure);
+  } finally {
+    loading.value = false;
+  }
+}
+watch(()=>route.fullPath,()=>{expansionBeforeFilter=new Set();query.value='';statusFilter.value='';page.value=1;expandedChapterIds.value=new Set();focusApplied.value=false;void load();},{immediate:true});
 const formKind=ref<FormKind|null>(null); const form=ref({id:'',code:'',name:'',description:'',programId:'',domainId:'',status:'ACTIVE',version:undefined as number|undefined});
 const formTitle=computed(()=>`${form.value.id?'Sửa':'Tạo'} ${{domain:'lĩnh vực',program:'chương trình',course:'khóa học',chapter:'chương',lesson:'bài học'}[formKind.value || 'course']}`);
 function openForm(kind:FormKind,r?:Partial<Row|TrainingDomain|TrainingProgram>){formError.value='';formKind.value=kind;const item=r as Partial<Course & Chapter & Lesson & TrainingProgram> | undefined;form.value={id:item?.id || '',code:item?.code || (kind==='lesson'?item?.id || '':''),name:item?.name || item?.title || '',description:item?.description || item?.hint || '',programId:item?.programId || '',domainId:item?.domainId || domainId.value,status:item?.status || 'ACTIVE',version:item?.version};}
 function closeForm(){if(!busy.value)formKind.value=null;}
-function openRow(r:Row){if(chapter.value)router.push(`/admin/lessons/${r.id}/edit`);else if(course.value)router.push(`/admin/courses/${course.value.id}/chapters/${r.id}`);else router.push(`/admin/courses/${r.id}`);}
+function openRow(r:Row){if(chapter.value)openLesson(r as Lesson);else if(course.value)toggleChapter(r.id);else router.push(`/admin/courses/${r.id}`);}
+function openLesson(lesson: Lesson) { void router.push(`/admin/lessons/${encodeURIComponent(lesson.id)}/edit`); }
+function openLessonForm(target: Chapter) {
+  if (busy.value || !canEditCourse.value) return;
+  lessonChapter.value = target;
+  expandedChapterIds.value = new Set([...expandedChapterIds.value, target.id]);
+  openForm('lesson');
+}
 function editRow(r:Row){if(chapter.value)openRow(r);else openForm(course.value?'chapter':'course',r);}
 async function save(){
   if(busy.value || !formKind.value)return;
@@ -139,9 +215,9 @@ async function save(){
       destination=`/admin/courses/${saved.id}`;
     }else if(kind==='chapter'){
       const saved=await trainingApi.saveChapter(course.value!.id,{...f,id:f.id || undefined,title:f.name});
-      if(!f.id)destination=`/admin/courses/${course.value!.id}/chapters/${saved.id}`;
+      if(!f.id)destination=`/admin/courses/${encodeURIComponent(course.value!.id)}?chapter=${encodeURIComponent(saved.id)}`;
     }else if(kind==='lesson'){
-      const saved=await adminApi.createLesson({id:f.code,title:f.name,courseId:course.value!.id,chapterId:chapter.value!.id,hint:f.description,videoUrl:'',videoSource:'URL',documents:[],procedureSteps:[]});
+      const saved=await adminApi.createLesson({id:f.code,title:f.name,courseId:course.value!.id,chapterId:(lessonChapter.value || chapter.value)!.id,hint:f.description,videoUrl:'',videoSource:'URL',documents:[],procedureSteps:[]});
       destination=`/admin/lessons/${saved.id}/edit`;
     }
     formKind.value=null;
@@ -149,14 +225,33 @@ async function save(){
     showToast(`${f.id?'Cập nhật':'Tạo'} ${label} thành công.`);
     if(destination && destination!==route.path)await router.push(destination);
     else await load();
-  }catch(e){formError.value=serverError(e);showToast(formError.value,'error');}
+  }catch(e){formError.value=serverError(e);}
   finally{busy.value=false;}
 }
 const deleteTarget=ref<Row|null>(null);const deleteMessage=computed(()=>{const r=deleteTarget.value;if(!r)return '';const count='lessons' in r?r.lessons.length:0;return `Xóa “${rowName(r)}”? ${count ? `${count} bài học và nội dung trực thuộc cũng sẽ bị xóa. `:''}Thao tác không thể hoàn tác.`;});
-function askDelete(r:Row){deleteTarget.value=r;}
-async function remove(){if(!deleteTarget.value)return;busy.value=true;try{const name=rowName(deleteTarget.value);if(chapter.value)await trainingApi.deleteLesson(deleteTarget.value.id);else if(course.value)await trainingApi.deleteChapter(deleteTarget.value.id);else await adminApi.deleteCourse(deleteTarget.value.id);deleteTarget.value=null;showToast(`Đã xóa “${name}”.`);await load();page.value=Math.min(page.value,pageCount.value);}catch(e){deleteTarget.value=null;error.value=serverError(e);showToast(error.value,'error');}finally{busy.value=false;}}
-async function move(row:Row,offset:number){busy.value=true;try{const ids=rows.value.map(r=>r.id),i=ids.indexOf(row.id);const [id]=ids.splice(i,1);ids.splice(i+offset,0,id!);if(chapter.value)await trainingApi.reorderLessons(chapter.value.id,ids);else await trainingApi.reorderChapters(course.value!.id,ids);showToast('Đã cập nhật thứ tự.');await load();}catch(e){error.value=serverError(e);showToast(error.value,'error');}finally{busy.value=false;}}
-async function changeStatus(status:string){busy.value=true;try{await trainingApi.setStatus(course.value!.id,status);showToast(status==='PUBLISHED'?'Đã xuất bản khóa học.':status==='ARCHIVED'?'Đã lưu trữ khóa học.':'Đã chuyển khóa học về bản nháp.');await load();}catch(e){error.value=serverError(e);showToast(error.value,'error');}finally{busy.value=false;}}
+const deleteKind = ref<'course' | 'chapter' | 'lesson'>('course');
+function askDelete(r:Row,kind?:'course'|'chapter'|'lesson'){deleteKind.value=kind || (chapter.value?'lesson':course.value?'chapter':'course');deleteTarget.value=r;}
+async function remove(){if(!deleteTarget.value)return;busy.value=true;try{const name=rowName(deleteTarget.value);if(deleteKind.value==='lesson')await trainingApi.deleteLesson(deleteTarget.value.id);else if(deleteKind.value==='chapter')await trainingApi.deleteChapter(deleteTarget.value.id);else await adminApi.deleteCourse(deleteTarget.value.id);deleteTarget.value=null;showToast(`Đã xóa “${name}”.`);await load();page.value=Math.min(page.value,pageCount.value);}catch(e){deleteTarget.value=null;showToast(serverError(e),'error');}finally{busy.value=false;}}
+async function move(row:Row,offset:number){busy.value=true;try{const ids=rows.value.map(r=>r.id),i=ids.indexOf(row.id);const [id]=ids.splice(i,1);ids.splice(i+offset,0,id!);if(chapter.value)await trainingApi.reorderLessons(chapter.value.id,ids);else await trainingApi.reorderChapters(course.value!.id,ids);showToast('Đã cập nhật thứ tự.');await load();}catch(e){showToast(serverError(e),'error');}finally{busy.value=false;}}
+async function moveLesson(target: Chapter, lesson: Lesson, offset: number) {
+  if (busy.value || !canEditCourse.value) return;
+  const ids = [...target.lessons].sort((a,b)=>(a.lessonOrder ?? 0)-(b.lessonOrder ?? 0) || a.id.localeCompare(b.id)).map(item=>item.id);
+  const index = ids.indexOf(lesson.id);
+  if (index < 0 || index + offset < 0 || index + offset >= ids.length) return;
+  const [id] = ids.splice(index, 1);
+  ids.splice(index + offset, 0, id!);
+  busy.value = true;
+  try {
+    await trainingApi.reorderLessons(target.id, ids);
+    showToast('Đã cập nhật thứ tự bài học trong chương.');
+    await load();
+  } catch (failure) {
+    showToast(serverError(failure), 'error');
+  } finally {
+    busy.value = false;
+  }
+}
+async function changeStatus(status:string){busy.value=true;try{await trainingApi.setStatus(course.value!.id,status);showToast(status==='PUBLISHED'?'Đã xuất bản khóa học.':status==='ARCHIVED'?'Đã lưu trữ khóa học.':'Đã chuyển khóa học về bản nháp.');await load();}catch(e){showToast(serverError(e),'error');}finally{busy.value=false;}}
 </script>
 
 <style scoped>
@@ -177,6 +272,10 @@ async function changeStatus(status:string){busy.value=true;try{await trainingApi
 .pagination>span{min-width:0;overflow-wrap:anywhere}
 .pagination>div{display:flex;gap:.5rem;flex-shrink:0}
 .pagination button{display:grid;place-items:center;margin:0;padding:0;width:36px;height:36px;cursor:pointer;color:var(--primary-color)}
+.pagination-controls{align-items:center}
+.page-size-control{display:flex;align-items:center;gap:.5rem;white-space:nowrap;font-size:.8rem;color:var(--text-muted)}
+.page-size-control select{min-height:36px;padding:.35rem .55rem;border:1px solid var(--border-color);border-radius:6px;background:white;color:var(--text-main);font:inherit;cursor:pointer}
+@media(max-width:600px){.list-pagination{flex-wrap:wrap}.list-pagination .pagination-controls{margin-left:auto}}
 .domain-pagination{align-items:center;flex-direction:row;font-size:.75rem;gap:.5rem}
 .domain-item{display:flex;align-items:center;border-radius:12px;margin-bottom:.5rem}
 .domain-item.active{background:var(--primary-light);color:var(--primary-color)}

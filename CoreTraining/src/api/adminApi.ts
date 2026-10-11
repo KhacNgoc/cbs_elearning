@@ -20,6 +20,20 @@ const getDocumentType = (fileName: string): LessonDocument["documentType"] => {
   return "WORD";
 };
 
+export interface LessonKnowledgeSource {
+  documentId: string;
+  pageFrom?: number | null;
+  pageTo?: number | null;
+  section?: string | null;
+}
+
+export interface DocumentOutline {
+  documentId: string;
+  pages: number[];
+  sections: string[];
+  excerpts: { page: number; section: string; excerpt: string }[];
+}
+
 export interface AdminUser {
   id?: number;
   username: string;
@@ -237,6 +251,24 @@ export const adminApi = {
       `/api/admin/courses/${courseId}/documents`,
     );
     return response.data;
+  },
+
+  async deleteCourseDocument(courseId: string, documentId: string): Promise<void> {
+    await axiosClient.delete(
+      `/api/admin/courses/${encodeURIComponent(courseId)}/documents/${encodeURIComponent(documentId)}`,
+    );
+  },
+
+  async getLessonKnowledgeSources(lessonId: string): Promise<LessonKnowledgeSource[]> {
+    return (await axiosClient.get<LessonKnowledgeSource[]>(`/api/admin/lessons/${encodeURIComponent(lessonId)}/knowledge-sources`)).data;
+  },
+
+  async saveLessonKnowledgeSources(lessonId: string, sources: LessonKnowledgeSource[]): Promise<LessonKnowledgeSource[]> {
+    return (await axiosClient.put<LessonKnowledgeSource[]>(`/api/admin/lessons/${encodeURIComponent(lessonId)}/knowledge-sources`, sources)).data;
+  },
+
+  async getDocumentOutline(courseId: string, documentId: string): Promise<DocumentOutline> {
+    return (await axiosClient.get<DocumentOutline>(`/api/admin/courses/${encodeURIComponent(courseId)}/documents/${encodeURIComponent(documentId)}/outline`)).data;
   },
 
   // ==========================================

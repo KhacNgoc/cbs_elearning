@@ -25,17 +25,20 @@ import java.util.Map;
 public class QuizGenerationService {
     private final CourseRepository courseRepository;
     private final LessonRepository lessonRepository;
+    private final LessonKnowledgeSourceService knowledgeSources;
     private final RestTemplate restTemplate;
     private final String ragUrl;
 
     public QuizGenerationService(
             CourseRepository courseRepository,
             LessonRepository lessonRepository,
+            LessonKnowledgeSourceService knowledgeSources,
             @Value("${app.rag-url}") String ragUrl,
             @Value("${app.rag.connect-timeout-ms:5000}") int connectTimeoutMs,
             @Value("${app.rag.quiz-read-timeout-ms:300000}") int readTimeoutMs) {
         this.courseRepository = courseRepository;
         this.lessonRepository = lessonRepository;
+        this.knowledgeSources = knowledgeSources;
         this.ragUrl = ragUrl;
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(connectTimeoutMs);
@@ -52,6 +55,7 @@ public class QuizGenerationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Course", "id", request.getCourseId()));
 
         String lessonName = null;
+        java.util.List<Map<String, Object>> selectedSources = null;
         if (request.getLessonId() != null && !request.getLessonId().isBlank()) {
             Lesson lesson = lessonRepository.findById(request.getLessonId())
                     .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", request.getLessonId()));
@@ -60,12 +64,17 @@ public class QuizGenerationService {
             }
             // Deliberately send only the lesson title. Hint and procedure steps are not retrieval context.
             lessonName = lesson.getTitle();
+            selectedSources = knowledgeSources.generationSources(lesson);
         }
 
         Map<String, Object> ragRequest = new LinkedHashMap<>();
         ragRequest.put("course_id", course.getId());
         ragRequest.put("course_name", course.getName());
         if (lessonName != null) ragRequest.put("lesson_name", lessonName);
+        if (selectedSources != null) {
+            ragRequest.put("lesson_id", request.getLessonId());
+            ragRequest.put("sources", selectedSources);
+        }
         ragRequest.put("single_choice_count", request.getSingleChoiceCount());
         ragRequest.put("multiple_choice_count", request.getMultipleChoiceCount());
         ragRequest.put("option_count", request.getOptionCount());

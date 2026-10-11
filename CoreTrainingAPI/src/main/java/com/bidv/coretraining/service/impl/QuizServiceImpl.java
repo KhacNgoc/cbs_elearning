@@ -81,6 +81,7 @@ public class QuizServiceImpl implements QuizService {
         com.bidv.coretraining.service.LearningPolicy.assertLessonAccess(user,lesson);
         if(lesson.getQuiz()==null)throw new BadRequestException("Bài học chưa có kiểm tra");
         List<Question> questions = questionRepository.findByLessonId(lessonId);
+        if(questions.isEmpty())throw new BadRequestException("Bài học chưa có câu hỏi kiểm tra");
         Map<Long, List<Integer>> submittedAnswers = request.getSelectedAnswers() == null
                 ? Map.of() : request.getSelectedAnswers();
         int total = questions.size();

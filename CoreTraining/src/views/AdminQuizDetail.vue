@@ -52,8 +52,9 @@
         </button>
       </div>
       <div v-else-if="canEdit" class="settings-action">
-        <p>Thay đổi ngưỡng đạt sẽ áp dụng cho những lượt làm bài tiếp theo.</p>
-        <button class="primary-button" :disabled="savingSettings" @click="saveSettings">
+        <p>{{ questions.length ? 'Thay đổi ngưỡng đạt sẽ áp dụng cho những lượt làm bài tiếp theo.' : 'Lưu ít nhất một câu hỏi để tạo bài kiểm tra và lưu cấu hình.' }}</p>
+        <button class="primary-button" :disabled="savingSettings || !questions.length" @click="saveSettings"
+          :title="!questions.length ? 'Thêm ít nhất một câu hỏi trước khi lưu cấu hình' : undefined">
           {{ savingSettings ? "Đang lưu..." : "Lưu ngưỡng đạt" }}
         </button>
       </div>
@@ -86,15 +87,16 @@
           <div class="ai-panel-heading">
             <div>
               <strong>Tạo bản nháp từ tài liệu của {{ lessonId ? "bài học" : "khóa học" }}</strong>
-              <small>AI tìm kiếm trên toàn bộ tài liệu của course. Tên lesson chỉ được dùng để định hướng tìm kiếm.</small>
+              <small>{{ lessonId ? 'Chọn và lưu nguồn kiến thức của bài học trước khi tạo câu hỏi.' : 'AI dùng tài liệu của khóa học đã chọn.' }}</small>
             </div>
             <button aria-label="Đóng" @click="showAiPanel = false"><X :size="18" /></button>
           </div>
+          <LessonKnowledgeSources v-if="lessonId" :key="`${courseId}:${lessonId}`" :course-id="courseId" :lesson-id="lessonId" :disabled="generating || savingDrafts" @ready="handleSourceReady" />
           <div class="ai-settings">
             <label><span>Single choice</span><input v-model.number="aiConfig.singleChoiceCount" type="number" min="0" max="10" /></label>
             <label><span>Multiple choice</span><input v-model.number="aiConfig.multipleChoiceCount" type="number" min="0" max="10" /></label>
             <label><span>Số lựa chọn</span><input v-model.number="aiConfig.optionCount" type="number" min="3" max="6" /></label>
-            <button class="primary-button" :disabled="generating" @click="generateQuestions">
+            <button class="primary-button" :disabled="generating || (Boolean(lessonId) && !sourceReady)" @click="generateQuestions">
               <LoaderCircle v-if="generating" class="spin" :size="17" />
               <Sparkles v-else :size="17" />
               {{ generating ? "Đang truy xuất và tạo..." : "Tạo bản nháp" }}
@@ -263,6 +265,7 @@ import { adminApi } from "../api/adminApi";
 import type { GeneratedQuizQuestion, QuizGenerationSource } from "../api/adminApi";
 import type { Question, Lesson } from "../types";
 import ConfirmModal from "../components/ConfirmModal.vue";
+import LessonKnowledgeSources from "../components/LessonKnowledgeSources.vue";
 import { showToast } from "../utils/toast";
 
 const props=defineProps<{embedded?:boolean; lesson?:Lesson; readOnly?:boolean}>();
@@ -284,6 +287,7 @@ const savingSettings = ref(false);
 const deletingQuiz = ref(false);
 const showAiPanel = ref(false);
 const generating = ref(false);
+const sourceReady = ref(false);
 const savingDrafts = ref(false);
 const aiWarnings = ref<string[]>([]);
 const aiSources = ref<QuizGenerationSource[]>([]);
@@ -567,6 +571,10 @@ const toggleDraftCorrectAnswer = (draft: AiDraft, index: number) => {
 };
 
 const generateQuestions = async () => {
+  if (lessonId.value && !sourceReady.value) {
+    showToast("Hãy chọn và lưu nguồn kiến thức của bài học trước khi tạo câu hỏi.", "warning");
+    return;
+  }
   const total = aiConfig.singleChoiceCount + aiConfig.multipleChoiceCount;
   if (!Number.isInteger(total) || total < 1 || total > 20) {
     alert("Tổng số câu hỏi phải từ 1 đến 20.");
@@ -606,6 +614,14 @@ const discardAiDrafts = () => {
   aiDrafts.value = [];
   editingDraftIndex.value = null;
   draftBackup.value = null;
+};
+const handleSourceReady = (ready: boolean) => {
+  if (sourceReady.value && !ready && aiDrafts.value.length) {
+    discardAiDrafts();
+    aiSources.value = [];
+    aiWarnings.value = ["Nguồn đã thay đổi. Lưu nguồn và tạo lại bản nháp để câu hỏi phù hợp với phạm vi mới."];
+  }
+  sourceReady.value = ready;
 };
 const saveAiDrafts = async () => {
   if (editingDraftIndex.value !== null && !finishDraftEditing(editingDraftIndex.value)) return;
@@ -650,7 +666,8 @@ const deleteQuestion = (question: Question) => {
       await adminApi.deleteQuestion(question.id);
       showToast("Đã xóa câu hỏi.");
       await loadQuestions();
-      await courseStore.fetchCourses();
+      await courseStore.fetchCourses(true);
+      emit("saved");
     },
   );
 };

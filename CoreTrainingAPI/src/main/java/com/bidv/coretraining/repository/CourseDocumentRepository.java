@@ -7,8 +7,13 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 
 public interface CourseDocumentRepository extends JpaRepository<CourseDocument, String> {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select document from CourseDocument document where document.id = :id")
+    Optional<CourseDocument> findForDeletionById(@Param("id") String id);
     List<CourseDocument> findByCourseIdOrderByCreatedAtDesc(String courseId);
 
     @EntityGraph(attributePaths = "course")

@@ -1,8 +1,46 @@
 """Pure retrieval and validation helpers for quiz generation."""
 
 import re
+import unicodedata
 
 from app.schemas import GeneratedQuizQuestion, QuizGenerationRequest
+
+
+def normalized_quiz_text(text: str) -> str:
+    text = unicodedata.normalize("NFD", text.casefold()).replace("đ", "d")
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    return " ".join(re.findall(r"\w+", text))
+
+
+def same_question_objective(left: GeneratedQuizQuestion, right: GeneratedQuizQuestion) -> bool:
+    if left.type != right.type:
+        return False
+    answers = lambda q: {normalized_quiz_text(q.options[i]) for i in q.correct_answers}
+    if answers(left) != answers(right):
+        return False
+    ignored = {"trong", "phan", "he", "cho", "vay", "duoc", "dung", "de", "nao", "gi", "la", "cua"}
+    terms = lambda q: set(normalized_quiz_text(q.text).split()) - ignored
+    a, b = terms(left), terms(right)
+    return bool(a and b) and len(a & b) / len(a | b) >= 0.75
+
+
+def question_quality_error(question: GeneratedQuizQuestion) -> str | None:
+    stem = normalized_quiz_text(question.text)
+    if "dien vao cho trong" in stem and not re.search(r"_{2,}|\.{3,}|…|\[\s*\]", question.text):
+        return "missing_blank"
+    for index in question.correct_answers:
+        answer = question.options[index]
+        normalized_answer = normalized_quiz_text(answer)
+        tokens = normalized_answer.split()
+        # Whole phrases and explicit acronyms, not arbitrary single words or substrings.
+        acronym = len(tokens) == 1 and bool(re.fullmatch(r"[A-ZĐ]{2,8}", answer.strip()))
+        if (len(tokens) >= 2 or acronym) and f" {normalized_answer} " in f" {stem} ":
+            return "answer_in_question"
+        if re.search(r"thuat ngu nao|duoc goi la gi|goi la gi", stem):
+            description = re.sub(r"^(?:ma|thuat ngu|khai niem)\s+", "", normalized_answer)
+            if len(description.split()) >= 4 and f" {description} " in f" {stem} ":
+                return "answer_repeats_question"
+    return None
 
 
 def quiz_retrieval_queries(request: QuizGenerationRequest) -> list[str]:
@@ -78,6 +116,9 @@ def generated_question_validation_error(
         return "text_or_option_count"
     if any(not option for option in question.options):
         return "empty_option"
+    if any(re.search(r"(?<=[^\W\d_]):|\b(\w+)\W+\1\b", option, re.IGNORECASE)
+           for option in question.options):
+        return "malformed_option"
     if len({option.casefold() for option in question.options}) != len(question.options):
         return "duplicate_option"
     generic_options = {
@@ -98,6 +139,19 @@ def generated_question_validation_error(
         for index in question.correct_answers
     ):
         return "answer_out_of_range"
+    if question.type == "MULTIPLE_CHOICE":
+        # Recombining already-correct independent items cannot make a false distractor.
+        stem = normalized_quiz_text(question.text)
+        if re.search(r"cac.*(?:yeu to|thong tin|thuat ngu)|nhung.*(?:yeu to|thong tin|thuat ngu)", stem):
+            parts = [set(re.split(r"\s+va\s+", normalized_quiz_text(option))) for option in question.options]
+            if all(len(items) > 1 for items in parts):
+                correct_items = set().union(*(parts[i] for i in question.correct_answers))
+                if any(items <= correct_items for i, items in enumerate(parts)
+                       if i not in question.correct_answers):
+                    return "ambiguous_combined_option"
+    quality_error = question_quality_error(question)
+    if quality_error:
+        return quality_error
     if question.type == "SINGLE_CHOICE":
         return None if len(question.correct_answers) == 1 else "single_answer_count"
     return (

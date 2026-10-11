@@ -77,17 +77,8 @@ axiosClient.interceptors.response.use(
         redirectToLogin();
       }
     }
-    const isTimeout = isTimeoutError(error);
-    const isNetworkError = !error.response;
-    const isServerError = error.response?.status >= 500;
-    if (isTimeout || isNetworkError || isServerError) {
-      const message = isTimeout
-        ? 'Yêu cầu đã quá thời gian chờ. Vui lòng thử lại.'
-        : isNetworkError
-          ? 'Không thể kết nối tới hệ thống. Vui lòng kiểm tra mạng.'
-          : 'Hệ thống đang gặp sự cố. Vui lòng thử lại sau.';
-      window.dispatchEvent(new CustomEvent('system-error', { detail: message }));
-    }
+    // The caller owns user-facing errors (toast, form validation, or retry state).
+    // Emitting a second global notification here duplicates that feedback.
     return Promise.reject(error);
   }
 );

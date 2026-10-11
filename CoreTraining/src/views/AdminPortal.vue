@@ -680,6 +680,7 @@
             </div>
             <p v-if="documentUploadMessage" class="rag-upload-message">{{ documentUploadMessage }}</p>
 
+            <div class="rag-document-table-scroll">
             <table class="admin-table rag-document-table">
               <thead>
                 <tr>
@@ -689,11 +690,12 @@
                   <th>Chunks</th>
                   <th>Thời gian</th>
                   <th>Lỗi</th>
+                  <th class="rag-document-actions">Thao tác</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-if="documentListLoading && courseDocuments.length === 0">
-                  <td colspan="6" class="rag-empty-cell">Đang tải danh sách tài liệu...</td>
+                  <td colspan="7" class="rag-empty-cell">Đang tải danh sách tài liệu...</td>
                 </tr>
                 <tr v-for="document in courseDocuments" :key="document.id">
                   <td><strong>{{ document.fileName }}</strong></td>
@@ -706,12 +708,21 @@
                   <td class="rag-error-cell">
                     <span :title="document.errorMessage || ''">{{ document.errorMessage || "-" }}</span>
                   </td>
+                  <td class="rag-document-actions">
+                    <button type="button" class="btn btn-secondary btn-sm"
+                      :disabled="document.status === 'PENDING' || document.status === 'INDEXING' || confirmationModal.submitting"
+                      :title="document.status === 'PENDING' || document.status === 'INDEXING' ? 'Chờ embedding hoàn tất trước khi xóa' : 'Xóa tài liệu và dữ liệu embedding'"
+                      @click="deleteCourseDocument(document)">
+                      <Trash2 :size="16" /> Xóa
+                    </button>
+                  </td>
                 </tr>
                 <tr v-if="!documentListLoading && courseDocuments.length === 0">
-                  <td colspan="6" class="rag-empty-cell">Khóa học này chưa có tài liệu được embedding.</td>
+                  <td colspan="7" class="rag-empty-cell">Khóa học này chưa có tài liệu được embedding.</td>
                 </tr>
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       </div>
@@ -1912,11 +1923,11 @@ const activityChartOptions = {
   scales: {
     y: {
       grid: { color: "#F1F5F9" },
-      ticks: { color: "#64748B", font: { family: "Inter", size: 11 } },
+      ticks: { color: "#64748B", font: { family: "Arial, sans-serif", size: 11 } },
     },
     x: {
       grid: { display: false },
-      ticks: { color: "#64748B", font: { family: "Inter", size: 11 } },
+      ticks: { color: "#64748B", font: { family: "Arial, sans-serif", size: 11 } },
     },
   },
 };
@@ -1968,7 +1979,7 @@ const competencyChartOptions = {
       position: "right" as const,
       labels: {
         color: "#1E293B",
-        font: { family: "Outfit", size: 11, weight: "bold" as const },
+        font: { family: "Arial, sans-serif", size: 11, weight: "bold" as const },
         boxWidth: 12,
       },
     },
@@ -2035,13 +2046,13 @@ const courseScoreChartOptions = {
       min: 0,
       max: 100,
       grid: { color: "#F1F5F9" },
-      ticks: { color: "#64748B", font: { family: "Inter", size: 11 } },
+      ticks: { color: "#64748B", font: { family: "Arial, sans-serif", size: 11 } },
     },
     x: {
       grid: { display: false },
       ticks: {
         color: "#64748B",
-        font: { family: "Inter", size: 10, weight: "bold" as const },
+        font: { family: "Arial, sans-serif", size: 10, weight: "bold" as const },
       },
     },
   },
@@ -2123,6 +2134,27 @@ const openConfirmationModal = (
   };
 };
 
+const deleteCourseDocument = (document: CourseDocument) => {
+  const courseId = selectedCourseId.value;
+  const courseName = courseStore.courses.find(course => course.id === courseId)?.name || courseId;
+  openConfirmationModal(
+    "Xóa tài liệu tri thức AI",
+    `Bạn có thực sự muốn xóa tài liệu “${document.fileName}” khỏi khóa “${courseName}”? Tệp, dữ liệu embedding và liên kết nguồn của bài học sẽ bị xóa. Hành động này không thể hoàn tác.`,
+    async () => {
+      try {
+        await adminApi.deleteCourseDocument(courseId, document.id);
+        if (selectedCourseId.value === courseId) {
+          courseDocuments.value = courseDocuments.value.filter(item => item.id !== document.id);
+        }
+        showToast("Đã xóa tài liệu và dữ liệu embedding.");
+      } catch (error: any) {
+        showToast(error?.response?.data?.message || "Không thể xóa tài liệu. Vui lòng thử lại.", "error");
+        throw error;
+      }
+    },
+  );
+};
+
 const closeConfirmationModal = () => {
   if (confirmationModal.value.submitting) return;
   confirmationModal.value.show = false;
@@ -2181,6 +2213,7 @@ const loadAllData = async () => {
     }
   } catch (error) {
     console.error("Failed to load admin panel data:", error);
+    showToast("Không thể tải dữ liệu quản trị. Vui lòng thử lại.", "error");
   } finally {
     loading.value = false;
   }
@@ -2932,6 +2965,7 @@ void handleDeleteQuestion;
 /* Main Content area */
 .admin-main-content {
   flex: 1;
+  min-width: 0;
   padding: 2.2rem;
   overflow-y: auto;
   display: flex;
@@ -4251,13 +4285,43 @@ select:disabled {
   line-clamp: 3;
 }
 
-.rag-document-table { table-layout: fixed; }
+.rag-document-table-scroll {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.rag-document-table {
+  table-layout: fixed;
+  min-width: 760px;
+}
+
+.rag-document-table th,
+.rag-document-table td {
+  box-sizing: border-box;
+  padding: 0.9rem 0.55rem;
+  overflow-wrap: anywhere;
+}
+
 .rag-document-table th:nth-child(1) { width: 24%; }
-.rag-document-table th:nth-child(2) { width: 11%; }
+.rag-document-table th:nth-child(2) { width: 10%; }
 .rag-document-table th:nth-child(3) { width: 12%; }
-.rag-document-table th:nth-child(4) { width: 9%; }
-.rag-document-table th:nth-child(5) { width: 15%; }
-.rag-document-table th:nth-child(6) { width: 29%; }
+.rag-document-table th:nth-child(4) { width: 7%; }
+.rag-document-table th:nth-child(5) { width: 16%; }
+.rag-document-table th:nth-child(6) { width: 21%; }
+.rag-document-table th:nth-child(7) { width: 10%; }
+
+.rag-document-table .rag-document-actions {
+  position: sticky;
+  right: 0;
+  background: white;
+  text-align: right;
+}
+
+.rag-document-table .rag-document-actions .btn {
+  padding: 0.5rem;
+  white-space: nowrap;
+}
 
 .rag-empty-cell {
   padding: 2rem !important;

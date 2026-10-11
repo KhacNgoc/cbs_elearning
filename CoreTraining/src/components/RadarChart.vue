@@ -83,7 +83,7 @@ const chartOptions = {
       },
       pointLabels: {
         font: {
-          family: 'Outfit',
+          family: 'Arial, sans-serif',
           size: 11,
           weight: 'bold' as const
         },

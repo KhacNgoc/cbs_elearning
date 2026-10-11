@@ -15,7 +15,13 @@
     </div>
 
     <!-- Active Quiz Card -->
-    <div v-if="!isReviewMode && !quizStore.isQuizFinished" class="quiz-main-card card">
+    <div v-if="quizStore.isLoading" class="quiz-main-card card" role="status">Đang tải bài kiểm tra...</div>
+    <div v-else-if="!isReviewMode && !totalQuestions" class="quiz-main-card card">
+      <h2>Bài học chưa có bài kiểm tra</h2>
+      <p>Chưa có câu hỏi để làm bài. Bạn có thể quay lại tiếp tục học.</p>
+      <RouterLink class="btn btn-secondary" :to="lessonId ? `/lesson/${lessonId}` : `/course/${courseId}`">Quay lại học</RouterLink>
+    </div>
+    <div v-else-if="!isReviewMode && !quizStore.isQuizFinished" class="quiz-main-card card">
       <!-- Question progress and timer row -->
       <div class="quiz-status-row">
         <span class="question-progress">Câu hỏi {{ quizStore.currentQuestionIndex + 1 }} / {{ totalQuestions }}</span>
@@ -404,7 +410,8 @@ const getBadgeIcon = (icon: string) => {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  font-family: monospace;
+  font-family: var(--font-family);
+  font-variant-numeric: tabular-nums;
   font-size: 1.1rem;
   font-weight: 700;
   color: var(--text-main);
