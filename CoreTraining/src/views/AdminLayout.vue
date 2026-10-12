@@ -26,7 +26,7 @@
       </div>
     </aside>
     </div>
-    <section class="admin-shell-content" :class="route.path.startsWith('/admin') ? 'admin-management-content' : 'learning-shell-content'">
+    <section class="admin-shell-content" :class="[route.path.startsWith('/admin') ? 'admin-management-content' : 'learning-shell-content', { 'permissions-shell-content': route.name === 'AdminPermissions' }]">
       <slot><RouterView /></slot>
     </section>
   </div>
@@ -203,6 +203,8 @@ onMounted(() => navigationStore.load());
   background: var(--bg-main);
   font-size: 1rem;
 }
+
+.permissions-shell-content { overflow: hidden; scrollbar-gutter: auto; }
 
 .admin-management-content :deep(.card-title) {
   font-size: var(--admin-heading-section);
