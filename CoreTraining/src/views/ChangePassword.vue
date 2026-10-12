@@ -93,8 +93,8 @@ const handleChangePassword = async () => {
   errorMessage.value = '';
   successMessage.value = '';
 
-  if (newPassword.value.length < 6) {
-    errorMessage.value = 'Mật khẩu phải dài tối thiểu 6 ký tự!';
+  if (newPassword.value.length < 8) {
+    errorMessage.value = 'Mật khẩu phải dài tối thiểu 8 ký tự!';
     return;
   }
 

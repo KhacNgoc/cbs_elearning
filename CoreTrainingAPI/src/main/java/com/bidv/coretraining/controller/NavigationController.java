@@ -18,12 +18,18 @@ public class NavigationController {
         this.repository = repository;
     }
 
+    private boolean allowed(com.bidv.coretraining.entity.NavigationItem item,java.util.Set<String> permissions) {
+        if(item.getPermissionPage()!=null)return permissions.contains(item.getPermissionPage()+":read");
+        if(item.getId().equals("admin"))return permissions.stream().anyMatch(p->p.endsWith(":read"));
+        return true;
+    }
+
     @GetMapping("/me")
     public ResponseEntity<List<NavigationItemDto>> getMyNavigation(
             @AuthenticationPrincipal CustomUserDetails userDetails) {
-        String role = userDetails.getUser().getRole();
+        var permissions=com.bidv.coretraining.security.AccessPolicy.permissions(userDetails.getUser());
         return ResponseEntity.ok(repository.findAllByOrderBySortOrderAsc().stream()
-                .filter(item -> item.getAllowedRoles().contains(role))
+                .filter(item -> allowed(item,permissions))
                 .map(item -> NavigationItemDto.builder()
                         .id(item.getId())
                         .label(item.getLabel())

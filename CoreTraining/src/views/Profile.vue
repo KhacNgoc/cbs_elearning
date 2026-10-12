@@ -11,7 +11,7 @@
           {{ avatarLetter }}
         </div>
         <div class="profile-identity">
-          <span class="profile-eyebrow">Hồ sơ học viên</span>
+          <span class="profile-eyebrow">Hồ sơ người dùng</span>
           <h1>{{ profile?.fullName || userStore.fullName }}</h1>
           <div class="profile-tags">
             <span><AtSign :size="14" />{{ profile?.username || userStore.username }}</span>
@@ -26,6 +26,11 @@
         </div>
       </section>
 
+      <form class="card" @submit.prevent="saveProfile" v-if="profile">
+        <label>Họ và tên <input v-model="profile.fullName" required /></label>
+        <label>Email <input v-model="profile.email" type="email" required /></label>
+        <button class="btn btn-primary" :disabled="saving">Lưu hồ sơ</button><p role="status">{{ profileMessage }}</p>
+      </form>
       <div class="profile-layout">
         <aside class="profile-sidebar">
           <section class="profile-info card">
@@ -134,6 +139,7 @@
 </template>
 
 <script setup lang="ts">
+import {roleLabel as describeRoles} from "../utils/permissions";
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {
@@ -151,6 +157,9 @@ const router = useRouter();
 const courseStore = useCourseStore();
 const userStore = useUserStore();
 const loading = ref(true);
+const saving=ref(false);const profileMessage=ref('');
+async function saveProfile(){if(!profile.value)return;saving.value=true;profileMessage.value='';try{profile.value=await userApi.updateProfile({fullName:profile.value.fullName,email:profile.value.email || ''});await userStore.fetchProgress();profileMessage.value='Đã lưu hồ sơ';}catch(e:any){profileMessage.value=e.response?.data?.message || 'Không lưu được hồ sơ';}finally{saving.value=false;}}
+
 const profile = ref<UserProfile | null>(null);
 
 onMounted(async () => {
@@ -173,9 +182,7 @@ const avatarLetter = computed(() =>
   (profile.value?.fullName || userStore.fullName || userStore.username || 'U').charAt(0).toUpperCase()
 );
 
-const roleLabel = computed(() =>
-  (profile.value?.role || userStore.role) === 'ROLE_ADMIN' ? 'Quản trị viên' : 'Học viên'
-);
+const roleLabel = computed(() => describeRoles(profile.value?.roles || [profile.value?.role || userStore.role]));
 
 const joinedCourses = computed(() => {
   const explicitCourseIds = new Set([
@@ -185,7 +192,7 @@ const joinedCourses = computed(() => {
 
   return courseStore.courses
     .filter(course => {
-      if (userStore.role === 'ROLE_ADMIN') return true;
+      if (userStore.systemAdmin) return true;
       const hasCompletedLesson = course.lessons.some(lesson =>
         userStore.completedLessons.includes(lesson.id)
       );
@@ -211,7 +218,7 @@ const joinedCourses = computed(() => {
         total,
         percent,
         quiz,
-        kind: userStore.role === 'ROLE_ADMIN'
+        kind: userStore.systemAdmin
           ? 'Khóa học hệ thống'
           : userStore.mandatoryCourses.includes(course.id)
             ? 'Khóa học bắt buộc'

@@ -11,6 +11,7 @@
       :completed-count="completedCount"
       :total-lessons="course?.lessons.length || 0"
       :completed="isCompleted"
+      :can-complete="userStore.canLearn"
       @complete="markAsCompleted"
       @open-content="sidebarOpen = true"
     />
@@ -85,7 +86,7 @@
         <LessonDiscussion
           :comments="lesson.comments"
           :current-username="userStore.username"
-          :is-admin="userStore.role === 'ROLE_ADMIN'"
+          :is-admin="Boolean(fullCourse?.canEdit)"
           v-model:rating="userRating"
           v-model:comment="commentText"
           @submit="submitFeedback"
@@ -247,7 +248,7 @@ const loadLessonData = async (lessonId: string) => {
   }
 
   // Guard check: course accessibility
-  if (course.value && !userStore.isCourseAccessible(course.value.id)) {
+  if (course.value && !outline.value?.course.canEdit && !userStore.isCourseAccessible(course.value.id)) {
     alert("Bạn cần đăng ký học khóa học nghiệp vụ này trước!");
     router.push("/");
     return;
@@ -339,7 +340,7 @@ const persistCurrentProgress = async () => {
 };
 
 const handleVideoEnded = async (progress: LessonProgressRequest) => {
-  if (!lesson.value) return;
+  if (!userStore.canLearn || !lesson.value) return;
   if (progressSaveTimer) {
     clearTimeout(progressSaveTimer);
     progressSaveTimer = null;
@@ -371,7 +372,7 @@ const switchLesson = async (lessonId: string): Promise<boolean> => {
   if (!lesson.value) return false;
   if (lessonId === lesson.value.id) return true;
   const index=course.value?.lessons.findIndex(l=>l.id===lessonId) ?? -1;
-  if(userStore.role!=="ROLE_ADMIN" && course.value?.lessons.slice(0,index).some(l=>!userStore.completedLessons.includes(l.id))){alert("Hoàn thành các bài trước và kiểm tra bắt buộc để tiếp tục");return false;}
+  if(!fullCourse.value?.canEdit && !userStore.systemAdmin && course.value?.lessons.slice(0,index).some(l=>!userStore.completedLessons.includes(l.id))){alert("Hoàn thành các bài trước và kiểm tra bắt buộc để tiếp tục");return false;}
   await persistCurrentProgress();
   await router.push(`/lesson/${lessonId}`);
   return true;

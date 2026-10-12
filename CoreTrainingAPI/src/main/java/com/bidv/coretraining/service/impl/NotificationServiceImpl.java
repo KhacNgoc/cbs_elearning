@@ -45,8 +45,14 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     @Transactional
     public void createForAdmins(NotificationType type, String title, String message, String targetUrl) {
-        userRepository.findByRole("ROLE_ADMIN")
+        userRepository.findAll().stream().filter(com.bidv.coretraining.security.AccessPolicy::system)
                 .forEach(admin -> create(admin.getUsername(), type, title, message, targetUrl));
+    }
+
+    @Override @Transactional
+    public void createForUnitAdmins(com.bidv.coretraining.entity.OrganizationUnit unit,NotificationType type,String title,String message,String targetUrl) {
+        userRepository.findAll().stream().filter(u->u.activeAccount() && (com.bidv.coretraining.security.AccessPolicy.system(u) || com.bidv.coretraining.security.AccessPolicy.allows(u,"enrollments:update",unit)))
+                .forEach(u->create(u.getUsername(),type,title,message,targetUrl));
     }
 
     @Override

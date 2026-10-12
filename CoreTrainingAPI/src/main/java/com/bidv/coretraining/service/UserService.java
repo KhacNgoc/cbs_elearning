@@ -4,6 +4,7 @@ import com.bidv.coretraining.dto.UserProgressDto;
 import com.bidv.coretraining.dto.UserProfileDto;
 
 public interface UserService {
+    com.bidv.coretraining.dto.UserProfileDto updateProfile(String username, java.util.Map<String,String> fields);
     UserProfileDto getUserProfile(String username);
     UserProgressDto getUserProgress(String username);
     UserProgressDto completeLesson(String username, String lessonId);

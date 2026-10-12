@@ -12,7 +12,10 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class CourseDto {
+    private java.util.Set<String> allowedActions;
+    private java.util.Map<String,java.util.Set<String>> adminActions;
     private String id;
+    private Boolean canEdit;
     private String code;
     private String programId;
     private String programName;

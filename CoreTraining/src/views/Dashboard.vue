@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard-view animate-fade-in">
+  <div class="dashboard-view animate-fade-in" :class="{ 'admin-learning-dashboard': userStore.hasAdminAccess }">
     <!-- Welcome Header Banner -->
     <div class="welcome-banner card">
       <div class="welcome-text">
@@ -250,7 +250,7 @@ const handleCourseClick = (course: any) => {
     goToCourseFirstLesson(course);
   } else if (userStore.pendingCourses.includes(course.id)) {
     alert('Yêu cầu đăng ký khóa học đang chờ quản trị viên phê duyệt.');
-  } else {
+  } else if(userStore.canLearn) {
     openRegisterConfirm(course);
   }
 };
@@ -304,6 +304,20 @@ const getBadgeIcon = (icon: string) => {
   flex-direction: column;
   gap: 2rem;
 }
+
+.admin-learning-dashboard { width: 100%; max-width: 1440px; margin-inline: auto; min-width: 0; container-type: inline-size; }
+.admin-learning-dashboard .welcome-banner { background: linear-gradient(110deg, #fff, #f0f7f3); color: var(--text-main); border: 1px solid #dce7e2; box-shadow: var(--shadow-sm); gap: 1.25rem; flex-wrap: wrap; padding: clamp(1.25rem, 2.5vw, 2rem); }
+.admin-learning-dashboard .welcome-banner::before { display: none; }
+.admin-learning-dashboard .welcome-text { min-width: 0; flex: 1 1 380px; }
+.admin-learning-dashboard .welcome-text h1 { font-size: clamp(1.5rem, 2vw, 2rem); line-height: 1.4; overflow-wrap: anywhere; margin-top: .75rem; }
+.admin-learning-dashboard .banner-tag { color: var(--primary-color); background: #e3f0e9; }
+.admin-learning-dashboard .last-lesson-info { color: var(--text-muted); line-height: 1.6; }
+.admin-learning-dashboard .lesson-link { color: var(--primary-color); }
+.admin-learning-dashboard .user-group-tag { color: var(--primary-color); background: #e3f0e9; }
+.admin-learning-dashboard .btn-learn { flex-shrink: 0; background: var(--primary-color); color: #fff; box-shadow: none; }
+.admin-learning-dashboard .btn-learn:hover { background: #004632; color: #fff; }
+.admin-learning-dashboard .left-col, .admin-learning-dashboard .right-col { min-width: 0; }
+@container (max-width: 1000px) { .admin-learning-dashboard .dashboard-grid { grid-template-columns: 1fr; } }
 
 .welcome-banner {
   background: linear-gradient(135deg, var(--primary-color) 0%, #004632 100%);

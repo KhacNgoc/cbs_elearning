@@ -22,7 +22,7 @@ const totalLessons=computed(()=>outline.value?.chapters.reduce((n,c)=>n+c.lesson
 const completed=(id:string)=>user.completedLessons.includes(id);
 const chapterCompleted=(chapter:Chapter)=>chapter.lessons.filter(l=>completed(l.id)).length;
 const passed=(l:Lesson)=>(user.lessonQuizTotals[l.id] || 0)>0 && Math.round((user.lessonQuizScores[l.id] || 0)/(user.lessonQuizTotals[l.id] || 1)*100)>=(l.quizPassingScore || 80);
-const isLocked=(c:Chapter,index:number)=>user.role!=='ROLE_ADMIN' && c.lessons.slice(0,index).some(l=>!completed(l.id));
+const isLocked=(c:Chapter,index:number)=>!outline.value?.course.canEdit && !user.systemAdmin && c.lessons.slice(0,index).some(l=>!completed(l.id));
 function toggle(id:string){const set=new Set(expanded.value);set.has(id)?set.delete(id):set.add(id);expanded.value=set;}
 function learn(id:string){router.push(`/lesson/${id}`);}
 function start(c:Chapter){const l=c.lessons.find(l=>!completed(l.id)) || c.lessons[0];if(l)learn(l.id);}

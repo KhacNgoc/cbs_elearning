@@ -250,10 +250,7 @@ public class RagChatService {
     private Course requireAccessibleCourse(User user, String courseId) {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course", "id", courseId));
-        boolean accessible = "ROLE_ADMIN".equals(user.getRole())
-                || userRepository.hasRegisteredCourse(user.getUsername(), courseId)
-                || userRepository.hasMandatoryCourse(user.getUsername(), courseId);
-        if (!accessible) throw new AccessDeniedException("Bạn không có quyền truy cập tài liệu của khóa học này");
+        LearningPolicy.assertCourseAccess(user,course);
         return course;
     }
 

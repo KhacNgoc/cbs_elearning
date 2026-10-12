@@ -36,11 +36,19 @@ export interface DocumentOutline {
 
 export interface AdminUser {
   id?: number;
+  allowedActions?:string[];
   username: string;
   password?: string;
   fullName: string;
   avatarColor: string;
   role: string;
+  roles?: string[];
+  roleNames?: Record<string,string>;
+  permissions?: string[];
+  unitId?: string;
+  scopeUnitIds?: string[];
+  status?: string;
+  learnerType?: string;
   points: number;
   userGroupId?: string;
   employeeId?: string;
@@ -246,9 +254,9 @@ export const adminApi = {
     return response.data;
   },
 
-  async getCourseDocuments(courseId: string): Promise<CourseDocument[]> {
+  async getCourseDocuments(courseId: string, page?: string): Promise<CourseDocument[]> {
     const response = await axiosClient.get<CourseDocument[]>(
-      `/api/admin/courses/${courseId}/documents`,
+      `/api/admin/courses/${courseId}/documents`,{params:{page}},
     );
     return response.data;
   },
@@ -259,16 +267,16 @@ export const adminApi = {
     );
   },
 
-  async getLessonKnowledgeSources(lessonId: string): Promise<LessonKnowledgeSource[]> {
-    return (await axiosClient.get<LessonKnowledgeSource[]>(`/api/admin/lessons/${encodeURIComponent(lessonId)}/knowledge-sources`)).data;
+  async getLessonKnowledgeSources(lessonId: string, page?:string): Promise<LessonKnowledgeSource[]> {
+    return (await axiosClient.get<LessonKnowledgeSource[]>(`/api/admin/lessons/${encodeURIComponent(lessonId)}/knowledge-sources`,{params:{page}})).data;
   },
 
-  async saveLessonKnowledgeSources(lessonId: string, sources: LessonKnowledgeSource[]): Promise<LessonKnowledgeSource[]> {
-    return (await axiosClient.put<LessonKnowledgeSource[]>(`/api/admin/lessons/${encodeURIComponent(lessonId)}/knowledge-sources`, sources)).data;
+  async saveLessonKnowledgeSources(lessonId: string, sources: LessonKnowledgeSource[], page?:string): Promise<LessonKnowledgeSource[]> {
+    return (await axiosClient.put<LessonKnowledgeSource[]>(`/api/admin/lessons/${encodeURIComponent(lessonId)}/knowledge-sources`, sources,{params:{page}})).data;
   },
 
-  async getDocumentOutline(courseId: string, documentId: string): Promise<DocumentOutline> {
-    return (await axiosClient.get<DocumentOutline>(`/api/admin/courses/${encodeURIComponent(courseId)}/documents/${encodeURIComponent(documentId)}/outline`)).data;
+  async getDocumentOutline(courseId: string, documentId: string, page?:string): Promise<DocumentOutline> {
+    return (await axiosClient.get<DocumentOutline>(`/api/admin/courses/${encodeURIComponent(courseId)}/documents/${encodeURIComponent(documentId)}/outline`,{params:{page}})).data;
   },
 
   // ==========================================

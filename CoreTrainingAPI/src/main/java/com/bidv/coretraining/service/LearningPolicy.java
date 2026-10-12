@@ -32,15 +32,18 @@ public final class LearningPolicy {
                 .takeWhile(l -> !l.getId().equals(lesson.getId())).allMatch(l -> completed(user,l));
     }
     public static void assertCourseAccess(User user, Course course) {
-        if ("ROLE_ADMIN".equals(user.getRole())) return;
-        boolean enrolled = user.getRegisteredCourses().stream().anyMatch(c -> c.getId().equals(course.getId()))
+        com.bidv.coretraining.security.AccessPolicy.require(user.activeAccount());
+        if (com.bidv.coretraining.security.AccessPolicy.canReadCourse(user,course)) return;
+        com.bidv.coretraining.security.AccessPolicy.require(com.bidv.coretraining.security.AccessPolicy.permissions(user).contains("LEARN") && com.bidv.coretraining.security.AccessPolicy.visible(user,course));
+        boolean enrolled = com.bidv.coretraining.security.AccessPolicy.mandatory(user,course) || user.getRegisteredCourses().stream().anyMatch(c -> c.getId().equals(course.getId()))
                 || user.getUserGroup()!=null && user.getUserGroup().getMandatoryCourses().stream()
                 .anyMatch(c -> c.getId().equals(course.getId()));
         if (!"PUBLISHED".equals(course.getStatus()) || !enrolled)
             throw new AccessDeniedException("Bạn chưa được cấp quyền học khóa này");
     }
     public static void assertLessonAccess(User user, Lesson lesson) {
-        if ("ROLE_ADMIN".equals(user.getRole())) return;
+        com.bidv.coretraining.security.AccessPolicy.require(user.activeAccount());
+        if (com.bidv.coretraining.security.AccessPolicy.canReadCourse(user,lesson.getCourse())) return;
         assertCourseAccess(user,lesson.getCourse());
         if (lesson.getChapter()==null || !"PUBLISHED".equals(lesson.getChapter().getStatus())
                 || !"PUBLISHED".equals(lesson.getStatus()) || !lessonUnlocked(user,lesson))

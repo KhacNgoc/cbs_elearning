@@ -24,6 +24,8 @@ import java.util.stream.Collectors;
 @Service
 public class AdminServiceImpl implements AdminService {
 
+    @org.springframework.beans.factory.annotation.Autowired private com.bidv.coretraining.service.AuthorizationService authorization;
+    @org.springframework.beans.factory.annotation.Autowired private com.bidv.coretraining.service.AssetAccessService assets;
     private final CourseRepository courseRepository;
     private final LessonRepository lessonRepository;
     private final QuestionRepository questionRepository;
@@ -85,6 +87,7 @@ public class AdminServiceImpl implements AdminService {
             throw new BadRequestException("Mã và tên bài học không được để trống");
         Chapter chapter=structure.chapter(lessonDto.getChapterId());
         Course course=chapter.getCourse();
+        authorization.edit(course);
         if(!"DRAFT".equals(course.getStatus())) throw new BadRequestException("Chuyển khóa về bản nháp trước khi thêm bài");
         if(lessonRepository.existsById(lessonDto.getId())) throw new BadRequestException("Mã bài học đã tồn tại");
         Lesson lesson = Lesson.builder()
@@ -97,6 +100,7 @@ public class AdminServiceImpl implements AdminService {
                 .build();
 
         lesson.ensureContent();
+        assets.attach(normalizeUploadedPath(lessonDto.getVideoUrl()));
         lesson.setVideoUrl(normalizeUploadedPath(lessonDto.getVideoUrl()));
         lesson.setVideoSource(resolveVideoSource(lessonDto));
         lesson.setTextBody(lessonDto.getTextBody());
@@ -127,6 +131,7 @@ public class AdminServiceImpl implements AdminService {
         Lesson lesson = lessonRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", id));
 
+        authorization.edit(lesson.getCourse());
         if(!"DRAFT".equals(lesson.getCourse().getStatus())) throw new BadRequestException("Chuyển khóa về bản nháp trước khi sửa nội dung");
         if(lessonDto.getVersion()!=null && !java.util.Objects.equals(lesson.getVersion(),lessonDto.getVersion()))
             throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,"Bài học đã thay đổi. Tải lại trước khi lưu");
@@ -135,6 +140,7 @@ public class AdminServiceImpl implements AdminService {
         lesson.setUpdatedAt(java.time.LocalDateTime.now());
         lesson.setHint(lessonDto.getHint());
         lesson.setTextBody(lessonDto.getTextBody());
+        assets.attach(normalizeUploadedPath(lessonDto.getVideoUrl()));
         lesson.setVideoUrl(normalizeUploadedPath(lessonDto.getVideoUrl()));
         lesson.setVideoSource(resolveVideoSource(lessonDto));
         lesson.getDocuments().clear();
@@ -183,6 +189,7 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional
     public List<LessonDto> reorderLessons(String courseId, List<String> lessonIds) {
+        authorization.edit(courseId);
         if (!courseRepository.existsById(courseId)) {
             throw new ResourceNotFoundException("Course", "id", courseId);
         }
@@ -231,6 +238,7 @@ public class AdminServiceImpl implements AdminService {
         List<LessonDocument> documents = new ArrayList<>();
         for (int i = 0; i < documentDtos.size(); i++) {
             LessonDocumentDto documentDto = documentDtos.get(i);
+            assets.attach(normalizeUploadedPath(documentDto.getFileUrl()));
             documents.add(LessonDocument.builder()
                     .name(documentDto.getName())
                     .documentType(documentDto.getDocumentType())
@@ -248,6 +256,7 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional(readOnly = true)
     public List<QuestionDto> getQuizQuestions(String courseId, String lessonId) {
+        authorization.edit(courseId);
         if (!courseRepository.existsById(courseId)) {
             throw new ResourceNotFoundException("Course", "id", courseId);
         }
@@ -268,6 +277,7 @@ public class AdminServiceImpl implements AdminService {
         Course course = courseRepository.findById(questionDto.getCourseId())
                 .orElseThrow(() -> new ResourceNotFoundException("Course", "id", questionDto.getCourseId()));
 
+        authorization.edit(questionDto.getCourseId());
         normalizeAndValidateQuestion(questionDto);
 
         Lesson quizLesson=resolveQuestionLesson(questionDto,course);
@@ -295,7 +305,9 @@ public class AdminServiceImpl implements AdminService {
     public QuestionDto updateQuestion(Long id, QuestionDto questionDto) {
         Question question = questionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Question", "id", id));
+        authorization.edit(question.getCourse());
 
+        authorization.edit(questionDto.getCourseId());
         normalizeAndValidateQuestion(questionDto);
         if (!question.getCourse().getId().equals(questionDto.getCourseId())) {
             Course course = courseRepository.findById(questionDto.getCourseId())
@@ -371,6 +383,7 @@ public class AdminServiceImpl implements AdminService {
     public void deleteQuestion(Long id) {
         Question question = questionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Question", "id", id));
+        authorization.edit(question.getCourse());
         if(!"DRAFT".equals(question.getCourse().getStatus()))throw new BadRequestException("Chuyển khóa về bản nháp trước khi xóa câu hỏi");
         questionRepository.delete(question);
     }
@@ -378,7 +391,9 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional(readOnly = true)
     public List<EnrollmentRequestDto> getEnrollmentRequests() {
-        return enrollmentRequestRepository.findAllByOrderByRequestedAtDesc().stream()
+        authorization.permission("ENROLLMENT_MANAGE");
+        return (com.bidv.coretraining.security.AccessPolicy.system(authorization.current())?enrollmentRequestRepository.findAllByOrderByRequestedAtDesc():enrollmentRequestRepository.findByUserOrganizationUnitIdInOrderByRequestedAtDesc(authorization.scopeIds())).stream()
+                .filter(r -> authorization.allowedScope(r.getUser().getOrganizationUnit()) && com.bidv.coretraining.security.AccessPolicy.visible(r.getUser(),r.getCourse()))
                 .map(this::toEnrollmentRequestDto)
                 .toList();
     }
@@ -389,6 +404,9 @@ public class AdminServiceImpl implements AdminService {
             Long id, boolean approve, String rejectionReason, String reviewedBy) {
         CourseEnrollmentRequest request = enrollmentRequestRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Enrollment request", "id", id));
+        authorization.permission("ENROLLMENT_MANAGE");
+        authorization.scope(request.getUser().getOrganizationUnit());
+        com.bidv.coretraining.security.AccessPolicy.require(com.bidv.coretraining.security.AccessPolicy.visible(request.getUser(),request.getCourse()));
         if (request.getStatus() != EnrollmentStatus.PENDING) {
             throw new BadRequestException("Yêu cầu đăng ký này đã được xử lý");
         }
@@ -435,11 +453,13 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional
     public QuizSettingsDto updateQuizSettings(QuizSettingsDto settings) {
+        authorization.edit(settings.getCourseId());
         int passingScore=settings.getPassingScore()==null?80:settings.getPassingScore();
         if(passingScore<1 || passingScore>100)throw new BadRequestException("Ngưỡng đạt phải từ 1 đến 100");
         if(settings.getLessonId()==null)throw new BadRequestException("Kiểm tra phải gắn với bài học");
         Lesson lesson=structure.lesson(settings.getLessonId());
         if(!lesson.getCourse().getId().equals(settings.getCourseId()))throw new BadRequestException("Bài không thuộc khóa");
+        authorization.edit(lesson.getCourse());
         if(!"DRAFT".equals(lesson.getCourse().getStatus()))throw new BadRequestException("Chuyển khóa về bản nháp trước khi đổi kiểm tra");
         if(!lesson.hasQuiz())throw new BadRequestException("Thêm ít nhất một câu hỏi trước khi lưu cấu hình bài kiểm tra");
         lesson.getQuiz().setPassingScore(passingScore);
@@ -450,9 +470,11 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional
     public void deleteQuiz(String courseId, String lessonId) {
+        authorization.edit(courseId);
         if(lessonId==null)throw new BadRequestException("Kiểm tra phải gắn với bài học");
         Lesson lesson=structure.lesson(lessonId);
         if(!lesson.getCourse().getId().equals(courseId))throw new BadRequestException("Bài không thuộc khóa");
+        authorization.edit(lesson.getCourse());
         if(!"DRAFT".equals(lesson.getCourse().getStatus()))throw new BadRequestException("Chuyển khóa về bản nháp trước khi xóa kiểm tra");
         questionRepository.deleteByLessonId(lessonId);questionRepository.flush();lesson.setQuiz(null);lessonRepository.save(lesson);
     }
@@ -460,11 +482,12 @@ public class AdminServiceImpl implements AdminService {
     // User CRUD implementation
     private UserDto mapToUserDto(User user) {
         return UserDto.builder()
-                .id(user.getId())
+                .id(user.getId()).allowedActions(java.util.stream.Stream.of("create","read","update","delete").filter(a->com.bidv.coretraining.security.AccessPolicy.allows(authorization.current(),"users:"+a,user.getOrganizationUnit())).collect(java.util.stream.Collectors.toSet()))
                 .username(user.getUsername())
                 .fullName(user.getFullName())
                 .avatarColor(user.getAvatarColor())
-                .role(user.getRole())
+                .role(user.getRole()).roles(user.effectiveRoles()).roleNames(com.bidv.coretraining.security.AccessPolicy.roleNames(user)).permissions(com.bidv.coretraining.security.AccessPolicy.permissions(user))
+                .unitId(user.getOrganizationUnit()==null?null:user.getOrganizationUnit().getId()).scopeUnitIds(user.getScopeUnitIds()).status(user.getStatus()).learnerType(user.getLearnerType())
                 .points(user.getPoints())
                 .userGroupId(user.getUserGroup() != null ? user.getUserGroup().getId() : null)
                 .employeeId(user.getEmployeeId())
@@ -475,7 +498,7 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional(readOnly = true)
     public List<UserDto> getAllUsers() {
-        return userRepository.findAll().stream()
+        return authorization.manageableUsers().stream()
                 .map(this::mapToUserDto)
                 .collect(Collectors.toList());
     }
@@ -483,10 +506,12 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional
     public UserDto createUser(UserDto userDto) {
+        authorization.permission("USER_MANAGE");
         UserGroup userGroup = userDto.getUserGroupId() == null || userDto.getUserGroupId().isBlank()
-                ? null : userGroupRepository.findById(userDto.getUserGroupId()).orElse(null);
+                ? null : userGroupRepository.findById(userDto.getUserGroupId()).orElseThrow(()->new BadRequestException("Nhóm không tồn tại"));
         String rawPassword = userDto.getPassword() != null && !userDto.getPassword().isBlank()
-                ? userDto.getPassword() : "123456";
+                ? userDto.getPassword() : java.util.UUID.randomUUID().toString();
+        if(rawPassword.length()<8) throw new BadRequestException("Mật khẩu phải có tối thiểu 8 ký tự");
         User user = User.builder()
                 .username(userDto.getUsername())
                 .password(passwordEncoder.encode(rawPassword))
@@ -501,6 +526,7 @@ public class AdminServiceImpl implements AdminService {
                 .email(userDto.getEmail())
                 .mustChangePassword(true)
                 .build();
+        applyAccess(user,userDto);
         User saved = userRepository.save(user);
         return mapToUserDto(saved);
     }
@@ -510,18 +536,22 @@ public class AdminServiceImpl implements AdminService {
     public UserDto updateUser(Long id, UserDto userDto) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", id.toString()));
+        authorization.user(user);
         user.setFullName(userDto.getFullName());
         user.setAvatarColor(userDto.getAvatarColor());
-        user.setRole(userDto.getRole());
+
         user.setPoints(userDto.getPoints());
         UserGroup userGroup = userDto.getUserGroupId() == null || userDto.getUserGroupId().isBlank()
-                ? null : userGroupRepository.findById(userDto.getUserGroupId()).orElse(null);
+                ? null : userGroupRepository.findById(userDto.getUserGroupId()).orElseThrow(()->new BadRequestException("Nhóm không tồn tại"));
         user.setUserGroup(userGroup);
         user.setEmployeeId(userDto.getEmployeeId());
         user.setEmail(userDto.getEmail());
         if (userDto.getPassword() != null && !userDto.getPassword().trim().isEmpty()) {
+            if(userDto.getPassword().length()<8) throw new BadRequestException("Mật khẩu phải có tối thiểu 8 ký tự");
             user.setPassword(passwordEncoder.encode(userDto.getPassword()));
+            user.setMustChangePassword(true);
         }
+        applyAccess(user,userDto);
         User saved = userRepository.save(user);
         return mapToUserDto(saved);
     }
@@ -531,12 +561,16 @@ public class AdminServiceImpl implements AdminService {
     public void deleteUser(Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", id.toString()));
-        userRepository.delete(user);
+        authorization.user(user);
+        com.bidv.coretraining.security.AccessPolicy.require(!user.getId().equals(authorization.current().getId()));
+        userRepository.delete(user);permissionCache.invalidateAfterCommit();
     }
 
     @Override
     @Transactional
     public void importUsersFromExcel(MultipartFile file) {
+        // Legacy import has no unit column; restrict to global admin to avoid unscoped accounts.
+        authorization.permission("ORG_MANAGE");
         try (InputStream input = file.getInputStream(); Workbook workbook = new XSSFWorkbook(input)) {
             Iterator<Row> rows = workbook.getSheetAt(0).iterator();
             if (rows.hasNext()) rows.next();
@@ -556,8 +590,8 @@ public class AdminServiceImpl implements AdminService {
                 String[] colors = {"#005B41", "#4F46E5", "#10B981", "#F59E0B", "#EF4444"};
                 userRepository.save(User.builder()
                         .username(email).email(email).employeeId(employeeId).fullName(fullName)
-                        .password(passwordEncoder.encode("Bidv@" + employeeId.toUpperCase()))
-                        .role("ROLE_USER").points(0).userGroup(group)
+                        .password(passwordEncoder.encode(java.util.UUID.randomUUID().toString()))
+                        .role("UNASSIGNED").dynamicAccessInitialized(true).points(0).userGroup(group)
                         .avatarColor(colors[Math.abs(employeeId.hashCode()) % colors.length])
                         .mustChangePassword(true)
                         .build());
@@ -565,6 +599,38 @@ public class AdminServiceImpl implements AdminService {
         } catch (Exception exception) {
             throw new RuntimeException("Lỗi khi import dữ liệu Excel: " + exception.getMessage(), exception);
         }
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired private com.bidv.coretraining.service.PermissionCache permissionCache;
+    private void applyAccess(User user,UserDto dto) {
+        User actor=authorization.current();
+        boolean system=com.bidv.coretraining.security.AccessPolicy.system(actor);
+        if(user.getId()!=null && dto.getRoles()!=null)com.bidv.coretraining.security.AccessPolicy.require(new java.util.HashSet<>(dto.getRoles()).equals(user.effectiveRoles()));
+        OrganizationUnit unit=dto.getUnitId()==null || dto.getUnitId().isBlank()?null:authorization.unit(dto.getUnitId());
+        if(!system) authorization.scope(unit);
+        if(unit!=null && !com.bidv.coretraining.security.AccessPolicy.activeUnit(unit)) throw new BadRequestException("Đơn vị đã ngừng hoạt động");
+        java.util.Set<String> scopes=user.getScopeUnitIds();
+        if(dto.getScopeUnitIds()!=null)com.bidv.coretraining.security.AccessPolicy.require(new java.util.HashSet<>(dto.getScopeUnitIds()).equals(scopes));
+        if(user.getId()!=null && dto.getRole()!=null)com.bidv.coretraining.security.AccessPolicy.require(dto.getRole().equals(user.getRole()));
+        if(!system && user.getId()!=null && user.getId().equals(actor.getId()))
+            com.bidv.coretraining.security.AccessPolicy.require(java.util.Objects.equals(unit==null?null:unit.getId(),actor.getOrganizationUnit()==null?null:actor.getOrganizationUnit().getId()));
+        String status=dto.getStatus()==null?user.getStatus():dto.getStatus();
+        if(user.getId()!=null && java.util.Objects.equals(user.getId(),actor.getId()))com.bidv.coretraining.security.AccessPolicy.require("ACTIVE".equals(status));
+        if(com.bidv.coretraining.security.AccessPolicy.system(user))com.bidv.coretraining.security.AccessPolicy.require("ACTIVE".equals(status));
+        if(!java.util.Set.of("ACTIVE","LOCKED","DISABLED").contains(status)) throw new BadRequestException("Trạng thái tài khoản không hợp lệ");
+        String learnerType=dto.getLearnerType()==null?(user.getLearnerType()==null?"CURRENT_STAFF":user.getLearnerType()):dto.getLearnerType();
+        if(!java.util.Set.of("NEW_STAFF","TRANSFERRED_STAFF","CURRENT_STAFF","EXTERNAL").contains(learnerType)) throw new BadRequestException("Đối tượng học viên không hợp lệ");
+        if(user.getUserGroup()!=null && user.getUserGroup().getOrganizationUnit()!=null && !com.bidv.coretraining.security.AccessPolicy.ancestors(unit).contains(user.getUserGroup().getOrganizationUnit().getId()))
+            throw new BadRequestException("Nhóm không thuộc đơn vị của người dùng");
+        if(user.getUserGroup()!=null && !system) authorization.scope(user.getUserGroup().getOrganizationUnit());
+        if(user.getId()!=null) user.setTokenVersion(user.getTokenVersion()+1);
+        if(!user.isDynamicAccessInitialized()) {
+            user.setDynamicAccessInitialized(true);
+            user.setAssignedRoles(new java.util.HashSet<>());
+            user.setRoles(new java.util.HashSet<>());user.setRole("UNASSIGNED");
+        }
+        permissionCache.invalidateAfterCommit();
+        user.setOrganizationUnit(unit);user.setScopeUnitIds(new java.util.HashSet<>(scopes));user.setStatus(status);user.setLearnerType(learnerType);
     }
 
     private String cellValue(Cell cell) {
@@ -600,6 +666,7 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional(readOnly = true)
     public List<UserGroup> getAllUserGroups() {
-        return userGroupRepository.findAll();
+        authorization.permission("GROUP_MANAGE");
+        return userGroupRepository.findAll().stream().filter(g->authorization.allowedScope(g.getOrganizationUnit())).toList();
     }
 }

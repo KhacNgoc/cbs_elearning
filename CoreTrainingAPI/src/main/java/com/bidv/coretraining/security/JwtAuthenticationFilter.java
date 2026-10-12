@@ -35,14 +35,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String jwt = getJwtFromRequest(request);
 
             if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
-                String username = tokenProvider.getUsernameFromJWT(jwt);
+                Long userId = tokenProvider.getUserIdFromJWT(jwt);
 
-                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                        userDetails, null, userDetails.getAuthorities());
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                UserDetails userDetails = userDetailsService.loadUserById(userId);
+                if (tokenProvider.matchesUser(jwt, ((CustomUserDetails)userDetails).getUser())) {
+                    String path=request.getRequestURI().substring(request.getContextPath().length());
+                    if(((CustomUserDetails)userDetails).getUser().isMustChangePassword()
+                        && !java.util.Set.of("/api/auth/login","/api/auth/session","/api/auth/csrf","/api/auth/logout","/api/users/me","/api/users/me/profile","/api/users/me/change-password","/api/navigation/me").contains(path)) {
+                        response.setStatus(403);
+                        response.setContentType("application/json;charset=UTF-8");
+                        response.getWriter().write("{\"message\":\"Bạn cần đổi mật khẩu trước khi sử dụng hệ thống\"}");
+                        return;
+                    }
+                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                            userDetails, null, userDetails.getAuthorities());
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                }
             }
         } catch (Exception ex) {
             log.error("Could not set user authentication in security context", ex);

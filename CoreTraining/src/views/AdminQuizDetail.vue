@@ -1,5 +1,5 @@
 <template>
-  <main class="quiz-editor-page">
+  <main class="quiz-editor-page" :class="{embedded}">
     <header v-if="!embedded" class="quiz-editor-header">
       <button class="back-button" @click="router.push('/admin?tab=exams')">
         <ArrowLeft :size="19" />
@@ -38,20 +38,20 @@
         <label>
           <span>Ngưỡng điểm đạt</span>
           <div class="score-input">
-            <input v-model.number="passingScore" :disabled="!canEdit" type="number" min="1" max="100" />
+            <input v-model.number="passingScore" :disabled="!canAction('update') && !isNew" type="number" min="1" max="100" />
             <strong>%</strong>
           </div>
           <small>Học viên cần đạt tối thiểu mức này để hoàn thành bài kiểm tra.</small>
         </label>
       </div>
-      <label class="required-quiz-setting"><input v-model="requiredForProgress" :disabled="!canEdit" type="checkbox" /> Bắt buộc đạt để sang bài tiếp theo<small>Tắt tùy chọn: bài kiểm tra tự luyện, không chặn hoàn thành bài, chương hoặc khóa.</small></label>
+      <div class="required-quiz-setting"><ToggleSwitch v-model="requiredForProgress" :disabled="!canAction('update') && !isNew" label="Bắt buộc đạt để sang bài tiếp theo" /><small>Tắt tùy chọn: bài kiểm tra tự luyện, không chặn hoàn thành bài, chương hoặc khóa.</small></div>
       <div v-if="isNew && canEdit" class="settings-action">
         <p>Phạm vi sẽ tự động áp dụng cho mọi câu hỏi được thêm hoặc import.</p>
         <button class="primary-button" :disabled="!courseId || !lessonId" @click="confirmScope">
           Tiếp tục soạn câu hỏi <ArrowRight :size="17" />
         </button>
       </div>
-      <div v-else-if="canEdit" class="settings-action">
+      <div v-else-if="canAction('update')" class="settings-action">
         <p>{{ questions.length ? 'Thay đổi ngưỡng đạt sẽ áp dụng cho những lượt làm bài tiếp theo.' : 'Lưu ít nhất một câu hỏi để tạo bài kiểm tra và lưu cấu hình.' }}</p>
         <button class="primary-button" :disabled="savingSettings || !questions.length" @click="saveSettings"
           :title="!questions.length ? 'Thêm ít nhất một câu hỏi trước khi lưu cấu hình' : undefined">
@@ -65,8 +65,8 @@
         <div class="section-heading question-section-heading">
           <span>2</span>
           <div><h2>Danh sách câu hỏi</h2><p>{{ questions.length }} câu hỏi trong bài kiểm tra.</p></div>
-          <div v-if="canEdit" class="question-tools">
-            <button class="ai-button" :disabled="generating" @click="showAiPanel = !showAiPanel">
+          <div v-if="canAction('create')" class="question-tools">
+            <button v-if="canAction('update')" class="ai-button" :disabled="generating" @click="showAiPanel = !showAiPanel">
               <Sparkles :size="16" /> {{ generating ? "Đang tạo..." : "Tạo bằng AI" }}
             </button>
             <button class="secondary-button" @click="downloadTemplate"><Download :size="16" /> File mẫu</button>
@@ -80,7 +80,7 @@
 
         <div class="search-box">
           <Search :size="18" />
-          <input v-model="searchQuery" type="search" placeholder="Tìm theo nội dung câu hỏi hoặc đáp án..." />
+          <input v-model="searchQuery" aria-label="Tìm câu hỏi" type="search" placeholder="Tìm theo nội dung câu hỏi hoặc đáp án..." />
         </div>
 
         <section v-if="canEdit && showAiPanel" class="ai-panel">
@@ -91,7 +91,7 @@
             </div>
             <button aria-label="Đóng" @click="showAiPanel = false"><X :size="18" /></button>
           </div>
-          <LessonKnowledgeSources v-if="lessonId" :key="`${courseId}:${lessonId}`" :course-id="courseId" :lesson-id="lessonId" :disabled="generating || savingDrafts" @ready="handleSourceReady" />
+          <LessonKnowledgeSources permission-page="exams" v-if="lessonId" :key="`${courseId}:${lessonId}`" :course-id="courseId" :lesson-id="lessonId" :disabled="generating || savingDrafts" @ready="handleSourceReady" />
           <div class="ai-settings">
             <label><span>Single choice</span><input v-model.number="aiConfig.singleChoiceCount" type="number" min="0" max="10" /></label>
             <label><span>Multiple choice</span><input v-model.number="aiConfig.multipleChoiceCount" type="number" min="0" max="10" /></label>
@@ -104,15 +104,15 @@
           </div>
           <p v-for="warning in aiWarnings" :key="warning" class="ai-warning">{{ warning }}</p>
           <div v-if="aiDrafts.length" class="ai-drafts">
-            <article v-for="(draft, index) in aiDrafts" :key="index" class="ai-draft-card">
-              <label class="draft-select"><input v-model="draft.selected" type="checkbox" /> Chọn</label>
-              <div class="draft-heading-actions">
+<div class="admin-table-scroll"><table class="admin-data-table"><thead><tr><th>Chọn</th><th>Bản nháp câu hỏi / đáp án</th></tr></thead><tbody>            <tr v-for="(draft,index) in paginatedDrafts" :key="(draftPage-1)*draftPageSize+index"><td>
+              <ToggleSwitch v-model="draft.selected" :label="`Chọn câu ${ (draftPage-1)*draftPageSize + index+1 }`" :disabled="savingDrafts" />
+</td><td class="question-table-content"><div class="draft-heading-actions">
                 <span class="question-type-badge">{{ draft.type === "MULTIPLE_CHOICE" ? "Nhiều đáp án" : "Một đáp án" }}</span>
-                <button v-if="editingDraftIndex !== index" class="draft-edit-button" @click="startDraftEditing(index)">
+                <button v-if="editingDraftIndex !== (draftPage-1)*draftPageSize+index" class="draft-edit-button" @click="startDraftEditing((draftPage-1)*draftPageSize+index)">
                   <Edit :size="15" /> Sửa
                 </button>
               </div>
-              <div v-if="editingDraftIndex === index" class="ai-draft-editor">
+              <div v-if="editingDraftIndex === (draftPage-1)*draftPageSize+index" class="ai-draft-editor">
                 <label class="question-text-field">
                   <span>Nội dung câu hỏi</span>
                   <textarea v-model="draft.text" rows="3" />
@@ -127,12 +127,8 @@
                 <div class="ai-draft-answer-editor">
                   <label v-for="(_, optionIndex) in draft.options" :key="optionIndex"
                     :class="{ correct: draft.correctAnswers.includes(optionIndex) }">
-                    <input
-                      :type="draft.type === 'MULTIPLE_CHOICE' ? 'checkbox' : 'radio'"
-                      :checked="draft.correctAnswers.includes(optionIndex)"
-                      :name="`draft-correct-answer-${index}`"
-                      @change="toggleDraftCorrectAnswer(draft, optionIndex)"
-                    />
+                    <ToggleSwitch :show-label="false" v-if="draft.type === 'MULTIPLE_CHOICE'" :model-value="draft.correctAnswers.includes(optionIndex)" :label="`Đáp án ${String.fromCharCode(65+optionIndex)} là đáp án đúng`" @update:model-value="toggleDraftCorrectAnswer(draft, optionIndex)" />
+                    <input v-else type="radio" :checked="draft.correctAnswers.includes(optionIndex)" :name="`draft-correct-answer-${index}`" @change="toggleDraftCorrectAnswer(draft, optionIndex)" />
                     <strong>{{ String.fromCharCode(65 + optionIndex) }}</strong>
                     <input v-model="draft.options[optionIndex]" type="text" :placeholder="`Nhập đáp án ${String.fromCharCode(65 + optionIndex)}`" />
                     <CheckCircle2 v-if="draft.correctAnswers.includes(optionIndex)" :size="17" />
@@ -140,7 +136,7 @@
                 </div>
                 <div class="draft-editor-actions">
                   <button class="secondary-button" @click="cancelDraftEditing">Hủy</button>
-                  <button class="primary-button" @click="finishDraftEditing(index)">Hoàn tất chỉnh sửa</button>
+                  <button class="primary-button" @click="finishDraftEditing((draftPage-1)*draftPageSize+index)">Hoàn tất chỉnh sửa</button>
                 </div>
               </div>
               <template v-else>
@@ -157,7 +153,8 @@
               <small v-if="draft.sourceIds.length" class="draft-sources">
                 Nguồn: {{ formatDraftSources(draft.sourceIds) }}
               </small>
-            </article>
+</td></tr>
+</tbody></table></div><TablePagination v-model:page="draftPage" v-model:page-size="draftPageSize" :total="aiDrafts.length" :page-count="draftPageCount" unit="bản nháp" unit-label="Bản nháp" />
             <div class="ai-draft-actions">
               <button class="secondary-button" @click="discardAiDrafts">Bỏ bản nháp</button>
               <button class="primary-button" :disabled="savingDrafts || !selectedDraftCount" @click="saveAiDrafts">
@@ -167,12 +164,7 @@
           </div>
         </section>
 
-        <Transition name="editor-expand">
-        <div v-if="canEdit && showQuestionForm" class="question-editor">
-          <div class="question-editor-title">
-            <div><strong>{{ editingId ? "Chỉnh sửa câu hỏi" : "Câu hỏi mới" }}</strong><small>Chọn loại câu hỏi và đánh dấu đầy đủ đáp án đúng.</small></div>
-            <button aria-label="Đóng" @click="closeQuestionForm"><X :size="18" /></button>
-          </div>
+        <AdminModal :open="canEdit && showQuestionForm" :title="editingId?'Chỉnh sửa câu hỏi':'Thêm câu hỏi'" :busy="saving" :width="860" submit-label="Lưu câu hỏi" @close="closeQuestionForm" @submit="saveQuestion"><div class="question-editor modal-question-editor">
           <label class="question-text-field">
             <span>Nội dung câu hỏi</span>
             <textarea v-model="form.text" rows="3" placeholder="Nhập câu hỏi rõ ràng, chỉ tập trung vào một nội dung..." />
@@ -186,55 +178,20 @@
           </label>
           <div class="answer-editor">
             <label v-for="index in form.options.length" :key="index" :class="{ correct: form.correctAnswers.includes(index - 1) }">
-              <input
-                :type="form.type === 'MULTIPLE_CHOICE' ? 'checkbox' : 'radio'"
-                :checked="form.correctAnswers.includes(index - 1)"
-                name="editor-correct-answer"
-                @change="toggleCorrectAnswer(index - 1)"
-              />
+              <ToggleSwitch :show-label="false" v-if="form.type === 'MULTIPLE_CHOICE'" :model-value="form.correctAnswers.includes(index - 1)" :label="`Đáp án ${String.fromCharCode(64+index)} là đáp án đúng`" @update:model-value="toggleCorrectAnswer(index - 1)" />
+                    <input v-else type="radio" :checked="form.correctAnswers.includes(index - 1)" name="editor-correct-answer" @change="toggleCorrectAnswer(index - 1)" />
               <strong>{{ String.fromCharCode(64 + index) }}</strong>
               <input v-model="form.options[index - 1]" type="text" :placeholder="`Nhập đáp án ${String.fromCharCode(64 + index)}`" />
               <CheckCircle2 v-if="form.correctAnswers.includes(index - 1)" :size="18" />
             </label>
           </div>
-          <div class="form-actions">
-            <button class="secondary-button" @click="closeQuestionForm">Hủy</button>
-            <button class="primary-button" :disabled="saving" @click="saveQuestion">
-              {{ saving ? "Đang lưu..." : "Lưu câu hỏi" }}
-            </button>
-          </div>
-        </div>
-        </Transition>
+        </div></AdminModal>
 
-        <TransitionGroup
-          v-if="filteredQuestions.length"
-          name="question-item"
-          tag="div"
-          class="question-list"
-        >
-          <article v-for="(question, index) in filteredQuestions" :key="question.id" class="question-card">
-            <div class="question-number">{{ index + 1 }}</div>
-            <div class="question-content">
-              <h3>{{ question.text }}</h3>
-              <div class="answer-grid">
-                <span v-for="(option, optionIndex) in question.options" :key="optionIndex"
-                  :class="{ correct: questionCorrectAnswers(question).includes(optionIndex) }">
-                  <strong>{{ String.fromCharCode(65 + optionIndex) }}</strong>{{ option }}
-                  <CheckCircle2 v-if="questionCorrectAnswers(question).includes(optionIndex)" :size="15" />
-                </span>
-              </div>
-            </div>
-            <div v-if="canEdit" class="question-actions">
-              <button title="Sửa câu hỏi" @click="editQuestion(question)"><Edit :size="17" /></button>
-              <button class="danger" title="Xóa câu hỏi" @click="deleteQuestion(question)"><Trash2 :size="17" /></button>
-            </div>
-          </article>
-        </TransitionGroup>
-        <div v-else class="empty-box">
-          {{ searchQuery ? "Không tìm thấy câu hỏi phù hợp." : "Bài kiểm tra chưa có câu hỏi. Hãy thêm thủ công hoặc import CSV." }}
-        </div>
+
+        <div class="admin-table-scroll"><table class="admin-data-table"><thead><tr><th>STT</th><th>Câu hỏi / đáp án</th><th>Loại</th><th>Thao tác</th></tr></thead><tbody><tr v-for="(question,index) in paginatedQuestions" :key="question.id"><td>{{ (questionPage-1)*questionPageSize+index+1 }}</td><td class="question-table-content"><strong>{{ question.text }}</strong><div class="answer-grid"><span v-for="(option,optionIndex) in question.options" :key="optionIndex" :class="{correct:questionCorrectAnswers(question).includes(optionIndex)}"><strong>{{ String.fromCharCode(65+optionIndex) }}</strong>{{ option }}<CheckCircle2 v-if="questionCorrectAnswers(question).includes(optionIndex)" :size="15" /></span></div></td><td><span class="question-type-badge">{{ question.type==='MULTIPLE_CHOICE'?'Nhiều đáp án':'Một đáp án' }}</span></td><td><div v-if="canEdit" class="admin-row-actions"><button v-if="canAction('update')" class="admin-row-edit" @click="editQuestion(question)">Sửa</button><button v-if="canAction('delete')" class="admin-row-delete" @click="deleteQuestion(question)">Xóa</button></div><span v-else>Chỉ xem</span></td></tr><tr v-if="!filteredQuestions.length"><td colspan="4" class="admin-empty">{{ searchQuery?'Không tìm thấy câu hỏi phù hợp.':'Bài kiểm tra chưa có câu hỏi.' }}</td></tr></tbody></table></div>
+        <TablePagination v-model:page="questionPage" v-model:page-size="questionPageSize" :total="filteredQuestions.length" :page-count="questionPageCount" unit="câu hỏi" unit-label="Câu hỏi" />
       </section>
-      <section v-if="canEdit" class="danger-zone">
+      <section v-if="canAction('delete')" class="danger-zone">
         <div>
           <strong>Xóa bài kiểm tra</strong>
           <p>Xóa toàn bộ {{ questions.length }} câu hỏi của bài kiểm tra này. Thao tác không thể hoàn tác.</p>
@@ -257,6 +214,7 @@
 </template>
 
 <script setup lang="ts">
+import {axiosClient} from "../api/axiosClient";
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ArrowLeft, ArrowRight, CheckCircle2, Download, Edit, FileUp, LoaderCircle, Plus, Search, Sparkles, Trash2, X } from "lucide-vue-next";
@@ -264,6 +222,10 @@ import { useCourseStore } from "../stores/courseStore";
 import { adminApi } from "../api/adminApi";
 import type { GeneratedQuizQuestion, QuizGenerationSource } from "../api/adminApi";
 import type { Question, Lesson } from "../types";
+import AdminModal from '../components/AdminModal.vue';
+import ToggleSwitch from '../components/ToggleSwitch.vue';
+import TablePagination from '../components/TablePagination.vue';
+import {useTablePagination} from '../composables/useTablePagination';
 import ConfirmModal from "../components/ConfirmModal.vue";
 import LessonKnowledgeSources from "../components/LessonKnowledgeSources.vue";
 import { showToast } from "../utils/toast";
@@ -276,7 +238,8 @@ const router = useRouter();
 const courseStore = useCourseStore();
 const isNew = computed(() => !props.lesson && route.name === "AdminQuizCreate");
 const courseId = ref("");
-const canEdit = computed(() => !props.readOnly && courseStore.courses.find(course => course.id === courseId.value)?.status === 'DRAFT');
+const canAction=(action:string)=>!props.readOnly && courseStore.courses.find(c=>c.id===courseId.value)?.status==='DRAFT' && courseStore.courses.find(c=>c.id===courseId.value)?.adminActions?.exams?.includes(action)===true;
+const canEdit=computed(()=>canAction('create')||canAction('update')||canAction('delete'));
 const lessonId = ref("");
 const questions = ref<Question[]>([]);
 const searchQuery = ref("");
@@ -332,11 +295,17 @@ const filteredQuestions = computed(() => {
     `${question.text} ${question.options.join(" ")}`.toLocaleLowerCase("vi").includes(query),
   );
 });
+const {page:questionPage,pageSize:questionPageSize,pageCount:questionPageCount,paginated:paginatedQuestions,reset:resetQuestionPage}=useTablePagination(filteredQuestions);
+const {page:draftPage,pageSize:draftPageSize,pageCount:draftPageCount,paginated:paginatedDrafts}=useTablePagination(aiDrafts);
+watch(searchQuery,resetQuestionPage);
+watch([courseId,lessonId],resetQuestionPage);
 const selectedDraftCount = computed(() => aiDrafts.value.filter(draft => draft.selected).length);
+
+async function loadAdminCourses(){courseStore.courses=(await axiosClient.get("/api/admin/courses",{params:{page:"exams"}})).data;}
 
 onMounted(async () => {
   if(props.lesson){courseId.value=props.lesson.courseId;lessonId.value=props.lesson.id;passingScore.value=props.lesson.quizPassingScore ?? 80;requiredForProgress.value=props.lesson.quizRequired ?? true;await loadQuestions();return;}
-  if (!courseStore.courses.length) await courseStore.fetchCourses();
+  courseStore.courses=(await axiosClient.get("/api/admin/courses",{params:{page:"exams"}})).data;
   if (isNew.value) {
     courseId.value = typeof route.query.courseId === "string" ? route.query.courseId : courseStore.courses[0]?.id || "";
   } else {
@@ -373,7 +342,7 @@ const saveSettings = async () => {
   try {
     await adminApi.updateQuizSettings(courseId.value, lessonId.value || undefined, passingScore.value, requiredForProgress.value);
     showToast("Đã lưu cấu hình bài kiểm tra.");
-    await courseStore.fetchCourses();
+    await loadAdminCourses();
     emit("saved");
   } catch {
     showToast("Không thể hoàn tất lưu cấu hình bài kiểm tra. Vui lòng thử lại.", "error");
@@ -422,7 +391,7 @@ const deleteQuiz = () => {
       try {
         await adminApi.deleteQuiz(courseId.value, lessonId.value || undefined);
         showToast("Đã xóa bài kiểm tra.");
-        await courseStore.fetchCourses();
+        await loadAdminCourses();
         if(props.embedded){await loadQuestions();emit("saved");}else router.push("/admin?tab=exams");
       } finally {
         deletingQuiz.value = false;
@@ -479,7 +448,7 @@ const saveQuestion = async () => {
     showToast(editingId.value ? "Đã cập nhật câu hỏi." : "Đã thêm câu hỏi.");
     await loadQuestions();
     emit("saved");
-    await courseStore.fetchCourses(true);
+    await loadAdminCourses();
     closeQuestionForm();
   } catch {
     showToast("Không thể hoàn tất lưu câu hỏi. Vui lòng thử lại.", "error");
@@ -648,7 +617,7 @@ const saveAiDrafts = async () => {
     }
     await loadQuestions();
     emit("saved");
-    await courseStore.fetchCourses(true);
+    await loadAdminCourses();
     showToast(`Đã thêm ${selected.length} câu hỏi AI vào bài kiểm tra.`);
     aiDrafts.value = [];
     showAiPanel.value = false;
@@ -666,7 +635,7 @@ const deleteQuestion = (question: Question) => {
       await adminApi.deleteQuestion(question.id);
       showToast("Đã xóa câu hỏi.");
       await loadQuestions();
-      await courseStore.fetchCourses(true);
+      await loadAdminCourses();
       emit("saved");
     },
   );
@@ -720,7 +689,7 @@ const importCsv = async (event: Event) => {
     await Promise.all(payloads.map((payload) => adminApi.createQuestion(payload)));
     await loadQuestions();
     emit("saved");
-    await courseStore.fetchCourses(true);
+    await loadAdminCourses();
     showToast(`Đã nhập ${payloads.length} câu hỏi từ CSV.`);
   } catch (error) {
     showToast(error instanceof Error ? error.message : "Không thể nhập câu hỏi từ file.", "error");
@@ -729,6 +698,10 @@ const importCsv = async (event: Event) => {
 </script>
 
 <style scoped>
+.modal-question-editor{margin:0!important;padding:0!important;border:0!important;background:transparent!important}.answer-editor .toggle-label,.ai-draft-answer-editor .toggle-label{font-size:.75rem}
+
+.question-table-content{min-width:320px;max-width:800px}.question-table-content .answer-grid{margin-top:.7rem}.question-type-badge{white-space:nowrap}.quiz-editor-page{width:100%!important;margin:0!important;padding:2rem!important;box-sizing:border-box}.quiz-editor-page.embedded{padding:0!important}@media(max-width:768px){.quiz-editor-page{padding:1rem!important}}
+
 .required-quiz-setting{display:block;margin:1rem 0;color:var(--primary-color);font-weight:600}.required-quiz-setting input{margin-right:.5rem}.required-quiz-setting small{display:block;margin-top:.5rem;font-weight:400;color:var(--text-muted)}
 .quiz-editor-page { width: min(1240px, calc(100% - 3rem)); min-height: 100%; margin: 0 auto; padding: 1.5rem; color: var(--text-color); }
 .quiz-editor-header { display: grid; grid-template-columns: 180px 1fr; gap: 1rem; align-items: start; margin-bottom: 1.2rem; }

@@ -16,6 +16,7 @@ import java.util.Set;
 public class NavigationItem {
     @Id
     private String id;
+    private String permissionPage;
 
     @Column(nullable = false)
     private String label;

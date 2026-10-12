@@ -45,7 +45,11 @@ export const axiosClient = axios.create({
 
 // Request interceptor to append JWT Token
 axiosClient.interceptors.request.use(
-  (config) => {
+  async (config) => {
+    if(!isMockApi() && !['get','head','options'].includes((config.method || 'get').toLowerCase())) {
+      const response=await axios.get<{token:string}>(`${baseURL}/api/auth/csrf`,{withCredentials:true});
+      config.headers.set('X-XSRF-TOKEN',response.data.token);
+    }
     if (config.headers) {
       config.headers[CORRELATION_ID_HEADER] = createCorrelationId();
     }

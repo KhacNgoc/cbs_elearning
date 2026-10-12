@@ -19,7 +19,10 @@ public class UserGroup {
     private String id; // e.g. "GDV", "QHKH", "KSV"
 
     @Column(nullable = false)
-    private String name; // e.g. "Giao dịch viên", "Quan hệ khách hàng", "Kiểm soát viên"
+    private String name;
+    @ManyToOne(fetch=FetchType.EAGER) @JoinColumn(name="unit_id")
+    private OrganizationUnit organizationUnit;
+ // e.g. "Giao dịch viên", "Quan hệ khách hàng", "Kiểm soát viên"
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(

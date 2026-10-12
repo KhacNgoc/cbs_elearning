@@ -10,6 +10,7 @@ import java.util.Optional;
 @Repository
 public interface PasswordResetOtpRepository extends JpaRepository<PasswordResetOtp, Long> {
     Optional<PasswordResetOtp> findByUserAndOtpCode(User user, String otpCode);
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     Optional<PasswordResetOtp> findByUser(User user);
     void deleteByUser(User user);
 }

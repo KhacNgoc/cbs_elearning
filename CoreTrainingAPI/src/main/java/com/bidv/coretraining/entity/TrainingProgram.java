@@ -12,4 +12,7 @@ public class TrainingProgram {
     @Builder.Default private String status = "ACTIVE";
     @ManyToOne(fetch=FetchType.LAZY, optional=false) @JoinColumn(name="domain_id", nullable=false)
     private TrainingDomain domain;
+    @ManyToMany(fetch=FetchType.EAGER)
+    @JoinTable(name="training_program_units",joinColumns=@JoinColumn(name="program_id"),inverseJoinColumns=@JoinColumn(name="unit_id"))
+    @Builder.Default private java.util.Set<OrganizationUnit> units=new java.util.HashSet<>();
 }

@@ -23,12 +23,12 @@
               <td><span class="lesson-count">{{ chapter.lessons.length }} bài học</span></td>
               <td><span class="status">{{ statusLabel(chapter.status) }}</span></td>
               <td>
-                <div v-if="canEdit" class="row-actions">
-                  <button class="row-edit" :disabled="busy" :aria-label="`Thêm bài học vào chương ${chapter.title}`" @click="$emit('addLesson', chapter)"><Plus :size="14" /> Thêm bài</button>
-                  <button class="order-button" :disabled="busy || reorderDisabled || orderOf(chapter) === 0" @click="$emit('moveChapter', chapter, -1)" :aria-label="`Di chuyển chương ${chapter.title} lên`"><ArrowUp :size="14" /></button>
-                  <button class="order-button" :disabled="busy || reorderDisabled || orderOf(chapter) === totalChapters - 1" @click="$emit('moveChapter', chapter, 1)" :aria-label="`Di chuyển chương ${chapter.title} xuống`"><ArrowDown :size="14" /></button>
-                  <button class="row-edit" @click="$emit('editChapter', chapter)">Sửa</button>
-                  <button class="row-delete" :disabled="busy" @click="$emit('deleteChapter', chapter)">Xóa</button>
+                <div v-if="canEdit || canCreate || canDelete" class="row-actions">
+                  <button v-if="canCreate" class="row-edit" :disabled="busy" :aria-label="`Thêm bài học vào chương ${chapter.title}`" @click="$emit('addLesson', chapter)"><Plus :size="14" /> Thêm bài</button>
+                  <button v-if="canEdit" class="order-button" :disabled="busy || reorderDisabled || orderOf(chapter) === 0" @click="$emit('moveChapter', chapter, -1)" :aria-label="`Di chuyển chương ${chapter.title} lên`"><ArrowUp :size="14" /></button>
+                  <button v-if="canEdit" class="order-button" :disabled="busy || reorderDisabled || orderOf(chapter) === totalChapters - 1" @click="$emit('moveChapter', chapter, 1)" :aria-label="`Di chuyển chương ${chapter.title} xuống`"><ArrowDown :size="14" /></button>
+                  <button v-if="canEdit" class="row-edit" @click="$emit('editChapter', chapter)">Sửa</button>
+                  <button v-if="canDelete" class="row-delete" :disabled="busy" @click="$emit('deleteChapter', chapter)">Xóa</button>
                 </div>
                 <span v-else class="readonly-label">Chỉ xem</span>
               </td>
@@ -47,14 +47,14 @@
               <td><span class="status">{{ statusLabel(lesson.status) }}</span></td>
               <td><div class="row-actions">
                 <template v-if="canEdit">
-                  <button class="order-button" :disabled="busy || reorderDisabled || lessonIndex(chapter, lesson) === 0" :aria-label="`Di chuyển bài học ${lesson.title} lên`" @click="$emit('moveLesson', chapter, lesson, -1)"><ArrowUp :size="14" /></button>
-                  <button class="order-button" :disabled="busy || reorderDisabled || lessonIndex(chapter, lesson) === chapter.lessons.length - 1" :aria-label="`Di chuyển bài học ${lesson.title} xuống`" @click="$emit('moveLesson', chapter, lesson, 1)"><ArrowDown :size="14" /></button>
+                  <button v-if="canEdit" class="order-button" :disabled="busy || reorderDisabled || lessonIndex(chapter, lesson) === 0" :aria-label="`Di chuyển bài học ${lesson.title} lên`" @click="$emit('moveLesson', chapter, lesson, -1)"><ArrowUp :size="14" /></button>
+                  <button v-if="canEdit" class="order-button" :disabled="busy || reorderDisabled || lessonIndex(chapter, lesson) === chapter.lessons.length - 1" :aria-label="`Di chuyển bài học ${lesson.title} xuống`" @click="$emit('moveLesson', chapter, lesson, 1)"><ArrowDown :size="14" /></button>
                 </template>
                 <button class="row-edit" :disabled="busy" @click="$emit('openLesson', lesson)">{{ canEdit ? 'Soạn bài' : 'Xem bài' }}</button>
-                <button v-if="canEdit" class="row-delete" :disabled="busy" :aria-label="`Xóa bài học ${lesson.title}`" @click="$emit('deleteLesson', lesson)">Xóa</button>
+                <button v-if="canDelete" class="row-delete" :disabled="busy" :aria-label="`Xóa bài học ${lesson.title}`" @click="$emit('deleteLesson', lesson)">Xóa</button>
               </div></td>
             </tr>
-            <tr v-if="!chapter.lessons.length" :id="`chapter-empty-${chapter.id}`" class="tree-lesson-row"><td class="toggle-column"></td><td class="order-column"></td><td colspan="4" class="empty-chapter">Chương chưa có bài học. <button v-if="canEdit" class="name-link" :disabled="busy" @click="$emit('addLesson', chapter)">Thêm bài học đầu tiên</button></td></tr>
+            <tr v-if="!chapter.lessons.length" :id="`chapter-empty-${chapter.id}`" class="tree-lesson-row"><td class="toggle-column"></td><td class="order-column"></td><td colspan="4" class="empty-chapter">Chương chưa có bài học. <button v-if="canCreate" class="name-link" :disabled="busy" @click="$emit('addLesson', chapter)">Thêm bài học đầu tiên</button></td></tr>
             <tr v-else-if="!displayedLessons(chapter).length" class="tree-lesson-row"><td class="toggle-column"></td><td class="order-column"></td><td colspan="4" class="empty-chapter">Không có bài học phù hợp với bộ lọc.</td></tr>
           </template>
           </template>
@@ -71,6 +71,8 @@ const props = defineProps<{
   chapters: Chapter[];
   expandedIds: Set<string>;
   canEdit: boolean;
+  canCreate?: boolean;
+  canDelete?: boolean;
   busy: boolean;
   reorderDisabled: boolean;
   totalChapters: number;

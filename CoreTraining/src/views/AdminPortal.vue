@@ -2,6 +2,7 @@
   <div class="admin-portal-layout">
     <!-- Right Main Content Area -->
     <div class="admin-main-content">
+      <header v-if="activeTab!=='overview'" class="admin-page-heading"><div><h1>{{ sectionHeading.title }}</h1><p>{{ sectionHeading.description }}</p></div></header>
       <!-- Loading State -->
       <div v-if="loading" class="loading-overlay">
         <div class="spinner"></div>
@@ -155,7 +156,7 @@
                   Danh sách các khóa học đào tạo nghiệp vụ ngân hàng
                 </p>
               </div>
-              <button class="btn btn-primary btn-sm" @click="openCourseModal()">
+              <button class="btn btn-primary btn-sm" @click="router.push('/admin/courses')">
                 <Plus class="btn-icon-sm" /> THÊM KHÓA HỌC
               </button>
             </div>
@@ -172,7 +173,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="course in courseStore.courses" :key="course.id">
+                <tr v-for="course in paginatedSummaryCourses" :key="course.id">
                   <td>
                     <span class="code-badge">{{ course.id }}</span>
                   </td>
@@ -192,7 +193,7 @@
                       class="action-btn edit"
                       title="Sửa khóa học"
                       v-if="course.status === 'DRAFT'"
-                      @click="openCourseModal(course)"
+                      @click="router.push(`/admin/courses/${course.id}`)"
                     >
                       <Edit />
                     </button>
@@ -208,6 +209,7 @@
                 </tr>
               </tbody>
             </table>
+            <TablePagination v-model:page="summaryPage" v-model:page-size="summaryPageSize" :total="courseStore.courses.length" :page-count="summaryPageCount" unit="khóa học" unit-label="Khóa học" />
           </div>
         </div>
 
@@ -260,7 +262,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="u in filteredUsers" :key="u.username">
+                <tr v-for="u in paginatedLegacyUsers" :key="u.username">
                   <td>
                     <div class="user-cell">
                       <div
@@ -318,6 +320,7 @@
                 </tr>
               </tbody>
             </table>
+            <TablePagination v-model:page="legacyUserPage" v-model:page-size="legacyUserPageSize" :total="filteredUsers.length" :page-count="legacyUserPageCount" unit="tài khoản" unit-label="Tài khoản" />
           </div>
         </div>
 
@@ -328,7 +331,7 @@
           <div class="lessons-manager card">
             <div class="card-header-row">
               <div class="header-left">
-                <h3 class="card-title">DUYỆT ĐĂNG KÝ KHÓA HỌC</h3>
+                <h3 class="card-title">Danh sách yêu cầu đăng ký</h3>
                 <p class="card-subtitle">
                   Phê duyệt hoặc từ chối yêu cầu đăng ký khóa học tự chọn.
                 </p>
@@ -337,6 +340,7 @@
                 >{{ pendingEnrollmentCount }} yêu cầu chờ duyệt</span
               >
             </div>
+            <div class="admin-table-toolbar"><div class="admin-search-box"><Search :size="18" /><input v-model="enrollmentQuery" type="search" placeholder="Tìm học viên hoặc khóa học…" aria-label="Tìm yêu cầu đăng ký" /></div><select v-model="enrollmentStatus" aria-label="Lọc trạng thái đăng ký"><option value="">Tất cả trạng thái</option><option value="PENDING">Chờ duyệt</option><option value="APPROVED">Đã duyệt</option><option value="REJECTED">Từ chối</option></select></div>
             <table class="admin-table enrollment-table">
               <thead>
                 <tr>
@@ -348,7 +352,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="request in enrollmentRequests" :key="request.id">
+                <tr v-for="request in paginatedEnrollments" :key="request.id">
                   <td>
                     <strong>{{ request.fullName }}</strong
                     ><br /><small>{{ request.username }}</small>
@@ -375,7 +379,7 @@
                   </td>
                   <td>
                     <div
-                      v-if="request.status === 'PENDING'"
+                      v-if="request.status === 'PENDING' && accessUser.can('enrollments','update')"
                       class="enrollment-actions"
                     >
                       <button
@@ -400,13 +404,14 @@
                     </template>
                   </td>
                 </tr>
-                <tr v-if="!enrollmentRequests.length">
+                <tr v-if="!filteredEnrollments.length">
                   <td colspan="5" class="empty-row">
-                    Chưa có yêu cầu đăng ký khóa học.
+                    Không có yêu cầu đăng ký phù hợp.
                   </td>
                 </tr>
               </tbody>
             </table>
+            <TablePagination v-model:page="enrollmentPage" v-model:page-size="enrollmentPageSize" :total="filteredEnrollments.length" :page-count="enrollmentPageCount" unit="yêu cầu" unit-label="Yêu cầu" />
           </div>
         </div>
 
@@ -481,7 +486,7 @@
               </thead>
               <tbody>
                 <tr
-                  v-for="(lesson, index) in currentCourseLessons"
+                  v-for="(lesson, index) in paginatedLegacyLessons"
                   :key="lesson.id"
                   draggable="true"
                   :class="{
@@ -497,7 +502,7 @@
                   <td class="drag-column">
                     <span class="drag-handle" title="Kéo để sắp xếp">
                       <GripVertical :size="18" />
-                      <strong>{{ index + 1 }}</strong>
+                      <strong>{{ (lessonPage-1)*lessonPageSize + index+1 }}</strong>
                     </span>
                   </td>
                   <td>
@@ -543,7 +548,8 @@
                 trên để bắt đầu cấu hình.
               </p>
             </div>
-          </div>
+
+            <TablePagination v-model:page="lessonPage" v-model:page-size="lessonPageSize" :total="currentCourseLessons.length" :page-count="lessonPageCount" unit="bài học" unit-label="Bài học" />          </div>
         </div>
 
         <!-- 4. EXAMS TAB -->
@@ -551,14 +557,14 @@
           <div class="exams-manager card">
             <div class="card-header-row">
               <div class="header-left">
-                <h3 class="card-title">QUẢN LÝ BÀI KIỂM TRA</h3>
+                <h3 class="card-title">Danh sách bài kiểm tra</h3>
                 <p class="card-subtitle">
                   Chọn một bài kiểm tra để xem và quản lý câu hỏi bên trong.
                 </p>
               </div>
               <div class="exam-header-actions">
-                <button class="btn btn-primary" @click="createQuiz">
-                  <Plus class="btn-icon" /> THÊM BÀI KIỂM TRA
+                <button v-if="accessUser.can('exams','create')" class="btn btn-primary" @click="createQuiz">
+                  <Plus class="btn-icon" /> Thêm bài kiểm tra
                 </button>
               </div>
             </div>
@@ -586,53 +592,14 @@
               <Search :size="18" />
               <input
                 v-model="quizSearchQuery"
+                aria-label="Tìm bài kiểm tra"
                 type="search"
                 placeholder="Tìm theo tên bài kiểm tra hoặc bài học..."
               />
             </div>
 
-            <div
-              class="quiz-definition-grid"
-              v-if="filteredQuizDefinitions.length"
-            >
-              <button
-                v-for="quiz in filteredQuizDefinitions"
-                :key="quiz.key"
-                class="quiz-definition-card"
-                @click="openQuizDefinition(quiz)"
-              >
-                <div class="quiz-definition-icon">
-                  <HelpCircle :size="22" />
-                </div>
-                <div class="quiz-definition-copy">
-                  <span class="q-scope-tag">{{
-                    quiz.lessonId ? "Bài học" : "Toàn khóa học"
-                  }}</span>
-                  <h4>{{ quiz.title }}</h4>
-                  <p>
-                    {{ quiz.questionCount }} câu hỏi · Đạt tối thiểu
-                    {{ quiz.passingScore }}%
-                  </p>
-                </div>
-                <ArrowRight :size="20" />
-              </button>
-            </div>
-            <div class="empty-state-box" v-else>
-              <p>
-                {{
-                  quizSearchQuery
-                    ? "Không tìm thấy bài kiểm tra phù hợp."
-                    : "Khóa học này chưa có bài kiểm tra."
-                }}
-              </p>
-              <button
-                v-if="!quizSearchQuery"
-                class="btn btn-primary"
-                @click="createQuiz"
-              >
-                <Plus :size="16" /> Tạo bài kiểm tra đầu tiên
-              </button>
-            </div>
+            <div class="admin-table-scroll"><table class="admin-table"><thead><tr><th>Bài kiểm tra</th><th>Số câu hỏi</th><th>Ngưỡng đạt</th><th>Thao tác</th></tr></thead><tbody><tr v-for="quiz in paginatedQuizDefinitions" :key="quiz.key"><td><strong>{{ quiz.title }}</strong><small>{{ quiz.lessonId ? 'Kiểm tra bài học' : 'Kiểm tra khóa học' }}</small></td><td>{{ quiz.questionCount }} câu hỏi</td><td>{{ quiz.passingScore }}%</td><td><button class="admin-row-edit" @click="openQuizDefinition(quiz)">Chi tiết</button></td></tr><tr v-if="!filteredQuizDefinitions.length"><td colspan="4" class="admin-empty">Không có bài kiểm tra phù hợp.</td></tr></tbody></table></div>
+            <TablePagination v-model:page="quizPage" v-model:page-size="quizPageSize" :total="filteredQuizDefinitions.length" :page-count="quizPageCount" unit="bài kiểm tra" unit-label="Bài kiểm tra" />
           </div>
         </div>
 
@@ -667,7 +634,7 @@
                   <strong>Upload và embedding tài liệu</strong>
                   <small>Định dạng PDF/DOCX, tối đa theo cấu hình máy chủ.</small>
                 </div>
-                <button class="btn btn-primary" :disabled="documentUploading || !selectedCourseId || selectedCourseId === ALL_COURSES"
+                <button v-if="allowedCourseAction('documents','create')" class="btn btn-primary" :disabled="documentUploading || !selectedCourseId || selectedCourseId === ALL_COURSES"
                   @click="ragFileInput?.click()">
                   <LoaderCircle v-if="documentUploading" :size="16" class="spin-icon" />
                   <Upload v-else :size="16" />
@@ -680,6 +647,7 @@
             </div>
             <p v-if="documentUploadMessage" class="rag-upload-message">{{ documentUploadMessage }}</p>
 
+            <div class="admin-table-toolbar"><div class="admin-search-box"><Search :size="18" /><input v-model="documentQuery" type="search" placeholder="Tìm tên tài liệu…" aria-label="Tìm tài liệu AI" /></div></div>
             <div class="rag-document-table-scroll">
             <table class="admin-table rag-document-table">
               <thead>
@@ -697,7 +665,7 @@
                 <tr v-if="documentListLoading && courseDocuments.length === 0">
                   <td colspan="7" class="rag-empty-cell">Đang tải danh sách tài liệu...</td>
                 </tr>
-                <tr v-for="document in courseDocuments" :key="document.id">
+                <tr v-for="document in paginatedDocuments" :key="document.id">
                   <td><strong>{{ document.fileName }}</strong></td>
                   <td>{{ formatFileSize(document.sizeBytes) }}</td>
                   <td><span class="rag-status" :class="`status-${document.status.toLowerCase()}`">
@@ -709,7 +677,7 @@
                     <span :title="document.errorMessage || ''">{{ document.errorMessage || "-" }}</span>
                   </td>
                   <td class="rag-document-actions">
-                    <button type="button" class="btn btn-secondary btn-sm"
+                    <button v-if="allowedCourseAction('documents','delete')" type="button" class="btn btn-secondary btn-sm"
                       :disabled="document.status === 'PENDING' || document.status === 'INDEXING' || confirmationModal.submitting"
                       :title="document.status === 'PENDING' || document.status === 'INDEXING' ? 'Chờ embedding hoàn tất trước khi xóa' : 'Xóa tài liệu và dữ liệu embedding'"
                       @click="deleteCourseDocument(document)">
@@ -717,37 +685,20 @@
                     </button>
                   </td>
                 </tr>
-                <tr v-if="!documentListLoading && courseDocuments.length === 0">
+                <tr v-if="!documentListLoading && filteredDocuments.length === 0">
                   <td colspan="7" class="rag-empty-cell">Khóa học này chưa có tài liệu được embedding.</td>
                 </tr>
               </tbody>
             </table>
+            <TablePagination v-model:page="documentPage" v-model:page-size="documentPageSize" :total="filteredDocuments.length" :page-count="documentPageCount" unit="tài liệu" unit-label="Tài liệu" />
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ENROLLMENT REJECTION MODAL -->
-    <div
-      v-if="rejectEnrollmentModal.show"
-      class="modal-overlay"
-      @click.self="closeRejectEnrollmentModal"
-    >
-      <section
-        class="modal-content card reject-enrollment-modal animate-scale-in"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="reject-enrollment-title"
-      >
-        <div class="reject-modal-icon"><XCircle :size="26" /></div>
-        <div class="reject-modal-heading">
-          <span>Từ chối đăng ký</span>
-          <h3 id="reject-enrollment-title">Nêu lý do từ chối yêu cầu</h3>
-          <p>
-            Lý do sẽ được gửi trực tiếp tới học viên trong thông báo kết quả.
-          </p>
-        </div>
+    <AdminModal :open="rejectEnrollmentModal.show" title="Từ chối đăng ký khóa học" :busy="rejectEnrollmentModal.submitting" :width="640" submit-label="Gửi lý do từ chối" @close="closeRejectEnrollmentModal" @submit="confirmRejectEnrollment">
+      <p class="admin-modal-help">Lý do sẽ được gửi tới học viên trong thông báo kết quả.</p>
         <div v-if="rejectEnrollmentModal.request" class="reject-request-summary">
           <div>
             <small>Học viên</small>
@@ -760,7 +711,7 @@
             <span>{{ rejectEnrollmentModal.request.courseId }}</span>
           </div>
         </div>
-        <form @submit.prevent="confirmRejectEnrollment">
+
           <div class="form-group">
             <label for="enrollment-rejection-reason">
               Lý do từ chối <span class="required-mark">*</span>
@@ -778,44 +729,10 @@
               {{ rejectEnrollmentModal.reason.length }}/500
             </div>
           </div>
-          <div class="modal-buttons">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              :disabled="rejectEnrollmentModal.submitting"
-              @click="closeRejectEnrollmentModal"
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              class="btn reject-confirm-button"
-              :disabled="
-                !rejectEnrollmentModal.reason.trim() ||
-                rejectEnrollmentModal.submitting
-              "
-            >
-              <XCircle :size="16" />
-              {{
-                rejectEnrollmentModal.submitting
-                  ? "Đang xử lý..."
-                  : "Xác nhận từ chối"
-              }}
-            </button>
-          </div>
-        </form>
-      </section>
-    </div>
+    </AdminModal>
 
-    <!-- MODAL 1: COURSE FORM -->
-    <div
-      class="modal-overlay"
-      v-if="courseModal.show"
-      @click.self="courseModal.show = false"
-    >
-      <div class="modal-content card animate-scale-in">
-        <h3>{{ courseModal.isEdit ? "CẬP NHẬT KHÓA HỌC" : "TẠO KHÓA HỌC MỚI" }}</h3>
-        <form @submit.prevent="saveCourse">
+    <AdminModal :open="courseModal.show" :title="courseModal.isEdit ? 'Cập nhật khóa học' : 'Thêm khóa học'" :width="640" :busy="modalSaving" submit-label="Lưu" @close="courseModal.show=false" @submit="runModalSave(saveCourse)">
+
           <div class="form-group">
             <label
               >Mã khóa học (In hoa, không dấu, ví dụ: 'CIF', 'TIEN_GUI')</label
@@ -849,31 +766,11 @@
               required
             />
           </div>
-          <div class="modal-buttons">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              @click="courseModal.show = false"
-            >
-              Hủy
-            </button>
-            <button type="submit" class="btn btn-primary">Lưu</button>
-          </div>
-        </form>
-      </div>
-    </div>
 
-    <!-- MODAL 2: USER FORM -->
-    <div
-      class="modal-overlay"
-      v-if="userModal.show"
-      @click.self="userModal.show = false"
-    >
-      <div class="modal-content card animate-scale-in">
-        <h3>
-          {{ userModal.isEdit ? "CẬP NHẬT THÀNH VIÊN" : "TẠO THÀNH VIÊN MỚI" }}
-        </h3>
-        <form @submit.prevent="saveUser">
+    </AdminModal>
+
+    <AdminModal :open="userModal.show" :title="userModal.isEdit ? 'Cập nhật tài khoản' : 'Thêm tài khoản'" :width="720" :busy="modalSaving" submit-label="Lưu" @close="userModal.show=false" @submit="runModalSave(saveUser)">
+
           <div class="form-group">
             <label>Tên đăng nhập (Username)</label>
             <input
@@ -890,7 +787,7 @@
               {{
                 userModal.isEdit
                   ? "(Để trống nếu không đổi)"
-                  : "(Mặc định nếu để trống: 123456)"
+                  : "(Để trống: tạo mật khẩu ngẫu nhiên; dùng quên mật khẩu qua email)"
               }}</label
             >
             <input
@@ -932,36 +829,12 @@
               <option value="ROLE_ADMIN">Quản trị viên (ROLE_ADMIN)</option>
             </select>
           </div>
-          <div class="modal-buttons">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              @click="userModal.show = false"
-            >
-              Hủy
-            </button>
-            <button type="submit" class="btn btn-primary">Lưu</button>
-          </div>
-        </form>
-      </div>
-    </div>
 
-    <!-- MODAL 3: LESSON FORM -->
-    <div
-      class="modal-overlay"
-      v-if="lessonModal.show"
-      @click.self="lessonModal.show = false"
-    >
-      <div
-        class="modal-content card modal-large lesson-modal-content animate-scale-in"
-      >
-        <header class="lesson-modal-header">
-          <h3>
-            {{ lessonModal.isEdit ? "CẬP NHẬT BÀI HỌC" : "TẠO BÀI HỌC MỚI" }}
-          </h3>
-        </header>
-        <form class="lesson-modal-form" @submit.prevent="saveLesson">
-          <div ref="lessonModalBodyRef" class="lesson-modal-body">
+    </AdminModal>
+
+    <AdminModal :open="lessonModal.show" :title="lessonModal.isEdit ? 'Cập nhật bài học' : 'Thêm bài học'" :width="960" :busy="modalSaving" submit-label="Lưu" @close="lessonModal.show=false" @submit="runModalSave(saveLesson)">
+
+          <div ref="lessonModalBodyRef" class="legacy-lesson-fields">
             <div class="form-row">
               <div class="form-group col">
                 <label>Khóa học trực thuộc</label>
@@ -1199,35 +1072,11 @@
               </div>
             </div>
           </div>
-          <footer class="modal-buttons lesson-modal-footer">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              @click="lessonModal.show = false"
-            >
-              Hủy
-            </button>
-            <button type="submit" class="btn btn-primary">Lưu</button>
-          </footer>
-        </form>
-      </div>
-    </div>
 
-    <!-- MODAL 4: QUESTION FORM -->
-    <div
-      class="modal-overlay"
-      v-if="questionModal.show"
-      @click.self="questionModal.show = false"
-    >
-      <div class="modal-content card modal-large animate-scale-in">
-        <h3>
-          {{
-            questionModal.isEdit
-              ? "CẬP NHẬT CÂU HỎI THI"
-              : "TẠO CÂU HỎI THI MỚI"
-          }}
-        </h3>
-        <form @submit.prevent="saveQuestion">
+    </AdminModal>
+
+    <AdminModal :open="questionModal.show" :title="questionModal.isEdit ? 'Cập nhật câu hỏi' : 'Thêm câu hỏi'" :width="860" :busy="modalSaving" submit-label="Lưu" @close="questionModal.show=false" @submit="runModalSave(saveQuestion)">
+
           <div class="form-row">
             <div class="form-group col">
               <label>1. Chọn khóa học</label>
@@ -1307,19 +1156,9 @@
             >
           </div>
 
-          <div class="modal-buttons">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              @click="questionModal.show = false"
-            >
-              Hủy
-            </button>
-            <button type="submit" class="btn btn-primary">Lưu</button>
-          </div>
-        </form>
-      </div>
-    </div>
+
+    </AdminModal>
+
     <ConfirmModal
       :open="confirmationModal.show"
       :title="confirmationModal.title"
@@ -1333,8 +1172,13 @@
 </template>
 
 <script setup lang="ts">
+import AdminModal from '../components/AdminModal.vue';
+import TablePagination from '../components/TablePagination.vue';
+import {useTablePagination} from '../composables/useTablePagination';
+import { axiosClient } from "../api/axiosClient";
 import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import {useUserStore} from '../stores/userStore';
 import { useCourseStore } from "../stores/courseStore";
 import { useNavigationStore } from "../stores/navigationStore";
 import { validateVideoUpload } from "../utils/videoAccess";
@@ -1400,7 +1244,8 @@ ChartJS.register(
 );
 
 // Stores
-const courseStore = useCourseStore();
+const courseStore = useCourseStore();const accessUser=useUserStore();
+const allowedCourseAction=(page:string,action:string)=>courseStore.courses.find(c=>c.id===selectedCourseId.value)?.adminActions?.[page]?.includes(action)===true;
 const navigationStore = useNavigationStore();
 const router = useRouter();
 const route = useRoute();
@@ -1645,6 +1490,20 @@ const filteredQuizDefinitions = computed(() => {
       .includes(query),
   );
 });
+
+const sectionHeading=computed(()=>({exams:{title:'Bài kiểm tra',description:'Quản lý bài kiểm tra và ngân hàng câu hỏi theo khóa, bài học.'},enrollments:{title:'Duyệt đăng ký',description:'Theo dõi và xử lý yêu cầu đăng ký khóa học của học viên.'},documents:{title:'Tài liệu AI',description:'Quản lý tài liệu và nguồn kiến thức của khóa học.'},lessons:{title:'Bài học',description:'Quản lý nội dung bài học theo khóa đào tạo.'},users:{title:'Tài khoản',description:'Quản lý người dùng trong phạm vi được cấp.'}}[activeTab.value] || {title:'Quản trị',description:''}));
+const modalSaving=ref(false);
+async function runModalSave(action:()=>Promise<void>){if(modalSaving.value)return;modalSaving.value=true;try{await action();}finally{modalSaving.value=false;}}
+const enrollmentQuery=ref(''),enrollmentStatus=ref(''),documentQuery=ref('');
+const filteredEnrollments=computed(()=>enrollmentRequests.value.filter(r=>`${r.fullName} ${r.username} ${r.courseName}`.toLocaleLowerCase('vi').includes(enrollmentQuery.value.trim().toLocaleLowerCase('vi')) && (!enrollmentStatus.value || r.status===enrollmentStatus.value)));
+const filteredDocuments=computed(()=>courseDocuments.value.filter(d=>d.fileName.toLocaleLowerCase('vi').includes(documentQuery.value.trim().toLocaleLowerCase('vi'))));
+const {page:summaryPage,pageSize:summaryPageSize,pageCount:summaryPageCount,paginated:paginatedSummaryCourses}=useTablePagination(computed(()=>courseStore.courses));
+const {page:legacyUserPage,pageSize:legacyUserPageSize,pageCount:legacyUserPageCount,paginated:paginatedLegacyUsers,reset:resetLegacyUsers}=useTablePagination(filteredUsers);
+const {page:enrollmentPage,pageSize:enrollmentPageSize,pageCount:enrollmentPageCount,paginated:paginatedEnrollments,reset:resetEnrollments}=useTablePagination(filteredEnrollments);
+const {page:lessonPage,pageSize:lessonPageSize,pageCount:lessonPageCount,paginated:paginatedLegacyLessons,reset:resetLegacyLessons}=useTablePagination(currentCourseLessons);
+const {page:documentPage,pageSize:documentPageSize,pageCount:documentPageCount,paginated:paginatedDocuments,reset:resetDocuments}=useTablePagination(filteredDocuments);
+const {page:quizPage,pageSize:quizPageSize,pageCount:quizPageCount,paginated:paginatedQuizDefinitions,reset:resetQuizzes}=useTablePagination(filteredQuizDefinitions);
+watch(userSearchQuery,resetLegacyUsers);watch([enrollmentQuery,enrollmentStatus],resetEnrollments);watch(documentQuery,resetDocuments);watch([quizSearchQuery,selectedCourseId],resetQuizzes);watch(selectedCourseId,()=>{resetLegacyLessons();resetDocuments();});
 
 const navigationRoute = (id: string, params: Record<string, string> = {}) => {
   const item = navigationStore.items.find((entry) => entry.id === id);
@@ -2191,15 +2050,15 @@ const loadQuestions = async () => {
 const loadAllData = async () => {
   loading.value = true;
   try {
-    await courseStore.fetchCourses();
+    courseStore.courses = ["exams","documents"].includes(activeTab.value)?(await axiosClient.get("/api/admin/courses",{params:{page:activeTab.value}})).data:accessUser.can('courses')?(await axiosClient.get("/api/admin/courses")).data:[];
     const tasks: Promise<unknown>[] = [];
-    if (["overview", "users"].includes(activeTab.value)) {
+    if (["overview", "users"].includes(activeTab.value) && accessUser.can("users")) {
       tasks.push(adminApi.getAllUsers().then((value) => (users.value = value)));
     }
-    if (["overview", "enrollments"].includes(activeTab.value)) {
+    if (["overview", "enrollments"].includes(activeTab.value) && accessUser.can("enrollments")) {
       tasks.push(adminApi.getEnrollmentRequests().then((value) => (enrollmentRequests.value = value)));
     }
-    if (["overview", "exams"].includes(activeTab.value)) tasks.push(loadQuestions());
+    if (["overview", "exams"].includes(activeTab.value) && accessUser.can("exams")) tasks.push(loadQuestions());
     await Promise.all(tasks);
 
     if (courseStore.courses.length > 0 && !selectedCourseId.value) {
@@ -2228,20 +2087,6 @@ onBeforeUnmount(clearDocumentPolling);
 // ==========================================
 // COURSE ACTIONS
 // ==========================================
-const openCourseModal = (course?: Course) => {
-  if (course) {
-    courseModal.value = { show: true, isEdit: true };
-    courseForm.value = {
-      id: course.id,
-      name: course.name,
-      iconName: course.iconName,
-    };
-  } else {
-    courseModal.value = { show: true, isEdit: false };
-    courseForm.value = { id: "", name: "", iconName: "Settings" };
-  }
-};
-
 const saveCourse = async () => {
   loading.value = true;
   try {
@@ -2870,6 +2715,10 @@ void handleDeleteQuestion;
 </script>
 
 <style scoped>
+.admin-table{font-size:.875rem}.admin-table th{text-transform:none!important;font-size:.75rem;white-space:nowrap}.card-title{text-transform:none!important}.admin-page-heading{margin-bottom:1.6rem}
+
+.legacy-lesson-fields{overflow:visible;min-height:0}.admin-table-scroll{width:100%;overflow-x:auto}.admin-table small{display:block;margin-top:.35rem;color:var(--text-muted);font-size:.75rem}
+
 /* Redesigned Sidebar Layout */
 .admin-portal-layout {
   display: flex;

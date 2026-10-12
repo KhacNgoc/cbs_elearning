@@ -8,7 +8,6 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -26,6 +25,9 @@ import java.util.Arrays;
 @EnableMethodSecurity
 public class SecurityConfig {
 
+    @org.springframework.beans.factory.annotation.Autowired private AdminRequestAuthorization adminAuthorization;
+    @org.springframework.beans.factory.annotation.Value("${app.jwt.cookie-secure:false}") private boolean csrfCookieSecure;
+    @org.springframework.beans.factory.annotation.Value("${app.jwt.cookie-same-site:Lax}") private String csrfCookieSameSite;
     private final JwtTokenProvider tokenProvider;
     private final UserDetailsServiceImpl userDetailsService;
     private final JwtCookieService jwtCookieService;
@@ -56,13 +58,16 @@ public class SecurityConfig {
                 tokenProvider, userDetailsService, jwtCookieService);
         RequestLoggingFilter requestLoggingFilter = new RequestLoggingFilter();
 
+        var csrfCookies=org.springframework.security.web.csrf.CookieCsrfTokenRepository.withHttpOnlyFalse();
+        csrfCookies.setCookieCustomizer(cookie->cookie.secure(csrfCookieSecure).sameSite(csrfCookieSameSite));
         http.headers(headers -> headers
                         .frameOptions(frame -> frame.disable())
                         .contentSecurityPolicy(csp -> csp.policyDirectives(
                                 "frame-ancestors 'self'"
                         )))
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .csrf(AbstractHttpConfigurer::disable)
+            .csrf(csrf -> csrf.csrfTokenRepository(csrfCookies)
+               .csrfTokenRequestHandler(new org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .exceptionHandling(exceptions -> exceptions
                 .accessDeniedHandler((request, response, exception) -> {
@@ -74,13 +79,14 @@ public class SecurityConfig {
                     response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized"))
             )
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/session").authenticated()
+                .requestMatchers("/api/auth/session", "/api/auth/logout").authenticated()
+                .requestMatchers("/api/auth/register", "/api/auth/reset-password-direct").denyAll()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/ws/**").permitAll()
                 .requestMatchers("/uploads/videos/**").denyAll()
                 .requestMatchers("/api/videos/stream").permitAll()
-                .requestMatchers("/uploads/documents/**").permitAll()
-                .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
+                .requestMatchers("/uploads/documents/**").authenticated()
+                .requestMatchers("/api/admin/**").access(adminAuthorization)
                 .anyRequest().authenticated()
             );
 
@@ -104,7 +110,7 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList(
-                "Content-Type", "X-Requested-With", "X-Correlation-Id", "Accept", "Origin", "Range",
+                "Content-Type", "X-XSRF-TOKEN", "X-Requested-With", "X-Correlation-Id", "Accept", "Origin", "Range",
                 "Access-Control-Request-Method", "Access-Control-Request-Headers"));
         configuration.setExposedHeaders(Arrays.asList(
                 "X-Correlation-Id", "Accept-Ranges", "Content-Range", "Content-Length"));

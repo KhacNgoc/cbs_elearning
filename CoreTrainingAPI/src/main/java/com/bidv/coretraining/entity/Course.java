@@ -20,6 +20,17 @@ public class Course {
 
     @Column(nullable = false)
     private String name;
+    @ManyToOne(fetch=FetchType.EAGER) @JoinColumn(name="owner_unit_id")
+    private OrganizationUnit ownerUnit;
+    @ElementCollection(fetch=FetchType.EAGER)
+    @CollectionTable(name="course_unit_grants",joinColumns=@JoinColumn(name="course_id"))
+    @MapKeyColumn(name="unit_id") @Column(name="grant_type",nullable=false) @Builder.Default
+    private java.util.Map<String,String> unitGrants=new java.util.HashMap<>();
+    @ElementCollection(fetch=FetchType.EAGER)
+    @CollectionTable(name="course_instructors",joinColumns=@JoinColumn(name="course_id"))
+    @Column(name="user_id",nullable=false) @Builder.Default
+    private java.util.Set<Long> instructorIds=new java.util.HashSet<>();
+
     @Column(nullable=false, unique=true) private String code;
     @ManyToOne(fetch=FetchType.LAZY, optional=false) @JoinColumn(name="program_id", nullable=false)
     private TrainingProgram program;

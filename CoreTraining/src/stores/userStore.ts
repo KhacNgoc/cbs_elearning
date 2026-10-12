@@ -5,15 +5,17 @@ import { authApi } from '../api/authApi';
 import type { LoginRequest } from '../api/authApi';
 import { courseApi } from '../api/courseApi';
 import { userApi } from '../api/userApi';
-import router from '../router';
+import {useNavigationStore} from './navigationStore';
 import { isMockApi } from '../api/axiosClient';
 import { clearAuthSession, setCachedAuthSession } from '../utils/authSession';
 import { showToast } from '../utils/toast';
 
 let progressRequest: Promise<void> | null = null;
+async function navigate(path:string){const {default:router}=await import('../router');return router.push(path);}
+
 
 export const useUserStore = defineStore('user', {
-  state: (): UserProgress & { isAuthenticated: boolean; role: string; username: string; fullName: string; mustChangePassword: boolean } => ({
+  state: (): UserProgress & { isAuthenticated: boolean; role: string; roles: string[]; permissions: string[]; roleNames: Record<string,string>; systemAdmin:boolean; username: string; fullName: string; mustChangePassword: boolean } => ({
     completedLessons: [],
     quizScores: {},
     quizTotals: {},
@@ -29,12 +31,16 @@ export const useUserStore = defineStore('user', {
     pendingCourses: [],
     isAuthenticated: !!localStorage.getItem('username'),
     role: localStorage.getItem('userRole') || '',
+    roles: [], permissions: [], roleNames: {},systemAdmin:false,
     username: localStorage.getItem('username') || '',
     fullName: localStorage.getItem('fullName') || '',
     mustChangePassword: localStorage.getItem('mustChangePassword') === 'true'
   }),
 
   getters: {
+    can: (state)=>(page:string,action:string="read")=>state.permissions.includes(`${page}:${action}`),
+    hasAdminAccess: state=>state.permissions.some(p=>p.endsWith(":read")),
+    canLearn(): boolean {return this.permissions.includes("LEARN");},
     totalLessonsCount(): number {
       return useCourseStore().courses.reduce((acc, course) => acc + course.lessons.length, 0);
     },
@@ -67,12 +73,17 @@ export const useUserStore = defineStore('user', {
       };
     },
     isCourseAccessible: (state) => (courseId: string): boolean => {
-      if (state.role === 'ROLE_ADMIN') return true;
+      if (state.systemAdmin || useCourseStore().courses.find(c=>c.id===courseId)?.canEdit) return true;
       return state.mandatoryCourses.includes(courseId) || state.registeredCourses.includes(courseId);
     }
   },
 
   actions: {
+    async refreshAccess() {
+      const session=await authApi.session();
+      this.role=session.role;this.roles=session.roles || [];this.permissions=session.permissions || [];this.roleNames=session.roleNames || {};this.systemAdmin=!!session.systemAdmin;this.mustChangePassword=session.mustChangePassword;
+      setCachedAuthSession(session);await useNavigationStore().load(true);
+    },
     async login(credentials: LoginRequest) {
       try {
         const res = await authApi.login(credentials);
@@ -84,18 +95,14 @@ export const useUserStore = defineStore('user', {
 
         this.isAuthenticated = true;
         this.role = res.role;
+        this.roles = res.roles || [res.role]; this.permissions = res.permissions || [];this.roleNames=res.roleNames || {};this.systemAdmin=!!res.systemAdmin;
         this.username = res.username;
         this.fullName = res.fullName;
         this.mustChangePassword = res.mustChangePassword;
-        setCachedAuthSession({
-          role: res.role,
-          username: res.username,
-          fullName: res.fullName,
-          mustChangePassword: res.mustChangePassword,
-        });
+        setCachedAuthSession(res);
 
         await this.fetchProgress();
-        router.push(this.mustChangePassword ? '/change-password' : '/');
+        await navigate(this.mustChangePassword ? '/change-password' : '/');
       } catch (error) {
         console.error('Login failed:', error);
         throw error;
@@ -134,8 +141,9 @@ export const useUserStore = defineStore('user', {
       this.registeredCourses = [];
       this.pendingCourses = [];
 
+      this.roles=[];this.permissions=[];this.roleNames={};this.systemAdmin=false;useNavigationStore().clear();
       useCourseStore().$reset();
-      router.push('/login');
+      await navigate('/login');
     },
 
     async fetchProgress() {
@@ -163,6 +171,8 @@ export const useUserStore = defineStore('user', {
         this.pendingCourses = progress.pendingCourses || [];
         this.mustChangePassword = progress.mustChangePassword || false;
 
+        this.role=profile.role;this.roles=profile.roles || [profile.role];this.permissions=profile.permissions || [];this.roleNames=profile.roleNames || {};this.systemAdmin=!!profile.systemAdmin;
+        setCachedAuthSession({role:profile.role,roles:profile.roles,permissions:profile.permissions,roleNames:profile.roleNames,systemAdmin:profile.systemAdmin,username:profile.username,fullName:profile.fullName,mustChangePassword:this.mustChangePassword});
         this.fullName = profile.fullName || '';
         localStorage.setItem('fullName', this.fullName);
         localStorage.setItem('mustChangePassword', this.mustChangePassword ? 'true' : 'false');
@@ -211,7 +221,7 @@ export const useUserStore = defineStore('user', {
     },
 
     async saveLessonProgress(lessonId: string, request: LessonProgressRequest) {
-      if (!this.isAuthenticated) return null;
+      if (!this.canLearn || !this.isAuthenticated) return null;
       try {
         const progress = await courseApi.saveLessonProgress(lessonId, request);
         this.lessonProgress = { ...(this.lessonProgress || {}), [lessonId]: progress };

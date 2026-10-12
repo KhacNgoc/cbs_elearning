@@ -4,10 +4,10 @@
     <template v-if="lesson && chapter">
       <header><div class="heading-with-back"><AdminBackButton :to="chapterUrl" label="Quay lại chương trong khóa học" /><div class="heading-copy"><nav class="breadcrumb"><RouterLink :to="`/admin/courses/${chapter.courseId}`">{{ course?.name }}</RouterLink> / <RouterLink :to="chapterUrl">{{ chapter.title }}</RouterLink> / {{ lesson.id }}</nav><h1>{{ lesson.title }}</h1></div></div></header>
       <p v-if="course?.status !== 'DRAFT'" class="readonly-notice">Khóa đang xuất bản hoặc lưu trữ. <RouterLink :to="`/admin/courses/${chapter.courseId}`">Mở chi tiết khóa và chuyển về nháp</RouterLink> để chỉnh sửa bài.</p>
-      <div class="editor-tabs" role="tablist"><button id="content-tab" role="tab" :aria-selected="tab === 'content'" aria-controls="content-panel" :class="{active:tab === 'content'}" @click="tab='content'">Nội dung bài học</button><button id="quiz-tab" role="tab" :aria-selected="tab === 'quiz'" aria-controls="quiz-panel" :class="{active:tab === 'quiz'}" @click="tab='quiz'">Bài kiểm tra <span v-if="lesson.hasQuiz">{{ lesson.quizRequired ? 'Bắt buộc' : 'Tùy chọn' }}</span></button></div>
-      <fieldset :disabled="course?.status !== 'DRAFT'" class="editor-fieldset">
-      <section id="content-panel" v-show="tab === 'content'" role="tabpanel" aria-labelledby="content-tab"><LessonContentEditor :lesson="lesson" :read-only="course?.status !== 'DRAFT'" @saved="savedContent" @dirty="dirty=$event" @cancel="router.push(chapterUrl)" /></section>
-      <section id="quiz-panel" v-show="tab === 'quiz'" role="tabpanel" aria-labelledby="quiz-tab"><div v-if="!lesson.hasQuiz && !preparingQuiz" class="card empty-quiz"><h2>Bài học chưa có bài kiểm tra</h2><p>Bài kiểm tra chỉ xuất hiện với học viên sau khi lưu ít nhất một câu hỏi.</p><button v-if="course?.status === 'DRAFT'" class="btn btn-primary" @click="createQuiz">Soạn bài kiểm tra</button></div><AdminQuizDetail v-else :key="lesson.id" embedded :lesson="lesson" :read-only="course?.status !== 'DRAFT'" @saved="refreshLesson" /></section>
+      <div class="editor-tabs" role="tablist"><button id="content-tab" role="tab" :aria-selected="tab === 'content'" aria-controls="content-panel" :class="{active:tab === 'content'}" @click="tab='content'">Nội dung bài học</button><button v-if="user.can('exams')" id="quiz-tab" role="tab" :aria-selected="tab === 'quiz'" aria-controls="quiz-panel" :class="{active:tab === 'quiz'}" @click="tab='quiz'">Bài kiểm tra <span v-if="lesson.hasQuiz">{{ lesson.quizRequired ? 'Bắt buộc' : 'Tùy chọn' }}</span></button></div>
+      <fieldset :disabled="false" class="editor-fieldset">
+      <section id="content-panel" v-show="tab === 'content'" role="tabpanel" aria-labelledby="content-tab"><LessonContentEditor :lesson="lesson" :read-only="!canEdit" @saved="savedContent" @dirty="dirty=$event" @cancel="router.push(chapterUrl)" /></section>
+      <section v-if="user.can('exams')" id="quiz-panel" v-show="tab === 'quiz'" role="tabpanel" aria-labelledby="quiz-tab"><div v-if="!lesson.hasQuiz && !preparingQuiz" class="card empty-quiz"><h2>Bài học chưa có bài kiểm tra</h2><p>Bài kiểm tra chỉ xuất hiện với học viên sau khi lưu ít nhất một câu hỏi.</p><button v-if="course?.status === 'DRAFT' && !!course?.adminActions?.exams?.includes('create')" class="btn btn-primary" @click="createQuiz">Soạn bài kiểm tra</button></div><AdminQuizDetail v-else :key="lesson.id" embedded :lesson="lesson" :read-only="course?.status !== 'DRAFT'" @saved="refreshLesson" /></section>
       </fieldset>
     </template><p v-else-if="!error">Đang tải bài học...</p>
   </main>
@@ -15,13 +15,15 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router';
+import {useUserStore} from '../stores/userStore';
 import { trainingApi } from '../api/trainingApi';
 import { useCourseStore } from '../stores/courseStore';
 import type { Lesson, Chapter, Course } from '../types';
 import LessonContentEditor from './LessonContentEditor.vue';
 import AdminQuizDetail from './AdminQuizDetail.vue';
 import AdminBackButton from '../components/AdminBackButton.vue';
-const route=useRoute(),router=useRouter(),courseStore=useCourseStore();
+const route=useRoute(),router=useRouter(),courseStore=useCourseStore(),user=useUserStore();
+const canEdit=computed(()=>course.value?.status==='DRAFT' && !!course.value?.allowedActions?.includes('update'));
 const lesson=ref<Lesson|null>(null),chapter=ref<Chapter|null>(null),course=ref<Course|null>(null),error=ref(''),dirty=ref(false),preparingQuiz=ref(false),tab=ref('content');
 const chapterUrl=computed(()=>`/admin/courses/${encodeURIComponent(chapter.value?.courseId || '')}?chapter=${encodeURIComponent(chapter.value?.id || '')}`);
 async function refreshLesson(){lesson.value=await trainingApi.lesson(String(route.params.lessonId));}

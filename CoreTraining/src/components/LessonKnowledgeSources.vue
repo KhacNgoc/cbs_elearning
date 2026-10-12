@@ -15,15 +15,9 @@
           <FileText :size="24" /><strong>Khóa học chưa có tài liệu AI</strong>
           <p>Tải PDF hoặc Word lên, chờ xử lý xong rồi chọn phần dùng cho bài học.</p>
         </div>
-        <article v-for="document in documents" :key="document.id" class="source-document" :class="{ selected: selections[document.id] }">
-          <label class="document-choice">
-            <input type="checkbox" :checked="Boolean(selections[document.id])"
-              :disabled="document.status !== 'INDEXED' && !selections[document.id]"
-              @change="toggleDocument(document)" />
-            <FileText :size="20" aria-hidden="true" />
-            <span><strong>{{ document.fileName }}</strong><small>{{ isPdf(document) ? 'PDF · chọn theo trang' : 'Word · chọn theo mục' }}</small></span>
-            <span class="document-status" :class="document.status.toLowerCase()">{{ statusLabel(document.status) }}</span>
-          </label>
+<div class="admin-table-scroll"><table class="admin-data-table"><thead><tr><th>Chọn</th><th>Tài liệu / nguồn kiến thức</th><th>Trạng thái</th></tr></thead><tbody>
+        <template v-for="document in paginatedDocuments" :key="document.id"><tr :class="{selected:selections[document.id]}"><td><ToggleSwitch :show-label="false" :model-value="Boolean(selections[document.id])" :label="`Dùng tài liệu ${document.fileName}`" :disabled="disabled || saving || uploading || (document.status!=='INDEXED' && !selections[document.id])" @update:model-value="toggleDocument(document)" /></td><td><strong>{{ document.fileName }}</strong><small>{{ isPdf(document)?'PDF · chọn theo trang':'Word · chọn theo mục' }}</small></td><td><span class="document-status" :class="document.status.toLowerCase()">{{ statusLabel(document.status) }}</span></td></tr>
+        <tr v-if="selections[document.id] || document.status==='FAILED'"><td colspan="3">
           <p v-if="document.status === 'FAILED'" class="source-error">Không xử lý được tài liệu. Hãy kiểm tra file và tải lại.</p>
           <div v-if="selections[document.id]" class="source-options">
             <p v-if="outlineLoading[document.id]" class="source-message">Đang đọc nội dung tài liệu…</p>
@@ -50,7 +44,7 @@
               <div v-else class="section-choices">
                 <p class="scope-help">Chọn mục liên quan đến bài học. Các mục lấy từ tiêu đề trong file Word, không chia theo trang.</p>
                 <label v-for="section in outlines[document.id]!.sections" :key="section">
-                  <input v-model="selections[document.id]!.sections" type="checkbox" :value="section" /> {{ section }}
+                  <ToggleSwitch :model-value="selections[document.id]!.sections.includes(section)" :label="section" :disabled="disabled || saving || uploading" @update:model-value="enabled=>toggleSection(document.id,section,enabled)" />
                 </label>
               </div>
               <details class="source-preview">
@@ -64,10 +58,9 @@
               </details>
             </template>
           </div>
-        </article>
-        <label class="source-upload"><FileUp :size="17" /> {{ uploading ? 'Đang tải lên…' : 'Thêm tài liệu PDF / Word' }}
-          <input type="file" accept=".pdf,.docx" :disabled="disabled || uploading || saving" @change="uploadDocument" />
-        </label>
+</td></tr></template></tbody></table></div>
+        <TablePagination v-model:page="documentPage" v-model:page-size="documentPageSize" :total="documents.length" :page-count="documentPageCount" unit="tài liệu" unit-label="Tài liệu" />
+        <label v-if="sourceUser.can('documents','create')" class="source-upload"><FileUp :size="17" /> {{ uploading ? 'Đang tải lên…' : 'Thêm tài liệu PDF / Word' }}<input type="file" accept=".pdf,.docx" :disabled="disabled || uploading || saving" @change="uploadDocument" /></label>
         <p class="scope-help">Tài liệu được lưu vào kho chung của khóa học. Bạn có thể dùng các phần khác nhau cho nhiều bài học.</p>
       </fieldset>
       <p v-if="validationError" class="source-error" role="status">{{ validationError }}</p>
@@ -86,15 +79,23 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import ToggleSwitch from './ToggleSwitch.vue';
+import TablePagination from './TablePagination.vue';
+import {useTablePagination} from '../composables/useTablePagination';
 import { BookOpen, FileText, FileUp, Plus, Save, X } from 'lucide-vue-next';
+import {useUserStore} from '../stores/userStore';
 import { adminApi } from '../api/adminApi';
 import type { CourseDocument, DocumentOutline, LessonKnowledgeSource } from '../api/adminApi';
 
-const props = defineProps<{ courseId: string; lessonId: string; disabled?: boolean }>();
+const sourceUser=useUserStore();
+const props = defineProps<{ courseId: string; lessonId: string; disabled?: boolean; permissionPage?:string }>();
 const emit = defineEmits<{ ready: [ready: boolean] }>();
 type Selection = { mode: 'all' | 'pages' | 'sections'; ranges: { from: number; to: number }[]; sections: string[] };
 const documents = ref<CourseDocument[]>([]);
+const {page:documentPage,pageSize:documentPageSize,pageCount:documentPageCount,paginated:paginatedDocuments,reset:resetDocumentPage}=useTablePagination(documents);
+function toggleSection(id:string,section:string,enabled:boolean){const choices=selections.value[id]?.sections;if(!choices)return;const index=choices.indexOf(section);if(enabled && index<0)choices.push(section);else if(!enabled && index>=0)choices.splice(index,1);}
 const selections = ref<Record<string, Selection>>({});
+watch([()=>props.courseId,()=>props.lessonId],resetDocumentPage);
 const outlines = ref<Record<string, DocumentOutline>>({});
 const outlineLoading = ref<Record<string, boolean>>({});
 const outlineErrors = ref<Record<string, string>>({});
@@ -154,7 +155,7 @@ const readOutline = async (id: string) => {
   outlineLoading.value[id] = true;
   outlineErrors.value[id] = '';
   try {
-    const outline = await adminApi.getDocumentOutline(props.courseId, id);
+    const outline = await adminApi.getDocumentOutline(props.courseId, id,props.permissionPage);
     if (current === epoch) outlines.value[id] = outline;
   } catch (failure) {
     if (current === epoch) outlineErrors.value[id] = errorMessage(failure);
@@ -171,7 +172,7 @@ const scheduleRefresh = () => {
 const refreshDocuments = async () => {
   const current = epoch;
   try {
-    const fresh = await adminApi.getCourseDocuments(props.courseId);
+    const fresh = await adminApi.getCourseDocuments(props.courseId,props.permissionPage);
     if (current !== epoch) return;
     documents.value = fresh;
     scheduleRefresh();
@@ -190,7 +191,7 @@ const load = async () => {
   outlineErrors.value = {};
   outlineLoading.value = {};
   try {
-    const [docs, sources] = await Promise.all([adminApi.getCourseDocuments(props.courseId), adminApi.getLessonKnowledgeSources(props.lessonId)]);
+    const [docs, sources] = await Promise.all([adminApi.getCourseDocuments(props.courseId,props.permissionPage), adminApi.getLessonKnowledgeSources(props.lessonId,props.permissionPage)]);
     if (current !== epoch) return;
     documents.value = docs;
     for (const source of sources) {
@@ -226,7 +227,7 @@ const save = async () => {
   saving.value = true;
   error.value = '';
   try {
-    const sources = await adminApi.saveLessonKnowledgeSources(props.lessonId, sourceValues.value);
+    const sources = await adminApi.saveLessonKnowledgeSources(props.lessonId, sourceValues.value,props.permissionPage);
     if (current === epoch) saved.value = serialize(sources);
   } catch (failure) {
     if (current === epoch) error.value = errorMessage(failure);
@@ -256,6 +257,8 @@ onBeforeUnmount(() => { epoch++; clearTimeout(poll); });
 </script>
 
 <style scoped>
+.source-fieldset{min-width:0}.source-options{margin-top:0!important}.admin-data-table .selected td{background:var(--primary-light)}.admin-data-table td:first-child{max-width:190px}
+
 .knowledge-sources { margin: 1rem 0; padding: 1.1rem; border: 1px solid #c9ded4; border-radius: 12px; background: white; }
 .source-heading, .source-footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .source-heading h3 { display: flex; align-items: center; gap: .5rem; font-size: .95rem; color: var(--primary-color); }

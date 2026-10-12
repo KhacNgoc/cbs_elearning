@@ -10,4 +10,5 @@ public interface CourseEnrollmentRequestRepository extends JpaRepository<CourseE
     boolean existsByUserIdAndCourseIdAndStatus(Long userId, String courseId, EnrollmentStatus status);
     List<CourseEnrollmentRequest> findByUserIdAndStatus(Long userId, EnrollmentStatus status);
     List<CourseEnrollmentRequest> findAllByOrderByRequestedAtDesc();
+    List<CourseEnrollmentRequest> findByUserOrganizationUnitIdInOrderByRequestedAtDesc(java.util.Collection<String> unitIds);
 }

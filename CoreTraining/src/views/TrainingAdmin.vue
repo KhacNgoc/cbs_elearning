@@ -13,27 +13,21 @@
       </div>
       <div class="tools" v-if="course && !chapter">
         <button class="btn btn-secondary" @click="router.push(`/courses/${course.id}`)"><Eye :size="17" /> Xem trước</button>
-        <button v-if="course.status === 'DRAFT'" class="btn btn-primary" :disabled="busy" @click="changeStatus('PUBLISHED')">Kiểm tra và xuất bản</button>
-        <button v-else class="btn btn-secondary" :disabled="busy" @click="changeStatus('DRAFT')">Chuyển về nháp</button>
-        <button class="btn btn-secondary" :disabled="busy" @click="changeStatus('ARCHIVED')">Lưu trữ</button>
+        <button v-if="managesCourses && course.status === 'DRAFT'" class="btn btn-primary" :disabled="busy" @click="changeStatus('PUBLISHED')">Kiểm tra và xuất bản</button>
+        <button v-else-if="managesCourses" class="btn btn-secondary" :disabled="busy" @click="changeStatus('DRAFT')">Chuyển về nháp</button>
+        <button v-if="managesCourses" class="btn btn-secondary" :disabled="busy" @click="changeStatus('ARCHIVED')">Lưu trữ</button>
       </div>
       <button v-if="chapter && canEditCourse" class="btn btn-secondary" @click="openForm('chapter', chapter)"><Pencil :size="16" /> Sửa chương</button>
     </header>
 
     <div v-if="mode === 'catalog'" class="catalog-layout">
-      <section class="card catalog-domains"><div class="section-heading"><h2>Lĩnh vực đào tạo</h2><button class="btn btn-secondary" @click="openForm('domain')"><Plus :size="16" /> Thêm</button></div>
-        <div class="domain-list">
-          <div v-for="domain in paginatedDomains" :key="domain.id" class="domain-item" :class="{active: domain.id === domainId}">
-            <button class="domain-row" :aria-pressed="domain.id === domainId" @click="domainId = domain.id"><span><strong>{{ domain.name }}</strong><small>{{ programs.filter(p => p.domainId === domain.id).length }} chương trình</small></span></button>
-            <button class="domain-edit" :aria-label="`Sửa lĩnh vực ${domain.name}`" @click="openForm('domain', domain)"><Pencil :size="15" /></button>
-          </div>
-        <p v-if="!domains.length" class="empty">Tạo lĩnh vực đầu tiên để tổ chức chương trình đào tạo.</p>
-        </div>
+      <section class="card catalog-domains"><div class="section-heading"><h2>Lĩnh vực đào tạo</h2><button class="btn btn-secondary" v-if="accessUser.can('catalog','create') && canManageDomains" @click="openForm('domain')"><Plus :size="16" /> Thêm</button></div>
+        <div class="table-scroll"><table class="admin-table"><thead><tr><th>Lĩnh vực</th><th>Thao tác</th></tr></thead><tbody><tr v-for="domain in paginatedDomains" :key="domain.id" :class="{ 'selected-domain': domain.id === domainId }"><td><button class="name-link" :aria-pressed="domain.id===domainId" @click="domainId=domain.id">{{ domain.name }}</button><small>{{ domain.code }} · {{ programs.filter(p=>p.domainId===domain.id).length }} chương trình</small></td><td><button v-if="domain.allowedActions?.includes('update')" class="row-edit" :aria-label="`Sửa lĩnh vực ${domain.name}`" @click="openForm('domain',domain)"><Pencil :size="15" /></button></td></tr><tr v-if="!domains.length"><td colspan="2" class="empty">Chưa có lĩnh vực đào tạo.</td></tr></tbody></table></div>
         <TablePagination v-model:page="domainPage" v-model:page-size="domainPageSize" :total="domains.length" :page-count="domainPageCount" unit="lĩnh vực" unit-label="Lĩnh vực" compact />
       </section>
-      <section class="card"><div class="section-heading"><h2>Chương trình đào tạo</h2><button class="btn btn-primary" :disabled="!domainId" @click="openForm('program')"><Plus :size="16" /> Thêm chương trình</button></div>
+      <section class="card"><div class="section-heading"><h2>Chương trình đào tạo</h2><button class="btn btn-primary" :disabled="!domainId" v-if="accessUser.can('catalog','create')" @click="openForm('program')"><Plus :size="16" /> Thêm chương trình</button></div>
         <div class="search-box"><Search :size="18" /><input v-model="query" placeholder="Tìm mã hoặc tên chương trình..." /></div>
-        <div class="table-scroll"><table class="admin-table"><thead><tr><th>Chương trình</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody><tr v-for="program in paginatedPrograms" :key="program.id"><td><strong>{{ program.name }}</strong><small>{{ program.code }}</small></td><td>{{ statusLabel(program.status) }}</td><td><button class="row-edit" @click="openForm('program', program)">Sửa</button></td></tr></tbody></table></div>
+        <div class="table-scroll"><table class="admin-table"><thead><tr><th>Chương trình</th><th>Đơn vị</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody><tr v-for="program in paginatedPrograms" :key="program.id"><td><strong>{{ program.name }}</strong><small>{{ program.code }}</small></td><td>{{ program.unitIds?.map(id=>units.find(u=>u.id===id)?.name || id).join(', ') || 'Chưa gán đơn vị' }}</td><td>{{ statusLabel(program.status) }}</td><td><button class="row-edit" v-if="program.allowedActions?.includes('update')" @click="openForm('program', program)">Sửa</button></td></tr></tbody></table></div>
         <p v-if="!filteredPrograms.length" class="empty">Chưa có chương trình phù hợp.</p>
         <TablePagination v-model:page="programPage" v-model:page-size="programPageSize" :total="filteredPrograms.length" :page-count="programPageCount" unit="chương trình" unit-label="Chương trình" />
       </section>
@@ -46,11 +40,11 @@
         <div class="search-box"><Search :size="18" /><input v-model="query" :placeholder="chapter ? 'Tìm mã hoặc tên bài học...' : course ? 'Tìm mã, tên chương hoặc bài học...' : 'Tìm mã hoặc tên khóa...'" /></div>
         <select v-model="statusFilter" aria-label="Lọc trạng thái"><option value="">Tất cả trạng thái</option><option value="DRAFT">Bản nháp</option><option value="PUBLISHED">Đã xuất bản</option><option value="ARCHIVED">Đã lưu trữ</option></select>
         <select v-if="!course" v-model="programFilter" aria-label="Lọc chương trình"><option value="">Tất cả chương trình</option><option v-for="program in programs" :key="program.id" :value="program.id">{{ program.name }}</option></select>
-        <button v-if="!course || canEditCourse" class="btn btn-primary" @click="openForm(chapter ? 'lesson' : course ? 'chapter' : 'course')"><Plus :size="17" /> {{ chapter ? 'Thêm bài học' : course ? 'Thêm chương' : 'Tạo khóa học' }}</button>
+        <button v-if="(!course && accessUser.can('courses','create')) || (course?.status==='DRAFT' && !!course.allowedActions?.includes('create'))" class="btn btn-primary" @click="openForm(chapter ? 'lesson' : course ? 'chapter' : 'course')"><Plus :size="17" /> {{ chapter ? 'Thêm bài học' : course ? 'Thêm chương' : 'Tạo khóa học' }}</button>
       </div>
       <div v-if="loading" class="empty">Đang tải dữ liệu...</div>
       <ChapterTreeTable v-else-if="course && !chapter" :key="course.id" :chapters="paginated as Chapter[]" :expanded-ids="expandedChapterIds"
-        :can-edit="canEditCourse" :busy="busy" :reorder-disabled="query !== '' || statusFilter !== ''" :total-chapters="chapters.length" :order-of="orderOf" :visible-lessons="visibleLessons"
+        :can-edit="canEditCourse" :can-create="course?.status==='DRAFT' && accessUser.can('courses','create') && !!course?.allowedActions?.includes('create')" :can-delete="course?.status==='DRAFT' && accessUser.can('courses','delete') && !!course?.allowedActions?.includes('delete')" :busy="busy" :reorder-disabled="query !== '' || statusFilter !== ''" :total-chapters="chapters.length" :order-of="orderOf" :visible-lessons="visibleLessons"
         @toggle="toggleChapter" @open-chapter="openRow" @open-lesson="openLesson" @edit-chapter="editRow" @delete-chapter="askDelete" @move-chapter="move"
         @add-lesson="openLessonForm" @move-lesson="moveLesson" @delete-lesson="lesson => askDelete(lesson, 'lesson')" />
       <div v-else class="table-scroll"><table class="admin-table"><thead><tr><th v-if="course">STT</th><th>{{ chapter ? 'Bài học' : course ? 'Chương' : 'Khóa học' }}</th><th>{{ chapter ? 'Kiểm tra' : course ? 'Bài học' : 'Chương trình' }}</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
@@ -60,28 +54,33 @@
           <td v-if="chapter"><span class="status" :class="{amber: (row as Lesson).quizRequired}">{{ !(row as Lesson).hasQuiz ? 'Chưa có kiểm tra' : (row as Lesson).quizRequired ? 'Bắt buộc' : 'Tùy chọn' }}</span></td>
           <td v-else-if="course">{{ (row as Chapter).lessons.length }}</td><td v-else>{{ (row as Course).programName }}</td>
           <td><span class="status">{{ statusLabel(row.status) }}</span></td>
-          <td><div v-if="canEditRow(row)" class="row-actions"><button v-if="course" class="order-button" :disabled="busy || query !== '' || statusFilter !== '' || orderOf(row) === 0" @click="move(row, -1)" aria-label="Di chuyển lên"><ArrowUp :size="14" /></button><button v-if="course" class="order-button" :disabled="busy || query !== '' || statusFilter !== '' || orderOf(row) === rows.length - 1" @click="move(row, 1)" aria-label="Di chuyển xuống"><ArrowDown :size="14" /></button><button class="row-edit" @click="editRow(row)">Sửa</button><button class="row-delete" :disabled="busy" @click="askDelete(row)">Xóa</button></div><span v-else class="readonly-label">Chỉ xem</span></td>
+          <td><div v-if="canEditRow(row)" class="row-actions"><button v-if="canEditCourse" class="order-button" :disabled="busy || query !== '' || statusFilter !== '' || orderOf(row) === 0" @click="move(row, -1)" aria-label="Di chuyển lên"><ArrowUp :size="14" /></button><button v-if="canEditCourse" class="order-button" :disabled="busy || query !== '' || statusFilter !== '' || orderOf(row) === rows.length - 1" @click="move(row, 1)" aria-label="Di chuyển xuống"><ArrowDown :size="14" /></button><button v-if="course?canEditCourse:(row as Course).allowedActions?.includes('update')" class="row-edit" @click="editRow(row)">Sửa</button><button v-if="course?course.allowedActions?.includes('delete'):(row as Course).allowedActions?.includes('delete')" class="row-delete" :disabled="busy" @click="askDelete(row)">Xóa</button></div><span v-else class="readonly-label">Chỉ xem</span></td>
         </tr></tbody></table></div>
       <div v-if="!loading && !filtered.length" class="empty"><BookOpen :size="30" /><p>{{ query ? 'Không tìm thấy kết quả phù hợp.' : chapter ? 'Chương chưa có bài. Thêm bài học đầu tiên để bắt đầu soạn.' : course ? 'Khóa chưa có chương. Thêm chương đầu tiên.' : 'Tạo khóa đầu tiên và gán chương trình đào tạo.' }}</p></div>
       <TablePagination v-model:page="page" v-model:page-size="pageSize" :total="filtered.length" :page-count="pageCount" :unit="course && !chapter ? 'chương' : 'bản ghi'" :unit-label="course && !chapter ? 'Chương' : 'Bản ghi'" />
     </section>
 
-    <Teleport to="body"><div v-if="formKind" class="training-modal-overlay" @click.self="closeForm"><section class="training-modal card" role="dialog" aria-modal="true" aria-labelledby="training-form-title"><header><h2 id="training-form-title">{{ formTitle }}</h2><button :disabled="busy" @click="closeForm" aria-label="Đóng"><X :size="20" /></button></header>
-      <p>{{ formKind === 'lesson' ? `${course?.name} / ${lessonChapter?.title || chapter?.title}` : formKind === 'chapter' ? `Khóa: ${course?.name}` : 'Thông tin đào tạo' }}</p>
-      <form @submit.prevent="save"><label>Mã {{ formKind === 'lesson' ? 'bài học' : '' }} *<input v-model="form.code" required :disabled="formKind === 'lesson' && !!form.id" /></label><label>Tên *<input v-model="form.name" required /></label>
-        <label v-if="formKind === 'course'">Chương trình đào tạo *<select v-model="form.programId" required><option value="" disabled>Chọn chương trình</option><option v-for="program in programs.filter(p => p.status === 'ACTIVE')" :key="program.id" :value="program.id">{{ domains.find(d => d.id === program.domainId)?.name }} / {{ program.name }}</option></select></label>
-        <label v-if="formKind === 'program'">Lĩnh vực *<select v-model="form.domainId" required><option v-for="domain in domains" :key="domain.id" :value="domain.id">{{ domain.name }}</option></select></label>
-        <label>{{ formKind === 'lesson' ? 'Gợi ý nghiệp vụ' : 'Mô tả' }}<textarea v-model="form.description" rows="3" /></label>
-        <label v-if="['domain','program'].includes(formKind)">Trạng thái<select v-model="form.status"><option value="ACTIVE">Đang sử dụng</option><option value="ARCHIVED">Lưu trữ</option></select></label>
+    <AdminModal :open="!!formKind" :title="formTitle || ''" :busy="busy" :submit-label="formKind === 'lesson' ? 'Tạo và soạn bài' : formKind === 'chapter' && !form.id ? 'Lưu và mở chương' : formKind === 'course' && !form.id ? 'Lưu nháp và soạn nội dung' : 'Lưu thay đổi'" @close="closeForm" @submit="save">
+      <p class="admin-modal-help">{{ formKind === 'lesson' ? `${course?.name} / ${lessonChapter?.title || chapter?.title}` : formKind === 'chapter' ? `Khóa: ${course?.name}` : 'Thông tin đào tạo' }}</p>
+      <label class="admin-form-field">Mã {{ formKind === 'lesson' ? 'bài học' : '' }} *<input v-model="form.code" required :disabled="formKind === 'lesson' && !!form.id" /></label><label class="admin-form-field">Tên *<input v-model="form.name" required /></label>
+        <label class="admin-form-field" v-if="formKind === 'course'">Chương trình đào tạo *<select v-model="form.programId" required><option value="" disabled>Chọn chương trình</option><option v-for="program in programs.filter(p => p.status === 'ACTIVE')" :key="program.id" :value="program.id">{{ domains.find(d => d.id === program.domainId)?.name }} / {{ program.name }}</option></select></label>
+        <label class="admin-form-field" v-if="formKind === 'program'">Lĩnh vực *<select v-model="form.domainId" required><option v-for="domain in domains" :key="domain.id" :value="domain.id">{{ domain.name }}</option></select></label>
+        <div v-if="formKind==='program'" class="admin-form-field"><span>Đơn vị của chương trình *</span><OrganizationMultiTreeSelect v-model="form.unitIds" :units="units" :disabled="busy" /><small>Có thể chọn nhiều đơn vị. Khóa học kế thừa phạm vi của chương trình.</small></div>
+        <label class="admin-form-field">{{ formKind === 'lesson' ? 'Gợi ý nghiệp vụ' : 'Mô tả' }}<textarea v-model="form.description" rows="3" /></label>
+        <label class="admin-form-field" v-if="['domain','program'].includes(formKind || '')">Trạng thái<select v-model="form.status"><option value="ACTIVE">Đang sử dụng</option><option value="ARCHIVED">Lưu trữ</option></select></label>
         <p v-if="formKind === 'lesson'">Tạo bài xong sẽ mở trang soạn với hai tab Nội dung bài học và Bài kiểm tra.</p>
         <p v-if="formError" class="error" role="alert">{{ formError }}</p>
-        <footer><button class="btn btn-secondary" :disabled="busy" type="button" @click="closeForm">Hủy</button><button class="btn btn-primary" :disabled="busy">{{ busy ? 'Đang lưu...' : formKind === 'lesson' ? 'Tạo và soạn bài' : formKind === 'chapter' && !form.id ? 'Lưu và mở chương' : formKind === 'course' && !form.id ? 'Lưu nháp và soạn nội dung' : 'Lưu thay đổi' }}</button></footer>
-      </form></section></div></Teleport>
+
+    </AdminModal>
     <ConfirmModal :open="!!deleteTarget" title="Xóa nội dung?" :message="deleteMessage" :loading="busy" confirm-label="Xóa" @cancel="deleteTarget = null" @confirm="remove" />
   </main>
 </template>
 
 <script setup lang="ts">
+import { useUserStore } from "../stores/userStore";
+const accessUser=useUserStore();
+const managesCourses=computed(()=>accessUser.can('courses','update') && (!course.value || !!course.value.allowedActions?.includes('update')));
+const units=ref<OrganizationUnit[]>([]);const canManageDomains=ref(false);
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Search, Plus, Pencil, X, BookOpen, Eye, ArrowUp, ArrowDown } from 'lucide-vue-next';
@@ -91,6 +90,10 @@ import type { Course, Chapter, Lesson, TrainingDomain, TrainingProgram } from '.
 import ConfirmModal from '../components/ConfirmModal.vue';
 import AdminBackButton from '../components/AdminBackButton.vue';
 import ChapterTreeTable from '../components/ChapterTreeTable.vue';
+import OrganizationMultiTreeSelect from '../components/OrganizationMultiTreeSelect.vue';
+import type {OrganizationUnit} from '../types/organization';
+import {axiosClient} from '../api/axiosClient';
+import AdminModal from '../components/AdminModal.vue';
 import TablePagination from '../components/TablePagination.vue';
 import { showToast } from '../utils/toast';
 type Row = Course | Chapter | Lesson;
@@ -113,8 +116,8 @@ const backTo=computed(()=>mode.value==='chapter'?`/admin/courses/${route.params.
 const backLabel=computed(()=>mode.value==='chapter'?'Quay lại khóa học':'Quay lại danh sách khóa học');
 const title=computed(()=>mode.value==='catalog'?'Danh mục đào tạo':chapter.value?.title || course.value?.name || 'Khóa học');
 const rows=computed<Row[]>(()=>chapter.value?.lessons || (course.value ? chapters.value : courses.value));
-const canEditCourse=computed(()=>course.value?.status==='DRAFT');
-const canEditRow=(row:Row)=>course.value ? canEditCourse.value : row.status==='DRAFT';
+const canEditCourse=computed(()=>course.value?.status==='DRAFT' && managesCourses.value);
+const canEditRow=(row:Row)=>course.value ? course.value.status==='DRAFT' && course.value.allowedActions?.some(a=>a==='update'||a==='delete') : row.status==='DRAFT' && (row as Course).allowedActions?.some(a=>a==='update'||a==='delete');
 const rowName=(r:Row)=>'name' in r?r.name:r.title;
 const orderOf=(r:Row)=>rows.value.findIndex(item=>item.id===r.id);
 const matchesText = (value: string) => value.toLocaleLowerCase('vi').includes(query.value.trim().toLocaleLowerCase('vi'));
@@ -165,11 +168,12 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    const catalog = await trainingApi.catalog();
+    const catalog = mode.value==='catalog'?await trainingApi.catalog():(await axiosClient.get('/api/admin/options/courses')).data;
+    const options=mode.value==='catalog'?(await axiosClient.get('/api/admin/options/catalog')).data:catalog;units.value=options.units;canManageDomains.value=!!options.canManageDomains;
     domains.value = catalog.domains;
     programs.value = catalog.programs;
     domainId.value ||= domains.value[0]?.id || '';
-    courses.value = await trainingApi.courses();
+    courses.value = mode.value==='catalog'?[]:await trainingApi.courses();
     course.value = courses.value.find(item => item.id === route.params.courseId) || null;
     chapter.value = null;
     chapters.value = course.value ? await trainingApi.chapters(course.value.id) : [];
@@ -189,9 +193,9 @@ async function load() {
   }
 }
 watch(()=>route.fullPath,()=>{expansionBeforeFilter=new Set();query.value='';statusFilter.value='';page.value=1;expandedChapterIds.value=new Set();focusApplied.value=false;void load();},{immediate:true});
-const formKind=ref<FormKind|null>(null); const form=ref({id:'',code:'',name:'',description:'',programId:'',domainId:'',status:'ACTIVE',version:undefined as number|undefined});
+const formKind=ref<FormKind|null>(null); const form=ref({id:'',code:'',name:'',description:'',programId:'',domainId:'',status:'ACTIVE',unitIds:[] as string[],version:undefined as number|undefined});
 const formTitle=computed(()=>`${form.value.id?'Sửa':'Tạo'} ${{domain:'lĩnh vực',program:'chương trình',course:'khóa học',chapter:'chương',lesson:'bài học'}[formKind.value || 'course']}`);
-function openForm(kind:FormKind,r?:Partial<Row|TrainingDomain|TrainingProgram>){formError.value='';formKind.value=kind;const item=r as Partial<Course & Chapter & Lesson & TrainingProgram> | undefined;form.value={id:item?.id || '',code:item?.code || (kind==='lesson'?item?.id || '':''),name:item?.name || item?.title || '',description:item?.description || item?.hint || '',programId:item?.programId || '',domainId:item?.domainId || domainId.value,status:item?.status || 'ACTIVE',version:item?.version};}
+function openForm(kind:FormKind,r?:Partial<Row|TrainingDomain|TrainingProgram>){formError.value='';formKind.value=kind;const item=r as Partial<Course & Chapter & Lesson & TrainingProgram> | undefined;form.value={id:item?.id || '',code:item?.code || (kind==='lesson'?item?.id || '':''),name:item?.name || item?.title || '',description:item?.description || item?.hint || '',programId:item?.programId || '',domainId:item?.domainId || domainId.value,status:item?.status || 'ACTIVE',unitIds:[...(item?.unitIds || [])],version:item?.version};}
 function closeForm(){if(!busy.value)formKind.value=null;}
 function openRow(r:Row){if(chapter.value)openLesson(r as Lesson);else if(course.value)toggleChapter(r.id);else router.push(`/admin/courses/${r.id}`);}
 function openLesson(lesson: Lesson) { void router.push(`/admin/lessons/${encodeURIComponent(lesson.id)}/edit`); }
@@ -255,6 +259,10 @@ async function changeStatus(status:string){busy.value=true;try{await trainingApi
 </script>
 
 <style scoped>
+.row-edit,.row-delete{white-space:nowrap}
+
+.selected-domain td{background:var(--primary-light)}.catalog-layout{grid-template-columns:minmax(310px, .8fr) minmax(0,1.8fr)!important}@media(max-width:1200px){.catalog-layout{grid-template-columns:1fr!important}}
+
 .training-admin{padding:2rem;min-width:0}.page-heading,.section-heading,.tools,.table-toolbar,.pagination,.row-actions{display:flex;align-items:center;justify-content:space-between;gap:1rem}.page-heading{margin-bottom:1.6rem;align-items:flex-start}.page-heading h1{font-size:1.5rem;margin:.6rem 0}.page-heading p,.breadcrumb{font-size:.85rem;color:var(--text-muted)}.breadcrumb a{color:var(--primary-color)}.section-heading{margin-bottom:1.25rem}.section-heading h2{font-size:1.125rem}.card{padding:1.5rem}.catalog-layout{display:grid;grid-template-columns:280px 1fr;gap:1.25rem}.domain-row{width:100%;display:flex;justify-content:space-between;align-items:center;padding:1rem;border:0;border-radius:12px;background:white;text-align:left;color:var(--text-main);cursor:pointer}.domain-row.active{background:var(--primary-light);color:var(--primary-color)}small{display:block;color:var(--text-muted);font-size:.75rem;margin-top:.35rem}.search-box{display:flex;align-items:center;gap:.6rem;flex:1;min-width:160px;border:1px solid var(--border-color);border-radius:8px;padding:.6rem .8rem;color:var(--text-muted);background:white}.search-box input{width:100%;border:0;outline:0}.table-toolbar{margin-bottom:1.5rem;flex-wrap:wrap}.table-toolbar select{padding:.6rem;border:1px solid var(--border-color);border-radius:8px;color:var(--text-main);background:white}.table-scroll{overflow-x:auto}.admin-table{width:100%;border-collapse:collapse;font-size:.875rem}.admin-table th{background:var(--bg-main);color:var(--text-muted);font-size:.75rem;text-align:left;padding:1rem}.admin-table td{padding:1rem;border-bottom:1px solid var(--border-color);vertical-align:middle}.name-link{background:none;border:0;color:var(--primary-color);font-weight:700;cursor:pointer;text-align:left;font-size:inherit}.row-actions{gap:.45rem;justify-content:flex-start;white-space:nowrap}.row-edit,.row-delete,.order-button{padding:.4rem .7rem;border:1px solid var(--primary-color);border-radius:6px;background:white;color:var(--primary-color);cursor:pointer}.row-delete{border-color:#f0b7b7;color:#b91c1c}.order-button{padding:.3rem;color:var(--text-muted);border-color:var(--border-color)}button:disabled{opacity:.45;cursor:not-allowed}.status{padding:.35rem .6rem;border-radius:6px;font-size:.75rem;background:var(--primary-light);color:var(--primary-color);white-space:nowrap}.status.amber{background:#fff5de;color:#805b00}.empty{padding:2rem;text-align:center;color:var(--text-muted)}.empty svg{margin:auto}.pagination{padding-top:1.25rem;font-size:.8rem;color:var(--text-muted)}.pagination button{padding:.4rem .75rem;margin-left:.5rem;border:1px solid var(--border-color);background:white;border-radius:6px}.notice{padding:.8rem 1rem;background:var(--primary-light);color:var(--primary-color);border-radius:8px;margin-bottom:1rem;display:flex;justify-content:space-between}.notice.error,.error{color:#b91c1c;background:#fff1f2}.notice button,.training-modal header button{border:0;background:none;cursor:pointer}.training-modal-overlay{position:fixed;inset:0;background:#0f172a66;z-index:2000;display:flex;align-items:center;justify-content:center;padding:1.5rem}.training-modal{width:540px;max-height:90vh;overflow-y:auto}.training-modal header,.training-modal footer{display:flex;justify-content:space-between;align-items:center;gap:1rem}.training-modal h2{font-size:1.25rem}.training-modal p{font-size:.85rem;color:var(--text-muted);margin:1rem 0}.training-modal label{display:flex;flex-direction:column;gap:.5rem;margin:1rem 0;font-size:.875rem;font-weight:600}.training-modal input,.training-modal textarea,.training-modal select{border:1px solid var(--border-color);border-radius:8px;padding:.7rem;width:100%;font-weight:400}.training-modal footer{justify-content:flex-end;margin-top:1.5rem}@media(max-width:1000px){.catalog-layout{grid-template-columns:1fr}.page-heading{flex-direction:column}.training-admin{padding:1rem}.tools{flex-wrap:wrap}}
 /* Keep the catalog panels within the available admin workspace. */
 .training-admin{height:100%;display:flex;flex-direction:column;min-height:0;overflow:auto}

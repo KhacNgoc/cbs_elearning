@@ -17,7 +17,9 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin")
 public class AdminController {
+    @org.springframework.beans.factory.annotation.Autowired private com.bidv.coretraining.service.AuthorizationService authorization;
 
+    @org.springframework.beans.factory.annotation.Autowired private com.bidv.coretraining.service.AssetAccessService assets;
     private final AdminService adminService;
     private final DocumentStorageService documentStorageService;
     private final VideoStorageService videoStorageService;
@@ -52,12 +54,12 @@ public class AdminController {
     // Lessons CRUD
     @PostMapping(value = "/documents/upload", consumes = "multipart/form-data")
     public ResponseEntity<LessonDocumentDto> uploadDocument(@RequestPart("file") MultipartFile file) {
-        return ResponseEntity.ok(documentStorageService.store(file));
+        LessonDocumentDto document=documentStorageService.store(file);assets.record(document.getFileUrl());return ResponseEntity.ok(document);
     }
 
     @PostMapping(value = "/videos/upload", consumes = "multipart/form-data")
     public ResponseEntity<Map<String, String>> uploadVideo(@RequestPart("file") MultipartFile file) {
-        return ResponseEntity.ok(Map.of("videoUrl", videoStorageService.store(file)));
+        String path=videoStorageService.store(file);assets.record(path);return ResponseEntity.ok(Map.of("videoUrl",path));
     }
 
     @PostMapping("/lessons")
@@ -94,6 +96,7 @@ public class AdminController {
     @PostMapping("/quizzes/generate")
     public ResponseEntity<QuizGenerationResponseDto> generateQuiz(
             @Valid @RequestBody QuizGenerationRequestDto request) {
+        authorization.edit(request.getCourseId());
         return ResponseEntity.ok(quizGenerationService.generate(request));
     }
 

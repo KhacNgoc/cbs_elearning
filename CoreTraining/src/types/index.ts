@@ -55,6 +55,9 @@ export interface Lesson {
 }
 
 export interface Course {
+  allowedActions?: string[];
+  adminActions?: Record<string,string[]>;
+  canEdit?: boolean;
   id: string;
   name: string;
   code?: string;
@@ -71,8 +74,9 @@ export interface Course {
   lessons: Lesson[];
 }
 
-export interface TrainingDomain { id: string; code: string; name: string; description?: string; status: string }
-export interface TrainingProgram extends TrainingDomain { domainId: string }
+export interface TrainingDomain {
+  allowedActions?:string[]; id: string; code: string; name: string; description?: string; status: string }
+export interface TrainingProgram extends TrainingDomain { domainId: string; unitIds?:string[]; allowedActions?:string[] }
 export interface Chapter { id: string; courseId: string; code: string; title: string; description?: string; chapterOrder: number; status: string; version?: number; lessons: Lesson[]; locked: boolean; completed: boolean }
 export interface CourseOutline { course: Course; chapters: Chapter[]; completed: boolean; resumeLessonId?: string }
 
@@ -126,6 +130,9 @@ export interface LessonProgress {
 export type LessonProgressRequest = Omit<LessonProgress, 'lessonId'>;
 
 export interface UserProfile {
+  roleNames?: Record<string,string>;
+  systemAdmin?:boolean;
+  permissionRevision?:number;
   id?: number;
   username: string;
   fullName: string;
@@ -133,6 +140,12 @@ export interface UserProfile {
   employeeId?: string;
   avatarColor?: string;
   role: string;
+  roles?: string[];
+  permissions?: string[];
+  unitId?: string;
+  scopeUnitIds?: string[];
+  status?: string;
+  learnerType?: string;
   points: number;
   groupId?: string;
   groupName?: string;

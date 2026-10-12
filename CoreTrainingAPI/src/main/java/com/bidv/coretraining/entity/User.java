@@ -18,6 +18,7 @@ public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    @Version @Column(nullable=false,columnDefinition="bigint default 0") private Long version;
 
     @Column(nullable = false, unique = true)
     private String username;
@@ -38,7 +39,40 @@ public class User {
     private String email;
 
     @Column(nullable = false)
-    private String role; // e.g. "ROLE_USER", "ROLE_ADMIN"
+    private String role;
+
+    @ElementCollection(fetch=FetchType.EAGER)
+    @CollectionTable(name="user_roles",joinColumns=@JoinColumn(name="user_id"))
+    @Column(name="role",nullable=false) @Builder.Default
+    private Set<String> roles = new HashSet<>();
+
+    @ManyToOne(fetch=FetchType.EAGER) @JoinColumn(name="unit_id")
+    private OrganizationUnit organizationUnit;
+
+    @ElementCollection(fetch=FetchType.EAGER)
+    @CollectionTable(name="user_scope_units",joinColumns=@JoinColumn(name="user_id"))
+    @Column(name="unit_id",nullable=false) @Builder.Default
+    private Set<String> scopeUnitIds = new HashSet<>();
+
+    @Column(nullable=false,columnDefinition="varchar(32) default 'ACTIVE'") @Builder.Default
+    private String status="ACTIVE";
+    @Column(nullable=false,columnDefinition="bigint default 0") @Builder.Default
+    private long tokenVersion=0;
+    @Column(name="learner_type",columnDefinition="varchar(255) default 'CURRENT_STAFF'") @Builder.Default private String learnerType="CURRENT_STAFF";
+
+    @ManyToMany(fetch=FetchType.LAZY)
+    @JoinTable(name="user_access_roles",joinColumns=@JoinColumn(name="user_id"),inverseJoinColumns=@JoinColumn(name="role_id"))
+    @Builder.Default private Set<AccessRole> assignedRoles=new HashSet<>();
+    @Column(nullable=false,columnDefinition="boolean default false") private boolean dynamicAccessInitialized;
+    @Transient private java.util.List<com.bidv.coretraining.security.RolePolicy> policySnapshot;
+
+    public Set<String> effectiveRoles() {
+        if(dynamicAccessInitialized) return com.bidv.coretraining.security.AccessPolicy.policies(this).stream().filter(com.bidv.coretraining.security.RolePolicy::active).map(com.bidv.coretraining.security.RolePolicy::code).collect(java.util.stream.Collectors.toSet());
+        return roles == null || roles.isEmpty() ? (role == null ? Set.of() : Set.of(role)) : Set.copyOf(roles);
+    }
+    public boolean hasRole(String value) { return effectiveRoles().contains(value); }
+    public boolean activeAccount() { return "ACTIVE".equals(status); }
+ // e.g. "ROLE_USER", "ROLE_ADMIN"
 
     @Column(name = "must_change_password", nullable = false, columnDefinition = "boolean default true")
     @Builder.Default

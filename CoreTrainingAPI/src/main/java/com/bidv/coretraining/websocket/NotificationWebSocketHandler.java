@@ -19,6 +19,23 @@ import java.util.concurrent.ConcurrentHashMap;
 public class NotificationWebSocketHandler extends TextWebSocketHandler {
     private static final long IDLE_TIMEOUT_MS = 60_000;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bidv.coretraining.security.UserDetailsServiceImpl detailsService;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bidv.coretraining.security.JwtTokenProvider tokens;
+
+    private boolean authorized(WebSocketSession session) {
+        Object token = session.getAttributes().get("token");
+        Object username = session.getAttributes().get(JwtHandshakeInterceptor.USERNAME_ATTRIBUTE);
+        if (token == null || username == null)
+            return false;
+        try {
+            return tokens.matchesUser(token.toString(),((com.bidv.coretraining.security.CustomUserDetails)detailsService.loadUserById(tokens.getUserIdFromJWT(token.toString()))).getUser());
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
     private final ObjectMapper objectMapper;
     private final ConcurrentHashMap<String, Set<WebSocketSession>> sessionsByUser = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, WebSocketSession> sessionsById = new ConcurrentHashMap<>();
@@ -40,8 +57,7 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
         }
 
         String payload = objectMapper.writeValueAsString(
-                Map.of("type", "AUTHENTICATED")
-        );
+                Map.of("type", "AUTHENTICATED"));
         sessionsByUser.computeIfAbsent(username, ignored -> ConcurrentHashMap.newKeySet())
                 .add(session);
         sessionsById.put(session.getId(), session);
@@ -53,10 +69,13 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+        if (!authorized(session)) {
+            closeQuietly(session, CloseStatus.POLICY_VIOLATION);
+            return;
+        }
         lastSeen.put(session.getId(), Instant.now().toEpochMilli());
         String payload = objectMapper.writeValueAsString(
-                Map.of("type", "PONG")
-        );
+                Map.of("type", "PONG"));
         if ("PING".equals(objectMapper.readTree(message.getPayload()).path("type").asText())) {
             session.sendMessage(new TextMessage(payload));
         }
@@ -64,7 +83,8 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
 
     public void sendToUser(String username, NotificationDto notification) {
         Set<WebSocketSession> sessions = sessionsByUser.get(username);
-        if (sessions == null) return;
+        if (sessions == null)
+            return;
         try {
             String payload = objectMapper.writeValueAsString(
                     java.util.Map.of("type", "NOTIFICATION", "data", notification));
@@ -82,7 +102,8 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
 
     private boolean send(WebSocketSession session, String payload) {
         try {
-            if (!session.isOpen()) return false;
+            if (!session.isOpen() || !authorized(session))
+                return false;
             synchronized (session) {
                 session.sendMessage(new TextMessage(payload));
             }
@@ -102,7 +123,7 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
                 lastSeen.remove(sessionId);
                 return;
             }
-            if (now - seenAt > IDLE_TIMEOUT_MS) {
+            if (!authorized(session) || now - seenAt > IDLE_TIMEOUT_MS) {
                 log.warn("Closing stale WebSocket sessionId={} idleMs={}",
                         sessionId, now - seenAt);
                 closeQuietly(session, CloseStatus.SESSION_NOT_RELIABLE);
@@ -129,7 +150,8 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
 
     private void closeQuietly(WebSocketSession session, CloseStatus status) {
         try {
-            if (session.isOpen()) session.close(status);
+            if (session.isOpen())
+                session.close(status);
         } catch (IOException ignored) {
             log.debug("Could not close WebSocket sessionId={}", session.getId(), ignored);
         } finally {

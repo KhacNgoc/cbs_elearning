@@ -96,14 +96,15 @@
         </div>
 
         <div class="form-group">
-          <label for="forgot-employee-id">Mã nhân viên (Employee ID)</label>
+          <button type="button" class="btn btn-secondary" :disabled="isLoading || !forgotUsername || !forgotEmail" @click="sendOtp">Gửi mã xác minh</button>
+          <label for="forgot-employee-id">Mã xác minh gửi qua email</label>
           <div class="input-wrapper">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="input-icon"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             <input 
               type="text" 
               id="forgot-employee-id" 
-              v-model="forgotEmployeeId" 
-              placeholder="Ví dụ: BIDV001" 
+              v-model="resetOtp"
+              placeholder="Nhập mã gồm 6 chữ số"
               required
               :disabled="isLoading"
             />
@@ -118,7 +119,7 @@
               type="password" 
               id="forgot-new-password" 
               v-model="newPassword" 
-              placeholder="Tối thiểu 6 ký tự" 
+              placeholder="Tối thiểu 8 ký tự"
               required
               :disabled="isLoading"
             />
@@ -177,7 +178,7 @@ const password = ref('');
 // Forgot password fields
 const forgotUsername = ref('');
 const forgotEmail = ref('');
-const forgotEmployeeId = ref('');
+const resetOtp = ref('');
 
 // Reset fields
 const newPassword = ref('');
@@ -190,7 +191,7 @@ const setViewState = (state: 'login' | 'forgot') => {
   password.value = '';
   newPassword.value = '';
   confirmPassword.value = '';
-  forgotEmployeeId.value = '';
+  resetOtp.value = '';
 };
 
 const handleLogin = async () => {
@@ -210,13 +211,17 @@ const handleLogin = async () => {
   }
 };
 
+const sendOtp=async()=>{
+  isLoading.value=true;errorMessage.value='';successMessage.value='';
+  try{successMessage.value=await authApi.sendResetOtp(forgotUsername.value,forgotEmail.value);}catch(err:any){errorMessage.value=err.response?.data?.message || 'Không gửi được mã xác minh';}finally{isLoading.value=false;}
+};
 const handleForgotPassword = async () => {
   if (newPassword.value !== confirmPassword.value) {
     errorMessage.value = 'Mật khẩu xác nhận không khớp!';
     return;
   }
-  if (newPassword.value.length < 6) {
-    errorMessage.value = 'Mật khẩu mới phải có tối thiểu 6 ký tự!';
+  if (newPassword.value.length < 8) {
+    errorMessage.value = 'Mật khẩu mới phải có tối thiểu 8 ký tự!';
     return;
   }
 
@@ -224,12 +229,7 @@ const handleForgotPassword = async () => {
   errorMessage.value = '';
   successMessage.value = '';
   try {
-    await authApi.resetPasswordDirect(
-      forgotUsername.value,
-      forgotEmail.value,
-      forgotEmployeeId.value,
-      newPassword.value
-    );
+    await authApi.resetPasswordWithOtp(forgotUsername.value,resetOtp.value,newPassword.value);
     successMessage.value = 'Đặt lại mật khẩu thành công! Hãy dùng mật khẩu mới để đăng nhập.';
     setTimeout(() => {
       setViewState('login');

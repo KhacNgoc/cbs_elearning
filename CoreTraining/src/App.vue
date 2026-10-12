@@ -1,13 +1,18 @@
 <template>
-  <div class="app-container" :class="{ 'admin-route': route.path.startsWith('/admin') }">
+  <div class="app-container" :class="{ 'admin-route': showAdminSidebar }">
     <!-- Navbar Header (only when logged in and not on change-password page) -->
     <nav class="navbar" v-if="userStore.isAuthenticated && route.name !== 'ChangePassword'">
-      <router-link to="/" class="nav-brand">
+      <div class="nav-brand-group">
+        <button v-if="showAdminSidebar" type="button" class="sidebar-toggle" :aria-label="sidebarVisible ? 'Ẩn sidebar' : 'Hiện sidebar'" :title="sidebarVisible ? 'Ẩn sidebar' : 'Hiện sidebar'" :aria-expanded="sidebarVisible" aria-controls="admin-navigation-sidebar" @click="sidebarVisible = !sidebarVisible">
+          <component :is="sidebarVisible ? PanelLeftClose : PanelLeftOpen" :size="21" />
+        </button>
+      <router-link :to="showAdminSidebar ? (navigationStore.adminItems[0]?.route || '/') : '/'" class="nav-brand">
         <div class="nav-logo">B</div>
         <span>BIDV Core Training</span>
       </router-link>
+      </div>
       
-      <div class="nav-links">
+      <div v-if="!userStore.hasAdminAccess" class="nav-links" aria-label="Điều hướng học viên">
         <router-link v-for="item in navigationStore.mainItems" :key="item.id" :to="item.route" class="nav-link">
           <component :is="navigationIcon(item.icon)" class="nav-icon" />
           <span>{{ item.label }}</span>
@@ -29,11 +34,13 @@
 
     <!-- Main Router View Content -->
     <main class="main-content">
-      <router-view v-slot="{ Component }">
-        <transition name="page" mode="out-in">
-          <component :is="Component" />
-        </transition>
-      </router-view>
+      <component :is="showAdminSidebar ? AdminLayout : 'div'" v-bind="showAdminSidebar ? { sidebarVisible } : {}">
+        <router-view v-slot="{ Component }">
+          <transition name="page" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </router-view>
+      </component>
     </main>
 
     <LearningChatbot
@@ -44,19 +51,25 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useUserStore } from './stores/userStore';
 import { useCourseStore } from './stores/courseStore';
 import { useNavigationStore } from './stores/navigationStore';
 import NotificationCenter from './components/NotificationCenter.vue';
 import LearningChatbot from './components/LearningChatbot.vue';
-import { BookOpen, ClipboardCheck, HelpCircle, Home, LogOut, Settings, Trophy, UserCircle, Users } from 'lucide-vue-next';
+import AdminLayout from './views/AdminLayout.vue';
+import { BookOpen, ClipboardCheck, HelpCircle, Home, LogOut, PanelLeftClose, PanelLeftOpen, Settings, Trophy, UserCircle, Users } from 'lucide-vue-next';
 
 const route = useRoute();
 const userStore = useUserStore();
 const courseStore = useCourseStore();
 const navigationStore = useNavigationStore();
+const showAdminSidebar = computed(() => userStore.isAuthenticated && userStore.hasAdminAccess && route.name !== 'ChangePassword');
+const sidebarVisible = ref(localStorage.getItem('adminSidebarVisible') !== 'false');
+watch(sidebarVisible, visible => {
+  try { localStorage.setItem('adminSidebarVisible', String(visible)); } catch { /* Keep the current session usable if storage is unavailable. */ }
+});
 const iconRegistry = { BookOpen, ClipboardCheck, HelpCircle, Home, Settings, Trophy, UserCircle, Users };
 const navigationIcon = (name: string) => iconRegistry[name as keyof typeof iconRegistry] || Home;
 const showLearningChatbot = computed(() => userStore.isAuthenticated && route.name !== 'ChangePassword');
@@ -103,6 +116,11 @@ onMounted(async () => {
   width: 18px;
   height: 18px;
 }
+
+.nav-brand-group { display: flex; align-items: center; gap: .75rem; min-width: 0; }
+.sidebar-toggle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 40px; width: 40px; height: 40px; border: 1px solid var(--border-color); border-radius: 8px; background: white; color: var(--primary-color); cursor: pointer; }
+.sidebar-toggle:hover { background: var(--primary-light); }
+.sidebar-toggle:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 3px; }
 
 .nav-user-menu {
   display: flex;

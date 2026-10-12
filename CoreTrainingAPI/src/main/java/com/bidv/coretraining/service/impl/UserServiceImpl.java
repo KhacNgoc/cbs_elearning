@@ -5,6 +5,7 @@ import com.bidv.coretraining.dto.UserProfileDto;
 import com.bidv.coretraining.dto.UserProgressDto;
 import com.bidv.coretraining.entity.Lesson;
 import com.bidv.coretraining.entity.User;
+import com.bidv.coretraining.entity.Course;
 import com.bidv.coretraining.entity.UserQuizScore;
 import com.bidv.coretraining.entity.EnrollmentStatus;
 import com.bidv.coretraining.entity.CourseEnrollmentRequest;
@@ -61,6 +62,15 @@ public class UserServiceImpl implements UserService {
         this.userQuizScoreRepository = userQuizScoreRepository;
     }
 
+    @Override @Transactional
+    public UserProfileDto updateProfile(String username,java.util.Map<String,String> fields) {
+        if(!java.util.Set.of("fullName","email","avatarColor").containsAll(fields.keySet())) throw new com.bidv.coretraining.exception.BadRequestException("Chỉ được cập nhật tên, email và màu đại diện");
+        User user=userRepository.findByUsername(username).orElseThrow();
+        String name=fields.get("fullName");if(name!=null) {if(name.isBlank()) throw new com.bidv.coretraining.exception.BadRequestException("Tên không được để trống");user.setFullName(name.trim());}
+        String email=fields.get("email");if(email!=null) {if(!email.matches("[^\\s@]+@[^\\s@]+\\.[^\\s@]+")) throw new com.bidv.coretraining.exception.BadRequestException("Email không hợp lệ");user.setEmail(email);}
+        if(fields.get("avatarColor")!=null) user.setAvatarColor(fields.get("avatarColor"));userRepository.save(user);return getUserProfile(username);
+    }
+
     @Override
     @Transactional(readOnly = true)
     public UserProfileDto getUserProfile(String username) {
@@ -74,7 +84,8 @@ public class UserServiceImpl implements UserService {
                 .email(user.getEmail())
                 .employeeId(user.getEmployeeId())
                 .avatarColor(user.getAvatarColor())
-                .role(user.getRole())
+                .role(user.getRole()).roles(user.effectiveRoles()).roleNames(com.bidv.coretraining.security.AccessPolicy.roleNames(user)).systemAdmin(com.bidv.coretraining.security.AccessPolicy.system(user)).permissions(com.bidv.coretraining.security.AccessPolicy.permissions(user))
+                .unitId(user.getOrganizationUnit()==null?null:user.getOrganizationUnit().getId()).scopeUnitIds(user.getScopeUnitIds()).status(user.getStatus()).learnerType(user.getLearnerType())
                 .points(user.getPoints())
                 .groupId(user.getUserGroup() != null ? user.getUserGroup().getId() : null)
                 .groupName(user.getUserGroup() != null ? user.getUserGroup().getName() : null)
@@ -154,6 +165,10 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public UserProgressDto registerCourse(String username, String courseId) {
+        User actor=userRepository.findByUsername(username).orElseThrow();
+        com.bidv.coretraining.security.AccessPolicy.require(com.bidv.coretraining.security.AccessPolicy.permissions(actor).contains("LEARN") && actor.activeAccount());
+        Course target=courseRepository.findById(courseId).orElseThrow();
+        com.bidv.coretraining.security.AccessPolicy.require(com.bidv.coretraining.security.AccessPolicy.visible(actor,target) && "PUBLISHED".equals(target.getStatus()));
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
         com.bidv.coretraining.entity.Course course = courseRepository.findById(courseId)
@@ -175,7 +190,7 @@ public class UserServiceImpl implements UserService {
                 .requestedAt(java.time.LocalDateTime.now())
                 .build();
         enrollmentRequestRepository.save(request);
-        notificationService.createForAdmins(
+        notificationService.createForUnitAdmins(user.getOrganizationUnit(),
                 NotificationType.ENROLLMENT_REQUEST,
                 "Yêu cầu đăng ký khóa học mới",
                 user.getFullName() + " đã yêu cầu đăng ký khóa học " + course.getName(),
@@ -218,6 +233,7 @@ public class UserServiceImpl implements UserService {
                     .collect(Collectors.toList());
         }
 
+        courseRepository.findAll().stream().filter(c->"PUBLISHED".equals(c.getStatus()) && com.bidv.coretraining.security.AccessPolicy.visible(user,c) && com.bidv.coretraining.security.AccessPolicy.mandatory(user,c)).map(Course::getId).forEach(mandatoryCourses::add);
         java.util.List<String> registeredCourses = user.getRegisteredCourses().stream()
                 .map(com.bidv.coretraining.entity.Course::getId)
                 .collect(Collectors.toList());
@@ -248,10 +264,12 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public void changePassword(String username, String newPassword) {
+        if(newPassword==null || newPassword.length()<8) throw new com.bidv.coretraining.exception.BadRequestException("Mật khẩu phải có tối thiểu 8 ký tự");
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
         user.setPassword(passwordEncoder.encode(newPassword));
         user.setMustChangePassword(false);
+        user.setTokenVersion(user.getTokenVersion()+1);
         userRepository.save(user);
     }
 }

@@ -27,6 +27,7 @@ public class QuizController {
         return ResponseEntity.ok(quizService.getQuestionsForLesson(lessonId));
     }
 
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('LEARN')")
     @PostMapping("/lessons/{lessonId}/submit")
     public ResponseEntity<QuizResultDto> submitLessonQuiz(
             @PathVariable String lessonId,
@@ -49,6 +50,7 @@ public class QuizController {
         return ResponseEntity.ok(quizService.getQuestionsForCourse(courseId));
     }
 
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('LEARN')")
     @PostMapping("/{courseId}/submit")
     public ResponseEntity<QuizResultDto> submitQuiz(
             @PathVariable String courseId,

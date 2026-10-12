@@ -2,6 +2,15 @@ const AUTH_STORAGE_KEYS = ['accessToken', 'userRole', 'username', 'fullName', 'm
 
 export interface AuthSession {
   role: string;
+  roles?: string[];
+  roleNames?: Record<string,string>;
+  systemAdmin?:boolean;
+  permissionRevision?:number;
+  permissions?: string[];
+  unitId?: string;
+  scopeUnitIds?: string[];
+  status?: string;
+  learnerType?: string;
   username: string;
   fullName: string;
   mustChangePassword: boolean;
