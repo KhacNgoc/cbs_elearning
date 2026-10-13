@@ -211,8 +211,13 @@ onBeforeUnmount(() => {
   border-radius: 99px;
   background: #dc2626;
   color: #fff;
+  font-family: var(--font-family);
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: 1;
+  letter-spacing: normal;
+  text-align: center;
 }
 .notification-panel {
   position: absolute;

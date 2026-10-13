@@ -104,7 +104,7 @@
           </div>
           <p v-for="warning in aiWarnings" :key="warning" class="ai-warning">{{ warning }}</p>
           <div v-if="aiDrafts.length" class="ai-drafts">
-<div class="admin-table-scroll"><table class="admin-data-table"><thead><tr><th>Chọn</th><th>Bản nháp câu hỏi / đáp án</th></tr></thead><tbody>            <tr v-for="(draft,index) in paginatedDrafts" :key="(draftPage-1)*draftPageSize+index"><td>
+<div class="admin-table-scroll"><table class="admin-data-table"><colgroup><col style="width:56px" /><col /></colgroup><thead><tr><th>Chọn</th><th>Bản nháp câu hỏi / đáp án</th></tr></thead><tbody>            <tr v-for="(draft,index) in paginatedDrafts" :key="(draftPage-1)*draftPageSize+index"><td>
               <ToggleSwitch v-model="draft.selected" :label="`Chọn câu ${ (draftPage-1)*draftPageSize + index+1 }`" :disabled="savingDrafts" />
 </td><td class="question-table-content"><div class="draft-heading-actions">
                 <span class="question-type-badge">{{ draft.type === "MULTIPLE_CHOICE" ? "Nhiều đáp án" : "Một đáp án" }}</span>
@@ -188,7 +188,7 @@
         </div></AdminModal>
 
 
-        <div class="admin-table-scroll"><table class="admin-data-table"><thead><tr><th>STT</th><th>Câu hỏi / đáp án</th><th>Loại</th><th>Thao tác</th></tr></thead><tbody><tr v-for="(question,index) in paginatedQuestions" :key="question.id"><td>{{ (questionPage-1)*questionPageSize+index+1 }}</td><td class="question-table-content"><strong>{{ question.text }}</strong><div class="answer-grid"><span v-for="(option,optionIndex) in question.options" :key="optionIndex" :class="{correct:questionCorrectAnswers(question).includes(optionIndex)}"><strong>{{ String.fromCharCode(65+optionIndex) }}</strong>{{ option }}<CheckCircle2 v-if="questionCorrectAnswers(question).includes(optionIndex)" :size="15" /></span></div></td><td><span class="question-type-badge">{{ question.type==='MULTIPLE_CHOICE'?'Nhiều đáp án':'Một đáp án' }}</span></td><td><div v-if="canEdit" class="admin-row-actions"><button v-if="canAction('update')" class="admin-row-edit" @click="editQuestion(question)">Sửa</button><button v-if="canAction('delete')" class="admin-row-delete" @click="deleteQuestion(question)">Xóa</button></div><span v-else>Chỉ xem</span></td></tr><tr v-if="!filteredQuestions.length"><td colspan="4" class="admin-empty">{{ searchQuery?'Không tìm thấy câu hỏi phù hợp.':'Bài kiểm tra chưa có câu hỏi.' }}</td></tr></tbody></table></div>
+        <div class="admin-table-scroll"><table class="admin-data-table"><colgroup><col style="width:6%" /><col style="width:60%" /><col style="width:16%" /><col style="width:18%" /></colgroup><thead><tr><th>STT</th><th>Câu hỏi / đáp án</th><th>Loại</th><th>Thao tác</th></tr></thead><tbody><tr v-for="(question,index) in paginatedQuestions" :key="question.id"><td>{{ (questionPage-1)*questionPageSize+index+1 }}</td><td class="question-table-content"><strong>{{ question.text }}</strong><div class="answer-grid"><span v-for="(option,optionIndex) in question.options" :key="optionIndex" :class="{correct:questionCorrectAnswers(question).includes(optionIndex)}"><strong>{{ String.fromCharCode(65+optionIndex) }}</strong>{{ option }}<CheckCircle2 v-if="questionCorrectAnswers(question).includes(optionIndex)" :size="15" /></span></div></td><td><span class="question-type-badge">{{ question.type==='MULTIPLE_CHOICE'?'Nhiều đáp án':'Một đáp án' }}</span></td><td><div v-if="canEdit" class="admin-row-actions"><button v-if="canAction('update')" class="admin-row-edit" @click="editQuestion(question)">Sửa</button><button v-if="canAction('delete')" class="admin-row-delete" @click="deleteQuestion(question)">Xóa</button></div><span v-else>Chỉ xem</span></td></tr><tr v-if="!filteredQuestions.length"><td colspan="4" class="admin-empty">{{ searchQuery?'Không tìm thấy câu hỏi phù hợp.':'Bài kiểm tra chưa có câu hỏi.' }}</td></tr></tbody></table></div>
         <TablePagination v-model:page="questionPage" v-model:page-size="questionPageSize" :total="filteredQuestions.length" :page-count="questionPageCount" unit="câu hỏi" unit-label="Câu hỏi" />
       </section>
       <section v-if="canAction('delete')" class="danger-zone">
@@ -421,15 +421,15 @@ const saveQuestion = async () => {
   const text = form.text.trim();
   const options = form.options.map((option) => option.trim());
   if (!text || options.some((option) => !option)) {
-    alert("Vui lòng nhập nội dung câu hỏi và đầy đủ 4 đáp án.");
+    showToast("Vui lòng nhập nội dung câu hỏi và đầy đủ 4 đáp án.", "warning");
     return;
   }
   if (form.type === "SINGLE_CHOICE" && form.correctAnswers.length !== 1) {
-    alert("Câu single choice phải có đúng một đáp án đúng.");
+    showToast("Câu single choice phải có đúng một đáp án đúng.", "warning");
     return;
   }
   if (form.type === "MULTIPLE_CHOICE" && (form.correctAnswers.length < 2 || form.correctAnswers.length >= options.length)) {
-    alert("Câu multiple choice cần ít nhất hai đáp án đúng và không được chọn tất cả.");
+    showToast("Câu multiple choice cần ít nhất hai đáp án đúng và không được chọn tất cả.", "warning");
     return;
   }
   saving.value = true;
@@ -514,7 +514,7 @@ const finishDraftEditing = (index: number): boolean => {
   const draft = aiDrafts.value[index];
   const validationError = validateAiDraft(draft);
   if (validationError) {
-    alert(validationError);
+    showToast(validationError, "warning");
     return false;
   }
   draft.text = draft.text.trim();
@@ -546,11 +546,11 @@ const generateQuestions = async () => {
   }
   const total = aiConfig.singleChoiceCount + aiConfig.multipleChoiceCount;
   if (!Number.isInteger(total) || total < 1 || total > 20) {
-    alert("Tổng số câu hỏi phải từ 1 đến 20.");
+    showToast("Tổng số câu hỏi phải từ 1 đến 20.", "warning");
     return;
   }
   if (!Number.isInteger(aiConfig.optionCount) || aiConfig.optionCount < 3 || aiConfig.optionCount > 6) {
-    alert("Số lựa chọn phải từ 3 đến 6.");
+    showToast("Số lựa chọn phải từ 3 đến 6.", "warning");
     return;
   }
   generating.value = true;
@@ -570,7 +570,7 @@ const generateQuestions = async () => {
       selected: true,
     }));
   } catch (error) {
-    alert(error instanceof Error ? error.message : "Không thể tạo câu hỏi. Vui lòng thử lại.");
+    showToast(error instanceof Error ? error.message : "Không thể tạo câu hỏi. Vui lòng thử lại.", "error");
   } finally {
     generating.value = false;
   }
@@ -598,7 +598,7 @@ const saveAiDrafts = async () => {
   if (!selected.length) return;
   const invalidIndex = aiDrafts.value.findIndex(draft => draft.selected && validateAiDraft(draft));
   if (invalidIndex >= 0) {
-    alert(`Câu AI số ${invalidIndex + 1}: ${validateAiDraft(aiDrafts.value[invalidIndex])}`);
+    showToast(`Câu AI số ${invalidIndex + 1}: ${validateAiDraft(aiDrafts.value[invalidIndex])}`, "warning");
     startDraftEditing(invalidIndex);
     return;
   }

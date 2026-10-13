@@ -1,6 +1,7 @@
 <template>
   <div class="admin-table-scroll">
     <table class="admin-data-table unit-tree-table" role="treegrid" aria-label="Cơ cấu đơn vị và phòng">
+      <colgroup><col style="width:43%" /><col style="width:22%" /><col style="width:13%" /><col style="width:22%" /></colgroup>
       <thead><tr><th>Đơn vị / phòng</th><th>Trực thuộc</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
       <tbody>
         <tr v-for="row in rows" :key="row.unit.id" :aria-level="row.depth+1" :aria-expanded="row.hasChildren ? expandedIds.has(row.unit.id) : undefined" :class="{'unit-root':row.depth===0,'unit-context':isContext?.(row.unit)}">

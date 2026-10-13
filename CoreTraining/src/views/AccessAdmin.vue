@@ -1,13 +1,12 @@
 <template>
   <main class="admin-data-page">
     <header class="admin-page-heading"><div><h1>{{ pageInfo.title }}</h1><p>{{ pageInfo.description }}</p></div><button class="btn btn-secondary" :disabled="busy || loading" @click="load"><RefreshCw :size="16" /> Tải lại</button></header>
-    <p v-if="message" class="admin-notice" :class="{error:failed}" role="status">{{ message }}</p>
     <p v-if="loading" class="admin-empty" role="status">Đang tải dữ liệu…</p>
     <template v-else>
       <section v-if="section==='users'" class="admin-data-section">
         <div class="admin-section-heading"><h2>{{ 'Danh sách tài khoản' }}</h2><div v-if="section==='users'" class="admin-row-actions"><template v-if="system"><button class="btn btn-secondary" :disabled="busy" @click="downloadTemplate"><Download :size="16" /> File mẫu</button><button class="btn btn-secondary" :disabled="busy" @click="excelInput?.click()"><Upload :size="16" /> Nhập Excel</button><input ref="excelInput" type="file" accept=".xlsx,.xls" hidden @change="importExcel" /></template><button v-if="user.can('users','create')" class="btn btn-primary" :disabled="busy" @click="editUser()"><Plus :size="16" /> Thêm tài khoản</button></div></div>
         <div class="admin-table-toolbar"><div class="admin-search-box"><Search :size="18" /><input v-model="query" type="search" placeholder="Tìm tên, tài khoản, email hoặc mã nhân viên…" aria-label="Tìm tài khoản" /></div><select v-model="unitFilter" aria-label="Lọc đơn vị"><option value="">Tất cả đơn vị</option><option v-for="u in units" :key="u.id" :value="u.id">{{ u.name }}</option></select><select v-if="section==='users'" v-model="statusFilter" aria-label="Lọc trạng thái tài khoản"><option value="">Tất cả trạng thái</option><option v-for="(label,key) in statusNames" :key="key" :value="key">{{ label }}</option></select></div>
-        <div class="admin-table-scroll"><table class="admin-data-table account-table"><thead><tr><th>Người dùng</th><th>Đơn vị / nhóm</th><th>Vai trò</th><th>{{ section==='users'?'Trạng thái':'Phạm vi quản lý' }}</th><th>Thao tác</th></tr></thead><tbody><tr v-for="u in paginatedUsers" :key="u.id"><td><strong>{{ u.fullName }}</strong><small>{{ u.username }}</small><small v-if="section==='users'">{{ u.employeeId }} · {{ u.email }}</small></td><td>{{ unitName(u.unitId) }}<small v-if="u.userGroupId">{{ groups.find(g=>g.id===u.userGroupId)?.name || u.userGroupId }}</small></td><td>{{ (u.roles || []).map(code=>u.roleNames?.[code] || code).join(', ') || 'Chưa gán role' }}</td><td><span v-if="section==='users'" class="admin-status" :class="u.status==='ACTIVE' || !u.status?'active':'inactive'">{{ statusNames[u.status || 'ACTIVE'] }}</span></td><td><div class="admin-row-actions"><button v-if="u.allowedActions?.includes('update')" class="admin-row-edit" :disabled="busy" @click="editUser(u)">{{ section==='users'?'Sửa':'Phân quyền' }}</button><button v-if="section==='users' && user.can('roles')" class="admin-row-edit" @click="router.push({path:'/admin/roles',query:{user:String(u.id)}})"><ShieldCheck :size="14" /> Phân quyền</button></div></td></tr><tr v-if="!userTotal"><td colspan="5" class="admin-empty">Không có tài khoản phù hợp.</td></tr></tbody></table></div>
+        <div class="admin-table-scroll"><table class="admin-data-table account-table"><colgroup><col style="width:25%" /><col style="width:23%" /><col style="width:22%" /><col style="width:12%" /><col style="width:18%" /></colgroup><thead><tr><th>Người dùng</th><th>Đơn vị / nhóm</th><th>Vai trò</th><th>{{ section==='users'?'Trạng thái':'Phạm vi quản lý' }}</th><th>Thao tác</th></tr></thead><tbody><tr v-for="u in paginatedUsers" :key="u.id"><td><strong>{{ u.fullName }}</strong><small>{{ u.username }}</small><small v-if="section==='users'">{{ u.employeeId }} · {{ u.email }}</small></td><td>{{ unitName(u.unitId) }}<small v-if="u.userGroupId">{{ groups.find(g=>g.id===u.userGroupId)?.name || u.userGroupId }}</small></td><td>{{ (u.roles || []).map(code=>u.roleNames?.[code] || code).join(', ') || 'Chưa gán role' }}</td><td><span v-if="section==='users'" class="admin-status" :class="u.status==='ACTIVE' || !u.status?'active':'inactive'">{{ statusNames[u.status || 'ACTIVE'] }}</span></td><td><div class="admin-row-actions"><button v-if="u.allowedActions?.includes('update')" class="admin-row-edit" :disabled="busy" @click="editUser(u)">{{ section==='users'?'Sửa':'Phân quyền' }}</button><button v-if="section==='users' && user.can('roles')" class="admin-row-edit" @click="router.push({path:'/admin/roles',query:{user:String(u.id)}})"><ShieldCheck :size="14" /> Phân quyền</button></div></td></tr><tr v-if="!userTotal"><td colspan="5" class="admin-empty">Không có tài khoản phù hợp.</td></tr></tbody></table></div>
         <TablePagination v-model:page="userPage" v-model:page-size="userPageSize" :total="userTotal" :page-count="userPageCount" unit="tài khoản" unit-label="Tài khoản" />
       </section>
       <section v-if="section==='units'" class="admin-data-section">
@@ -21,12 +20,11 @@
       <section v-if="section==='groups'" class="admin-data-section">
         <div class="admin-section-heading"><h2>Danh sách nhóm học viên</h2><button v-if="user.can('groups','create')" class="btn btn-primary" :disabled="busy" @click="editGroup()"><Plus :size="16" /> Thêm nhóm</button></div>
         <div class="admin-table-toolbar"><div class="admin-search-box"><Search :size="18" /><input v-model="query" type="search" placeholder="Tìm mã hoặc tên nhóm…" aria-label="Tìm nhóm" /></div><select v-model="unitFilter" aria-label="Lọc đơn vị của nhóm"><option value="">Tất cả đơn vị</option><option v-for="u in units" :key="u.id" :value="u.id">{{ u.name }}</option></select></div>
-        <div class="admin-table-scroll"><table class="admin-data-table"><thead><tr><th>Nhóm học viên</th><th>Đơn vị</th><th>Khóa bắt buộc</th><th>Thao tác</th></tr></thead><tbody><tr v-for="g in paginatedGroups" :key="g.id"><td><strong>{{ g.name }}</strong><small>{{ g.id }}</small></td><td>{{ unitName(g.unitId) }}</td><td>{{ g.mandatoryCourseIds.length }} khóa học</td><td><div class="admin-row-actions"><button v-if="g.allowedActions?.includes('update')" class="admin-row-edit" :disabled="busy" @click="editGroup(g)">Sửa</button><button v-if="g.allowedActions?.includes('delete')" class="admin-row-delete" :disabled="busy" @click="deleteTarget=g">Xóa</button></div></td></tr><tr v-if="!groupTotal"><td colspan="4" class="admin-empty">Không có nhóm phù hợp.</td></tr></tbody></table></div>
+        <div class="admin-table-scroll"><table class="admin-data-table"><colgroup><col style="width:30%" /><col style="width:25%" /><col style="width:25%" /><col style="width:20%" /></colgroup><thead><tr><th>Nhóm học viên</th><th>Đơn vị</th><th>Khóa bắt buộc</th><th>Thao tác</th></tr></thead><tbody><tr v-for="g in paginatedGroups" :key="g.id"><td><strong>{{ g.name }}</strong><small>{{ g.id }}</small></td><td>{{ unitName(g.unitId) }}</td><td>{{ g.mandatoryCourseIds.length }} khóa học</td><td><div class="admin-row-actions"><button v-if="g.allowedActions?.includes('update')" class="admin-row-edit" :disabled="busy" @click="editGroup(g)">Sửa</button><button v-if="g.allowedActions?.includes('delete')" class="admin-row-delete" :disabled="busy" @click="deleteTarget=g">Xóa</button></div></td></tr><tr v-if="!groupTotal"><td colspan="4" class="admin-empty">Không có nhóm phù hợp.</td></tr></tbody></table></div>
         <TablePagination v-model:page="groupPage" v-model:page-size="groupPageSize" :total="groupTotal" :page-count="groupPageCount" unit="nhóm" unit-label="Nhóm" />
       </section>
     </template>
     <AdminModal :open="!!editor" :title="modalTitle" :busy="busy" :width="720" @close="closeEditor" @submit="submitEditor">
-      <p v-if="message && failed" class="admin-notice error" role="alert">{{ message }}</p>
       <template v-if="editor==='user'">
         <div class="admin-form-grid"><label class="admin-form-field">Tài khoản *<input v-model="userForm.username" :disabled="!!editingId" required /></label><label class="admin-form-field">Họ và tên *<input v-model="userForm.fullName" required /></label><label class="admin-form-field">Email<input v-model="userForm.email" type="email" /></label><label class="admin-form-field">Mã nhân viên<input v-model="userForm.employeeId" /></label></div>
         <label class="admin-form-field">{{ editingId?'Mật khẩu mới':'Mật khẩu ban đầu *' }}<input v-model="userForm.password" type="password" autocomplete="new-password" :required="!editingId" minlength="8" /><small>{{ editingId?'Để trống để giữ mật khẩu hiện tại.':'Tối thiểu 8 ký tự. Người dùng sẽ đổi mật khẩu ở lần đăng nhập đầu tiên.' }}</small></label>
@@ -58,6 +56,7 @@ import TablePagination from '../components/TablePagination.vue';
 import {useTablePagination} from '../composables/useTablePagination';
 import {useRoute,useRouter} from 'vue-router';
 import {axiosClient} from '../api/axiosClient';
+import {showToast} from '../utils/toast';
 import {adminApi,type AdminUser} from '../api/adminApi';
 import type {Course} from '../types';
 import {useUserStore} from '../stores/userStore';
@@ -68,7 +67,7 @@ import {buildUnitForest,filterUnitForest,flattenUnitForest,unitDescendants} from
 interface Group {id:string;name:string;unitId:string;mandatoryCourseIds:string[];allowedActions?:string[]}
 const route=useRoute(),router=useRouter(),user=useUserStore();
 const units=ref<Unit[]>([]),groups=ref<Group[]>([]),users=ref<AdminUser[]>([]),courses=ref<Course[]>([]);
-const loading=ref(false),busy=ref(false),message=ref(''),failed=ref(false),query=ref('');
+const loading=ref(false),busy=ref(false),query=ref('');
 const section=computed(()=>String(route.meta.accessSection || 'users'));
 const pages:Record<string,{title:string;description:string}>={
  users:{title:'Tài khoản',description:'Quản lý hồ sơ, trạng thái và đơn vị công tác của người dùng.'},
@@ -117,7 +116,7 @@ const eligibleGroups=computed(()=>{
  return groups.value.filter(g=>!g.unitId || ancestors.has(g.unitId));
 });
 const excelInput=ref<HTMLInputElement|null>(null);
-function error(e:any){failed.value=true;message.value=e.response?.data?.message || 'Không thực hiện được thao tác';}
+function error(e:any){showToast(e.response?.data?.message || 'Không thực hiện được thao tác','error');}
 async function load(){loading.value=true;try{
  await user.refreshAccess();
  if(section.value==='units'){units.value=(await axiosClient.get<Unit[]>('/api/admin/units')).data;return;}
@@ -126,16 +125,16 @@ async function load(){loading.value=true;try{
  if(section.value==='groups'){groups.value=(await axiosClient.get<Group[]>('/api/admin/access/groups')).data;courses.value=options.courses || [];}
  }catch(e){error(e);}finally{loading.value=false;}}
 function closeEditor(){if(!busy.value){editor.value='';if(route.query.user)router.replace({query:{}});}}
-function editUser(u?:AdminUser){editingId.value=u?.id || null;userForm.value={...blankUser(),...u,password:'',unitId:u?.unitId || '',userGroupId:u?.userGroupId || '',roles:[...(u?.roles || [])],scopeUnitIds:[...(u?.scopeUnitIds || [])],status:u?.status || 'ACTIVE',learnerType:u?.learnerType || 'CURRENT_STAFF'};editor.value='user';message.value='';}
-function editUnit(u?:Unit,parentId=''){editingId.value=u?.id || null;unitForm.value=u?{...u,parentId:u.parentId || ''}:{id:'',name:'',type:'UNIT',parentId,active:true};editor.value='unit';message.value='';}
-function editGroup(g?:Group){editingId.value=g?.id || null;groupForm.value=g?{...g,mandatoryCourseIds:[...g.mandatoryCourseIds]}:{id:'',name:'',unitId:'',mandatoryCourseIds:[]};editor.value='group';message.value='';}
-async function saveEditor(){busy.value=true;message.value='';try{const endpoint=editor.value==='user'?'users':editor.value==='unit'?'units':'groups';const data=editor.value==='user'?userForm.value:editor.value==='unit'?unitForm.value:groupForm.value;await axiosClient.request({method:editingId.value?'put':'post',url:`/api/admin/${endpoint}${editingId.value?'/'+encodeURIComponent(String(editingId.value)):''}`,data});editor.value='';if(route.query.user)await router.replace({query:{}});failed.value=false;message.value='Đã lưu';await load();}catch(e){error(e);}finally{busy.value=false;}}
+function editUser(u?:AdminUser){editingId.value=u?.id || null;userForm.value={...blankUser(),...u,password:'',unitId:u?.unitId || '',userGroupId:u?.userGroupId || '',roles:[...(u?.roles || [])],scopeUnitIds:[...(u?.scopeUnitIds || [])],status:u?.status || 'ACTIVE',learnerType:u?.learnerType || 'CURRENT_STAFF'};editor.value='user';}
+function editUnit(u?:Unit,parentId=''){editingId.value=u?.id || null;unitForm.value=u?{...u,parentId:u.parentId || ''}:{id:'',name:'',type:'UNIT',parentId,active:true};editor.value='unit';}
+function editGroup(g?:Group){editingId.value=g?.id || null;groupForm.value=g?{...g,mandatoryCourseIds:[...g.mandatoryCourseIds]}:{id:'',name:'',unitId:'',mandatoryCourseIds:[]};editor.value='group';}
+async function saveEditor(){busy.value=true;try{const endpoint=editor.value==='user'?'users':editor.value==='unit'?'units':'groups';const data=editor.value==='user'?userForm.value:editor.value==='unit'?unitForm.value:groupForm.value;await axiosClient.request({method:editingId.value?'put':'post',url:`/api/admin/${endpoint}${editingId.value?'/'+encodeURIComponent(String(editingId.value)):''}`,data});editor.value='';if(route.query.user)await router.replace({query:{}});showToast('Đã lưu','success');await load();}catch(e){error(e);}finally{busy.value=false;}}
 const deleteTarget=ref<Group|null>(null);
-async function deleteGroup(){if(!deleteTarget.value)return;busy.value=true;try{await axiosClient.delete(`/api/admin/groups/${encodeURIComponent(deleteTarget.value.id)}`);deleteTarget.value=null;failed.value=false;message.value='Đã xóa nhóm';await load();}catch(e){error(e);}finally{busy.value=false;}}
+async function deleteGroup(){if(!deleteTarget.value)return;busy.value=true;try{await axiosClient.delete(`/api/admin/groups/${encodeURIComponent(deleteTarget.value.id)}`);deleteTarget.value=null;showToast('Đã xóa nhóm','success');await load();}catch(e){error(e);}finally{busy.value=false;}}
 const modalTitle=computed(()=>editor.value==='user'?(editingId.value?'Cập nhật tài khoản':'Thêm tài khoản'):editor.value==='unit'?(editingId.value?'Cập nhật đơn vị / phòng':'Thêm đơn vị / phòng'):(editingId.value?'Cập nhật nhóm học viên':'Thêm nhóm học viên'));
 async function submitEditor(){await saveEditor();}
 async function downloadTemplate(){busy.value=true;try{const blob=await adminApi.downloadUserTemplate();const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='user_import_template.xlsx';link.click();URL.revokeObjectURL(url);}catch(e){error(e);}finally{busy.value=false;}}
-async function importExcel(event:Event){const input=event.target as HTMLInputElement;const file=input.files?.[0];if(!file)return;busy.value=true;try{await adminApi.importUsersExcel(file);failed.value=false;message.value='Đã nhập tài khoản. Gán đơn vị, nhóm và role tại menu Quản lý role.';await load();}catch(e){error(e);}finally{input.value='';busy.value=false;}}
+async function importExcel(event:Event){const input=event.target as HTMLInputElement;const file=input.files?.[0];if(!file)return;busy.value=true;try{await adminApi.importUsersExcel(file);showToast('Đã nhập tài khoản. Gán đơn vị, nhóm và role tại menu Quản lý role.','success');await load();}catch(e){error(e);}finally{input.value='';busy.value=false;}}
 onMounted(load);
 </script>
 <style scoped>

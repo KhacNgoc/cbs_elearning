@@ -1,0 +1,20 @@
+/* Column widths come from colgroup, not from the rows on the current page. */
+.admin-data-table,
+.admin-table,
+.tree-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.admin-data-table td,
+.admin-table td,
+.tree-table td {
+  overflow-wrap: anywhere;
+}
+
+/* Keep action buttons inside their column when the viewport gets narrower. */
+.admin-data-table .admin-row-actions,
+.admin-table .row-actions,
+.admin-table .enrollment-actions {
+  flex-wrap: wrap;
+}

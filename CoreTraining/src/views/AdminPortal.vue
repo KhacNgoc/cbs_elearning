@@ -162,6 +162,7 @@
             </div>
 
             <table class="admin-table">
+              <colgroup><col style="width:14%" /><col style="width:30%" /><col style="width:12%" /><col style="width:10%" /><col style="width:12%" /><col style="width:22%" /></colgroup>
               <thead>
                 <tr>
                   <th>Mã khóa học</th>
@@ -249,6 +250,7 @@
             </div>
 
             <table class="admin-table">
+              <colgroup><col style="width:17%" /><col style="width:13%" /><col style="width:10%" /><col style="width:18%" /><col style="width:13%" /><col style="width:9%" /><col style="width:8%" /><col style="width:12%" /></colgroup>
               <thead>
                 <tr>
                   <th>Học viên</th>
@@ -342,6 +344,7 @@
             </div>
             <div class="admin-table-toolbar"><div class="admin-search-box"><Search :size="18" /><input v-model="enrollmentQuery" type="search" placeholder="Tìm học viên hoặc khóa học…" aria-label="Tìm yêu cầu đăng ký" /></div><select v-model="enrollmentStatus" aria-label="Lọc trạng thái đăng ký"><option value="">Tất cả trạng thái</option><option value="PENDING">Chờ duyệt</option><option value="APPROVED">Đã duyệt</option><option value="REJECTED">Từ chối</option></select></div>
             <table class="admin-table enrollment-table">
+              <colgroup><col style="width:23%" /><col style="width:32%" /><col style="width:16%" /><col style="width:12%" /><col style="width:17%" /></colgroup>
               <thead>
                 <tr>
                   <th>Học viên</th>
@@ -473,6 +476,7 @@
               v-else-if="currentCourseLessons.length > 0"
               class="admin-table lesson-order-table"
             >
+              <colgroup><col style="width:8%" /><col style="width:12%" /><col style="width:24%" /><col style="width:20%" /><col style="width:10%" /><col style="width:12%" /><col style="width:14%" /></colgroup>
               <thead>
                 <tr>
                   <th class="drag-column">Thứ tự</th>
@@ -598,7 +602,7 @@
               />
             </div>
 
-            <div class="admin-table-scroll"><table class="admin-table"><thead><tr><th>Bài kiểm tra</th><th>Số câu hỏi</th><th>Ngưỡng đạt</th><th>Thao tác</th></tr></thead><tbody><tr v-for="quiz in paginatedQuizDefinitions" :key="quiz.key"><td><strong>{{ quiz.title }}</strong><small>{{ quiz.lessonId ? 'Kiểm tra bài học' : 'Kiểm tra khóa học' }}</small></td><td>{{ quiz.questionCount }} câu hỏi</td><td>{{ quiz.passingScore }}%</td><td><button class="admin-row-edit" @click="openQuizDefinition(quiz)">Chi tiết</button></td></tr><tr v-if="!filteredQuizDefinitions.length"><td colspan="4" class="admin-empty">Không có bài kiểm tra phù hợp.</td></tr></tbody></table></div>
+            <div class="admin-table-scroll"><table class="admin-table"><colgroup><col style="width:55%" /><col style="width:15%" /><col style="width:15%" /><col style="width:15%" /></colgroup><thead><tr><th>Bài kiểm tra</th><th>Số câu hỏi</th><th>Ngưỡng đạt</th><th>Thao tác</th></tr></thead><tbody><tr v-for="quiz in paginatedQuizDefinitions" :key="quiz.key"><td><strong>{{ quiz.title }}</strong><small>{{ quiz.lessonId ? 'Kiểm tra bài học' : 'Kiểm tra khóa học' }}</small></td><td>{{ quiz.questionCount }} câu hỏi</td><td>{{ quiz.passingScore }}%</td><td><button class="admin-row-edit" @click="openQuizDefinition(quiz)">Chi tiết</button></td></tr><tr v-if="!filteredQuizDefinitions.length"><td colspan="4" class="admin-empty">Không có bài kiểm tra phù hợp.</td></tr></tbody></table></div>
             <TablePagination v-model:page="quizPage" v-model:page-size="quizPageSize" :total="filteredQuizDefinitions.length" :page-count="quizPageCount" unit="bài kiểm tra" unit-label="Bài kiểm tra" />
           </div>
         </div>
@@ -645,11 +649,11 @@
                   @change="uploadDocument" />
               </div>
             </div>
-            <p v-if="documentUploadMessage" class="rag-upload-message">{{ documentUploadMessage }}</p>
 
             <div class="admin-table-toolbar"><div class="admin-search-box"><Search :size="18" /><input v-model="documentQuery" type="search" placeholder="Tìm tên tài liệu…" aria-label="Tìm tài liệu AI" /></div></div>
             <div class="rag-document-table-scroll">
             <table class="admin-table rag-document-table">
+              <colgroup><col style="width:24%" /><col style="width:10%" /><col style="width:12%" /><col style="width:7%" /><col style="width:16%" /><col style="width:21%" /><col style="width:10%" /></colgroup>
               <thead>
                 <tr>
                   <th>Tệp</th>
@@ -1172,6 +1176,7 @@
 </template>
 
 <script setup lang="ts">
+import { showToast } from "../utils/toast";
 import AdminModal from '../components/AdminModal.vue';
 import TablePagination from '../components/TablePagination.vue';
 import {useTablePagination} from '../composables/useTablePagination';
@@ -1310,11 +1315,8 @@ const pendingEnrollmentCount = computed(
       .length,
 );
 const questions = ref<Question[]>([]);
-type ToastVariant = "success" | "error" | "info" | "warning";
-const showToast = (message: string, variant: ToastVariant = "success") =>
-  window.dispatchEvent(new CustomEvent("app-toast", { detail: { message, variant } }));
+
 const courseDocuments = ref<CourseDocument[]>([]);
-const documentUploadMessage = ref("");
 const documentUploading = ref(false);
 const documentListLoading = ref(false);
 const ragFileInput = ref<HTMLInputElement | null>(null);
@@ -1569,7 +1571,7 @@ const dropLessonAt = async (targetLessonId: string) => {
   } catch (error) {
     course.lessons = previousLessons;
     console.error("Failed to reorder lessons:", error);
-    alert("Không thể lưu thứ tự bài học. Vui lòng thử lại.");
+    showToast("Không thể lưu thứ tự bài học. Vui lòng thử lại.", "error");
   }
 };
 
@@ -1643,7 +1645,7 @@ const loadDocuments = async (silent = false) => {
     }
   } catch (error) {
     console.error("Failed to load course documents:", error);
-    documentUploadMessage.value = "Không thể tải trạng thái tài liệu.";
+    showToast("Không thể tải trạng thái tài liệu.", "error");
   } finally {
     documentListLoading.value = false;
   }
@@ -1656,19 +1658,17 @@ const uploadDocument = async (event: Event) => {
     return;
   const extension = file.name.split(".").pop()?.toLowerCase();
   if (!extension || !["pdf", "docx"].includes(extension)) {
-    documentUploadMessage.value = "Chỉ hỗ trợ tệp PDF hoặc DOCX.";
+    showToast("Chỉ hỗ trợ tệp PDF hoặc DOCX.", "warning");
     input.value = "";
     return;
   }
   documentUploading.value = true;
-  documentUploadMessage.value = "Đang tải tài liệu lên máy chủ...";
   try {
     await adminApi.uploadCourseDocument(selectedCourseId.value, file);
-    documentUploadMessage.value =
-      "Đã nhận tài liệu. Hệ thống đang embedding và đồng bộ vào Qdrant.";
+    showToast("Đã nhận tài liệu. Hệ thống đang xử lý nội dung.", "success");
     await loadDocuments();
   } catch (error) {
-    documentUploadMessage.value = "Tải hoặc xử lý tài liệu thất bại. Vui lòng kiểm tra trạng thái dịch vụ embedding.";
+    showToast("Tải hoặc xử lý tài liệu thất bại. Vui lòng thử lại.", "error");
     console.error("Failed to upload course document:", error);
   } finally {
     documentUploading.value = false;
@@ -1946,7 +1946,7 @@ const reviewEnrollment = async (
     return true;
   } catch (error) {
     console.error("Failed to review enrollment:", error);
-    alert("Không thể xử lý yêu cầu đăng ký. Vui lòng thử lại.");
+    showToast("Không thể xử lý yêu cầu đăng ký. Vui lòng thử lại.", "error");
     return false;
   }
 };
@@ -2119,7 +2119,7 @@ const handleDeleteCourse = (id: string) => {
         await adminApi.deleteCourse(id);
         await loadAllData();
       } catch (err) {
-        alert("Xóa khóa học thất bại!");
+        showToast("Xóa khóa học thất bại!", "error");
         console.error(err);
         throw err;
       } finally {
@@ -2175,7 +2175,7 @@ const handleDownloadTemplate = async () => {
     URL.revokeObjectURL(url);
   } catch (error) {
     console.error(error);
-    alert("Không thể tải file Excel mẫu.");
+    showToast("Không thể tải file Excel mẫu.", "error");
   }
 };
 
@@ -2187,10 +2187,10 @@ const handleExcelUpload = async (event: Event) => {
   try {
     await adminApi.importUsersExcel(file);
     await loadAllData();
-    alert("Nhập danh sách học viên thành công.");
+    showToast("Nhập danh sách học viên thành công.", "success");
   } catch (error) {
     console.error(error);
-    alert("Không thể nhập danh sách học viên.");
+    showToast("Không thể nhập danh sách học viên.", "error");
   } finally {
     loading.value = false;
     input.value = "";
@@ -2230,7 +2230,7 @@ const handleDeleteUser = (user: AdminUser) => {
         await adminApi.deleteUser(user.id!);
         await loadAllData();
       } catch (err) {
-        alert("Xóa học viên thất bại!");
+        showToast("Xóa học viên thất bại!", "error");
         console.error(err);
         throw err;
       } finally {
@@ -2342,7 +2342,7 @@ const handleDocumentFileChange = (event: Event, index: number) => {
 
   const extension = file.name.split(".").pop()?.toLowerCase();
   if (!["pdf", "doc", "docx", "ppt", "pptx"].includes(extension || "")) {
-    alert("Chỉ hỗ trợ file PDF, DOC, DOCX, PPT hoặc PPTX.");
+    showToast("Chỉ hỗ trợ file PDF, DOC, DOCX, PPT hoặc PPTX.", "warning");
     input.value = "";
     return;
   }
@@ -2448,7 +2448,7 @@ const handleDeleteLesson = (id: string) => {
         await adminApi.deleteLesson(id);
         await loadAllData();
       } catch (err) {
-        alert("Xóa bài học thất bại!");
+        showToast("Xóa bài học thất bại!", "error");
         console.error(err);
         throw err;
       } finally {
@@ -2500,7 +2500,7 @@ const saveQuestion = async () => {
       .map((o) => o.trim())
       .filter((o) => o.length > 0);
     if (opts.length !== 4) {
-      alert("Vui lòng nhập đầy đủ 4 đáp án trước khi lưu.");
+      showToast("Vui lòng nhập đầy đủ 4 đáp án trước khi lưu.", "warning");
       loading.value = false;
       return;
     }
@@ -2667,9 +2667,7 @@ const importQuestionsFromCsv = async (event: Event) => {
     });
     if (!payloads.length) errors.push("File không có dòng dữ liệu.");
     if (errors.length) {
-      alert(
-        `Không thể import vì file chưa đúng định dạng:\n\n${errors.slice(0, 12).join("\n")}`,
-      );
+      showToast(`Không thể import vì file chưa đúng định dạng:\n\n${errors.slice(0, 12).join("\n")}`, "warning");
       return;
     }
     loading.value = true;
@@ -2677,9 +2675,9 @@ const importQuestionsFromCsv = async (event: Event) => {
       payloads.map((payload) => adminApi.createQuestion(payload)),
     );
     await loadAllData();
-    alert(`Đã import thành công ${payloads.length} câu hỏi.`);
+    showToast(`Đã import thành công ${payloads.length} câu hỏi.`, "success");
   } catch (error) {
-    alert(error instanceof Error ? error.message : "Không thể đọc file CSV.");
+    showToast(error instanceof Error ? error.message : "Không thể đọc file CSV.", "error");
   } finally {
     loading.value = false;
     input.value = "";
@@ -2696,7 +2694,7 @@ const handleDeleteQuestion = (id: number) => {
         await adminApi.deleteQuestion(id);
         await loadAllData();
       } catch (err) {
-        alert("Xóa câu hỏi thất bại!");
+        showToast("Xóa câu hỏi thất bại!", "error");
         console.error(err);
         throw err;
       } finally {
@@ -3154,7 +3152,7 @@ void handleDeleteQuestion;
 }
 
 .code-badge {
-  font-family: monospace;
+  font-family: var(--font-family);
   background-color: var(--bg-main);
   color: var(--primary-color);
   padding: 0.25rem 0.5rem;
@@ -3529,7 +3527,7 @@ void handleDeleteQuestion;
   border-radius: var(--radius-full);
   background: #fff7d6;
   color: #806710;
-  font-weight: 800;
+  font-weight: 700;
   font-size: 0.78rem;
 }
 .lesson-back-button {
@@ -3625,7 +3623,7 @@ void handleDeleteQuestion;
   padding: 0.3rem 0.55rem;
   border-radius: var(--radius-full);
   font-size: 0.72rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 .enrollment-status.pending {
   background: #fff7d6;

@@ -3,6 +3,7 @@ import { createPinia } from 'pinia';
 import router from './router';
 import './assets/styles/main.css';
 import './assets/styles/admin.css';
+import './assets/styles/tables.css';
 import App from './App.vue';
 import { Chart } from 'chart.js';
 

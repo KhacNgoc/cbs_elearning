@@ -1,6 +1,5 @@
 <template>
   <main class="training-admin">
-    <div v-if="error" class="notice error" role="alert">{{ error }} <button @click="error = ''" aria-label="Đóng thông báo"><X :size="16" /></button></div>
     <header class="page-heading">
       <div class="heading-with-back">
         <AdminBackButton v-if="backTo" :to="backTo" :label="backLabel" />
@@ -22,12 +21,12 @@
 
     <div v-if="mode === 'catalog'" class="catalog-layout">
       <section class="card catalog-domains"><div class="section-heading"><h2>Lĩnh vực đào tạo</h2><button class="btn btn-secondary" v-if="accessUser.can('catalog','create') && canManageDomains" @click="openForm('domain')"><Plus :size="16" /> Thêm</button></div>
-        <div class="table-scroll"><table class="admin-table"><thead><tr><th>Lĩnh vực</th><th>Thao tác</th></tr></thead><tbody><tr v-for="domain in paginatedDomains" :key="domain.id" :class="{ 'selected-domain': domain.id === domainId }"><td><button class="name-link" :aria-pressed="domain.id===domainId" @click="domainId=domain.id">{{ domain.name }}</button><small>{{ domain.code }} · {{ programs.filter(p=>p.domainId===domain.id).length }} chương trình</small></td><td><button v-if="domain.allowedActions?.includes('update')" class="row-edit" :aria-label="`Sửa lĩnh vực ${domain.name}`" @click="openForm('domain',domain)"><Pencil :size="15" /></button></td></tr><tr v-if="!domains.length"><td colspan="2" class="empty">Chưa có lĩnh vực đào tạo.</td></tr></tbody></table></div>
+        <div class="table-scroll"><table class="admin-table"><colgroup><col style="width:72%" /><col style="width:28%" /></colgroup><thead><tr><th>Lĩnh vực</th><th>Thao tác</th></tr></thead><tbody><tr v-for="domain in paginatedDomains" :key="domain.id" :class="{ 'selected-domain': domain.id === domainId }"><td><button class="name-link" :aria-pressed="domain.id===domainId" @click="domainId=domain.id">{{ domain.name }}</button><small>{{ domain.code }} · {{ programs.filter(p=>p.domainId===domain.id).length }} chương trình</small></td><td><button v-if="domain.allowedActions?.includes('update')" class="row-edit" :aria-label="`Sửa lĩnh vực ${domain.name}`" @click="openForm('domain',domain)"><Pencil :size="15" /></button></td></tr><tr v-if="!domains.length"><td colspan="2" class="empty">Chưa có lĩnh vực đào tạo.</td></tr></tbody></table></div>
         <TablePagination v-model:page="domainPage" v-model:page-size="domainPageSize" :total="domains.length" :page-count="domainPageCount" unit="lĩnh vực" unit-label="Lĩnh vực" compact />
       </section>
       <section class="card"><div class="section-heading"><h2>Chương trình đào tạo</h2><button class="btn btn-primary" :disabled="!domainId" v-if="accessUser.can('catalog','create')" @click="openForm('program')"><Plus :size="16" /> Thêm chương trình</button></div>
         <div class="search-box"><Search :size="18" /><input v-model="query" placeholder="Tìm mã hoặc tên chương trình..." /></div>
-        <div class="table-scroll"><table class="admin-table"><thead><tr><th>Chương trình</th><th>Đơn vị</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody><tr v-for="program in paginatedPrograms" :key="program.id"><td><strong>{{ program.name }}</strong><small>{{ program.code }}</small></td><td>{{ program.unitIds?.map(id=>units.find(u=>u.id===id)?.name || id).join(', ') || 'Chưa gán đơn vị' }}</td><td>{{ statusLabel(program.status) }}</td><td><button class="row-edit" v-if="program.allowedActions?.includes('update')" @click="openForm('program', program)">Sửa</button></td></tr></tbody></table></div>
+        <div class="table-scroll"><table class="admin-table"><colgroup><col style="width:40%" /><col style="width:25%" /><col style="width:15%" /><col style="width:20%" /></colgroup><thead><tr><th>Chương trình</th><th>Đơn vị</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody><tr v-for="program in paginatedPrograms" :key="program.id"><td><strong>{{ program.name }}</strong><small>{{ program.code }}</small></td><td>{{ program.unitIds?.map(id=>units.find(u=>u.id===id)?.name || id).join(', ') || 'Chưa gán đơn vị' }}</td><td>{{ statusLabel(program.status) }}</td><td><button class="row-edit" v-if="program.allowedActions?.includes('update')" @click="openForm('program', program)">Sửa</button></td></tr></tbody></table></div>
         <p v-if="!filteredPrograms.length" class="empty">Chưa có chương trình phù hợp.</p>
         <TablePagination v-model:page="programPage" v-model:page-size="programPageSize" :total="filteredPrograms.length" :page-count="programPageCount" unit="chương trình" unit-label="Chương trình" />
       </section>
@@ -47,7 +46,7 @@
         :can-edit="canEditCourse" :can-create="course?.status==='DRAFT' && accessUser.can('courses','create') && !!course?.allowedActions?.includes('create')" :can-delete="course?.status==='DRAFT' && accessUser.can('courses','delete') && !!course?.allowedActions?.includes('delete')" :busy="busy" :reorder-disabled="query !== '' || statusFilter !== ''" :total-chapters="chapters.length" :order-of="orderOf" :visible-lessons="visibleLessons"
         @toggle="toggleChapter" @open-chapter="openRow" @open-lesson="openLesson" @edit-chapter="editRow" @delete-chapter="askDelete" @move-chapter="move"
         @add-lesson="openLessonForm" @move-lesson="moveLesson" @delete-lesson="lesson => askDelete(lesson, 'lesson')" />
-      <div v-else class="table-scroll"><table class="admin-table"><thead><tr><th v-if="course">STT</th><th>{{ chapter ? 'Bài học' : course ? 'Chương' : 'Khóa học' }}</th><th>{{ chapter ? 'Kiểm tra' : course ? 'Bài học' : 'Chương trình' }}</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+      <div v-else class="table-scroll"><table class="admin-table"><colgroup><col v-if="course" style="width:7%" /><col :style="{ width: course ? '33%' : '40%' }" /><col style="width:18%" /><col style="width:14%" /><col style="width:28%" /></colgroup><thead><tr><th v-if="course">STT</th><th>{{ chapter ? 'Bài học' : course ? 'Chương' : 'Khóa học' }}</th><th>{{ chapter ? 'Kiểm tra' : course ? 'Bài học' : 'Chương trình' }}</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
         <tbody><tr v-for="row in paginated" :key="row.id">
           <td v-if="course">{{ orderOf(row) + 1 }}</td>
           <td><button class="name-link" @click="openRow(row)">{{ rowName(row) }}</button><small>{{ 'code' in row ? row.code : row.id }}</small></td>
@@ -69,7 +68,6 @@
         <label class="admin-form-field">{{ formKind === 'lesson' ? 'Gợi ý nghiệp vụ' : 'Mô tả' }}<textarea v-model="form.description" rows="3" /></label>
         <label class="admin-form-field" v-if="['domain','program'].includes(formKind || '')">Trạng thái<select v-model="form.status"><option value="ACTIVE">Đang sử dụng</option><option value="ARCHIVED">Lưu trữ</option></select></label>
         <p v-if="formKind === 'lesson'">Tạo bài xong sẽ mở trang soạn với hai tab Nội dung bài học và Bài kiểm tra.</p>
-        <p v-if="formError" class="error" role="alert">{{ formError }}</p>
 
     </AdminModal>
     <ConfirmModal :open="!!deleteTarget" title="Xóa nội dung?" :message="deleteMessage" :loading="busy" confirm-label="Xóa" @cancel="deleteTarget = null" @confirm="remove" />
@@ -83,7 +81,7 @@ const managesCourses=computed(()=>accessUser.can('courses','update') && (!course
 const units=ref<OrganizationUnit[]>([]);const canManageDomains=ref(false);
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Search, Plus, Pencil, X, BookOpen, Eye, ArrowUp, ArrowDown } from 'lucide-vue-next';
+import { Search, Plus, Pencil, BookOpen, Eye, ArrowUp, ArrowDown } from 'lucide-vue-next';
 import { trainingApi } from '../api/trainingApi';
 import { adminApi } from '../api/adminApi';
 import type { Course, Chapter, Lesson, TrainingDomain, TrainingProgram } from '../types';
@@ -99,7 +97,7 @@ import { showToast } from '../utils/toast';
 type Row = Course | Chapter | Lesson;
 type FormKind = 'domain' | 'program' | 'course' | 'chapter' | 'lesson';
 const route=useRoute(), router=useRouter();
-const loading=ref(false), busy=ref(false), error=ref(''), formError=ref('');
+const loading=ref(false), busy=ref(false);
 const domains=ref<TrainingDomain[]>([]), programs=ref<TrainingProgram[]>([]), courses=ref<Course[]>([]), chapters=ref<Chapter[]>([]);
 const course=ref<Course|null>(null), chapter=ref<Chapter|null>(null), domainId=ref(''), query=ref(''), statusFilter=ref(''), programFilter=ref(''), page=ref(1);
 const pageSize = ref(10);
@@ -166,7 +164,6 @@ const statusLabel=(status?:string)=>({DRAFT:'Bản nháp',PUBLISHED:'Đã xuất
 function serverError(e:unknown){return (e as {response?:{data?:{message?:string}}}).response?.data?.message || (e instanceof Error?e.message:'Không thể thực hiện. Vui lòng thử lại.');}
 async function load() {
   loading.value = true;
-  error.value = '';
   try {
     const catalog = mode.value==='catalog'?await trainingApi.catalog():(await axiosClient.get('/api/admin/options/courses')).data;
     const options=mode.value==='catalog'?(await axiosClient.get('/api/admin/options/catalog')).data:catalog;units.value=options.units;canManageDomains.value=!!options.canManageDomains;
@@ -187,7 +184,7 @@ async function load() {
       }
     }
   } catch (failure) {
-    error.value = serverError(failure);
+    showToast(serverError(failure), 'error');
   } finally {
     loading.value = false;
   }
@@ -195,7 +192,7 @@ async function load() {
 watch(()=>route.fullPath,()=>{expansionBeforeFilter=new Set();query.value='';statusFilter.value='';page.value=1;expandedChapterIds.value=new Set();focusApplied.value=false;void load();},{immediate:true});
 const formKind=ref<FormKind|null>(null); const form=ref({id:'',code:'',name:'',description:'',programId:'',domainId:'',status:'ACTIVE',unitIds:[] as string[],version:undefined as number|undefined});
 const formTitle=computed(()=>`${form.value.id?'Sửa':'Tạo'} ${{domain:'lĩnh vực',program:'chương trình',course:'khóa học',chapter:'chương',lesson:'bài học'}[formKind.value || 'course']}`);
-function openForm(kind:FormKind,r?:Partial<Row|TrainingDomain|TrainingProgram>){formError.value='';formKind.value=kind;const item=r as Partial<Course & Chapter & Lesson & TrainingProgram> | undefined;form.value={id:item?.id || '',code:item?.code || (kind==='lesson'?item?.id || '':''),name:item?.name || item?.title || '',description:item?.description || item?.hint || '',programId:item?.programId || '',domainId:item?.domainId || domainId.value,status:item?.status || 'ACTIVE',unitIds:[...(item?.unitIds || [])],version:item?.version};}
+function openForm(kind:FormKind,r?:Partial<Row|TrainingDomain|TrainingProgram>){formKind.value=kind;const item=r as Partial<Course & Chapter & Lesson & TrainingProgram> | undefined;form.value={id:item?.id || '',code:item?.code || (kind==='lesson'?item?.id || '':''),name:item?.name || item?.title || '',description:item?.description || item?.hint || '',programId:item?.programId || '',domainId:item?.domainId || domainId.value,status:item?.status || 'ACTIVE',unitIds:[...(item?.unitIds || [])],version:item?.version};}
 function closeForm(){if(!busy.value)formKind.value=null;}
 function openRow(r:Row){if(chapter.value)openLesson(r as Lesson);else if(course.value)toggleChapter(r.id);else router.push(`/admin/courses/${r.id}`);}
 function openLesson(lesson: Lesson) { void router.push(`/admin/lessons/${encodeURIComponent(lesson.id)}/edit`); }
@@ -208,7 +205,7 @@ function openLessonForm(target: Chapter) {
 function editRow(r:Row){if(chapter.value)openRow(r);else openForm(course.value?'chapter':'course',r);}
 async function save(){
   if(busy.value || !formKind.value)return;
-  busy.value=true;formError.value='';
+  busy.value=true;
   const f=form.value,kind=formKind.value;
   let destination='';
   try{
@@ -229,7 +226,7 @@ async function save(){
     showToast(`${f.id?'Cập nhật':'Tạo'} ${label} thành công.`);
     if(destination && destination!==route.path)await router.push(destination);
     else await load();
-  }catch(e){formError.value=serverError(e);}
+  }catch(e){showToast(serverError(e),'error');}
   finally{busy.value=false;}
 }
 const deleteTarget=ref<Row|null>(null);const deleteMessage=computed(()=>{const r=deleteTarget.value;if(!r)return '';const count='lessons' in r?r.lessons.length:0;return `Xóa “${rowName(r)}”? ${count ? `${count} bài học và nội dung trực thuộc cũng sẽ bị xóa. `:''}Thao tác không thể hoàn tác.`;});

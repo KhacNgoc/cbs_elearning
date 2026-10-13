@@ -1,4 +1,4 @@
-<template><section class="card embedded-content"><p v-if="feedback" :class="{failed}" role="status">{{feedback}}</p><form class="lesson-modal-form" @submit.prevent="saveLesson">
+<template><section class="card embedded-content"><form class="lesson-modal-form" @submit.prevent="saveLesson">
           <div ref="lessonModalBodyRef" class="lesson-modal-body">
             <div class="form-row">
               <div class="form-group col">
@@ -268,13 +268,12 @@ import { Upload, Link2, Plus, FileText, X, Trash2 } from 'lucide-vue-next';
 import { useCourseStore } from '../stores/courseStore';
 import { adminApi, VIDEO_UPLOAD_MAX_BYTES } from '../api/adminApi';
 import { validateVideoUpload } from '../utils/videoAccess';
-import { showToast as notifyToast } from '../utils/toast';
+import { showToast } from '../utils/toast';
 import type { Lesson, LessonDocument } from '../types';
 const props=defineProps<{lesson: Lesson; readOnly?: boolean}>();
 const emit=defineEmits<{saved:[]; cancel:[]; dirty:[value:boolean]}>();
 const courseStore=useCourseStore();
-const loading=ref(false), videoUploadProgress=ref<number|null>(null), feedback=ref(''), failed=ref(false);
-const showToast=(text:string,kind?:string)=>{feedback.value=kind==='error'?text:'';failed.value=kind==='error';notifyToast(text,kind==='error'?'error':'success');};
+const loading=ref(false), videoUploadProgress=ref<number|null>(null);
 const lessonModal=ref({show:true,isEdit:true});
 type LessonDocumentForm=LessonDocument & {file?:File};
 const lessonForm=ref({...props.lesson, textBody:props.lesson.textBody || '', videoFile:undefined as File|undefined, videoSource:props.lesson.videoSource || 'URL', videoUrl:props.lesson.videoUrl || '', documents:props.lesson.documents.map(d=>({...d})) as LessonDocumentForm[], procedureSteps:props.lesson.procedureSteps.map(s=>({...s,steps:[...s.steps]}))});
@@ -345,7 +344,7 @@ const handleDocumentFileChange = (event: Event, index: number) => {
 
   const extension = file.name.split(".").pop()?.toLowerCase();
   if (!["pdf", "doc", "docx", "ppt", "pptx"].includes(extension || "")) {
-    alert("Chỉ hỗ trợ file PDF, DOC, DOCX, PPT hoặc PPTX.");
+    showToast("Chỉ hỗ trợ file PDF, DOC, DOCX, PPT hoặc PPTX.", "warning");
     input.value = "";
     return;
   }
@@ -880,7 +879,7 @@ const saveLesson = async () => {
 }
 
 .code-badge {
-  font-family: monospace;
+  font-family: var(--font-family);
   background-color: var(--bg-main);
   color: var(--primary-color);
   padding: 0.25rem 0.5rem;

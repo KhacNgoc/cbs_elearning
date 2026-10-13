@@ -4,6 +4,7 @@
     <div class="tree-scroll">
       <table class="tree-table">
         <caption class="sr-only">Danh sách chương và các bài học thuộc chương</caption>
+        <colgroup><col style="width:64px" /><col style="width:72px" /><col /><col style="width:16%" /><col style="width:13%" /><col style="width:300px" /></colgroup>
         <thead><tr><th class="toggle-column"><span class="sr-only">Mở / thu gọn chương</span></th><th class="order-column">STT</th><th>Chương / Bài học</th><th>Bài học / Kiểm tra</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
         <tbody>
           <template v-for="chapter in chapters" :key="chapter.id">
@@ -100,7 +101,7 @@ const statusLabel = (status?: string) => ({ DRAFT: 'Bản nháp', PUBLISHED: 'Đ
 .chapter-tree { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
 .tree-help { margin: 0 0 .75rem; color: var(--text-muted); font-size: .8rem; }
 .tree-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
-.tree-table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+.tree-table { width: 100%; min-width: 960px; border-collapse: collapse; font-size: .875rem; }
 .tree-table > tbody { display: table-row-group; }
 th { position: sticky; top: 0; z-index: 1; padding: 1rem; background: var(--bg-main); color: var(--text-muted); font-size: .75rem; text-align: left; }
 td { padding: 1rem; border-bottom: 1px solid var(--border-color); vertical-align: middle; overflow-wrap: anywhere; }
@@ -138,6 +139,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .readonly-label, .empty-chapter { color: var(--text-muted); font-size: .8rem; }
 .empty-chapter .name-link { font-size: .8rem; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
-@media(max-width:700px) { .tree-table { min-width: 680px; } td, th { padding: .75rem; } }
+@media(max-width:700px) { td, th { padding: .75rem; } }
 @media(prefers-reduced-motion:reduce) { .chapter-toggle svg { transition: none; } }
 </style>
