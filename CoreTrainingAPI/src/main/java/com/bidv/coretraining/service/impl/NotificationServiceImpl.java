@@ -38,7 +38,11 @@ public class NotificationServiceImpl implements NotificationService {
                 .recipient(user).type(type).title(title).message(message)
                 .targetUrl(targetUrl).createdAt(LocalDateTime.now()).build());
         NotificationDto dto = toDto(saved);
-        socketHandler.sendToUser(username, dto);
+        if(org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization(){
+                @Override public void afterCommit(){socketHandler.sendToUser(username,dto);}
+            });
+        } else socketHandler.sendToUser(username, dto);
         return dto;
     }
 

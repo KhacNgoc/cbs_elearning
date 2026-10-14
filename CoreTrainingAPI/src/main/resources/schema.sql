@@ -306,7 +306,7 @@ CREATE TABLE public.notifications (
     title character varying(255) NOT NULL,
     type character varying(40) NOT NULL,
     recipient_id bigint NOT NULL,
-    CONSTRAINT notifications_type_check CHECK (((type)::text = ANY ((ARRAY['COMMENT_REPLY'::character varying, 'ENROLLMENT_REQUEST'::character varying, 'ENROLLMENT_APPROVED'::character varying, 'ENROLLMENT_REJECTED'::character varying])::text[])))
+    CONSTRAINT notifications_type_check CHECK (((type)::text = ANY ((ARRAY['COMMENT_REPLY'::character varying, 'ENROLLMENT_REQUEST'::character varying, 'ENROLLMENT_APPROVED'::character varying, 'ENROLLMENT_REJECTED'::character varying, 'LESSON_REPORT'::character varying])::text[])))
 );
 
 

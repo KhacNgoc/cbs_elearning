@@ -34,7 +34,7 @@
         <button v-if="videoError" type="button" @click="retryVideo">Thử lại</button>
       </div>
       <!-- Big Play Button Overlay -->
-      <div v-if="!youtubeEmbedUrl && resolvedVideoUrl && !isPlaying && !videoError && !accessLoading" class="play-overlay" @click="togglePlay">
+      <div v-if="!youtubeEmbedUrl && resolvedVideoUrl && !isPlaying && !videoError && !accessLoading" class="play-overlay cursor-pointer" @click="togglePlay">
         <div class="big-play-btn">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="play-svg"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         </div>
@@ -42,7 +42,7 @@
       
       <!-- Custom Controls Bar -->
       <div v-if="!youtubeEmbedUrl" class="custom-controls">
-        <div class="progress-container" @click="seek">
+        <div class="progress-container cursor-pointer" @click="seek">
           <div class="progress-bar">
             <div class="progress-current" :style="{ width: `${progressPercent}%` }"></div>
           </div>
@@ -101,7 +101,7 @@
     <div class="video-footer-info">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="vid-play-icon"><polygon points="5 3 19 12 5 21 5 3"/></svg>
       <span>Video Hướng Dẫn</span>
-      <span class="ext-btn" @click="openExternal">Mở ngoài</span>
+      <span class="ext-btn cursor-pointer" @click="openExternal">Mở ngoài</span>
     </div>
   </div>
 </template>

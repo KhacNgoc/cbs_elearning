@@ -145,9 +145,10 @@
               </div>
             </div>
 
-            <div class="form-group"><label>Nội dung văn bản</label><textarea v-model="lessonForm.textBody" class="form-control" rows="7" placeholder="Nhập nội dung bài học..." /></div>
-            <div class="form-group">
-              <label>Quy trình thực hiện</label>
+            <LessonTextEditor v-model="lessonForm.textBody" :read-only="readOnly || loading" @attach="addLessonDocument" />
+            <div class="form-group supporting-section">
+              <h2>Quy trình thực hiện</h2>
+              <p class="section-description">Chia hướng dẫn thành từng quy trình. Mỗi dòng tương ứng với một bước thực hiện.</p>
               <div v-for="(section, index) in lessonForm.procedureSteps" :key="index" class="document-form-card">
                 <div class="document-form-fields procedure-form-fields">
                   <input v-model="section.title" class="form-control" placeholder="Tên quy trình" />
@@ -158,14 +159,12 @@
               <button v-if="!readOnly" type="button" class="btn btn-secondary" @click="lessonForm.procedureSteps.push({title:'', steps:[]})"><Plus :size="15" /> Thêm quy trình</button>
             </div>
             <!-- Lesson documents -->
-            <div class="form-group">
+            <div class="form-group supporting-section">
               <div
                 class="card-header-row"
                 style="display: flex; align-items: center; gap: 10px"
               >
-                <label class="section-sub-label"
-                  >Tài liệu PDF/Word/PowerPoint đính kèm</label
-                >
+                <div><h2>Tài liệu đính kèm</h2><p class="section-description">Bổ sung tài liệu PDF, Word hoặc PowerPoint để học viên xem và tải xuống.</p></div>
                 <button
                   type="button"
                   class="btn btn-secondary btn-sm"
@@ -263,13 +262,14 @@
           </footer>
         </form></section></template>
 <script setup lang="ts">
-import { ref, computed, nextTick, watch } from 'vue';
+import { ref, computed, nextTick, watch, defineAsyncComponent } from 'vue';
 import { Upload, Link2, Plus, FileText, X, Trash2 } from 'lucide-vue-next';
 import { useCourseStore } from '../stores/courseStore';
 import { adminApi, VIDEO_UPLOAD_MAX_BYTES } from '../api/adminApi';
 import { validateVideoUpload } from '../utils/videoAccess';
 import { showToast } from '../utils/toast';
 import type { Lesson, LessonDocument } from '../types';
+const LessonTextEditor = defineAsyncComponent(() => import('../components/lesson/LessonTextEditor.vue'));
 const props=defineProps<{lesson: Lesson; readOnly?: boolean}>();
 const emit=defineEmits<{saved:[]; cancel:[]; dirty:[value:boolean]}>();
 const courseStore=useCourseStore();
@@ -387,7 +387,7 @@ const removeLessonDocument = (index: number) => {
 };
 
 const saveLesson = async () => {
-  if (loading.value) return;
+  if (loading.value || props.readOnly) return;
   loading.value = true;
   videoUploadProgress.value = null;
   try {
@@ -1895,8 +1895,9 @@ select:disabled {
 }
 
 .embedded-content{padding:1.5rem}.lesson-modal-form{height:auto}.lesson-modal-body{max-height:none;overflow:visible;padding:0}.lesson-modal-footer{position:static;margin-top:1.5rem}.failed{color:#b91c1c}textarea{width:100%}
-.procedure-form-fields{grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr)}
-.procedure-form-fields>.form-control{min-width:0}
+.procedure-form-fields{grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);align-items:start}
+.procedure-form-fields>.form-control{min-width:0;line-height:1.5}
 .procedure-form-fields+.document-remove{width:32px;height:36px}
 @media(max-width:700px){.procedure-form-fields{grid-template-columns:1fr}}
+.embedded-content .form-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}.supporting-section{border:1px solid var(--border-color);border-radius:12px;padding:1.25rem;margin-top:1.25rem}.supporting-section h2{font-size:1.05rem;color:var(--primary-color);margin:0}.section-description{font-size:.85rem;color:var(--text-muted);margin:.4rem 0 1rem}.card-header-row{justify-content:space-between}.embedded-content .lesson-modal-footer{position:sticky;bottom:0;z-index:5;display:flex;justify-content:flex-end;gap:.75rem;border-radius:0 0 10px 10px}.empty-state-box{padding:1.5rem;border:1px dashed #cbd5e1;border-radius:8px;color:var(--text-muted);text-align:center}@media(max-width:700px){.embedded-content{padding:1rem}.embedded-content .form-row{grid-template-columns:1fr}.supporting-section{padding:1rem}}
 </style>

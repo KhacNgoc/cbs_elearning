@@ -66,6 +66,8 @@ const routes: Array<RouteRecordRaw> = [
     path: '/admin',
     meta: { requiresAuth: true, requiresAdmin: true, pageKey: 'admin.overview' },
     children: [
+      {path:'question-bank',name:'QuestionBank',component:()=>import('../views/QuestionBank.vue'),meta:{pageKey:'admin.question-bank'}},
+      {path:'content-reports',name:'ContentReports',component:()=>import('../views/ContentReports.vue'),meta:{pageKey:'admin.content-reports'}},
       {path:'users',name:'AdminUsers',component:()=>import('../views/AccessAdmin.vue'),meta:{pageKey:'admin.users',accessSection:'users'}},
       {path:'units',name:'AdminUnits',component:()=>import('../views/AccessAdmin.vue'),meta:{pageKey:'admin.units',accessSection:'units'}},
       {path:'groups',name:'AdminGroups',component:()=>import('../views/AccessAdmin.vue'),meta:{pageKey:'admin.groups',accessSection:'groups'}},

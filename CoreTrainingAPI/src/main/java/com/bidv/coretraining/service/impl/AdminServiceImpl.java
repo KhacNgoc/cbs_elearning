@@ -64,13 +64,16 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional
     public CourseDto createCourse(CourseDto courseDto) {
-        return structure.saveCourse(null,new com.bidv.coretraining.service.TrainingStructureService.CourseRequest(courseDto.getCode(),courseDto.getName(),courseDto.getProgramId(),courseDto.getDescription(),courseDto.getIconName(),courseDto.getVersion()));
+        return structure.saveCourse(null,courseRequest(courseDto));
     }
 
     @Override
     @Transactional
     public CourseDto updateCourse(String id, CourseDto courseDto) {
-        return structure.saveCourse(id,new com.bidv.coretraining.service.TrainingStructureService.CourseRequest(courseDto.getCode(),courseDto.getName(),courseDto.getProgramId(),courseDto.getDescription(),courseDto.getIconName(),courseDto.getVersion()));
+        return structure.saveCourse(id,courseRequest(courseDto));
+    }
+    private com.bidv.coretraining.service.TrainingStructureService.CourseRequest courseRequest(CourseDto dto) {
+        return new com.bidv.coretraining.service.TrainingStructureService.CourseRequest(dto.getCode(),dto.getName(),dto.getProgramId(),dto.getDescription(),dto.getIconName(),dto.getVersion(),dto.getThumbnail(),dto.getBusinessModule(),dto.getLevel(),dto.getKeywords(),dto.getCompletionDeadline());
     }
 
     @Override
@@ -290,6 +293,7 @@ public class AdminServiceImpl implements AdminService {
                 .course(course)
                 .lesson(resolveQuestionLesson(questionDto, course))
                 .text(questionDto.getText())
+                .explanation(questionDto.getExplanation())
                 .options(questionDto.getOptions() != null ? questionDto.getOptions() : new ArrayList<>())
                 .correctAnswer(questionDto.getCorrectAnswer())
                 .correctAnswers(questionDto.getCorrectAnswers())
@@ -318,6 +322,7 @@ public class AdminServiceImpl implements AdminService {
         if(!"DRAFT".equals(question.getCourse().getStatus())) throw new BadRequestException("Chuyển khóa về bản nháp trước khi sửa câu hỏi");
         if(!java.util.Objects.equals(question.getLesson().getId(),questionDto.getLessonId())) throw new BadRequestException("Không đổi phạm vi câu hỏi");
         question.setText(questionDto.getText());
+        question.setExplanation(questionDto.getExplanation());
         question.setLesson(resolveQuestionLesson(questionDto, question.getCourse()));
         question.setOptions(questionDto.getOptions() != null ? questionDto.getOptions() : new ArrayList<>());
         question.setCorrectAnswer(questionDto.getCorrectAnswer());
@@ -329,41 +334,7 @@ public class AdminServiceImpl implements AdminService {
     }
 
     private void normalizeAndValidateQuestion(QuestionDto questionDto) {
-        if (questionDto.getText() == null || questionDto.getText().isBlank()) {
-            throw new BadRequestException("Nội dung câu hỏi không được để trống");
-        }
-        List<String> options = questionDto.getOptions() == null
-                ? List.of() : questionDto.getOptions().stream().map(String::trim).toList();
-        if (options.size() < 3 || options.size() > 6 || options.stream().anyMatch(String::isBlank)) {
-            throw new BadRequestException("Câu hỏi phải có từ 3 đến 6 lựa chọn hợp lệ");
-        }
-        if (options.stream().map(String::toLowerCase).distinct().count() != options.size()) {
-            throw new BadRequestException("Các lựa chọn không được trùng nhau");
-        }
-        List<Integer> answers = questionDto.getCorrectAnswers();
-        if ((answers == null || answers.isEmpty()) && questionDto.getCorrectAnswer() != null) {
-            answers = List.of(questionDto.getCorrectAnswer());
-        }
-        answers = answers == null ? List.of() : answers.stream()
-                .filter(java.util.Objects::nonNull).distinct().sorted().toList();
-        if (answers.isEmpty() || answers.stream().anyMatch(index -> index < 0 || index >= options.size())) {
-            throw new BadRequestException("Đáp án đúng không hợp lệ");
-        }
-        QuestionType type = questionDto.getType() == null
-                ? (answers.size() > 1 ? QuestionType.MULTIPLE_CHOICE : QuestionType.SINGLE_CHOICE)
-                : questionDto.getType();
-        if (type == QuestionType.SINGLE_CHOICE && answers.size() != 1) {
-            throw new BadRequestException("Câu single choice phải có đúng một đáp án đúng");
-        }
-        if (type == QuestionType.MULTIPLE_CHOICE
-                && (answers.size() < 2 || answers.size() >= options.size())) {
-            throw new BadRequestException("Câu multiple choice cần ít nhất hai đáp án đúng và không được chọn tất cả");
-        }
-        questionDto.setText(questionDto.getText().trim());
-        questionDto.setOptions(options);
-        questionDto.setCorrectAnswers(answers);
-        questionDto.setCorrectAnswer(answers.get(0));
-        questionDto.setType(type);
+        com.bidv.coretraining.service.QuestionValidation.normalize(questionDto);
     }
 
     private Lesson resolveQuestionLesson(QuestionDto questionDto, Course course) {

@@ -2,6 +2,12 @@ import { axiosClient } from './axiosClient';
 import type { TrainingDomain, TrainingProgram, Chapter, Course, CourseOutline, Lesson } from '../types';
 
 export const trainingApi = {
+  async uploadCourseImage(file: File, courseId?: string, programId?: string) {
+    const data = new FormData(); data.append('file', file);
+    return (await axiosClient.post<{ thumbnail: string }>('/api/admin/courses/images', data, {
+      params: { courseId: courseId || undefined, programId: programId || undefined }, headers: { 'Content-Type': 'multipart/form-data' }
+    })).data;
+  },
   async catalog() { return (await axiosClient.get<{domains: TrainingDomain[]; programs: TrainingProgram[]}>('/api/admin/training/catalog')).data; },
   async saveDomain(data: Partial<TrainingDomain>) { return (await axiosClient[data.id ? 'put' : 'post']<TrainingDomain>(`/api/admin/training-domains${data.id ? `/${data.id}` : ''}`, data)).data; },
   async saveProgram(data: Partial<TrainingProgram>) { return (await axiosClient[data.id ? 'put' : 'post']<TrainingProgram>(`/api/admin/training-programs${data.id ? `/${data.id}` : ''}`, data)).data; },

@@ -59,10 +59,16 @@
       <TablePagination v-model:page="page" v-model:page-size="pageSize" :total="filtered.length" :page-count="pageCount" :unit="course && !chapter ? 'chương' : 'bản ghi'" :unit-label="course && !chapter ? 'Chương' : 'Bản ghi'" />
     </section>
 
-    <AdminModal :open="!!formKind" :title="formTitle || ''" :busy="busy" :submit-label="formKind === 'lesson' ? 'Tạo và soạn bài' : formKind === 'chapter' && !form.id ? 'Lưu và mở chương' : formKind === 'course' && !form.id ? 'Lưu nháp và soạn nội dung' : 'Lưu thay đổi'" @close="closeForm" @submit="save">
+    <AdminModal :open="!!formKind" :title="formTitle || ''" :busy="busy || uploadingImage" :submit-label="formKind === 'lesson' ? 'Tạo và soạn bài' : formKind === 'chapter' && !form.id ? 'Lưu và mở chương' : formKind === 'course' && !form.id ? 'Lưu nháp và soạn nội dung' : 'Lưu thay đổi'" @close="closeForm" @submit="save">
       <p class="admin-modal-help">{{ formKind === 'lesson' ? `${course?.name} / ${lessonChapter?.title || chapter?.title}` : formKind === 'chapter' ? `Khóa: ${course?.name}` : 'Thông tin đào tạo' }}</p>
       <label class="admin-form-field">Mã {{ formKind === 'lesson' ? 'bài học' : '' }} *<input v-model="form.code" required :disabled="formKind === 'lesson' && !!form.id" /></label><label class="admin-form-field">Tên *<input v-model="form.name" required /></label>
         <label class="admin-form-field" v-if="formKind === 'course'">Chương trình đào tạo *<select v-model="form.programId" required><option value="" disabled>Chọn chương trình</option><option v-for="program in programs.filter(p => p.status === 'ACTIVE')" :key="program.id" :value="program.id">{{ domains.find(d => d.id === program.domainId)?.name }} / {{ program.name }}</option></select></label>
+        <template v-if="formKind === 'course'">
+          <div class="admin-form-grid"><label class="admin-form-field">Phân hệ nghiệp vụ<input v-model="form.businessModule" maxlength="255" placeholder="Ví dụ: LN, CIF, GL" /></label><label class="admin-form-field">Mức độ<input v-model="form.level" maxlength="255" placeholder="Ví dụ: Cơ bản, nâng cao" /></label></div>
+          <label class="admin-form-field">Từ khóa<input v-model="form.keywords" placeholder="Từ khóa tìm kiếm khóa học" /></label>
+          <label class="admin-form-field">Hạn hoàn thành mặc định<input v-model="form.completionDeadline" type="date" /><small>Áp dụng cho học viên tham gia khóa; để trống nếu không quy định hạn.</small></label>
+          <div class="admin-form-field"><span>Ảnh khóa học</span><CourseThumbnail v-if="form.thumbnail" :thumbnail="form.thumbnail" :name="form.name || 'Ảnh khóa học'" class="course-image-preview" /><input type="file" accept="image/png,image/jpeg" :disabled="busy || uploadingImage || (!form.id && !form.programId)" @change="uploadImage" /><small>PNG hoặc JPEG, tối đa 5 MB. Chọn chương trình trước khi tải ảnh. Khuyến nghị tỷ lệ 16:9.</small><button v-if="form.thumbnail" type="button" class="btn btn-secondary" :disabled="busy || uploadingImage" @click="form.thumbnail = ''">Bỏ ảnh</button><p v-if="uploadingImage" role="status">Đang tải ảnh...</p></div>
+        </template>
         <label class="admin-form-field" v-if="formKind === 'program'">Lĩnh vực *<select v-model="form.domainId" required><option v-for="domain in domains" :key="domain.id" :value="domain.id">{{ domain.name }}</option></select></label>
         <div v-if="formKind==='program'" class="admin-form-field"><span>Đơn vị của chương trình *</span><OrganizationMultiTreeSelect v-model="form.unitIds" :units="units" :disabled="busy" /><small>Có thể chọn nhiều đơn vị. Khóa học kế thừa phạm vi của chương trình.</small></div>
         <label class="admin-form-field">{{ formKind === 'lesson' ? 'Gợi ý nghiệp vụ' : 'Mô tả' }}<textarea v-model="form.description" rows="3" /></label>
@@ -93,6 +99,7 @@ import type {OrganizationUnit} from '../types/organization';
 import {axiosClient} from '../api/axiosClient';
 import AdminModal from '../components/AdminModal.vue';
 import TablePagination from '../components/TablePagination.vue';
+import CourseThumbnail from '../components/CourseThumbnail.vue';
 import { showToast } from '../utils/toast';
 type Row = Course | Chapter | Lesson;
 type FormKind = 'domain' | 'program' | 'course' | 'chapter' | 'lesson';
@@ -190,10 +197,12 @@ async function load() {
   }
 }
 watch(()=>route.fullPath,()=>{expansionBeforeFilter=new Set();query.value='';statusFilter.value='';page.value=1;expandedChapterIds.value=new Set();focusApplied.value=false;void load();},{immediate:true});
-const formKind=ref<FormKind|null>(null); const form=ref({id:'',code:'',name:'',description:'',programId:'',domainId:'',status:'ACTIVE',unitIds:[] as string[],version:undefined as number|undefined});
+const formKind=ref<FormKind|null>(null); const form=ref({id:'',code:'',name:'',description:'',programId:'',domainId:'',status:'ACTIVE',unitIds:[] as string[],version:undefined as number|undefined,thumbnail:'',businessModule:'',level:'',keywords:'',completionDeadline:''});
+const uploadingImage=ref(false);
+async function uploadImage(event:Event){const input=event.target as HTMLInputElement;const file=input.files?.[0];if(!file)return;if(!['image/png','image/jpeg'].includes(file.type)||file.size>5*1024*1024){showToast('Chọn ảnh PNG/JPEG không vượt quá 5 MB.','error');input.value='';return;}uploadingImage.value=true;try{form.value.thumbnail=(await trainingApi.uploadCourseImage(file,form.value.id,form.value.programId)).thumbnail;}catch(e){showToast(serverError(e),'error');}finally{uploadingImage.value=false;input.value='';}}
 const formTitle=computed(()=>`${form.value.id?'Sửa':'Tạo'} ${{domain:'lĩnh vực',program:'chương trình',course:'khóa học',chapter:'chương',lesson:'bài học'}[formKind.value || 'course']}`);
-function openForm(kind:FormKind,r?:Partial<Row|TrainingDomain|TrainingProgram>){formKind.value=kind;const item=r as Partial<Course & Chapter & Lesson & TrainingProgram> | undefined;form.value={id:item?.id || '',code:item?.code || (kind==='lesson'?item?.id || '':''),name:item?.name || item?.title || '',description:item?.description || item?.hint || '',programId:item?.programId || '',domainId:item?.domainId || domainId.value,status:item?.status || 'ACTIVE',unitIds:[...(item?.unitIds || [])],version:item?.version};}
-function closeForm(){if(!busy.value)formKind.value=null;}
+function openForm(kind:FormKind,r?:Partial<Row|TrainingDomain|TrainingProgram>){formKind.value=kind;const item=r as Partial<Course & Chapter & Lesson & TrainingProgram> | undefined;form.value={id:item?.id || '',code:item?.code || (kind==='lesson'?item?.id || '':''),name:item?.name || item?.title || '',description:item?.description || item?.hint || '',programId:item?.programId || '',domainId:item?.domainId || domainId.value,status:item?.status || 'ACTIVE',unitIds:[...(item?.unitIds || [])],version:item?.version,thumbnail:item?.thumbnail || '',businessModule:item?.businessModule || '',level:item?.level || '',keywords:item?.keywords || '',completionDeadline:item?.completionDeadline || ''};}
+function closeForm(){if(!busy.value && !uploadingImage.value)formKind.value=null;}
 function openRow(r:Row){if(chapter.value)openLesson(r as Lesson);else if(course.value)toggleChapter(r.id);else router.push(`/admin/courses/${r.id}`);}
 function openLesson(lesson: Lesson) { void router.push(`/admin/lessons/${encodeURIComponent(lesson.id)}/edit`); }
 function openLessonForm(target: Chapter) {
@@ -204,7 +213,7 @@ function openLessonForm(target: Chapter) {
 }
 function editRow(r:Row){if(chapter.value)openRow(r);else openForm(course.value?'chapter':'course',r);}
 async function save(){
-  if(busy.value || !formKind.value)return;
+  if(busy.value || uploadingImage.value || !formKind.value)return;
   busy.value=true;
   const f=form.value,kind=formKind.value;
   let destination='';
@@ -212,7 +221,7 @@ async function save(){
     if(kind==='domain')await trainingApi.saveDomain({...f,id:f.id || undefined});
     else if(kind==='program')await trainingApi.saveProgram({...f,id:f.id || undefined});
     else if(kind==='course'){
-      const saved=await trainingApi.saveCourse({...f,id:f.id || undefined,iconName:'BookOpen'});
+      const saved=await trainingApi.saveCourse({...f,id:f.id || undefined,iconName:'BookOpen',completionDeadline:f.completionDeadline || null});
       destination=`/admin/courses/${saved.id}`;
     }else if(kind==='chapter'){
       const saved=await trainingApi.saveChapter(course.value!.id,{...f,id:f.id || undefined,title:f.name});

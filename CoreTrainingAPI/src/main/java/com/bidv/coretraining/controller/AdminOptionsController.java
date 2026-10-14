@@ -9,7 +9,8 @@ public class AdminOptionsController {
     private final AuthorizationService auth;private final OrganizationUnitRepository units;private final TrainingProgramRepository programs;private final CourseRepository courses;private final TrainingDomainRepository domains;
     @org.springframework.beans.factory.annotation.Autowired private UserGroupRepository groups;
     public AdminOptionsController(AuthorizationService auth,OrganizationUnitRepository units,TrainingProgramRepository programs,CourseRepository courses,TrainingDomainRepository domains){this.auth=auth;this.units=units;this.programs=programs;this.courses=courses;this.domains=domains;}
-    @GetMapping("/{page}") public Map<String,Object> options(@PathVariable String page){
+    @GetMapping("/{page}") @org.springframework.transaction.annotation.Transactional(readOnly=true)
+    public Map<String,Object> options(@PathVariable String page){
         AccessPolicy.require(Set.of("users","groups","roles","catalog","courses","exams","documents").contains(page));auth.requireOperation(page,"read");var u=auth.current();
         String permission=page+":read";
         return Map.of("canManageDomains",AccessPolicy.has(u,"catalog:create"),"units",units.findAll().stream().filter(n->AccessPolicy.system(u)||AccessPolicy.inScope(u,n)).map(n->new AccessManagementService.UnitDto(n.getId(),n.getName(),n.getType(),n.getParent()==null?null:n.getParent().getId(),n.isActive())).toList(),

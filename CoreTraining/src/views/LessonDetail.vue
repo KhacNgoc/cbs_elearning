@@ -24,6 +24,9 @@
         :total-lessons="course?.lessons.length || 0"
         :initial-position-seconds="currentLessonProgress?.lastPositionSeconds || 0"
         :initial-watched-seconds="currentLessonProgress?.watchedSeconds || 0"
+        :initial-document-page="currentLessonProgress?.documentId === selectedDocument?.id ? currentLessonProgress?.documentPage || 1 : 1"
+        :initial-scroll-offset="currentLessonProgress?.documentId === selectedDocument?.id ? currentLessonProgress?.scrollOffset || 0 : 0"
+        @document-position="handleDocumentPosition"
         @adjacent="goToAdjacentLesson"
         @close-document="selectedDocument = null"
         @download-document="downloadDocument"
@@ -61,12 +64,13 @@
       </button>
       <div
         v-if="sidebarOpen"
-        class="mobile-overlay"
+        class="mobile-overlay cursor-pointer"
         @click="sidebarOpen = false"
       ></div>
     </div>
 
     <section class="lesson-information">
+      <LessonReportForm v-if="userStore.canLearn" :key="lesson.id" :lesson-id="lesson.id" :lesson-title="lesson.title" />
       <LessonOverview
         :lesson="lesson"
         :course-name="fullCourse?.name"
@@ -100,7 +104,7 @@
     <Transition name="quiz-gate">
       <div
         v-if="quizGateOpen"
-        class="quiz-gate-backdrop"
+        class="quiz-gate-backdrop cursor-pointer"
         role="presentation"
         @click.self="closeQuizPrompt"
       >
@@ -153,7 +157,7 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { AlertTriangle, ChevronLeft, ChevronRight, X } from "lucide-vue-next";
 import { useCourseStore } from "../stores/courseStore";
 import { useUserStore } from "../stores/userStore";
@@ -165,11 +169,14 @@ import LessonLearningHeader from "../components/lesson/LessonLearningHeader.vue"
 import LessonCourseSidebar from "../components/lesson/LessonCourseSidebar.vue";
 import LessonMediaStage from "../components/lesson/LessonMediaStage.vue";
 import LessonOverview from "../components/lesson/LessonOverview.vue";
+import LessonReportForm from "../components/lesson/LessonReportForm.vue";
 import LessonDiscussion from "../components/lesson/LessonDiscussion.vue";
 import LessonVideoNotes from "../components/lesson/LessonVideoNotes.vue";
 
 const props = defineProps<{ id: string }>();
 const router = useRouter();
+const route = useRoute();
+const bookmarkReady = ref(false);
 const courseStore = useCourseStore();
 const userStore = useUserStore();
 const mediaStage = ref<InstanceType<typeof LessonMediaStage> | null>(null);
@@ -231,6 +238,7 @@ const currentLessonIndex = computed(
 );
 
 const loadLessonData = async (lessonId: string) => {
+  bookmarkReady.value = false;
   currentVideoTime.value = 0;
   videoNotes.value = [];
   await Promise.all([
@@ -255,6 +263,7 @@ const loadLessonData = async (lessonId: string) => {
   }
   const progress = userStore.lessonProgress?.[lessonId];
   currentProgressSnapshot.value = {
+    ...progress,
     lastPositionSeconds: progress?.lastPositionSeconds || 0,
     watchedSeconds: progress?.watchedSeconds || 0,
     durationSeconds: progress?.durationSeconds || 0,
@@ -264,6 +273,9 @@ const loadLessonData = async (lessonId: string) => {
 const selectInitialContent = (requestedDocument?: LessonDocument) => {
   if (!lesson.value) return;
   const documents = lesson.value.documents || [];
+  const saved=userStore.lessonProgress?.[lesson.value.id];
+  const requestedId=typeof route.query.documentId==='string'?Number(route.query.documentId):saved?.contentType==='DOCUMENT'?saved.documentId:undefined;
+  requestedDocument ||= documents.find(d=>d.id===requestedId);
   if (requestedDocument) {
     selectedDocument.value =
       documents.find(
@@ -298,6 +310,8 @@ onMounted(async () => {
   ]);
   await loadLessonData(props.id);
   selectInitialContent();
+  bookmarkReady.value = true;
+  await persistCurrentProgress();
   sidebarOpen.value = window.innerWidth > 900;
 });
 
@@ -318,26 +332,43 @@ watch(
         : undefined;
     pendingDocument.value = null;
     selectInitialContent(requestedDocument);
+    bookmarkReady.value = true;
+    await persistCurrentProgress();
     if (window.innerWidth <= 900) sidebarOpen.value = false;
   },
 );
 
 const handleVideoProgress = (progress: LessonProgressRequest) => {
-  currentProgressSnapshot.value = progress;
+  if(selectedDocument.value)return;
+  currentProgressSnapshot.value = { ...progress, contentType: 'VIDEO' };
   if (progressSaveTimer) clearTimeout(progressSaveTimer);
   progressSaveTimer = setTimeout(() => void persistCurrentProgress(), 5000);
 };
 
 const persistCurrentProgress = async () => {
-  if (!lesson.value) return null;
+  if (!lesson.value || !bookmarkReady.value) return null;
   if (progressSaveTimer) {
     clearTimeout(progressSaveTimer);
     progressSaveTimer = null;
   }
   return userStore.saveLessonProgress(lesson.value.id, {
     ...currentProgressSnapshot.value,
+    contentType: selectedDocument.value ? 'DOCUMENT' : lesson.value.videoUrl ? 'VIDEO' : 'TEXT',
+    documentId: selectedDocument.value?.id,
+    documentPage: selectedDocument.value ? currentProgressSnapshot.value.documentPage || 1 : undefined,
   });
 };
+const handleDocumentPosition = (position:{page:number;scrollOffset:number}) => {
+  if(!selectedDocument.value || !bookmarkReady.value)return;
+  currentProgressSnapshot.value={...currentProgressSnapshot.value,contentType:'DOCUMENT',documentId:selectedDocument.value.id,documentPage:position.page,scrollOffset:position.scrollOffset};
+  if(progressSaveTimer)clearTimeout(progressSaveTimer);
+  progressSaveTimer=setTimeout(()=>void persistCurrentProgress(),1000);
+};
+watch(selectedDocument, async document => {
+  if(!bookmarkReady.value || !lesson.value)return;
+  if(document){const saved=userStore.lessonProgress?.[lesson.value.id];currentProgressSnapshot.value={...currentProgressSnapshot.value,documentId:document.id,documentPage:saved && saved.documentId===document.id?saved.documentPage:1,scrollOffset:saved && saved.documentId===document.id?saved.scrollOffset:0};}
+  await persistCurrentProgress();
+});
 
 const handleVideoEnded = async (progress: LessonProgressRequest) => {
   if (!userStore.canLearn || !lesson.value) return;

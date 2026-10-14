@@ -66,6 +66,7 @@
           <span>2</span>
           <div><h2>Danh sách câu hỏi</h2><p>{{ questions.length }} câu hỏi trong bài kiểm tra.</p></div>
           <div v-if="canAction('create')" class="question-tools">
+            <button class="secondary-button" @click="showBank = true">Ngân hàng câu hỏi</button>
             <button v-if="canAction('update')" class="ai-button" :disabled="generating" @click="showAiPanel = !showAiPanel">
               <Sparkles :size="16" /> {{ generating ? "Đang tạo..." : "Tạo bằng AI" }}
             </button>
@@ -176,6 +177,8 @@
               <option value="MULTIPLE_CHOICE">Multiple choice</option>
             </select>
           </label>
+          <fieldset class="question-answer-section">
+          <legend>Các lựa chọn trả lời</legend>
           <div class="answer-editor">
             <label v-for="index in form.options.length" :key="index" :class="{ correct: form.correctAnswers.includes(index - 1) }">
               <ToggleSwitch :show-label="false" v-if="form.type === 'MULTIPLE_CHOICE'" :model-value="form.correctAnswers.includes(index - 1)" :label="`Đáp án ${String.fromCharCode(64+index)} là đáp án đúng`" @update:model-value="toggleCorrectAnswer(index - 1)" />
@@ -185,10 +188,38 @@
               <CheckCircle2 v-if="form.correctAnswers.includes(index - 1)" :size="18" />
             </label>
           </div>
+          </fieldset>
+          <label class="question-text-field"><span>Giải thích đáp án</span><textarea v-model="form.explanation" rows="3" maxlength="20000" /></label>
         </div></AdminModal>
+        <AdminModal :open="showBank" title="Thêm câu hỏi từ ngân hàng" :width="1200" @close="showBank=false"><QuestionBankPanel v-if="showBank" picker :lesson-id="lessonId" :existing-ids="questions.map(q=>q.bankQuestionId).filter((id):id is number=>id!=null)" @added="bankAdded" /><template #footer><button type="button" class="btn btn-secondary" @click="showBank=false">Đóng</button></template></AdminModal>
 
 
-        <div class="admin-table-scroll"><table class="admin-data-table"><colgroup><col style="width:6%" /><col style="width:60%" /><col style="width:16%" /><col style="width:18%" /></colgroup><thead><tr><th>STT</th><th>Câu hỏi / đáp án</th><th>Loại</th><th>Thao tác</th></tr></thead><tbody><tr v-for="(question,index) in paginatedQuestions" :key="question.id"><td>{{ (questionPage-1)*questionPageSize+index+1 }}</td><td class="question-table-content"><strong>{{ question.text }}</strong><div class="answer-grid"><span v-for="(option,optionIndex) in question.options" :key="optionIndex" :class="{correct:questionCorrectAnswers(question).includes(optionIndex)}"><strong>{{ String.fromCharCode(65+optionIndex) }}</strong>{{ option }}<CheckCircle2 v-if="questionCorrectAnswers(question).includes(optionIndex)" :size="15" /></span></div></td><td><span class="question-type-badge">{{ question.type==='MULTIPLE_CHOICE'?'Nhiều đáp án':'Một đáp án' }}</span></td><td><div v-if="canEdit" class="admin-row-actions"><button v-if="canAction('update')" class="admin-row-edit" @click="editQuestion(question)">Sửa</button><button v-if="canAction('delete')" class="admin-row-delete" @click="deleteQuestion(question)">Xóa</button></div><span v-else>Chỉ xem</span></td></tr><tr v-if="!filteredQuestions.length"><td colspan="4" class="admin-empty">{{ searchQuery?'Không tìm thấy câu hỏi phù hợp.':'Bài kiểm tra chưa có câu hỏi.' }}</td></tr></tbody></table></div>
+        <div class="admin-table-scroll">
+          <table class="admin-data-table quiz-questions-table">
+            <colgroup><col style="width:5%" /><col style="width:46%" /><col style="width:12%" /><col style="width:15%" /><col style="width:22%" /></colgroup>
+            <thead><tr><th scope="col">STT</th><th scope="col">Câu hỏi / đáp án</th><th scope="col">Loại</th><th scope="col">Ngân hàng câu hỏi</th><th scope="col">Thao tác</th></tr></thead>
+            <tbody>
+              <tr v-for="(question,index) in paginatedQuestions" :key="question.id">
+                <td>{{ (questionPage-1)*questionPageSize+index+1 }}</td>
+                <td class="question-table-content"><strong>{{ question.text }}</strong><div class="answer-grid"><span v-for="(option,optionIndex) in question.options" :key="optionIndex" :class="{correct:questionCorrectAnswers(question).includes(optionIndex)}"><strong>{{ String.fromCharCode(65+optionIndex) }}</strong>{{ option }}<CheckCircle2 v-if="questionCorrectAnswers(question).includes(optionIndex)" :size="15" /></span></div></td>
+                <td><span class="question-type-badge">{{ question.type==='MULTIPLE_CHOICE'?'Nhiều đáp án':'Một đáp án' }}</span></td>
+                <td class="bank-status-cell">
+                  <span class="bank-save-status" :class="{saved:question.bankQuestionId!=null}"><CheckCircle2 v-if="question.bankQuestionId!=null" :size="14" />{{ question.bankQuestionId!=null?'Đã lưu':'Chưa lưu' }}</span>
+                  <small v-if="question.bankQuestionCode" class="bank-source-code">{{ question.bankQuestionCode }}</small>
+                </td>
+                <td>
+                  <div v-if="canEdit || (canCapture && question.bankQuestionId==null)" class="admin-row-actions quiz-question-actions">
+                    <button v-if="canAction('update')" type="button" class="admin-row-edit" @click="editQuestion(question)">Sửa</button>
+                    <button v-if="canAction('delete')" type="button" class="admin-row-delete" @click="deleteQuestion(question)">Xóa</button>
+                    <button v-if="canCapture && question.bankQuestionId==null" type="button" class="secondary-button bank-save-action" :disabled="capturing!==null" @click="captureQuestion(question)">{{ capturing===question.id?'Đang lưu…':'Lưu vào ngân hàng' }}</button>
+                  </div>
+                  <span v-else>Chỉ xem</span>
+                </td>
+              </tr>
+              <tr v-if="!filteredQuestions.length"><td colspan="5" class="admin-empty">{{ searchQuery?'Không tìm thấy câu hỏi phù hợp.':'Bài kiểm tra chưa có câu hỏi.' }}</td></tr>
+            </tbody>
+          </table>
+        </div>
         <TablePagination v-model:page="questionPage" v-model:page-size="questionPageSize" :total="filteredQuestions.length" :page-count="questionPageCount" unit="câu hỏi" unit-label="Câu hỏi" />
       </section>
       <section v-if="canAction('delete')" class="danger-zone">
@@ -229,6 +260,8 @@ import {useTablePagination} from '../composables/useTablePagination';
 import ConfirmModal from "../components/ConfirmModal.vue";
 import LessonKnowledgeSources from "../components/LessonKnowledgeSources.vue";
 import { showToast } from "../utils/toast";
+import QuestionBankPanel from '../components/QuestionBankPanel.vue';
+import {contentToolsApi,contentToolsError} from '../api/contentToolsApi';
 
 const props=defineProps<{embedded?:boolean; lesson?:Lesson; readOnly?:boolean}>();
 const emit=defineEmits<{saved:[]}>();
@@ -242,6 +275,10 @@ const canAction=(action:string)=>!props.readOnly && courseStore.courses.find(c=>
 const canEdit=computed(()=>canAction('create')||canAction('update')||canAction('delete'));
 const lessonId = ref("");
 const questions = ref<Question[]>([]);
+const showBank=ref(false),capturing=ref<number|null>(null);
+const canCapture=computed(()=>courseStore.courses.find(c=>c.id===courseId.value)?.adminActions?.exams?.includes('create'));
+async function captureQuestion(question:Question){if(capturing.value!==null || question.bankQuestionId!=null || !canCapture.value)return;capturing.value=question.id;try{const saved=await contentToolsApi.capture(question.id);question.bankQuestionId=saved.id;question.bankQuestionCode=saved.code;showToast(`Đã lưu ${saved.code} vào ngân hàng câu hỏi.`);await loadQuestions();}catch(e){showToast(contentToolsError(e),'error');}finally{capturing.value=null;}}
+async function bankAdded(){showBank.value=false;await loadQuestions();await loadAdminCourses();emit('saved');}
 const searchQuery = ref("");
 const showQuestionForm = ref(false);
 const editingId = ref<number | null>(null);
@@ -277,10 +314,11 @@ const confirmationModal = ref<{
 const passingScore = ref(80);
 const form = reactive<{
   text: string;
+  explanation: string;
   options: string[];
   type: "SINGLE_CHOICE" | "MULTIPLE_CHOICE";
   correctAnswers: number[];
-}>({ text: "", options: ["", "", "", ""], type: "SINGLE_CHOICE", correctAnswers: [0] });
+}>({ text: "", explanation:"", options: ["", "", "", ""], type: "SINGLE_CHOICE", correctAnswers: [0] });
 
 const availableLessons = computed(() => courseStore.courses.find((course) => course.id === courseId.value)?.lessons || []);
 const pageTitle = computed(() => {
@@ -401,6 +439,7 @@ const deleteQuiz = () => {
 };
 const resetForm = () => {
   form.text = "";
+  form.explanation="";
   form.options.splice(0, form.options.length, "", "", "", "");
   form.type = "SINGLE_CHOICE";
   form.correctAnswers = [0];
@@ -411,6 +450,7 @@ const closeQuestionForm = () => { showQuestionForm.value = false; resetForm(); }
 const editQuestion = (question: Question) => {
   editingId.value = question.id;
   form.text = question.text;
+  form.explanation=question.explanation || '';
   form.options.splice(0, form.options.length, ...question.options);
   form.type = question.type || ((question.correctAnswers?.length || 1) > 1 ? "MULTIPLE_CHOICE" : "SINGLE_CHOICE");
   form.correctAnswers = questionCorrectAnswers(question);
@@ -437,6 +477,7 @@ const saveQuestion = async () => {
     courseId: courseId.value,
     lessonId: lessonId.value || undefined,
     text,
+    explanation:form.explanation,
     options,
     type: form.type,
     correctAnswers: [...form.correctAnswers].sort(),
@@ -609,6 +650,7 @@ const saveAiDrafts = async () => {
         courseId: courseId.value,
         lessonId: lessonId.value || undefined,
         text: draft.text,
+        explanation: draft.explanation,
         options: draft.options,
         type: draft.type,
         correctAnswers: draft.correctAnswers,
@@ -698,9 +740,18 @@ const importCsv = async (event: Event) => {
 </script>
 
 <style scoped>
-.modal-question-editor{margin:0!important;padding:0!important;border:0!important;background:transparent!important}.answer-editor .toggle-label,.ai-draft-answer-editor .toggle-label{font-size:.75rem}
+.modal-question-editor{display:grid;gap:1.5rem;margin:0!important;padding:0!important;border:0!important;background:transparent!important}
+.modal-question-editor>.question-text-field,.modal-question-editor>.question-type-field{display:grid;gap:.5rem;margin:0;min-width:0}
+.modal-question-editor>.question-text-field>span,.modal-question-editor>.question-type-field>span{margin:0;line-height:1.5}
+.modal-question-editor textarea{display:block;line-height:1.6}
+.question-answer-section{border:0;padding:0;margin:0;min-width:0}
+.question-answer-section legend{padding:0;margin-bottom:.75rem;font-size:var(--admin-text-label,.8125rem);font-weight:700;line-height:1.5}
+.modal-question-editor .answer-editor{gap:.75rem;margin:0}
+.modal-question-editor .answer-editor label{gap:.5rem;padding:.65rem}
+.answer-editor .toggle-label,.ai-draft-answer-editor .toggle-label{font-size:.75rem}
 
 .question-table-content{min-width:320px;max-width:800px}.question-table-content .answer-grid{margin-top:.7rem}.question-type-badge{white-space:nowrap}.quiz-editor-page{width:100%!important;margin:0!important;padding:2rem!important;box-sizing:border-box}.quiz-editor-page.embedded{padding:0!important}@media(max-width:768px){.quiz-editor-page{padding:1rem!important}}
+.quiz-questions-table{min-width:960px}.quiz-question-actions{display:flex;align-items:center;flex-wrap:wrap;gap:.5rem}.quiz-question-actions button{white-space:nowrap}.bank-save-action{padding:.45rem .65rem;font-size:.8rem}.bank-save-action:disabled{opacity:.55;cursor:wait}.bank-save-status{display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .55rem;border-radius:6px;background:#f1f5f9;color:var(--text-muted);font-size:.78rem;white-space:nowrap}.bank-save-status.saved{background:var(--primary-light);color:var(--primary-color)}.bank-source-code{display:block;margin-top:.4rem;color:var(--text-muted);font-size:.72rem;overflow-wrap:anywhere}
 
 .required-quiz-setting{display:block;margin:1rem 0;color:var(--primary-color);font-weight:600}.required-quiz-setting input{margin-right:.5rem}.required-quiz-setting small{display:block;margin-top:.5rem;font-weight:400;color:var(--text-muted)}
 .quiz-editor-page { width: min(1240px, calc(100% - 3rem)); min-height: 100%; margin: 0 auto; padding: 1.5rem; color: var(--text-color); }

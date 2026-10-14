@@ -79,7 +79,7 @@ foreach ($taskRequiredSetting in @('POSTGRES_DB', 'POSTGRES_USER', 'POSTGRES_PAS
 $env:SPRING_DATASOURCE_URL = "jdbc:postgresql://localhost:5432/$env:POSTGRES_DB"
 $env:SPRING_DATASOURCE_USERNAME = $env:POSTGRES_USER
 $env:SPRING_DATASOURCE_PASSWORD = $env:POSTGRES_PASSWORD
-$env:DATA_INITIALIZER_ENABLED = 'true'
+$env:DATA_INITIALIZER_ENABLED = 'false'
 $env:JWT_COOKIE_SECURE = 'false'
 $env:CORS_ALLOWED_ORIGINS = 'http://localhost:5173,http://localhost:4173,http://localhost:4180'
 $env:APP_RAG_URL = 'http://localhost:8000'

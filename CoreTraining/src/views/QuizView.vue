@@ -43,7 +43,7 @@
           <div 
             v-for="(option, idx) in currentQuestion.options" 
             :key="idx" 
-            class="option-item"
+            class="option-item cursor-pointer"
             :class="{ selected: isSelected(currentQuestion.id, idx) }"
             @click="selectOption(currentQuestion.id, idx)"
           >

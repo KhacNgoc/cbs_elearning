@@ -1,884 +1,97 @@
 <template>
-  <div class="dashboard-view animate-fade-in" :class="{ 'admin-learning-dashboard': userStore.hasAdminAccess }">
-    <!-- Welcome Header Banner -->
-    <div class="welcome-banner card">
-      <div class="welcome-text">
-        <span class="banner-tag">TỔNG QUAN HỌC TẬP</span>
-        <h1>Xin chào, {{ username }} <span class="user-group-tag" v-if="userStore.groupName">({{ userStore.groupName }})</span></h1>
-        <p class="last-lesson-info">
-          Bài học xem gần nhất:
-          <span class="lesson-link" v-if="lastLesson" @click="goToLesson(lastLesson.id)">{{ lastLesson.title }}</span>
-          <span v-else>Chưa xem bài nào</span>
-        </p>
-      </div>
-      <button class="btn btn-primary btn-learn" @click="resumeLearning">
-        TIẾP TỤC HỌC
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-      </button>
+  <main class="learning-home animate-fade-in">
+    <header class="welcome"><div><span class="eyebrow">HỌC TẬP MỖI NGÀY</span><h1>Xin chào, {{ user.fullName || user.username || 'bạn' }}</h1><p>Tiếp tục hành trình học tập của bạn.</p></div></header>
+    <Transition name="content" mode="out-in">
+    <PageLoading v-if="learning.loading" key="loading" label="Đang tải thông tin học tập..." />
+    <div v-else-if="learning.error" class="card empty" role="alert"><p>{{ learning.error }}</p><button class="btn btn-primary" @click="refresh">Thử lại</button></div>
+    <div v-else-if="learning.workspace" key="loaded" class="learning-home-content">
+      <section v-if="learning.workspace.resume" class="resume-banner">
+        <BookOpen :size="28" /><div><span class="eyebrow">{{ learning.workspace.resume.lastAccessedAt ? 'ĐANG HỌC GẦN NHẤT' : 'SẴN SÀNG BẮT ĐẦU' }}</span><h2>{{ learning.workspace.resume.lessonTitle }}</h2><p>{{ learning.workspace.resume.courseName }} · {{ resumeDescription }}</p></div>
+        <button class="btn btn-primary" :disabled="!!opening" @click="continueLearning(learning.workspace.resume)">{{ learning.workspace.resume.lastAccessedAt ? 'Tiếp tục học' : 'Bắt đầu học' }} <ArrowRight :size="18" /></button>
+      </section>
+      <section v-else-if="!summary.joined.length" class="resume-banner"><BookOpen :size="28" /><div><h2>Bắt đầu hành trình học tập</h2><p>Khám phá và đăng ký khóa học phù hợp.</p></div><button class="btn btn-primary" @click="changeTab('discover')">Khám phá khóa học</button></section>
+      <section class="progress-overview" aria-label="Tiến độ học tập">
+        <div class="overall"><div><span>Tiến độ học tập của tôi</span><strong>{{ summary.percent === null ? 'Chưa có dữ liệu' : `${summary.percent}%` }}</strong></div><ProgressBar :progress="summary.percent || 0" height="6px" /><small>{{ summary.completed }}/{{ summary.total }} bài hoàn thành · {{ summary.joined.length }} khóa tham gia</small></div>
+        <button v-for="stat in statusCounts" :key="stat.status" class="status-count" @click="tab = 'mine'; filters.status = stat.status"><strong>{{ stat.count }}</strong><span>{{ learningStatusLabel(stat.status) }}</span></button>
+      </section>
+      <nav class="learning-tabs" role="tablist" aria-label="Danh sách khóa học">
+        <button v-for="item in catalogTabs" :id="`${item.id}-tab`" :key="item.id" role="tab" :aria-selected="tab === item.id" aria-controls="course-list-panel" :class="{ active: tab === item.id }" @click="changeTab(item.id)" @keydown="tabKey($event,item.id)">{{ item.label }} <span>{{ item.count }}</span></button>
+      </nav>
+      <section id="course-list-panel" role="tabpanel" :aria-labelledby="`${tab}-tab`">
+        <div class="search-toolbar"><label class="search-box"><Search :size="19" /><input v-model="filters.search" type="search" placeholder="Tên khóa học, mã hoặc từ khóa..." aria-label="Tìm khóa học theo tên, mã hoặc từ khóa" /></label><label class="select-label">Trạng thái<select v-model="filters.status"><option value="">Tất cả</option><option v-for="status in availableStatuses" :key="status" :value="status">{{ learningStatusLabel(status) }}</option></select></label><button class="btn btn-secondary" :aria-expanded="advanced" aria-controls="advanced-filters" @click="advanced = !advanced"><SlidersHorizontal :size="17" /> Bộ lọc {{ activeFilters ? `(${activeFilters})` : '' }}</button></div>
+        <MotionCollapse :open="advanced"><div id="advanced-filters" class="advanced-filters card"><div class="filter-grid"><label v-for="field in filterFields" :key="field.key">{{ field.label }}<select v-model="filters[field.key]"><option value="">Tất cả</option><option v-for="value in options(field.key)" :key="value" :value="value">{{ optionLabel(field.key,value) }}</option></select></label></div><label class="mandatory-toggle"><input v-model="filters.mandatory" type="checkbox" /> Chỉ khóa học bắt buộc</label><button class="clear-filters" @click="clearFilters">Xóa bộ lọc</button></div></MotionCollapse>
+        <div class="list-meta"><span aria-live="polite">{{ filtered.length }} khóa học {{ tab === 'mine' ? 'của tôi' : 'trong danh mục' }}</span><label>Sắp xếp <select v-model="sort"><option value="deadline">Ưu tiên hạn hoàn thành</option><option value="recent">Học gần đây</option><option value="name">Tên khóa học</option></select></label></div>
+        <TransitionGroup :key="`${tab}-${page}`" name="data-list" tag="div" class="course-grid" appear>
+          <article v-for="(item,index) in paginated" :key="item.course.id" class="learning-course card" :style="{ '--item-delay': `${Math.min(index,4)*20}ms` }">
+            <CourseThumbnail :thumbnail="item.course.thumbnail" :name="item.course.name" />
+            <div class="course-content"><div class="badges"><span class="status-badge" :class="item.learningStatus.toLowerCase()">{{ learningStatusLabel(item.learningStatus) }}</span><span v-if="item.mandatory" class="mandatory-badge">Bắt buộc</span></div><h3>{{ item.course.name }}</h3><p class="course-meta">{{ [item.course.domainName,item.course.businessModule,item.course.level].filter(Boolean).join(' · ') || 'Chưa phân loại' }}</p><p class="course-meta">{{ item.course.programName }}<span v-if="isEnrolled(item)"> · {{ sourceLabel(item.source) }}</span></p>
+              <template v-if="isEnrolled(item)"><div class="course-progress"><span>{{ item.completedCount }}/{{ item.totalCount }} bài hoàn thành</span><strong>{{ item.percent }}%</strong></div><ProgressBar :progress="item.percent" height="6px" /></template><p v-else class="course-meta">{{ item.totalCount }} bài học · Đăng ký cần phê duyệt</p>
+              <footer><span class="deadline" :class="{ urgent: deadlineState(item) }">{{ isEnrolled(item) ? `Hạn: ${formatLearningDate(item.dueDate)}` : `Mã: ${item.course.code || item.course.id}` }}<small v-if="deadlineState(item)">{{ deadlineState(item) }}</small></span><button class="btn" :class="item.learningStatus === 'IN_PROGRESS' ? 'btn-primary' : 'btn-secondary'" :disabled="item.source === 'PENDING' || !!opening" @click="openCourse(item)">{{ actionLabel(item) }}<ArrowRight v-if="item.source !== 'PENDING'" :size="15" /></button></footer>
+            </div>
+          </article>
+        </TransitionGroup>
+        <div v-if="!filtered.length" class="card empty data-reveal"><BookOpen :size="32" /><h3>{{ tab === 'mine' && !summary.joined.length ? 'Chưa có khóa học tham gia' : 'Không có khóa học phù hợp' }}</h3><p>Khám phá khóa học hoặc thay đổi từ khóa và bộ lọc.</p><button class="btn btn-secondary" @click="clearFilters">Xóa tìm kiếm & bộ lọc</button></div>
+        <TablePagination v-model:page="page" v-model:page-size="pageSize" :page-count="pageCount" :total="filtered.length" :sizes="[6, 9, 12]" unit="khóa học" unit-label="Khóa học" />
+      </section>
     </div>
-
-    <!-- Main Content Section: Grid of Courses vs Progress & Analytics -->
-    <div class="dashboard-grid">
-
-      <!-- Left Column: Courses Grid & Radar Chart -->
-      <div class="left-col">
-        <h2 class="section-title">KHÓA HỌC ĐÀO TẠO</h2>
-
-        <!-- Grid of 7 banking courses -->
-        <div class="courses-grid">
-          <div
-            v-for="course in courseStore.courses"
-            :key="course.id"
-            class="course-card card card-hover"
-            :class="{ 'course-locked': !userStore.isCourseAccessible(course.id) }"
-            @click="handleCourseClick(course)"
-          >
-            <div class="course-icon-box">
-              <component :is="getIconComponent(course.iconName)" class="course-icon" />
-            </div>
-            <div class="course-details">
-              <div class="course-header-row">
-                <h3>{{ course.name }}</h3>
-                <span
-                  v-if="userStore.mandatoryCourses.includes(course.id)"
-                  class="badge badge-mandatory"
-                >Bắt buộc</span>
-                <span
-                  v-else-if="userStore.registeredCourses.includes(course.id)"
-                  class="badge badge-optional"
-                >Đã đăng ký</span>
-                <span
-                  v-else-if="userStore.pendingCourses.includes(course.id)"
-                  class="badge badge-pending"
-                >Chờ duyệt</span>
-                <span
-                  v-else
-                  class="badge badge-locked"
-                >Chưa đăng ký</span>
-              </div>
-              <span class="lesson-count">{{ course.lessons.length }} bài học</span>
-            </div>
-            <div class="course-action">
-              <Lock v-if="!userStore.isCourseAccessible(course.id)" class="lock-icon" />
-              <ChevronRight v-else class="arrow-icon" />
-            </div>
-          </div>
-        </div>
-
-        <!-- Competency Analysis Radar Chart -->
-        <div class="radar-section card">
-          <h3 class="card-title">PHÂN TÍCH NĂNG LỰC</h3>
-          <p class="card-subtitle">Biểu đồ đánh giá năng lực nghiệp vụ dựa trên kết quả thi</p>
-          <div class="radar-chart-container">
-            <RadarChart />
-          </div>
-        </div>
-      </div>
-
-      <!-- Right Column: Overall Progress & Badges Showcase -->
-      <div class="right-col">
-        <!-- Overall Progress Card -->
-        <div class="progress-section card">
-          <h3 class="card-title">TIẾN ĐỘ TỔNG THỂ</h3>
-
-          <div class="overall-progress-big">
-            <span class="progress-pct">{{ userStore.overallProgressPercent }}%</span>
-            <span class="progress-ratio">{{ userStore.completedLessonsCount }} / {{ userStore.totalLessonsCount }} ĐÃ HỌC</span>
-          </div>
-
-          <ProgressBar :progress="userStore.overallProgressPercent" height="12px" class="main-prog-bar" />
-
-          <div class="course-progress-list">
-            <div v-for="course in courseStore.courses" :key="course.id" class="course-prog-item">
-              <div class="course-prog-header">
-                <span>{{ course.name }}</span>
-                <span>{{ userStore.getCourseProgressPercent(course.id) }}%</span>
-              </div>
-              <ProgressBar :progress="userStore.getCourseProgressPercent(course.id)" height="6px" />
-              <div
-                class="course-course-status"
-                :class="{ completed: userStore.getCourseProgressPercent(course.id) === 100 }"
-              >
-                <CheckCircle2 v-if="userStore.getCourseProgressPercent(course.id) === 100" :size="15" />
-                <CircleDashed v-else :size="15" />
-                <span>
-                  {{ userStore.getCourseProgressPercent(course.id) === 100
-                    ? 'Đã hoàn thành khóa học'
-                    : 'Chưa hoàn thành khóa học' }}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Achievements & Badges Card -->
-        <div class="badges-section card">
-          <div class="badges-header">
-            <h3 class="card-title">HUY HIỆU ĐÃ ĐẠT</h3>
-            <span class="points-badge">{{ userStore.points }} PTS</span>
-          </div>
-          <p class="card-subtitle">Hoàn thành bài thi tối thiểu 80% để mở khóa</p>
-
-          <div class="badges-mini-grid" v-if="userStore.unlockedBadges.length > 0">
-            <div
-              v-for="badge in userStore.unlockedBadges"
-              :key="badge.id"
-              class="badge-mini-card"
-              :class="badge.type"
-            >
-              <component :is="getBadgeIcon(badge.icon)" class="badge-mini-icon" />
-              <div class="badge-mini-tooltip">
-                <strong>{{ badge.title }}</strong>
-                <span>Nhận ngày {{ badge.unlockedAt }}</span>
-              </div>
-            </div>
-          </div>
-          <div class="empty-badges" v-else>
-            <Award class="empty-icon" />
-            <p>Chưa có huy hiệu nào. Hãy hoàn thành các bài thi thử đạt điểm cao nhé!</p>
-          </div>
-          <router-link to="/leaderboard" class="view-all-link">Bảng xếp hạng & Huy hiệu -></router-link>
-        </div>
-      </div>
-
-    </div>
-
-    <Teleport to="body">
-      <!-- Registration Confirmation Modal -->
-      <div class="modal-overlay animate-fade-in" v-if="showRegisterModal" @click.self="showRegisterModal = false">
-        <div class="modal-card card animate-scale-up" role="dialog" aria-modal="true" aria-labelledby="register-course-title">
-          <div class="modal-header">
-            <div class="modal-icon-box">
-              <BookOpen class="modal-icon" />
-            </div>
-            <h2 id="register-course-title">Đăng ký học Nghiệp vụ</h2>
-          </div>
-          <div class="modal-body">
-            <p>Bạn có muốn đăng ký học thêm khóa học nghiệp vụ <strong>{{ selectedCourseToRegister?.name }}</strong> không?</p>
-            <p class="modal-note">Yêu cầu sẽ được gửi đến quản trị viên. Khóa học được mở sau khi được phê duyệt.</p>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-secondary" @click="showRegisterModal = false" :disabled="isRegistering">HỦY BỎ</button>
-            <button class="btn btn-primary btn-confirm" @click="handleRegisterCourse" :disabled="isRegistering">
-              <span v-if="isRegistering" class="spinner"></span>
-              <span v-else>GỬI YÊU CẦU ĐĂNG KÝ</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
-  </div>
+    </Transition>
+    <AdminModal :open="!!registerTarget" title="Đăng ký khóa học" submit-label="Gửi yêu cầu đăng ký" :width="460" :busy="registering" @close="registerTarget = null" @submit="register"><p>Gửi yêu cầu đăng ký khóa “{{ registerTarget?.course.name }}”? Khóa sẽ mở sau khi được phê duyệt.</p></AdminModal>
+  </main>
 </template>
-
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { useCourseStore } from '../stores/courseStore';
+import { BookOpen, Search, ArrowRight, SlidersHorizontal } from 'lucide-vue-next';
 import { useUserStore } from '../stores/userStore';
+import { useLearningStore } from '../stores/learningStore';
+import { trainingApi } from '../api/trainingApi';
+import type { LearnerCourse, ResumeTarget } from '../types';
+import { deadlineState, formatLearningDate, isEnrolled, learningStatusLabel, learningSummary, normalizeSearch, resumeRoute } from '../utils/learning';
+import CourseThumbnail from '../components/CourseThumbnail.vue';
 import ProgressBar from '../components/ProgressBar.vue';
-import RadarChart from '../components/RadarChart.vue';
-import {
-  Coins,
-  ArrowLeftRight,
-  PiggyBank,
-  Users,
-  Wallet,
-  BookOpen,
-  CreditCard,
-  ChevronRight,
-  Award,
-  Shield,
-  Medal,
-  Lock,
-  CheckCircle2,
-  CircleDashed
-} from 'lucide-vue-next';
-
-const router = useRouter();
-const courseStore = useCourseStore();
-const userStore = useUserStore();
-
-const showRegisterModal = ref(false);
-const selectedCourseToRegister = ref<{ id: string, name: string } | null>(null);
-const isRegistering = ref(false);
-
-onMounted(async () => {
-  await Promise.all([
-    userStore.fetchProgress(),
-    courseStore.fetchCourses()
-  ]);
+import TablePagination from '../components/TablePagination.vue';
+import AdminModal from '../components/AdminModal.vue';
+import MotionCollapse from '../components/MotionCollapse.vue';
+import PageLoading from '../components/PageLoading.vue';
+import { showToast } from '../utils/toast';
+const user = useUserStore(), learning = useLearningStore(), router = useRouter();
+const tab = ref<'mine' | 'discover'>('mine'), advanced = ref(false), sort = ref('deadline'), page = ref(1), pageSize = ref(6), opening = ref('');
+const filters = reactive({ search: '', status: '', domainId: '', businessModule: '', programId: '', level: '', source: '', mandatory: false });
+const filterFields = [{ key: 'domainId', label: 'Lĩnh vực' }, { key: 'businessModule', label: 'Phân hệ nghiệp vụ' }, { key: 'programId', label: 'Chương trình' }, { key: 'level', label: 'Mức độ' }, { key: 'source', label: 'Nguồn tham gia' }] as const;
+const summary = computed(() => learningSummary(learning.workspace?.courses || []));
+const statusCounts = computed(() => [{ status: 'NOT_STARTED', count: summary.value.notStarted }, { status: 'IN_PROGRESS', count: summary.value.inProgress }, { status: 'COMPLETED', count: summary.value.complete }]);
+const catalogTabs = computed(() => [{ id: 'mine' as const, label: 'Khóa học của tôi', count: summary.value.joined.length }, { id: 'discover' as const, label: 'Khám phá & đăng ký', count: (learning.workspace?.courses || []).filter(c => !isEnrolled(c)).length }]);
+const baseCourses = computed(() => (learning.workspace?.courses || []).filter(c => tab.value === 'mine' ? isEnrolled(c) : !isEnrolled(c)));
+const availableStatuses = computed(() => [...new Set(baseCourses.value.map(c => c.learningStatus))]);
+const options = (key: typeof filterFields[number]['key']) => [...new Set(baseCourses.value.map(c => key === 'source' ? c.source : c.course[key]).filter((v): v is string => !!v))].sort((a,b) => a.localeCompare(b,'vi'));
+function optionLabel(key:typeof filterFields[number]['key'],value:string){if(key==='source')return sourceLabel(value);if(key==='domainId'||key==='programId'){const field=key==='domainId'?'domainName':'programName';const course=baseCourses.value.find(c=>c.course[key]===value)?.course;const label=course?.[field]||value;const duplicates=baseCourses.value.some(c=>c.course[field]===label&&c.course[key]!==value);return duplicates?`${label} (${value})`:label;}return value;}
+const activeFilters = computed(() => filterFields.filter(f => filters[f.key]).length + Number(filters.mandatory));
+const filtered = computed(() => {
+  const term = normalizeSearch(filters.search.trim());
+  return baseCourses.value.filter(c => (!filters.status || c.learningStatus === filters.status) && (!filters.mandatory || c.mandatory)
+    && filterFields.every(f => !filters[f.key] || (f.key === 'source' ? c.source : c.course[f.key]) === filters[f.key])
+    && (!term || normalizeSearch([c.course.name,c.course.code,c.course.description,c.course.keywords].filter(Boolean).join(' ')).includes(term)))
+    .sort((a,b) => sort.value === 'name' ? a.course.name.localeCompare(b.course.name,'vi') : sort.value === 'recent' ? (b.lastAccessedAt || '').localeCompare(a.lastAccessedAt || '') : dueRank(a)-dueRank(b) || (b.lastAccessedAt || '').localeCompare(a.lastAccessedAt || ''));
 });
-
-const username = computed(() => userStore.fullName || userStore.username || 'quantrh');
-
-// Grab last lesson in computed, let's use the first completed lesson as mock, or first lesson overall
-const lastLesson = computed(() => {
-  if (courseStore.currentLessonId) {
-    return courseStore.allLessons.find(l => l.id === courseStore.currentLessonId) || null;
-  }
-  return null;
-});
-
-const resumeLearning = () => {
-  if (lastLesson.value) {
-    router.push(`/lesson/${lastLesson.value.id}`);
-  } else {
-    // Go to first lesson of first course that is accessible
-    const firstAccessibleCourse = courseStore.courses.find(t => userStore.isCourseAccessible(t.id));
-    if (firstAccessibleCourse && firstAccessibleCourse.lessons.length > 0) {
-      router.push(`/lesson/${firstAccessibleCourse.lessons[0].id}`);
-    } else {
-      const firstCourse = courseStore.courses[0];
-      if (firstCourse && firstCourse.lessons.length > 0) {
-        router.push(`/lesson/${firstCourse.lessons[0].id}`);
-      }
-    }
-  }
-};
-
-const goToLesson = (lessonId: string) => {
-  router.push(`/lesson/${lessonId}`);
-};
-
-const goToCourseFirstLesson = (course: any) => {
-  if (course.lessons.length > 0) {
-    router.push(`/courses/${course.id}`);
-  }
-};
-const handleCourseClick = (course: any) => {
-  if (userStore.isCourseAccessible(course.id)) {
-    goToCourseFirstLesson(course);
-  } else if (userStore.pendingCourses.includes(course.id)) {
-    alert('Yêu cầu đăng ký khóa học đang chờ quản trị viên phê duyệt.');
-  } else if(userStore.canLearn) {
-    openRegisterConfirm(course);
-  }
-};
-
-const openRegisterConfirm = (course: any) => {
-  selectedCourseToRegister.value = course;
-  showRegisterModal.value = true;
-};
-
-const handleRegisterCourse = async () => {
-  if (!selectedCourseToRegister.value) return;
-  isRegistering.value = true;
-  try {
-    await userStore.registerCourse(selectedCourseToRegister.value.id);
-    showRegisterModal.value = false;
-    selectedCourseToRegister.value = null;
-  } catch (error) {
-    alert('Đăng ký không thành công. Vui lòng kiểm tra lại kết nối!');
-  } finally {
-    isRegistering.value = false;
-  }
-};
-
-// Map string icon names to Lucide components
-const getIconComponent = (iconName: string) => {
-  switch (iconName) {
-    case 'Coins': return Coins;
-    case 'ArrowLeftRight': return ArrowLeftRight;
-    case 'PiggyBank': return PiggyBank;
-    case 'Users': return Users;
-    case 'Wallet': return Wallet;
-    case 'BookOpen': return BookOpen;
-    case 'CreditCard': return CreditCard;
-    default: return BookOpen;
-  }
-};
-
-const getBadgeIcon = (icon: string) => {
-  switch (icon) {
-    case 'Award': return Award;
-    case 'Medal': return Medal;
-    case 'Shield': return Shield;
-    default: return Shield;
-  }
-};
+function dueRank(c: LearnerCourse) { return c.dueDate && c.learningStatus !== 'COMPLETED' && isEnrolled(c) ? Date.parse(c.dueDate) : Infinity; }
+const pageCount = computed(() => Math.max(1,Math.ceil(filtered.value.length/pageSize.value)));
+const paginated = computed(() => filtered.value.slice((page.value-1)*pageSize.value,page.value*pageSize.value));
+watch([filters,sort,tab,pageSize],() => page.value=1,{deep:true});watch(pageCount,n=>page.value=Math.min(page.value,n));
+function clearFilters(){Object.assign(filters,{search:'',status:'',domainId:'',businessModule:'',programId:'',level:'',source:'',mandatory:false});}
+function changeTab(value:'mine'|'discover'){tab.value=value;clearFilters();}
+function tabKey(e:KeyboardEvent,id:'mine'|'discover'){if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){e.preventDefault();const next=e.key==='Home'?'mine':e.key==='End'?'discover':id==='mine'?'discover':'mine';changeTab(next);document.getElementById(`${next}-tab`)?.focus();}}
+const sourceLabel=(value:string)=>({ASSIGNED:'Được giao',REGISTERED:'Đã đăng ký',PENDING:'Chờ duyệt',AVAILABLE:'Có thể đăng ký'}[value] || value);
+const actionLabel=(item:LearnerCourse)=>item.source==='PENDING'?'Chờ duyệt':item.source==='AVAILABLE'?'Đăng ký học':item.learningStatus==='COMPLETED'?'Xem lại':item.learningStatus==='NOT_STARTED'?'Bắt đầu học':'Tiếp tục học';
+const resumeDescription = computed(() => {const t=learning.workspace?.resume;if(!t)return '';return t.contentType==='DOCUMENT'?`Tài liệu · Trang ${t.documentPage || 1}`:t.contentType==='QUIZ'?'Kiểm tra bắt buộc cần hoàn thành':t.contentType==='VIDEO'?`Video · ${Math.floor((t.positionSeconds || 0)/60)}:${String(Math.floor((t.positionSeconds || 0)%60)).padStart(2,'0')}`:'Nội dung bài học';});
+async function continueLearning(target:ResumeTarget){await router.push(resumeRoute(target));}
+const registerTarget=ref<LearnerCourse|null>(null),registering=ref(false);
+async function openCourse(item:LearnerCourse){if(item.source==='AVAILABLE'){registerTarget.value=item;return;}if(item.source==='PENDING')return;opening.value=item.course.id;try{if(item.learningStatus!=='COMPLETED'&&item.resume)await continueLearning(item.resume);else{await trainingApi.outline(item.course.id);await router.push(`/courses/${encodeURIComponent(item.course.id)}`);}}catch{showToast('Không thể mở khóa học. Vui lòng thử lại.','error');}finally{opening.value='';}}
+async function register(){if(!registerTarget.value)return;registering.value=true;try{await user.registerCourse(registerTarget.value.course.id);registerTarget.value=null;await learning.load();showToast('Đã gửi yêu cầu đăng ký.');}catch{showToast('Không gửi được yêu cầu đăng ký.','error');}finally{registering.value=false;}}
+async function refresh(){await Promise.all([user.fetchProgress(),learning.load()]);}
+onMounted(refresh);
 </script>
-
 <style scoped>
-.dashboard-view {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
-
-.admin-learning-dashboard { width: 100%; max-width: 1440px; margin-inline: auto; min-width: 0; container-type: inline-size; }
-.admin-learning-dashboard .welcome-banner { background: linear-gradient(110deg, #fff, #f0f7f3); color: var(--text-main); border: 1px solid #dce7e2; box-shadow: var(--shadow-sm); gap: 1.25rem; flex-wrap: wrap; padding: clamp(1.25rem, 2.5vw, 2rem); }
-.admin-learning-dashboard .welcome-banner::before { display: none; }
-.admin-learning-dashboard .welcome-text { min-width: 0; flex: 1 1 380px; }
-.admin-learning-dashboard .welcome-text h1 { font-size: clamp(1.5rem, 2vw, 2rem); line-height: 1.4; overflow-wrap: anywhere; margin-top: .75rem; }
-.admin-learning-dashboard .banner-tag { color: var(--primary-color); background: #e3f0e9; }
-.admin-learning-dashboard .last-lesson-info { color: var(--text-muted); line-height: 1.6; }
-.admin-learning-dashboard .lesson-link { color: var(--primary-color); }
-.admin-learning-dashboard .user-group-tag { color: var(--primary-color); background: #e3f0e9; }
-.admin-learning-dashboard .btn-learn { flex-shrink: 0; background: var(--primary-color); color: #fff; box-shadow: none; }
-.admin-learning-dashboard .btn-learn:hover { background: #004632; color: #fff; }
-.admin-learning-dashboard .left-col, .admin-learning-dashboard .right-col { min-width: 0; }
-@container (max-width: 1000px) { .admin-learning-dashboard .dashboard-grid { grid-template-columns: 1fr; } }
-
-.welcome-banner {
-  background: linear-gradient(135deg, var(--primary-color) 0%, #004632 100%);
-  color: white;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border: none;
-  padding: 2.2rem;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  position: relative;
-  overflow: hidden;
-}
-
-.welcome-banner::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  right: -20%;
-  width: 350px;
-  height: 350px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(212, 175, 55, 0.15) 0%, transparent 70%);
-  pointer-events: none;
-}
-
-.banner-tag {
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: var(--accent-color);
-  letter-spacing: 1.5px;
-  background-color: rgba(255, 255, 255, 0.1);
-  padding: 0.25rem 0.75rem;
-  border-radius: var(--radius-full);
-}
-
-.welcome-text h1 {
-  font-size: 2.2rem;
-  font-weight: 700;
-  margin-top: 0.5rem;
-  margin-bottom: 0.25rem;
-}
-
-.last-lesson-info {
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 0.95rem;
-}
-
-.lesson-link {
-  color: var(--accent-color);
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-.btn-learn {
-  padding: 0.9rem 2.2rem;
-  border-radius: var(--radius-full);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
-  font-size: 1rem;
-  background-color: white;
-  color: var(--primary-color);
-  border: 1.5px solid transparent;
-}
-
-.btn-learn:hover {
-  background-color: var(--accent-color);
-  color: #000;
-  transform: translateY(-2px);
-}
-
-.btn-icon {
-  width: 18px;
-  height: 18px;
-}
-
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 2rem;
-}
-
-.left-col, .right-col {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.section-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--text-main);
-  letter-spacing: 0.5px;
-  border-left: 4px solid var(--primary-color);
-  padding-left: 0.75rem;
-  margin-bottom: -0.5rem;
-}
-
-.courses-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.85rem;
-}
-
-.course-card {
-  display: flex;
-  align-items: center;
-  padding: 1.1rem 1.5rem;
-  gap: 1.25rem;
-  cursor: pointer;
-}
-
-.course-icon-box {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius-md);
-  background-color: var(--primary-light);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--primary-color);
-}
-
-.course-icon {
-  width: 24px;
-  height: 24px;
-}
-
-.course-details {
-  flex: 1;
-}
-
-.course-details h3 {
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: var(--text-main);
-}
-
-.lesson-count {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  font-weight: 500;
-}
-
-.arrow-icon {
-  color: var(--text-muted);
-  width: 20px;
-  height: 20px;
-  transition: var(--transition);
-}
-
-.course-card:hover .arrow-icon {
-  color: var(--primary-color);
-  transform: translateX(4px);
-}
-
-.radar-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  min-height: 400px;
-}
-
-.card-title {
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: var(--text-main);
-}
-
-.card-subtitle {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  margin-bottom: 0.5rem;
-}
-
-.radar-chart-container {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-/* Right Column Styles */
-.progress-section {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.overall-progress-big {
-  display: flex;
-  align-items: baseline;
-  gap: 1rem;
-  margin-top: 0.5rem;
-}
-
-.progress-pct {
-  font-size: 3.5rem;
-  font-weight: 800;
-  color: var(--primary-color);
-  line-height: 1;
-}
-
-.progress-ratio {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--text-muted);
-  letter-spacing: 0.5px;
-}
-
-.main-prog-bar {
-  margin-bottom: 1.5rem;
-}
-
-.course-progress-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-.course-prog-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.course-prog-header {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-main);
-}
-
-.course-course-status {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.8rem;
-  color: #64748b;
-  margin-top: 0.15rem;
-  background-color: var(--bg-main);
-  padding: 0.35rem 0.5rem;
-  border-radius: var(--radius-sm);
-  font-weight: 600;
-}
-
-.course-course-status.completed {
-  background: #e8f5ef;
-  color: var(--primary-color);
-}
-
-
-/* Badges section */
-.badges-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.points-badge {
-  background-color: var(--accent-color);
-  color: #000;
-  font-weight: 800;
-  font-size: 0.8rem;
-  padding: 0.25rem 0.75rem;
-  border-radius: var(--radius-full);
-  box-shadow: var(--shadow-sm);
-}
-
-.badges-mini-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin: 1rem 0;
-}
-
-.badge-mini-card {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: var(--transition);
-}
-
-.badge-mini-card:hover {
-  transform: scale(1.1) rotate(5deg);
-  z-index: 10;
-}
-
-.badge-mini-card.gold {
-  background: linear-gradient(135deg, #FFE082 0%, #FFB300 100%);
-  border: 2.5px solid #FF8F00;
-  color: #FF6F00;
-}
-
-.badge-mini-card.silver {
-  background: linear-gradient(135deg, #E0E0E0 0%, #9E9E9E 100%);
-  border: 2.5px solid #757575;
-  color: #424242;
-}
-
-.badge-mini-card.bronze {
-  background: linear-gradient(135deg, #FFCC80 0%, #CA8A04 100%);
-  border: 2.5px solid #A16207;
-  color: #713F12;
-}
-
-.badge-mini-icon {
-  width: 22px;
-  height: 22px;
-}
-
-.badge-mini-tooltip {
-  position: absolute;
-  bottom: 110%;
-  left: 50%;
-  transform: translateX(-50%) translateY(10px);
-  background-color: #1E293B;
-  color: white;
-  padding: 0.5rem 0.75rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.75rem;
-  white-space: nowrap;
-  pointer-events: none;
-  opacity: 0;
-  transition: all 0.2s ease;
-  display: flex;
-  flex-direction: column;
-  box-shadow: var(--shadow-lg);
-  z-index: 20;
-}
-
-.badge-mini-tooltip::before {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border-width: 5px;
-  border-style: solid;
-  border-color: #1E293B transparent transparent transparent;
-}
-
-.badge-mini-card:hover .badge-mini-tooltip {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
-
-.empty-badges {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 1.5rem;
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 0.85rem;
-}
-
-.empty-icon {
-  width: 36px;
-  height: 36px;
-  color: var(--border-color);
-  margin-bottom: 0.5rem;
-}
-
-.view-all-link {
-  font-size: 0.85rem;
-  color: var(--primary-color);
-  font-weight: 700;
-  text-align: right;
-  display: block;
-  margin-top: 0.5rem;
-}
-
-.view-all-link:hover {
-  color: var(--accent-secondary);
-}
-
-@media (max-width: 1024px) {
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* User group styles */
-.user-group-tag {
-  font-size: 1.1rem;
-  font-weight: 500;
-  color: var(--accent-color);
-  margin-left: 0.5rem;
-}
-
-/* Badges for course card */
-.course-header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.25rem;
-}
-
-.course-header-row h3 {
-  margin: 0;
-}
-
-.badge {
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 0.15rem 0.5rem;
-  border-radius: var(--radius-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.badge-mandatory {
-  background-color: var(--primary-light);
-  color: var(--primary-color);
-  border: 1px solid var(--primary-color);
-}
-
-.badge-optional {
-  background-color: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
-  border: 1px solid #3b82f6;
-}
-.badge-pending {
-  background: #fff7d6;
-  color: #8a6b00;
-  border: 1px solid #ead88b;
-}
-
-.badge-locked {
-  background-color: var(--bg-main);
-  color: var(--text-muted);
-  border: 1px solid var(--border-color);
-}
-
-/* Locked Card Styling */
-.course-card.course-locked {
-  opacity: 0.85;
-  background-color: var(--bg-main);
-  border-color: var(--border-color);
-  cursor: pointer;
-  position: relative;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.course-card.course-locked:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-  border-color: var(--primary-color);
-  opacity: 1;
-}
-
-.course-card.course-locked:hover .lock-icon {
-  color: var(--primary-color);
-  transform: scale(1.1);
-}
-
-.lock-icon {
-  color: var(--text-muted);
-  width: 18px;
-  height: 18px;
-  transition: var(--transition);
-}
-
-/* Modal styling */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 999;
-}
-
-.modal-card {
-  width: 90%;
-  max-width: 480px;
-  background-color: var(--bg-card);
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.modal-icon-box {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius-md);
-  background-color: var(--primary-light);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--primary-color);
-}
-
-.modal-icon {
-  width: 24px;
-  height: 24px;
-}
-
-.modal-header h2 {
-  font-size: 1.3rem;
-  font-weight: 700;
-  color: var(--primary-color);
-  margin: 0;
-}
-
-.modal-body {
-  font-size: 0.95rem;
-  color: var(--text-main);
-  line-height: 1.5;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.modal-note {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  background-color: var(--bg-main);
-  padding: 0.75rem;
-  border-radius: var(--radius-sm);
-  border-left: 3px solid var(--primary-color);
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 0.5rem;
-}
-
-.btn-confirm {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  min-width: 140px;
-}
+.learning-home-content{display:flex;flex-direction:column;gap:1.3rem;min-width:0}
+.learning-home{width:100%;max-width:1320px;margin:auto;display:flex;flex-direction:column;gap:1.3rem;min-width:0}.welcome h1{font-size:1.8rem;margin:.3rem 0}.welcome p,.resume-banner p,.course-meta{color:var(--text-muted)}.eyebrow{font-size:.7rem;letter-spacing:1px;color:var(--primary-color);font-weight:700}.resume-banner{display:flex;align-items:center;gap:1.1rem;background:var(--primary-light);border-radius:var(--radius-lg);padding:1.5rem;color:var(--primary-color)}.resume-banner>div{flex:1;min-width:0}.resume-banner h2{font-size:1.1rem;margin:.3rem 0}.resume-banner p{font-size:.85rem}.resume-banner>.btn{flex-shrink:0}.progress-overview{display:flex;align-items:center;gap:2rem;padding:.2rem 0}.overall{flex:1.4;display:flex;flex-direction:column;gap:.5rem;min-width:200px}.overall>div{display:flex;justify-content:space-between;gap:1rem;font-size:.85rem}.overall strong{color:var(--primary-color)}.overall small{color:var(--text-muted)}.status-count{flex:1;border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:.25rem;padding:.5rem}.status-count strong{font-size:1.8rem;color:var(--text-main)}.status-count span{font-size:.8rem;color:var(--text-muted)}.learning-tabs{display:flex;flex-wrap:wrap;gap:1.5rem;border-bottom:1px solid var(--border-color)}.learning-tabs button{background:none;border:0;border-bottom:3px solid transparent;padding:.8rem 0;color:var(--text-muted);font-weight:600}.learning-tabs button.active{color:var(--primary-color);border-bottom-color:var(--primary-color)}.learning-tabs button span{padding:.15rem .5rem;background:var(--primary-light);border-radius:20px;font-size:.7rem}.search-toolbar{display:flex;gap:.8rem;align-items:end;margin-bottom:1rem}.search-box{flex:1;display:flex;align-items:center;gap:.7rem;background:var(--bg-card);padding:.75rem 1rem;border:1px solid var(--border-color);border-radius:10px;color:var(--text-muted)}.search-box input{border:0;background:transparent;flex:1;min-width:0;font-size:.9rem}.select-label,.advanced-filters label{display:flex;flex-direction:column;gap:.4rem;font-size:.8rem;color:var(--text-muted)}select{background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;padding:.6rem;color:var(--text-main);max-width:100%}.filter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;margin-bottom:1rem}.advanced-filters{padding:1rem;margin-bottom:1rem}.advanced-filters .mandatory-toggle{display:inline-flex;flex-direction:row;align-items:center;margin-right:1rem}.clear-filters{background:none;border:0;color:var(--primary-color);padding:.5rem}.list-meta{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.8rem;font-size:.8rem;color:var(--text-muted);margin:1rem 0}.list-meta select{font-size:.8rem;margin-left:.4rem}.course-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1.2rem;margin-bottom:1.5rem}.learning-course{padding:0;overflow:hidden;display:flex;flex-direction:column}.course-content{padding:1.1rem;display:flex;flex-direction:column;gap:.5rem;flex:1;min-width:0}.course-content h3{font-size:1.05rem;overflow-wrap:anywhere}.badges{display:flex;gap:.4rem;flex-wrap:wrap}.status-badge,.mandatory-badge{font-size:.7rem;padding:.2rem .5rem;border-radius:6px;background:var(--bg-main);color:var(--text-muted)}.status-badge.in_progress,.status-badge.completed{background:var(--primary-light);color:var(--primary-color)}.mandatory-badge{background:#fff3cf;color:#785719}.course-meta{font-size:.75rem}.course-progress{display:flex;justify-content:space-between;gap:.6rem;font-size:.75rem;margin-top:.5rem;color:var(--text-muted)}.course-progress strong{color:var(--primary-color)}.course-content footer{display:flex;align-items:center;justify-content:space-between;gap:.7rem;margin-top:auto;padding-top:1rem;flex-wrap:wrap}.course-content footer .btn{font-size:.75rem;padding:.5rem .7rem}.deadline{font-size:.75rem;color:var(--text-muted)}.deadline small{display:block}.deadline.urgent{color:#976718}.empty{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:.8rem;padding:2rem;text-align:center}.empty p{color:var(--text-muted)}
+@media(max-width:1150px){.course-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.resume-banner,.search-toolbar,.progress-overview{flex-wrap:wrap}.resume-banner .btn{margin-left:auto}.overall{flex-basis:100%}.search-box{flex-basis:100%}.filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.progress-overview{gap:.8rem}.status-count{min-width:85px}.welcome h1{font-size:1.45rem}}@media(max-width:480px){.course-grid,.filter-grid{grid-template-columns:1fr}.learning-tabs{gap:1rem}.learning-tabs button{font-size:.85rem}.search-toolbar>.btn{font-size:.8rem}.resume-banner{padding:1rem}.resume-banner>.btn{margin-left:0}.search-box input,select{font-size:16px}}
 </style>

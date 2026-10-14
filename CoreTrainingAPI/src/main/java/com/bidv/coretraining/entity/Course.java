@@ -37,6 +37,10 @@ public class Course {
     @Builder.Default private String status = "DRAFT";
     @Column(columnDefinition="TEXT") private String description;
     private String thumbnail;
+    private String businessModule;
+    private String level;
+    @Column(columnDefinition="TEXT") private String keywords;
+    private java.time.LocalDate completionDeadline;
     @Version private Long version;
     @OneToMany(mappedBy="course", cascade=CascadeType.ALL, orphanRemoval=true)
     @OrderBy("chapterOrder ASC, id ASC") @Builder.Default

@@ -40,9 +40,16 @@ public class LessonProgressService {
         LessonProgress progress = progressRepository.findByUserIdAndLessonId(user.getId(), lessonId)
                 .orElseGet(() -> LessonProgress.builder().user(user).lesson(lesson).build());
 
-        progress.setLastPositionSeconds(nonNegative(request.getLastPositionSeconds()));
+        if(request.getLastPositionSeconds()!=null)progress.setLastPositionSeconds(nonNegative(request.getLastPositionSeconds()));
         progress.setWatchedSeconds(Math.max(progress.getWatchedSeconds(), nonNegative(request.getWatchedSeconds())));
         progress.setDurationSeconds(Math.max(progress.getDurationSeconds(), nonNegative(request.getDurationSeconds())));
+        if(request.getContentType()!=null) {
+            if("DOCUMENT".equals(request.getContentType()) && lesson.getDocuments().stream().noneMatch(d->java.util.Objects.equals(d.getId(),request.getDocumentId())))
+                throw new com.bidv.coretraining.exception.BadRequestException("Tài liệu không thuộc bài học");
+            progress.setContentType(request.getContentType());
+            progress.setDocumentId("DOCUMENT".equals(request.getContentType())?request.getDocumentId():null);
+            progress.setDocumentPage(request.getDocumentPage());progress.setScrollOffset(request.getScrollOffset());
+        } else if(request.getLastPositionSeconds()!=null)progress.setContentType("VIDEO");
         if(progress.getDurationSeconds()>0 && progress.getWatchedSeconds()>=progress.getDurationSeconds()*0.9) progress.setContentCompleted(true);
         progress.setUpdatedAt(LocalDateTime.now());
         return toDto(progressRepository.save(progress));
@@ -85,6 +92,8 @@ public class LessonProgressService {
                 .lastPositionSeconds(nonNegative(progress.getLastPositionSeconds()))
                 .watchedSeconds(nonNegative(progress.getWatchedSeconds()))
                 .durationSeconds(nonNegative(progress.getDurationSeconds()))
+                .updatedAt(progress.getUpdatedAt()).contentType(progress.getContentType()).documentId(progress.getDocumentId())
+                .documentPage(progress.getDocumentPage()).scrollOffset(progress.getScrollOffset()).contentCompleted(progress.isContentCompleted())
                 .build();
     }
 

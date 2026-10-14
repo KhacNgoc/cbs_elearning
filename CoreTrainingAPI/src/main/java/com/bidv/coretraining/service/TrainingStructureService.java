@@ -13,8 +13,11 @@ public class TrainingStructureService {
     public record DomainDto(String id,String code,String name,String description,String status,Set<String> allowedActions) {public DomainDto(String id,String code,String name,String description,String status){this(id,code,name,description,status,Set.of());}}
     public record ProgramDto(String id,String domainId,String code,String name,String description,String status,Set<String> unitIds,Set<String> allowedActions) {}
     public record ChapterDto(String id,String courseId,String code,String title,String description,Integer chapterOrder,String status,Long version,List<LessonDto> lessons,boolean locked,boolean completed) {}
-    public record OutlineDto(CourseDto course,List<ChapterDto> chapters,boolean completed,String resumeLessonId) {}
-    public record CourseRequest(String code,String name,String programId,String description,String iconName,Long version) {}
+    public record OutlineDto(CourseDto course,List<ChapterDto> chapters,boolean completed,String resumeLessonId,LearnerWorkspaceService.Resume resume) {}
+    @org.springframework.beans.factory.annotation.Autowired private LearnerWorkspaceService workspace;
+    public record CourseRequest(String code,String name,String programId,String description,String iconName,Long version,
+            String thumbnail,String businessModule,String level,String keywords,java.time.LocalDate completionDeadline) {}
+    @org.springframework.beans.factory.annotation.Autowired private CourseImageService courseImages;
     public record ChapterRequest(String code,String title,String description,Long version) {}
     @org.springframework.beans.factory.annotation.Autowired private AuthorizationService authorization;
     @org.springframework.beans.factory.annotation.Autowired private OrganizationUnitRepository organizationUnits;
@@ -86,8 +89,13 @@ public class TrainingStructureService {
         if(!"ACTIVE".equals(p.getStatus()) || !"ACTIVE".equals(p.getDomain().getStatus())) throw new BadRequestException("Danh mục đã lưu trữ");
         authorization.program(p,"courses",id==null?"create":"update");
         c.setProgram(p);c.setCode(required(r.code(),"Mã khóa"));c.setName(required(r.name(),"Tên khóa"));c.setDescription(r.description());c.setIconName(r.iconName()==null?"BookOpen":r.iconName());
+        courseImages.assertAttach(r.thumbnail(),c.getThumbnail());
+        c.setThumbnail(r.thumbnail()==null || r.thumbnail().isBlank()?null:r.thumbnail());
+        c.setBusinessModule(clean(r.businessModule()));c.setLevel(clean(r.level()));c.setKeywords(clean(r.keywords()));
+        c.setCompletionDeadline(r.completionDeadline());
         return mapper.toCourseDto(courses.saveAndFlush(c));
     }
+    private String clean(String value) {return value==null || value.isBlank()?null:value.trim();}
     public List<CourseDto> adminCourses() {return authorization.editableCourses().stream().map(c->{CourseDto dto=mapper.toCourseDto(c);dto.setCanEdit(com.bidv.coretraining.security.AccessPolicy.canEdit(authorization.current(),c));dto.setAllowedActions(com.bidv.coretraining.security.AccessPolicy.courseActions(authorization.current(),c));
         dto.setAdminActions(java.util.stream.Stream.of("courses","exams","documents").collect(java.util.stream.Collectors.toMap(p->p,p->java.util.stream.Stream.of("read","create","update","delete").filter(a->com.bidv.coretraining.security.AccessPolicy.allowsCourse(authorization.current(),p+":"+a,c)).collect(java.util.stream.Collectors.toSet()))));
         if(!com.bidv.coretraining.security.AccessPolicy.canReadCourse(authorization.current(),c))dto.getLessons().forEach(TrainingStructureService::outlineOnly);return dto;}).toList();}
@@ -151,7 +159,10 @@ public class TrainingStructureService {
         CourseDto courseDto=mapper.toCourseDto(course);
         courseDto.setCanEdit(com.bidv.coretraining.security.AccessPolicy.canReadCourse(user,course));
         if(!com.bidv.coretraining.security.AccessPolicy.canReadCourse(user,course))courseDto.getLessons().forEach(TrainingStructureService::outlineOnly);
-        return new OutlineDto(courseDto,dto,!dto.isEmpty()&&dto.stream().allMatch(ChapterDto::completed),resume);
+        var target=workspace.resumeCourse(course,user);
+        return new OutlineDto(courseDto,dto,!dto.isEmpty()&&dto.stream().allMatch(ChapterDto::completed),target==null?resume:target.lessonId(),target);
     }
     public void requireLesson(String id,String username) {LearningPolicy.assertLessonAccess(user(username),lesson(id));}
+    @Transactional(readOnly=true)
+    public void requireCourse(String id,String username) {LearningPolicy.assertCourseAccess(user(username),course(id));}
 }

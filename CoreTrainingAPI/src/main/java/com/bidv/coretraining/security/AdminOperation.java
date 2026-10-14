@@ -23,7 +23,8 @@ public record AdminOperation(String page,String action) {
         else if(p.startsWith("/api/admin/enrollment-requests"))page="enrollments";
         else if(p.startsWith("/api/admin/training") )page="catalog";
         else if(p.contains("/documents") && !p.equals("/api/admin/documents/upload"))page="documents";
-        else if(p.startsWith("/api/admin/quizzes")||p.startsWith("/api/admin/questions"))page="exams";
+        else if(p.startsWith("/api/admin/quizzes")||p.startsWith("/api/admin/questions")||p.startsWith("/api/admin/question-bank"))page="exams";
+        else if(p.startsWith("/api/admin/content-reports"))page="courses";
         else if(p.startsWith("/api/admin/lessons")||p.startsWith("/api/admin/chapters")||p.contains("/chapters")||p.contains("/lessons")||p.equals("/api/admin/videos/upload")||p.equals("/api/admin/documents/upload"))page="courses";
         else if(p.startsWith("/api/admin/courses"))page="courses";
         else return new AdminOperation("unknown","denied");
@@ -33,6 +34,7 @@ public record AdminOperation(String page,String action) {
             if(java.util.Set.of("exams","documents").contains(request.getParameter("page")))page=request.getParameter("page");else return new AdminOperation("unknown","denied");
         }
         if(p.endsWith("/status"))action="update";
+        if(p.equals("/api/admin/courses/images") && request.getParameter("courseId")!=null)action="update";
         if(p.endsWith("/users/upload"))action="create";
         if(p.endsWith("/users/template"))action="read";
         return new AdminOperation(page,action);

@@ -3,7 +3,7 @@
     <div class="info-main">
       <div class="lesson-overview">
         <span class="eyebrow">Tổng quan bài học</span><h2>{{ lesson.title }}</h2>
-        <p v-if="overviewText" class="overview-text">{{ overviewText }}</p>
+        <LessonRichText v-if="overviewText" :content="overviewText" class="overview-text" />
         <div class="hint-box"><Lightbulb :size="22" /><div><strong>Gợi ý nghiệp vụ</strong><p>{{ lesson.hint }}</p></div></div>
       </div>
       <section v-if="lesson.procedureSteps?.length" class="procedure-content">
@@ -25,6 +25,7 @@
 import { computed } from 'vue';
 import { BookOpen, Layers3, Lightbulb, ShieldCheck } from 'lucide-vue-next';
 import type { Lesson } from '../../types';
+import LessonRichText from './LessonRichText.vue';
 const props = defineProps<{ lesson: Lesson; courseName?: string; completed: boolean }>();
 const overviewText = computed(() => {
   // Text-only lessons already show their content in the main viewer.
@@ -45,7 +46,6 @@ const overviewText = computed(() => {
   color: #3f544b;
   font-size: 0.95rem;
   line-height: 1.8;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 @media (max-width: 600px) {

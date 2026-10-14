@@ -9,15 +9,15 @@
             <button v-if="hasVideo" @click="$emit('close-document')"><PlayCircle :size="16" /> Quay lại video</button>
           </div>
         </div>
-        <iframe v-if="selectedDocument.documentType === 'PDF'" :src="resolveDocumentUrl(selectedDocument.fileUrl)" :title="selectedDocument.name"></iframe>
-        <PowerPointDocumentPreview v-else-if="selectedDocument.documentType === 'POWERPOINT'" :url="resolveDocumentUrl(selectedDocument.fileUrl)" :original-file-name="selectedDocument.originalFileName" />
-        <WordDocumentPreview v-else :url="resolveDocumentUrl(selectedDocument.fileUrl)" :original-file-name="selectedDocument.originalFileName" />
+        <PdfDocumentPreview v-if="selectedDocument.documentType === 'PDF'" :key="selectedDocument.id || selectedDocument.fileUrl" :url="resolveDocumentUrl(selectedDocument.fileUrl)" :initial-page="initialDocumentPage" @position-change="$emit('document-position', $event)" />
+        <PowerPointDocumentPreview v-else-if="selectedDocument.documentType === 'POWERPOINT'" :key="selectedDocument.id || selectedDocument.fileUrl" :url="resolveDocumentUrl(selectedDocument.fileUrl)" :original-file-name="selectedDocument.originalFileName" :initial-page="initialDocumentPage" :initial-scroll-offset="initialScrollOffset" @position-change="$emit('document-position', $event)" />
+        <WordDocumentPreview v-else :key="selectedDocument.id || selectedDocument.fileUrl" :url="resolveDocumentUrl(selectedDocument.fileUrl)" :original-file-name="selectedDocument.originalFileName" :initial-page="initialDocumentPage" :initial-scroll-offset="initialScrollOffset" @position-change="$emit('document-position', $event)" />
       </div>
       <VideoPlayer v-else-if="hasVideo" ref="videoPlayer" :lesson-id="lesson.id" :video-url="lesson.videoUrl" :title="lesson.title"
         :initial-position-seconds="initialPositionSeconds" :initial-watched-seconds="initialWatchedSeconds"
         @time-update="$emit('time-update', $event)" @progress-update="$emit('progress-update', $event)"
         @ended="$emit('video-ended', $event)" @add-note="$emit('add-note', $event)" />
-      <article v-else-if="lesson.textBody" class="lesson-text-viewer"><h2>{{lesson.title}}</h2><p>{{lesson.textBody}}</p></article>
+      <article v-else-if="lesson.textBody" class="lesson-text-viewer"><h2>{{lesson.title}}</h2><LessonRichText :content="lesson.textBody" /></article>
       <div v-else class="empty-lesson-media">
         <FileText :size="34" />
         <strong>Bài học chưa có nội dung</strong>
@@ -33,14 +33,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, defineAsyncComponent, ref } from 'vue';
 import { ChevronLeft, ChevronRight, Download, FileText, PlayCircle } from 'lucide-vue-next';
 import type { Lesson, LessonDocument, LessonProgressRequest } from '../../types';
 import VideoPlayer from '../VideoPlayer.vue';
+import LessonRichText from './LessonRichText.vue';
 import PowerPointDocumentPreview from './PowerPointDocumentPreview.vue';
 import WordDocumentPreview from './WordDocumentPreview.vue';
+const PdfDocumentPreview=defineAsyncComponent(()=>import('./PdfDocumentPreview.vue'));
 const videoPlayer = ref<InstanceType<typeof VideoPlayer> | null>(null);
-const props = defineProps<{ lesson: Lesson; selectedDocument: LessonDocument | null; currentIndex: number; totalLessons: number; initialPositionSeconds?: number; initialWatchedSeconds?: number }>();
+const props = defineProps<{ lesson: Lesson; selectedDocument: LessonDocument | null; currentIndex: number; totalLessons: number; initialPositionSeconds?: number; initialWatchedSeconds?: number; initialDocumentPage?: number; initialScrollOffset?: number }>();
 const hasVideo = computed(() => Boolean(props.lesson.videoUrl?.trim()));
 defineEmits<{
   adjacent: [offset: number];
@@ -48,6 +50,7 @@ defineEmits<{
   'download-document': [document: LessonDocument];
   'time-update': [seconds: number];
   'progress-update': [progress: LessonProgressRequest];
+  'document-position': [position: { page: number; scrollOffset: number }];
   'video-ended': [progress: LessonProgressRequest];
   'add-note': [seconds: number];
 }>();

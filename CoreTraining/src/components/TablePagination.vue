@@ -5,7 +5,7 @@
       <label class="page-size">
         <span>{{ compact ? 'Hiển thị' : `${unitLabel} / trang` }}</span>
         <select :value="pageSize" :aria-label="`Số ${unit} hiển thị mỗi trang`" @change="changeSize">
-          <option v-for="size in [10, 20, 50, 100]" :key="size" :value="size">{{ size }}</option>
+          <option v-for="size in sizes" :key="size" :value="size">{{ size }}</option>
         </select>
       </label>
       <div class="page-navigation">
@@ -18,13 +18,13 @@
 
 <script setup lang="ts">
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next';
-withDefaults(defineProps<{ total: number; page: number; pageCount: number; pageSize: number; unit?: string; unitLabel?: string; compact?: boolean }>(), {
-  unit: 'bản ghi', unitLabel: 'Bản ghi', compact: false,
+const props = withDefaults(defineProps<{ total: number; page: number; pageCount: number; pageSize: number; unit?: string; unitLabel?: string; compact?: boolean; sizes?: number[] }>(), {
+  unit: 'bản ghi', unitLabel: 'Bản ghi', compact: false, sizes: () => [10,20,50,100],
 });
 const emit = defineEmits<{ 'update:page': [page: number]; 'update:pageSize': [size: number] }>();
 function changeSize(event: Event) {
   const size = Number((event.target as HTMLSelectElement).value);
-  if (![10, 20, 50, 100].includes(size)) return;
+  if (!props.sizes.includes(size)) return;
   emit('update:page', 1);
   emit('update:pageSize', size);
 }

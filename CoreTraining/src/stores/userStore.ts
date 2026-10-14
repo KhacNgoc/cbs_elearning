@@ -9,13 +9,15 @@ import {useNavigationStore} from './navigationStore';
 import { isMockApi } from '../api/axiosClient';
 import { clearAuthSession, setCachedAuthSession } from '../utils/authSession';
 import { showToast } from '../utils/toast';
+import { useLearningStore } from './learningStore';
 
 let progressRequest: Promise<void> | null = null;
 async function navigate(path:string){const {default:router}=await import('../router');return router.push(path);}
 
 
 export const useUserStore = defineStore('user', {
-  state: (): UserProgress & { isAuthenticated: boolean; role: string; roles: string[]; permissions: string[]; roleNames: Record<string,string>; systemAdmin:boolean; username: string; fullName: string; mustChangePassword: boolean } => ({
+  state: (): UserProgress & { progressError: string; isAuthenticated: boolean; role: string; roles: string[]; permissions: string[]; roleNames: Record<string,string>; systemAdmin:boolean; username: string; fullName: string; mustChangePassword: boolean } => ({
+    progressError: '',
     completedLessons: [],
     quizScores: {},
     quizTotals: {},
@@ -42,15 +44,15 @@ export const useUserStore = defineStore('user', {
     hasAdminAccess: state=>state.permissions.some(p=>p.endsWith(":read")),
     canLearn(): boolean {return this.permissions.includes("LEARN");},
     totalLessonsCount(): number {
-      return useCourseStore().courses.reduce((acc, course) => acc + course.lessons.length, 0);
+      return useCourseStore().courses.filter(course => this.mandatoryCourses.includes(course.id) || this.registeredCourses.includes(course.id)).reduce((acc, course) => acc + course.lessons.length, 0);
     },
     completedLessonsCount(): number {
-      return this.completedLessons.length;
+      return useCourseStore().courses.filter(course => this.mandatoryCourses.includes(course.id) || this.registeredCourses.includes(course.id)).reduce((count, course) => count + course.lessons.filter(l => this.completedLessons.includes(l.id)).length, 0);
     },
     overallProgressPercent(): number {
       const total = this.totalLessonsCount;
       if (total === 0) return 0;
-      return Math.round((this.completedLessons.length / total) * 100);
+      return Math.round((this.completedLessonsCount / total) * 100);
     },
     getCourseProgressPercent: (state) => (courseId: string): number => {
       const course = useCourseStore().courses.find(t => t.id === courseId);
@@ -65,7 +67,8 @@ export const useUserStore = defineStore('user', {
     getCourseQuizScore: (state) => (courseId: string): { score: number, total: number, percent: number } | null => {
       if (state.quizScores[courseId] === undefined) return null;
       const score = state.quizScores[courseId];
-      const total = state.quizTotals[courseId] || 5;
+      const total = state.quizTotals[courseId];
+      if (!total || total <= 0) return null;
       return {
         score,
         total,
@@ -143,6 +146,7 @@ export const useUserStore = defineStore('user', {
 
       this.roles=[];this.permissions=[];this.roleNames={};this.systemAdmin=false;useNavigationStore().clear();
       useCourseStore().$reset();
+      useLearningStore().clear();
       await navigate('/login');
     },
 
@@ -150,6 +154,7 @@ export const useUserStore = defineStore('user', {
       if (!this.isAuthenticated) return;
       if (progressRequest) return progressRequest;
       progressRequest = (async () => {
+        this.progressError = '';
         try {
         const [progress, profile] = await Promise.all([
           courseApi.getMyProgress(),
@@ -180,6 +185,7 @@ export const useUserStore = defineStore('user', {
         // Save progress to localstorage for mock caching if active
         localStorage.setItem('mockCompletedLessons', JSON.stringify(this.completedLessons));
         } catch (error) {
+          this.progressError = 'Không thể tải tiến độ và thành tích. Vui lòng thử lại.';
           console.error('Failed to fetch user progress:', error);
           showToast('Không thể tải thông tin và tiến độ học tập. Vui lòng thử lại.', 'error');
         }

@@ -13,10 +13,18 @@ public class AuthorizationService {
     private final CourseRepository courses;
     private final OrganizationUnitRepository units;
     public AuthorizationService(UserRepository users,CourseRepository courses,OrganizationUnitRepository units) {this.users=users;this.courses=courses;this.units=units;}
+    /**
+     * Resolve the authenticated identity in the caller's persistence context.
+     * Callers reading entity relationships must keep their own transaction open
+     * through authorization and DTO mapping. The security principal is detached.
+     */
     public User current() {
         var auth=SecurityContextHolder.getContext().getAuthentication();
         AccessPolicy.require(auth!=null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getName()));
-        User user=auth.getPrincipal() instanceof CustomUserDetails details?details.getUser():users.findByUsername(auth.getName()).orElseThrow(()->new ResourceNotFoundException("User"));
+        User user=(auth.getPrincipal() instanceof CustomUserDetails details
+                ? users.findById(details.getUser().getId())
+                : users.findByUsername(auth.getName()))
+                .orElseThrow(()->new ResourceNotFoundException("User"));
         AccessPolicy.require(user.activeAccount() && (AccessPolicy.system(user) || AccessPolicy.activeUnit(user.getOrganizationUnit())));return user;
     }
     public void requireOperation(String page,String action){var op=AdminOperation.current(page,action);AccessPolicy.require(AccessPolicy.has(current(),op.permission()));}

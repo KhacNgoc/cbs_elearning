@@ -25,6 +25,7 @@ public interface CourseMapper {
     @Mapping(source="program.id", target="programId")
     @Mapping(source="program.name", target="programName")
     @Mapping(source="program.domain.name", target="domainName")
+    @Mapping(source="program.domain.id", target="domainId")
     CourseDto toCourseDto(Course course);
 
     List<CourseDto> toCourseDtoList(List<Course> courses);

@@ -31,6 +31,7 @@
         <div class="admin-form-grid"><label class="admin-form-field">Trạng thái<select v-model="userForm.status"><option v-for="(label,key) in statusNames" :key="key" :value="key">{{ label }}</option></select></label><label class="admin-form-field">Đối tượng đào tạo<select v-model="userForm.learnerType"><option v-for="(label,key) in learnerNames" :key="key" :value="key">{{ label }}</option></select></label></div>
         <div class="admin-form-grid"><label class="admin-form-field">Đơn vị công tác<select v-model="userForm.unitId"><option v-if="system" value="">Chưa gán đơn vị</option><option v-for="u in activeUnits" :key="u.id" :value="u.id">{{ u.name }}</option></select></label><label class="admin-form-field">Nhóm học viên<select v-model="userForm.userGroupId"><option value="">Chưa phân nhóm</option><option v-for="g in eligibleGroups" :key="g.id" :value="g.id">{{ g.name }}</option></select></label></div>
         <p class="admin-modal-help">Vai trò hiện tại: {{ userForm.roles.map(code=>users.find(u=>u.id===editingId)?.roleNames?.[code] || code).join(', ') || 'Chưa gán role' }}. Cấp hoặc thay đổi vai trò tại menu Quản lý role.</p>
+        <LearnerDeadlineEditor v-if="editingId" :key="editingId" :user-id="editingId" :disabled="busy" />
       </template>
       <template v-else-if="editor==='unit'">
         <div class="admin-form-grid"><label class="admin-form-field">Mã đơn vị *<input v-model="unitForm.id" :disabled="!!editingId" required /></label><label class="admin-form-field">Tên đơn vị / phòng *<input v-model="unitForm.name" required /></label></div>
@@ -50,6 +51,7 @@
 import {computed,onMounted,ref,watch} from 'vue';
 import {Search,Plus,RefreshCw,Download,Upload,ShieldCheck} from 'lucide-vue-next';
 import AdminModal from '../components/AdminModal.vue';
+import LearnerDeadlineEditor from '../components/LearnerDeadlineEditor.vue';
 import ConfirmModal from '../components/ConfirmModal.vue';
 import ToggleSwitch from '../components/ToggleSwitch.vue';
 import TablePagination from '../components/TablePagination.vue';

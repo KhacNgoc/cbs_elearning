@@ -30,6 +30,7 @@ public class RagChatService {
     private final RagConversationMessageRepository messageRepository;
     private final RagChatMessageRepository legacyMessageRepository;
     private final RagConversationSummaryService summaryService;
+    private final TrainingStructureService structure;
     private final RestTemplate restTemplate;
     private final String ragUrl;
     private final int recentMessageLimit;
@@ -41,6 +42,7 @@ public class RagChatService {
                           RagConversationMessageRepository messageRepository,
                           RagChatMessageRepository legacyMessageRepository,
                           RagConversationSummaryService summaryService,
+                          TrainingStructureService structure,
                           @Value("${app.rag-url}") String ragUrl,
                           @Value("${app.rag.recent-message-limit:8}") int recentMessageLimit,
                           @Value("${app.rag.recent-character-limit:12000}") int recentCharacterLimit,
@@ -52,6 +54,7 @@ public class RagChatService {
         this.messageRepository = messageRepository;
         this.legacyMessageRepository = legacyMessageRepository;
         this.summaryService = summaryService;
+        this.structure = structure;
         this.ragUrl = ragUrl;
         int cappedRecentLimit = Math.max(2, Math.min(recentMessageLimit, 30));
         this.recentMessageLimit = cappedRecentLimit % 2 == 0 ? cappedRecentLimit : cappedRecentLimit - 1;
@@ -248,9 +251,11 @@ public class RagChatService {
     }
 
     private Course requireAccessibleCourse(User user, String courseId) {
+        // Chat intentionally has no long transaction around the external AI call.
+        // Reload and check learning relationships in a short service transaction.
+        structure.requireCourse(courseId,user.getUsername());
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course", "id", courseId));
-        LearningPolicy.assertCourseAccess(user,course);
         return course;
     }
 

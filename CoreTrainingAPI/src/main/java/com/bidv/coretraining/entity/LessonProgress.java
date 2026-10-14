@@ -40,6 +40,10 @@ public class LessonProgress {
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+    private String contentType;
+    private Long documentId;
+    private Integer documentPage;
+    private Double scrollOffset;
 
     @Builder.Default @Column(nullable=false) private boolean contentCompleted = false;
 }

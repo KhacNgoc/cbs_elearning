@@ -86,6 +86,7 @@ public class UserServiceImpl implements UserService {
                 .avatarColor(user.getAvatarColor())
                 .role(user.getRole()).roles(user.effectiveRoles()).roleNames(com.bidv.coretraining.security.AccessPolicy.roleNames(user)).systemAdmin(com.bidv.coretraining.security.AccessPolicy.system(user)).permissions(com.bidv.coretraining.security.AccessPolicy.permissions(user))
                 .unitId(user.getOrganizationUnit()==null?null:user.getOrganizationUnit().getId()).scopeUnitIds(user.getScopeUnitIds()).status(user.getStatus()).learnerType(user.getLearnerType())
+                .unitName(user.getOrganizationUnit()==null?null:user.getOrganizationUnit().getName())
                 .points(user.getPoints())
                 .groupId(user.getUserGroup() != null ? user.getUserGroup().getId() : null)
                 .groupName(user.getUserGroup() != null ? user.getUserGroup().getName() : null)

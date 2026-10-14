@@ -32,6 +32,7 @@ class RagChatErrorTest {
             });
             var service = new RagChatService(users, courses, conversations, messages,
                     mock(RagChatMessageRepository.class), mock(RagConversationSummaryService.class),
+                    mock(TrainingStructureService.class),
                     "http://rag", 8, 12000, 5000, 90000);
             var http = mock(RestTemplate.class);
             when(http.postForObject(anyString(), any(), eq(com.bidv.coretraining.dto.RagServiceChatResponse.class)))

@@ -108,6 +108,10 @@ public class User {
     @CollectionTable(name="user_completed_courses", joinColumns=@JoinColumn(name="user_id"))
     @MapKeyColumn(name="course_id") @Column(name="completed_at") @Builder.Default
     private java.util.Map<String,java.time.LocalDateTime> completedCourses = new java.util.HashMap<>();
+    @ElementCollection
+    @CollectionTable(name="user_course_deadlines",joinColumns=@JoinColumn(name="user_id"))
+    @MapKeyColumn(name="course_id") @Column(name="due_date") @Builder.Default
+    private java.util.Map<String,java.time.LocalDate> courseDeadlines = new java.util.HashMap<>();
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default

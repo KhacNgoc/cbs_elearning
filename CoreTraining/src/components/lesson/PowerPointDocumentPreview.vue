@@ -9,7 +9,7 @@
       <strong>Không thể preview bản trình chiếu</strong>
       <p>{{ error }}</p>
     </div>
-    <div v-show="!loading && !error" ref="scrollContainer" class="powerpoint-preview-scroll">
+    <div v-show="!loading && !error" ref="scrollContainer" class="powerpoint-preview-scroll" @scroll="savePosition">
       <div ref="previewContainer" class="powerpoint-preview-content"></div>
     </div>
   </div>
@@ -19,13 +19,16 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { FileWarning, LoaderCircle } from 'lucide-vue-next';
 import { axiosClient } from '../../api/axiosClient';
+import type { PptxViewer } from '@aiden0z/pptx-renderer';
 
-const props = defineProps<{ url: string; originalFileName?: string }>();
+const props = defineProps<{ url: string; originalFileName?: string; initialScrollOffset?: number; initialPage?: number }>();
+const emit=defineEmits<{'position-change':[value:{page:number;scrollOffset:number}]}>();
+function savePosition(){if(loading.value||!scrollContainer.value)return;emit('position-change',{page:(viewer?.currentSlideIndex || 0)+1,scrollOffset:scrollContainer.value.scrollTop});}
 const previewContainer = ref<HTMLElement | null>(null);
 const scrollContainer = ref<HTMLElement | null>(null);
 const loading = ref(false);
 const error = ref('');
-let viewer: { destroy: () => void } | null = null;
+let viewer: PptxViewer | null = null;
 let requestId = 0;
 
 const destroyViewer = () => {
@@ -53,7 +56,7 @@ const renderDocument = async () => {
     await nextTick();
     if (currentRequest !== requestId || !previewContainer.value) return;
 
-    viewer = await PptxViewer.open(response.data, previewContainer.value, {
+    const opened = await PptxViewer.open(response.data, previewContainer.value, {
       fitMode: 'contain',
       zipLimits: RECOMMENDED_ZIP_LIMITS,
       lazySlides: true,
@@ -61,6 +64,9 @@ const renderDocument = async () => {
       scrollContainer: scrollContainer.value || undefined,
       listOptions: { windowed: true, initialSlides: 3, batchSize: 3 }
     });
+    if(currentRequest!==requestId){opened.destroy();return;}viewer=opened;
+    loading.value=false;await nextTick();if(props.initialPage && props.initialPage>1)await viewer.goToSlide(Math.min(props.initialPage-1,viewer.slideCount-1),{behavior:'instant'});
+    else if(scrollContainer.value)scrollContainer.value.scrollTop=props.initialScrollOffset || 0;
   } catch (cause) {
     console.error('Failed to preview PowerPoint document:', cause);
     if (currentRequest === requestId) {

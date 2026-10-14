@@ -34,7 +34,7 @@
 
     <!-- Main Router View Content -->
     <main class="main-content">
-      <component :is="showAdminSidebar ? AdminLayout : 'div'" v-bind="showAdminSidebar ? { sidebarVisible } : {}">
+      <component :is="showAdminSidebar ? AdminLayout : 'div'" v-bind="showAdminSidebar ? { sidebarVisible } : {}" @navigate="closeMobileNavigation">
         <router-view v-slot="{ Component }">
           <transition name="page" mode="out-in">
             <component :is="Component" />
@@ -67,6 +67,7 @@ const courseStore = useCourseStore();
 const navigationStore = useNavigationStore();
 const showAdminSidebar = computed(() => userStore.isAuthenticated && userStore.hasAdminAccess && route.name !== 'ChangePassword');
 const sidebarVisible = ref(localStorage.getItem('adminSidebarVisible') !== 'false');
+function closeMobileNavigation(){if(window.matchMedia('(max-width: 768px)').matches)sidebarVisible.value=false;}
 watch(sidebarVisible, visible => {
   try { localStorage.setItem('adminSidebarVisible', String(visible)); } catch { /* Keep the current session usable if storage is unavailable. */ }
 });
@@ -97,19 +98,22 @@ onMounted(async () => {
 
 <style>
 /* Page transition animation */
-.page-enter-active,
+.page-enter-active {
+  transition: opacity var(--motion-duration) var(--motion-easing), transform var(--motion-duration) var(--motion-easing);
+}
 .page-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity var(--motion-fast) ease, transform var(--motion-fast) ease;
+  pointer-events: none;
 }
 
 .page-enter-from {
   opacity: 0;
-  transform: translateY(10px);
+  transform: translateY(6px);
 }
 
 .page-leave-to {
   opacity: 0;
-  transform: translateY(-10px);
+  transform: translateY(-4px);
 }
 
 .nav-icon {

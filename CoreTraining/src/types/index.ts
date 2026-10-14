@@ -64,6 +64,12 @@ export interface Course {
   programId?: string;
   programName?: string;
   domainName?: string;
+  domainId?: string;
+  thumbnail?: string | null;
+  businessModule?: string;
+  level?: string;
+  keywords?: string;
+  completionDeadline?: string | null;
   description?: string;
   status?: string;
   version?: number;
@@ -78,13 +84,16 @@ export interface TrainingDomain {
   allowedActions?:string[]; id: string; code: string; name: string; description?: string; status: string }
 export interface TrainingProgram extends TrainingDomain { domainId: string; unitIds?:string[]; allowedActions?:string[] }
 export interface Chapter { id: string; courseId: string; code: string; title: string; description?: string; chapterOrder: number; status: string; version?: number; lessons: Lesson[]; locked: boolean; completed: boolean }
-export interface CourseOutline { course: Course; chapters: Chapter[]; completed: boolean; resumeLessonId?: string }
+export interface CourseOutline { course: Course; chapters: Chapter[]; completed: boolean; resumeLessonId?: string; resume?: ResumeTarget }
 
 export interface Question {
   id: number;
   courseId: string;
   lessonId?: string;
   text: string;
+  explanation?: string;
+  bankQuestionId?: number;
+  bankQuestionCode?: string;
   options: string[];
   correctAnswer: number; // 0-indexed index of options
   correctAnswers?: number[];
@@ -125,9 +134,33 @@ export interface LessonProgress {
   lastPositionSeconds: number;
   watchedSeconds: number;
   durationSeconds: number;
+  updatedAt?: string;
+  contentType?: 'VIDEO' | 'DOCUMENT' | 'TEXT';
+  documentId?: number;
+  documentPage?: number;
+  scrollOffset?: number;
+  contentCompleted?: boolean;
 }
 
-export type LessonProgressRequest = Omit<LessonProgress, 'lessonId'>;
+export type LessonProgressRequest = Partial<Omit<LessonProgress, 'lessonId' | 'updatedAt' | 'contentCompleted'>>;
+
+export interface ResumeTarget {
+  courseId: string; lessonId: string; lessonTitle: string; courseName: string;
+  contentType: 'VIDEO' | 'DOCUMENT' | 'TEXT' | 'QUIZ'; documentId?: number;
+  documentPage?: number; scrollOffset?: number; positionSeconds?: number; lastAccessedAt?: string;
+}
+export interface LearnerCourse {
+  course: Course; source: 'ASSIGNED' | 'REGISTERED' | 'AVAILABLE' | 'PENDING';
+  mandatory: boolean; learningStatus: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'AVAILABLE' | 'PENDING';
+  completedCount: number; totalCount: number; percent: number; dueDate?: string;
+  lastAccessedAt?: string; resume?: ResumeTarget;
+}
+export interface LearnerAttempt {
+  id: string; quizId: string; courseId: string; lessonId: string; title: string;
+  domainId: string; domainName: string; revision: number; score: number; total: number;
+  passingScore: number; passed: boolean; takenAt: string;
+}
+export interface LearnerWorkspace { courses: LearnerCourse[]; resume?: ResumeTarget; attempts: LearnerAttempt[]; legacyScores?: {courseId:string;lessonId?:string;title:string;score:number;total:number;takenAt:string}[] }
 
 export interface UserProfile {
   roleNames?: Record<string,string>;
@@ -143,6 +176,7 @@ export interface UserProfile {
   roles?: string[];
   permissions?: string[];
   unitId?: string;
+  unitName?: string;
   scopeUnitIds?: string[];
   status?: string;
   learnerType?: string;

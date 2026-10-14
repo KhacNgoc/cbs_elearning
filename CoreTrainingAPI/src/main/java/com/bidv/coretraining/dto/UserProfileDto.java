@@ -22,6 +22,7 @@ public class UserProfileDto {
     private java.util.Set<String> roles;
     private java.util.Set<String> permissions;
     private String unitId;
+    private String unitName;
     private java.util.Set<String> scopeUnitIds;
     private String status;
     private String learnerType;

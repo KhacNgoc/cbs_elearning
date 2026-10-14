@@ -4,7 +4,8 @@ export type NotificationType =
   | 'COMMENT_REPLY'
   | 'ENROLLMENT_REQUEST'
   | 'ENROLLMENT_APPROVED'
-  | 'ENROLLMENT_REJECTED';
+  | 'ENROLLMENT_REJECTED'
+  | 'LESSON_REPORT';
 
 export interface AppNotification {
   id: number;

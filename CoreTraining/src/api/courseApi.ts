@@ -277,10 +277,11 @@ export const courseApi = {
       );
       const previous = allProgress[lessonId];
       const progress: LessonProgress = {
-        lessonId,
-        lastPositionSeconds: Math.max(0, request.lastPositionSeconds),
-        watchedSeconds: Math.max(previous?.watchedSeconds || 0, request.watchedSeconds),
-        durationSeconds: Math.max(previous?.durationSeconds || 0, request.durationSeconds)
+        ...previous, ...request, lessonId,
+        lastPositionSeconds: Math.max(0, request.lastPositionSeconds ?? previous?.lastPositionSeconds ?? 0),
+        watchedSeconds: Math.max(previous?.watchedSeconds || 0, request.watchedSeconds || 0),
+        durationSeconds: Math.max(previous?.durationSeconds || 0, request.durationSeconds || 0),
+        updatedAt: new Date().toISOString()
       };
       allProgress[lessonId] = progress;
       localStorage.setItem('mockLessonProgress', JSON.stringify(allProgress));

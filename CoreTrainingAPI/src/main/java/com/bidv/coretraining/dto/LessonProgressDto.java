@@ -14,4 +14,10 @@ public class LessonProgressDto {
     private Double lastPositionSeconds;
     private Double watchedSeconds;
     private Double durationSeconds;
+    private java.time.LocalDateTime updatedAt;
+    private String contentType;
+    private Long documentId;
+    private Integer documentPage;
+    private Double scrollOffset;
+    private boolean contentCompleted;
 }

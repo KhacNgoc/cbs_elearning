@@ -17,6 +17,9 @@ public class QuestionDto {
     private String courseId;
     private String lessonId;
     private String text;
+    private String explanation;
+    private Long bankQuestionId;
+    private String bankQuestionCode;
     private List<String> options;
     private Integer correctAnswer;
     private QuestionType type;

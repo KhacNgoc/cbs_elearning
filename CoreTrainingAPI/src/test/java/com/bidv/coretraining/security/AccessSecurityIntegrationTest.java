@@ -76,6 +76,68 @@ class AccessSecurityIntegrationTest {
     }
     Map<String,Object> userBody(User u){Map<String,Object> r=new HashMap<>();r.put("username",u.getUsername());r.put("fullName",u.getFullName());r.put("role",u.getRole());r.put("roles",u.effectiveRoles());r.put("unitId",u.getOrganizationUnit()==null?null:u.getOrganizationUnit().getId());r.put("status",u.getStatus());r.put("points",0);return r;}
 
+    @Test void learnerWorkspaceUsesOnlyVisibleCoursesAndRestoresDocumentAndVideoBookmarks() throws Exception {
+        Cookie jwt=login(learner);
+        mvc.perform(get("/api/users/me/learning").cookie(jwt)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.courses.length()").value(1)).andExpect(jsonPath("$.courses[0].course.id").value("CA"))
+                .andExpect(jsonPath("$.courses[0].learningStatus").value("NOT_STARTED"))
+                .andExpect(jsonPath("$.courses[0].totalCount").value(1));
+        write(post("/api/users/me/lessons/LA/progress"),jwt,Map.of("contentType","VIDEO","lastPositionSeconds",754,"watchedSeconds",20,"durationSeconds",1200))
+                .andExpect(status().isOk());
+        Long doc=la.getDocuments().get(0).getId();
+        write(post("/api/users/me/lessons/LA/progress"),jwt,Map.of("contentType","DOCUMENT","documentId",doc,"documentPage",7,"scrollOffset",100))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.lastPositionSeconds").value(754.0)).andExpect(jsonPath("$.documentPage").value(7));
+        mvc.perform(get("/api/users/me/learning").cookie(jwt)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.courses[0].learningStatus").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.courses[0].percent").value(0))
+                .andExpect(jsonPath("$.resume.contentType").value("DOCUMENT")).andExpect(jsonPath("$.resume.documentPage").value(7));
+        write(post("/api/users/me/lessons/LA/progress"),jwt,Map.of("contentType","DOCUMENT","documentId",999999,"documentPage",1)).andExpect(status().isBadRequest());
+        write(post("/api/users/me/lessons/LA/progress"),jwt,Map.of("contentType","DOCUMENT","documentId",doc,"documentPage",0)).andExpect(status().isBadRequest());
+    }
+    @Test void individualDeadlineOverridesCourseDefaultAndCannotBeChangedAcrossScope() throws Exception {
+        ca.setCompletionDeadline(java.time.LocalDate.of(2026,10,30));courses.saveAndFlush(ca);
+        Cookie owner=login(ua);
+        write(put("/api/admin/users/"+learner.getId()+"/course-deadlines"),owner,Map.of("courseId","CA","dueDate","2026-10-20"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/users/me/learning").cookie(login(learner))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.courses[0].dueDate").value("2026-10-20"));
+        write(put("/api/admin/users/"+learner.getId()+"/course-deadlines"),login(ub),Map.of("courseId","CA","dueDate","2026-10-01"))
+                .andExpect(status().isForbidden());
+        Map<String,Object> reset=new HashMap<>();reset.put("courseId","CA");reset.put("dueDate",null);
+        write(put("/api/admin/users/"+learner.getId()+"/course-deadlines"),owner,reset).andExpect(status().isOk());
+        mvc.perform(get("/api/users/me/learning").cookie(login(learner))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.courses[0].dueDate").value("2026-10-30"));
+    }
+    byte[] imageBytes() throws Exception {
+        var output=new java.io.ByteArrayOutputStream();javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(12,8,java.awt.image.BufferedImage.TYPE_INT_RGB),"png",output);return output.toByteArray();
+    }
+    @Test void courseCreationPersistsImageAndFilterMetadata() throws Exception {
+        Cookie jwt=login(admin);
+        var file=new org.springframework.mock.web.MockMultipartFile("file","cover.jpg","image/jpeg",imageBytes());
+        var image=write(multipart("/api/admin/courses/images").file(file).param("programId",ca.getProgram().getId()),jwt,null)
+                .andExpect(status().isOk()).andReturn();
+        String thumbnail=json.readTree(image.getResponse().getContentAsString()).get("thumbnail").asText();
+        write(post("/api/admin/courses"),jwt,Map.of("code","NEW-COURSE","name","New course","programId",ca.getProgram().getId(),
+                "thumbnail",thumbnail,"businessModule","LN","level","Cơ bản","keywords","giải ngân","completionDeadline","2026-11-15"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.thumbnail").value(thumbnail))
+                .andExpect(jsonPath("$.businessModule").value("LN")).andExpect(jsonPath("$.level").value("Cơ bản"))
+                .andExpect(jsonPath("$.completionDeadline").value("2026-11-15"));
+    }
+    @Test void courseImageUploadChecksPermissionsSignatureAndServingScope() throws Exception {
+        var file=new org.springframework.mock.web.MockMultipartFile("file","cover.png","image/png",imageBytes());
+        write(multipart("/api/admin/courses/images").file(file).param("courseId","CA"),login(learner),null).andExpect(status().isForbidden());
+        write(multipart("/api/admin/courses/images").file(file).param("courseId","CB"),login(instructor),null).andExpect(status().isForbidden());
+        var bad=new org.springframework.mock.web.MockMultipartFile("file","fake.png","image/png","not an image".getBytes());
+        write(multipart("/api/admin/courses/images").file(bad).param("courseId","CA"),login(instructor),null).andExpect(status().isBadRequest());
+        var uploaded=write(multipart("/api/admin/courses/images").file(file).param("courseId","CA"),login(instructor),null)
+                .andExpect(status().isOk()).andReturn();
+        String path=json.readTree(uploaded.getResponse().getContentAsString()).get("thumbnail").asText();
+        ca.setThumbnail(path);courses.saveAndFlush(ca);
+        mvc.perform(get(path)).andExpect(status().isUnauthorized());
+        mvc.perform(get(path).cookie(login(ub))).andExpect(status().isForbidden());
+        mvc.perform(get(path).cookie(login(learner))).andExpect(status().isOk()).andExpect(content().contentType("image/png"));
+    }
+
     @Test void learnerCannotCallAdminOrWriteForeignDiscussion() throws Exception {
         Cookie jwt=login(learner);
         mvc.perform(get("/api/admin/users").cookie(jwt)).andExpect(status().isForbidden());

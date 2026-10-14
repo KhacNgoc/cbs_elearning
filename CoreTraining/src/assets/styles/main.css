@@ -23,6 +23,9 @@
   
   --font-family: Arial, sans-serif;
   --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-duration: 220ms;
+  --motion-fast: 140ms;
+  --motion-easing: cubic-bezier(.2, .7, .2, 1);
 }
 
 html {
@@ -56,6 +59,46 @@ a {
 
 button, input, textarea, select {
   font-family: inherit;
+}
+
+/* Shared action cursors; component-specific text and drag cursors take precedence. */
+:where(
+  button, a[href], select, summary,
+  input[type="button"], input[type="submit"], input[type="reset"],
+  input[type="checkbox"], input[type="radio"], input[type="file"],
+  input[type="range"], input[type="color"],
+  [role="button"], [role="link"], [role="tab"], [role="menuitem"],
+  [role="checkbox"], [role="radio"], [role="switch"], [role="combobox"][readonly]
+) {
+  cursor: pointer;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+/* A dismissible backdrop must not make the dialog's ordinary content look clickable. */
+:where([role="dialog"], [role="alertdialog"]) {
+  cursor: auto;
+}
+
+input[type="file"]::file-selector-button {
+  cursor: pointer;
+}
+
+label:has(input:is([type="checkbox"], [type="radio"]):enabled) {
+  cursor: pointer;
+}
+
+:is(button, a[href], select, input, summary, [role="button"], [role="link"],
+  [role="tab"], [role="menuitem"], [role="checkbox"], [role="radio"],
+  [role="switch"], .cursor-pointer):is(:disabled, [aria-disabled="true"]),
+label:has(input:is([type="checkbox"], [type="radio"]):disabled):not(:has(input:is([type="checkbox"], [type="radio"]):enabled)) {
+  cursor: not-allowed;
+}
+
+input[type="file"]:disabled::file-selector-button {
+  cursor: not-allowed;
 }
 
 button, a.btn, [role="button"] {
@@ -311,7 +354,9 @@ button:disabled {
   height: 100%;
   background-color: var(--primary-color);
   border-radius: var(--radius-full);
-  transition: width 0.5s ease-out;
+  transition: width 280ms var(--motion-easing);
+  transform-origin: left;
+  animation: progressReveal 280ms var(--motion-easing) backwards;
 }
 
 .progress-fill.accent {
@@ -325,7 +370,62 @@ button:disabled {
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.4s ease-out forwards;
+  animation: fadeIn var(--motion-duration) var(--motion-easing) backwards;
+}
+
+@keyframes progressReveal {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes contentReveal {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* v-show keeps forms alive; the entrance restarts when their tab becomes visible. */
+[role="tabpanel"], .data-reveal {
+  animation: contentReveal var(--motion-duration) var(--motion-easing) backwards;
+}
+
+.content-enter-active {
+  transition: opacity var(--motion-duration) var(--motion-easing), transform var(--motion-duration) var(--motion-easing);
+}
+.content-leave-active {
+  transition: opacity var(--motion-fast) ease;
+  pointer-events: none;
+}
+.content-enter-from { opacity: 0; transform: translateY(6px); }
+.content-leave-to { opacity: 0; }
+
+.data-list-enter-active {
+  transition: opacity var(--motion-duration) var(--motion-easing), transform var(--motion-duration) var(--motion-easing);
+  transition-delay: var(--item-delay, 0ms);
+}
+.data-list-enter-from { opacity: 0; transform: translateY(8px); }
+.data-list-move { transition: transform var(--motion-duration) var(--motion-easing); }
+/* Filtering removes stale results immediately instead of waiting for card hover transitions. */
+.data-list-leave-active { transition: none; animation: none; pointer-events: none; }
+
+.modal-enter-active { transition: opacity var(--motion-duration) ease; }
+.modal-leave-active { transition: opacity var(--motion-fast) ease; }
+.modal-enter-active [role="dialog"], .modal-enter-active [role="alertdialog"] {
+  transition: transform var(--motion-duration) var(--motion-easing);
+}
+.modal-leave-active [role="dialog"], .modal-leave-active [role="alertdialog"] {
+  transition: transform var(--motion-fast) var(--motion-easing);
+}
+.modal-enter-from, .modal-leave-to { opacity: 0; }
+.modal-enter-from [role="dialog"], .modal-enter-from [role="alertdialog"],
+.modal-leave-to [role="dialog"], .modal-leave-to [role="alertdialog"] { transform: translateY(8px) scale(.985); }
+.modal-leave-active { pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Responsive styles */

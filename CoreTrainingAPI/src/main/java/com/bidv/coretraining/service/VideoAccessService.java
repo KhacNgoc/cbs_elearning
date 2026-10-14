@@ -104,6 +104,7 @@ public class VideoAccessService {
         }
     }
 
+    @Transactional(readOnly = true)
     public Path authorizeStreamPath(String token) {
         String fileName = authorizeStream(token);
         Path video = videoDirectory.resolve(fileName).normalize();

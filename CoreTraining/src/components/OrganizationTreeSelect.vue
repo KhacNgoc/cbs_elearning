@@ -1,6 +1,6 @@
 <template>
   <div ref="container" class="unit-tree-select">
-    <div ref="control" class="tree-select-control" :class="{open,disabled}" @click="show">
+    <div ref="control" class="tree-select-control cursor-pointer" :class="{open,disabled}" @click="show">
       <input ref="input" :value="open?query:displayLabel" :placeholder="open?displayLabel:'Chọn cấp trực thuộc'" :readonly="!open" :disabled="disabled" role="combobox" aria-haspopup="tree" aria-autocomplete="list" :aria-expanded="open" :aria-controls="treeId" :aria-label="label" @focus="onFocus" @input="query=($event.target as HTMLInputElement).value" @keydown="inputKeydown" />
       <button v-if="value && !disabled" type="button" tabindex="-1" class="clear-choice" :aria-label="`Xóa lựa chọn ${label.toLocaleLowerCase('vi')}`" @mousedown.prevent @click.stop="select('')"><CircleX :size="15" /></button>
       <button type="button" tabindex="-1" class="select-arrow" :aria-label="`${open?'Đóng':'Mở'} cây đơn vị`" :disabled="disabled" @mousedown.prevent @click.stop="open?close():show()"><ChevronDown :size="16" :class="{opened:open}" /></button>
@@ -8,7 +8,7 @@
     <small v-if="selectedPath" class="selected-path">{{ selectedPath }}</small>
     <Teleport to="body"><div v-if="open" ref="popup" class="tree-select-popup" :style="popupStyle" @keydown.esc.stop.prevent="close()" @keydown.tab.prevent="popupTab($event.shiftKey)">
       <div :id="treeId" class="tree-options" role="tree" :aria-label="label" :style="{maxHeight:`${popupHeight}px`}">
-        <div v-for="(row,index) in rows" :key="row.id" class="tree-option" role="treeitem" :aria-level="row.depth+1" :aria-selected="value===row.id" :aria-expanded="row.hasChildren?expanded.has(row.id):undefined" :tabindex="index===focusedIndex?0:-1" :style="{paddingLeft:`${.55+row.depth*1.25}rem`}" @click="select(row.id)" @keydown="rowKeydown($event,index)">
+        <div v-for="(row,index) in rows" :key="row.id" class="tree-option cursor-pointer" role="treeitem" :aria-level="row.depth+1" :aria-selected="value===row.id" :aria-expanded="row.hasChildren?expanded.has(row.id):undefined" :tabindex="index===focusedIndex?0:-1" :style="{paddingLeft:`${.55+row.depth*1.25}rem`}" @click="select(row.id)" @keydown="rowKeydown($event,index)">
           <button v-if="row.hasChildren" type="button" tabindex="-1" class="option-toggle" :aria-label="`${expanded.has(row.id)?'Thu gọn':'Mở rộng'} ${row.name}`" @mousedown.prevent @click.stop="toggleBranch(row.id)"><ChevronRight :size="15" :class="{expanded:expanded.has(row.id)}" /></button><span v-else class="option-leaf"><CornerDownRight v-if="!row.id" :size="14" /></span>
           <span class="option-name"><template v-for="(part,partIndex) in highlight(row.name)" :key="partIndex"><mark v-if="part.match">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template><small v-if="!row.active">Ngừng hoạt động</small></span><Check v-if="value===row.id" :size="15" class="selected-check" />
         </div>

@@ -96,7 +96,7 @@ public class QuizServiceImpl implements QuizService {
                 userQuizScoreRepository.findByUserIdAndLessonId(user.getId(), lessonId);
         if (existingScore.isPresent()) {
             UserQuizScore quizScore = existingScore.get();
-            if (score >= quizScore.getScore()) {
+            if (quizScore.getTotal()==null || quizScore.getTotal()<=0 || (double)score/total >= (double)quizScore.getScore()/quizScore.getTotal()) {
                 quizScore.setScore(score);
                 quizScore.setTotal(total);
                 quizScore.setTakenAt(LocalDateTime.now());
