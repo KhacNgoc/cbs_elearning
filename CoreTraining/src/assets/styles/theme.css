@@ -1,0 +1,64 @@
+:root {
+  color-scheme: light;
+  --primary-ink: var(--primary-color);
+  --bg-body: var(--bg-main);
+  --bg-subtle: #eef2f6;
+  --danger-ink: #b42332;
+  --danger-surface: #fff1f2;
+  --danger-border: #fecdd3;
+  --warning-ink: #925b09;
+  --warning-surface: #fffbeb;
+  --warning-border: #f5d78e;
+  --success-ink: #00694b;
+  --success-surface: #edf7f2;
+  --success-border: #b5dace;
+  --info-ink: #1d5fad;
+  --info-surface: #eff6ff;
+  --info-border: #bfdbfe;
+  --purple-ink: #7e22ce;
+  --purple-surface: #faf5ff;
+  --purple-border: #e9d5ff;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --primary-color: #08785c;
+  --primary-hover: #09654e;
+  --primary-ink: #62dcb5;
+  --primary-light: #173b33;
+  --text-main: #e6edf5;
+  --text-muted: #a8b8ca;
+  --bg-main: #0f1722;
+  --bg-card: #182330;
+  --bg-subtle: #213040;
+  --border-color: #35465a;
+  --danger-ink: #ffadb5;
+  --danger-surface: #3c232c;
+  --danger-border: #7e3c4b;
+  --warning-ink: #f7ce79;
+  --warning-surface: #372f20;
+  --warning-border: #75603b;
+  --success-ink: #7cddba;
+  --success-surface: #19382f;
+  --success-border: #366a58;
+  --info-ink: #9ecaff;
+  --info-surface: #20344d;
+  --info-border: #3a5c85;
+  --purple-ink: #d4b4ff;
+  --purple-surface: #332747;
+  --purple-border: #684c8c;
+  --shadow-sm: 0 1px 3px #0004;
+  --shadow-md: 0 4px 12px #0005;
+  --shadow-lg: 0 12px 30px #0006;
+  --shadow-hover: 0 16px 36px #0007;
+}
+
+html { background: var(--bg-main); accent-color: var(--primary-color); }
+input, textarea, select { color: var(--text-main); background-color: var(--bg-card); }
+button { color: inherit; }
+input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: 1; }
+:root[data-theme="dark"] input:disabled,
+:root[data-theme="dark"] textarea:disabled,
+:root[data-theme="dark"] select:disabled { background-color: var(--bg-subtle); color: var(--text-muted); }
+/* Native document pages retain their original colors, independently of the app theme. */
+.word-preview-content, .powerpoint-preview-content { color-scheme: light; color: #1e293b; }

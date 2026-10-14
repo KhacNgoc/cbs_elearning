@@ -194,37 +194,37 @@ defineExpose({ openAt });
 .video-notes-section { margin-top: 2.5rem; padding-top: 2rem; border-top: 1px solid var(--border-color); }
 .notes-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .notes-heading h2 { margin: .35rem 0 1rem; font-size: 1.45rem; }
-.open-composer-button { padding: .55rem .75rem; display: flex; align-items: center; gap: .4rem; border: 1px solid rgba(0,91,65,.28); border-radius: 7px; background: white; color: var(--primary-color); font-weight: 700; cursor: pointer; white-space: nowrap; }
+.open-composer-button { padding: .55rem .75rem; display: flex; align-items: center; gap: .4rem; border: 1px solid rgba(0,91,65,.28); border-radius: 7px; background: var(--surface-ffffff); color: var(--primary-ink); font-weight: 700; cursor: pointer; white-space: nowrap; }
 .open-composer-button:hover { background: var(--primary-light); border-color: var(--primary-color); }
-.note-composer { padding: 1rem; border: 1px solid #d8e2de; border-radius: 10px; background: #f8faf9; }
-.timestamp-button { width: fit-content; padding: .35rem .55rem; display: inline-flex; align-items: center; gap: .35rem; border: 0; border-radius: 5px; background: #e5f1ed; color: var(--primary-color); font-size: .78rem; font-weight: 800; cursor: pointer; }
-.timestamp-button:hover { background: #d4e8e1; }
+.note-composer { padding: 1rem; border: 1px solid var(--line-d8e2de); border-radius: 10px; background: var(--surface-f8faf9); }
+.timestamp-button { width: fit-content; padding: .35rem .55rem; display: inline-flex; align-items: center; gap: .35rem; border: 0; border-radius: 5px; background: var(--surface-e5f1ed); color: var(--primary-ink); font-size: .78rem; font-weight: 800; cursor: pointer; }
+.timestamp-button:hover { background: var(--surface-d4e8e1); }
 .timestamp-button.current { margin-bottom: .65rem; background: var(--primary-color); color: white; }
-.note-composer textarea, .note-edit-area textarea { width: 100%; padding: .75rem; resize: vertical; border: 1px solid #cbd8d3; border-radius: 7px; background: white; color: var(--text-main); font: inherit; outline: none; }
+.note-composer textarea, .note-edit-area textarea { width: 100%; padding: .75rem; resize: vertical; border: 1px solid var(--line-cbd8d3); border-radius: 7px; background: var(--surface-ffffff); color: var(--text-main); font: inherit; outline: none; }
 .note-composer textarea:focus, .note-edit-area textarea:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(0,91,65,.1); }
 .composer-footer { margin-top: .65rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .composer-footer small { color: var(--text-muted); }
 .composer-actions { display: flex; align-items: center; gap: .4rem; }
-.cancel-note-button { padding: .58rem .75rem; border: 0; background: transparent; color: #52655e; font-weight: 700; cursor: pointer; }
+.cancel-note-button { padding: .58rem .75rem; border: 0; background: transparent; color: var(--ink-52655e); font-weight: 700; cursor: pointer; }
 .cancel-note-button:hover { color: var(--text-main); }
 .save-note-button { padding: .58rem .85rem; display: flex; align-items: center; gap: .4rem; border: 0; border-radius: 7px; background: var(--primary-color); color: white; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .save-note-button:disabled, .text-action:disabled { opacity: .5; cursor: not-allowed; }
 .notes-state { min-height: 110px; display: flex; align-items: center; justify-content: center; gap: .55rem; color: var(--text-muted); }
 .notes-state.empty { flex-direction: column; text-align: center; }
-.notes-state.empty svg { color: #8aa89d; }
+.notes-state.empty svg { color: var(--ink-8aa89d); }
 .notes-state.empty strong { color: var(--text-main); }
 .notes-state.empty span { max-width: 480px; font-size: .86rem; }
-.notes-list { margin-top: 1rem; border-top: 1px solid #e4ebe8; }
-.video-note { padding: 1rem .25rem; display: grid; grid-template-columns: 78px minmax(0,1fr) auto; align-items: flex-start; gap: .85rem; border-bottom: 1px solid #e4ebe8; }
-.note-body p { white-space: pre-wrap; color: #344b43; line-height: 1.55; }
+.notes-list { margin-top: 1rem; border-top: 1px solid var(--line-e4ebe8); }
+.video-note { padding: 1rem .25rem; display: grid; grid-template-columns: 78px minmax(0,1fr) auto; align-items: flex-start; gap: .85rem; border-bottom: 1px solid var(--line-e4ebe8); }
+.note-body p { white-space: pre-wrap; color: var(--ink-344b43); line-height: 1.55; }
 .note-body small { display: block; margin-top: .35rem; color: var(--text-muted); font-size: .7rem; }
 .note-actions { display: flex; gap: .2rem; opacity: 0; transition: opacity .15s ease; }
 .video-note:hover .note-actions, .note-actions:focus-within { opacity: 1; }
-.note-actions button { width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: #64756f; cursor: pointer; }
-.note-actions button:hover { background: #edf3f1; color: var(--primary-color); }
-.note-actions button.danger:hover { background: #fff0f0; color: #c53030; }
+.note-actions button { width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--ink-64756f); cursor: pointer; }
+.note-actions button:hover { background: var(--surface-edf3f1); color: var(--primary-ink); }
+.note-actions button.danger:hover { background: var(--surface-fff0f0); color: var(--ink-c53030); }
 .note-edit-area > div { margin-top: .45rem; display: flex; justify-content: flex-end; gap: .35rem; }
-.text-action { padding: .4rem .7rem; border: 0; border-radius: 5px; background: #e8eeec; color: #4f625b; font-weight: 700; cursor: pointer; }
+.text-action { padding: .4rem .7rem; border: 0; border-radius: 5px; background: var(--surface-e8eeec); color: var(--ink-4f625b); font-weight: 700; cursor: pointer; }
 .text-action.primary { background: var(--primary-color); color: white; }
 .spinning { animation: notes-spin .8s linear infinite; }
 @keyframes notes-spin { to { transform: rotate(360deg); } }

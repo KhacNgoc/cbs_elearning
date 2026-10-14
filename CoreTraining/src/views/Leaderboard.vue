@@ -178,7 +178,7 @@ const getBadgeIcon = (icon: string) => {
   height: 90px;
   border-radius: 50%;
   background-color: var(--accent-color);
-  color: #000;
+  color: var(--ink-000000);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -284,18 +284,18 @@ const getBadgeIcon = (icon: string) => {
 }
 
 .rank-first {
-  background: linear-gradient(135deg, #FFE082 0%, #FFB300 100%);
-  color: #FF6F00;
+  background: linear-gradient(135deg, var(--surface-ffe082) 0%, #FFB300 100%);
+  color: var(--ink-ff6f00);
 }
 
 .rank-second {
-  background: linear-gradient(135deg, #E0E0E0 0%, #9E9E9E 100%);
-  color: #424242;
+  background: linear-gradient(135deg, var(--surface-e0e0e0) 0%, var(--surface-9e9e9e) 100%);
+  color: var(--ink-424242);
 }
 
 .rank-third {
-  background: linear-gradient(135deg, #FFCC80 0%, #CA8A04 100%);
-  color: #713F12;
+  background: linear-gradient(135deg, var(--surface-ffcc80) 0%, #CA8A04 100%);
+  color: var(--ink-713f12);
 }
 
 .rank-avatar {
@@ -329,7 +329,7 @@ const getBadgeIcon = (icon: string) => {
 .rank-points {
   font-size: 1.1rem;
   font-weight: 800;
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 
 .pts-lbl {
@@ -390,32 +390,32 @@ const getBadgeIcon = (icon: string) => {
 }
 
 .cabinet-badge-card.gold {
-  background-color: #fffbeb;
-  border-color: #fde68a;
+  background-color: var(--surface-fffbeb);
+  border-color: var(--line-fde68a);
 }
 .cabinet-badge-card.gold .cabinet-badge-icon-box {
-  background: linear-gradient(135deg, #FFE082 0%, #FFB300 100%);
-  color: #FF6F00;
+  background: linear-gradient(135deg, var(--surface-ffe082) 0%, #FFB300 100%);
+  color: var(--ink-ff6f00);
   border: 2px solid #FF8F00;
 }
 
 .cabinet-badge-card.silver {
-  background-color: #f9fafb;
-  border-color: #e5e7eb;
+  background-color: var(--surface-f9fafb);
+  border-color: var(--line-e5e7eb);
 }
 .cabinet-badge-card.silver .cabinet-badge-icon-box {
-  background: linear-gradient(135deg, #E0E0E0 0%, #9E9E9E 100%);
-  color: #424242;
-  border: 2px solid #757575;
+  background: linear-gradient(135deg, var(--surface-e0e0e0) 0%, var(--surface-9e9e9e) 100%);
+  color: var(--ink-424242);
+  border: 2px solid var(--line-757575);
 }
 
 .cabinet-badge-card.bronze {
-  background-color: #fefaf0;
-  border-color: #fef08a;
+  background-color: var(--surface-fefaf0);
+  border-color: var(--line-fef08a);
 }
 .cabinet-badge-card.bronze .cabinet-badge-icon-box {
-  background: linear-gradient(135deg, #FFCC80 0%, #CA8A04 100%);
-  color: #713F12;
+  background: linear-gradient(135deg, var(--surface-ffcc80) 0%, #CA8A04 100%);
+  color: var(--ink-713f12);
   border: 2px solid #A16207;
 }
 
@@ -475,18 +475,18 @@ const getBadgeIcon = (icon: string) => {
 }
 
 .rule-icon-box.gold {
-  background-color: #fef3c7;
-  color: #d97706;
+  background-color: var(--surface-fef3c7);
+  color: var(--ink-d97706);
 }
 
 .rule-icon-box.silver {
-  background-color: #f3f4f6;
-  color: #4b5563;
+  background-color: var(--surface-f3f4f6);
+  color: var(--ink-4b5563);
 }
 
 .rule-icon-box.bronze {
-  background-color: #fef9c3;
-  color: #ca8a04;
+  background-color: var(--surface-fef9c3);
+  color: var(--ink-ca8a04);
 }
 
 .rule-icon {

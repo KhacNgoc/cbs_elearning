@@ -35,9 +35,9 @@ function changeSize(event: Event) {
 .page-summary { min-width: 0; overflow-wrap: anywhere; }
 .page-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .75rem; min-width: 0; margin-left: auto; }
 .page-size { display: flex; align-items: center; gap: .5rem; white-space: nowrap; }
-.page-size select { min-height: 36px; padding: .35rem .55rem; border: 1px solid var(--border-color); border-radius: 6px; background: white; color: var(--text-main); font: inherit; cursor: pointer; }
+.page-size select { min-height: 36px; padding: .35rem .55rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--surface-ffffff); color: var(--text-main); font: inherit; cursor: pointer; }
 .page-navigation { display: flex; gap: .5rem; flex-shrink: 0; }
-.page-navigation button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--border-color); border-radius: 6px; background: white; color: var(--primary-color); cursor: pointer; }
+.page-navigation button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--border-color); border-radius: 6px; background: var(--surface-ffffff); color: var(--primary-ink); cursor: pointer; }
 .page-navigation button:hover:not(:disabled) { background: var(--primary-light); border-color: var(--primary-color); }
 .page-navigation button:disabled { opacity: .45; cursor: not-allowed; }
 .compact .page-summary { flex-basis: 100%; }

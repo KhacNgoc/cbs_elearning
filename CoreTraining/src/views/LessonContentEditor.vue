@@ -449,7 +449,7 @@ const saveLesson = async () => {
 .admin-portal-layout {
   display: flex;
   min-height: 100%;
-  background-color: white;
+  background-color: var(--surface-ffffff);
   font-family: var(--font-family);
 }
 
@@ -495,8 +495,8 @@ const saveLesson = async () => {
 }
 
 .sidebar-item.active {
-  color: var(--primary-color);
-  background-color: white; /* White tab bg for clean contrast */
+  color: var(--primary-ink);
+  background-color: var(--surface-ffffff); /* White tab bg for clean contrast */
   box-shadow: var(--shadow-sm);
 }
 
@@ -550,7 +550,7 @@ const saveLesson = async () => {
 .admin-top-header {
   padding: 1.5rem 2rem;
   border-left: 5px solid var(--primary-color);
-  background: white;
+  background: var(--surface-ffffff);
   box-shadow: var(--shadow-sm);
 }
 
@@ -563,7 +563,7 @@ const saveLesson = async () => {
 
 .admin-top-header h1 {
   font-size: 1.6rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-weight: 700;
   margin-top: 0.1rem;
 }
@@ -586,7 +586,7 @@ const saveLesson = async () => {
   align-items: center;
   gap: 1.25rem;
   padding: 1.5rem;
-  background: white;
+  background: var(--surface-ffffff);
 }
 
 .stat-icon-box {
@@ -615,7 +615,7 @@ const saveLesson = async () => {
   background-color: var(--primary-color);
 }
 .questions-bg {
-  background-color: #8b5cf6;
+  background-color: var(--surface-8b5cf6);
 }
 
 .online-indicator-ping {
@@ -624,8 +624,8 @@ const saveLesson = async () => {
   right: -3px;
   width: 10px;
   height: 10px;
-  background-color: #ef4444;
-  border: 2px solid white;
+  background-color: var(--surface-ef4444);
+  border: 2px solid var(--line-ffffff);
   border-radius: 50%;
   animation: pulse 1.5s infinite;
 }
@@ -657,8 +657,8 @@ const saveLesson = async () => {
 .active-badge-lbl {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #10b981;
-  background-color: #dcfce7;
+  color: var(--ink-10b981);
+  background-color: var(--surface-dcfce7);
   padding: 0.1rem 0.4rem;
   border-radius: var(--radius-sm);
 }
@@ -691,7 +691,7 @@ const saveLesson = async () => {
 
 .chart-card {
   padding: 1.5rem;
-  background: white;
+  background: var(--surface-ffffff);
 }
 
 .chart-container {
@@ -704,7 +704,7 @@ const saveLesson = async () => {
 /* Real-time Sessions list Card */
 .sessions-card {
   padding: 1.5rem;
-  background: white;
+  background: var(--surface-ffffff);
   display: flex;
   flex-direction: column;
 }
@@ -768,7 +768,7 @@ const saveLesson = async () => {
 
 .session-detail {
   font-size: 0.8rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -785,7 +785,7 @@ const saveLesson = async () => {
 
 .session-course-tag {
   background-color: var(--primary-light);
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-weight: 700;
   padding: 0.1rem 0.4rem;
   border-radius: var(--radius-sm);
@@ -847,7 +847,7 @@ const saveLesson = async () => {
 .users-manager,
 .lessons-manager,
 .exams-manager {
-  background: white;
+  background: var(--surface-ffffff);
   padding: 1.8rem;
   box-shadow: var(--shadow-sm);
 }
@@ -881,7 +881,7 @@ const saveLesson = async () => {
 .code-badge {
   font-family: var(--font-family);
   background-color: var(--bg-main);
-  color: var(--primary-color);
+  color: var(--primary-ink);
   padding: 0.25rem 0.5rem;
   border-radius: var(--radius-sm);
   font-weight: 700;
@@ -909,12 +909,12 @@ const saveLesson = async () => {
 
 .action-btn:hover {
   background-color: var(--bg-main);
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 
 .action-btn.delete:hover {
-  background-color: #fee2e2;
-  color: #ef4444;
+  background-color: var(--surface-fee2e2);
+  color: var(--ink-ef4444);
 }
 
 .action-btn svg {
@@ -948,13 +948,13 @@ const saveLesson = async () => {
 }
 
 .role-tag.admin {
-  background-color: #fee2e2;
-  color: #ef4444;
+  background-color: var(--surface-fee2e2);
+  color: var(--ink-ef4444);
 }
 
 .role-tag.user {
-  background-color: #e0f2fe;
-  color: #0369a1;
+  background-color: var(--surface-e0f2fe);
+  color: var(--ink-0369a1);
 }
 
 /* Modal details */
@@ -980,7 +980,7 @@ const saveLesson = async () => {
   max-height: calc(100vh - 2.5rem);
   overflow-y: auto;
   padding: 2rem;
-  background: white;
+  background: var(--surface-ffffff);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
 }
@@ -1002,7 +1002,7 @@ const saveLesson = async () => {
 .lesson-modal-header {
   flex: 0 0 auto;
   padding: 1.35rem 1.75rem 0;
-  background: white;
+  background: var(--surface-ffffff);
 }
 
 .lesson-modal-header h3 {
@@ -1031,13 +1031,13 @@ const saveLesson = async () => {
   margin-top: 0;
   padding: 1rem 1.75rem;
   border-top: 1px solid var(--border-color);
-  background: white;
+  background: var(--surface-ffffff);
   box-shadow: 0 -8px 20px rgba(15, 35, 29, 0.05);
 }
 
 .modal-content h3 {
   font-size: 1.15rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   margin-bottom: 1.25rem;
   border-bottom: 2px solid var(--primary-light);
   padding-bottom: 0.5rem;
@@ -1064,7 +1064,7 @@ const saveLesson = async () => {
   padding: 0.6rem 0.8rem;
   font-size: 0.85rem;
   color: var(--text-main);
-  background-color: white;
+  background-color: var(--surface-ffffff);
   transition: var(--transition);
 }
 
@@ -1095,7 +1095,7 @@ const saveLesson = async () => {
   align-items: center;
   gap: 0.45rem;
   margin-bottom: 0.7rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-size: 0.8rem;
   font-weight: 700;
 }
@@ -1125,10 +1125,10 @@ const saveLesson = async () => {
   align-items: center;
   gap: 0.55rem;
   margin: 0 !important;
-  border: 1px dashed #9ab9ae;
+  border: 1px dashed var(--line-9ab9ae);
   border-radius: var(--radius-sm);
-  background: white;
-  color: var(--primary-color);
+  background: var(--surface-ffffff);
+  color: var(--primary-ink);
   cursor: pointer;
 }
 
@@ -1158,7 +1158,7 @@ const saveLesson = async () => {
   padding: 0.2rem 0.45rem;
   border-radius: 999px;
   background: var(--primary-light);
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-size: 0.66rem;
   font-weight: 700;
 }
@@ -1180,7 +1180,7 @@ const saveLesson = async () => {
   padding: 0 0.8rem;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  background: white;
+  background: var(--surface-ffffff);
   color: var(--text-muted);
 }
 
@@ -1206,7 +1206,7 @@ const saveLesson = async () => {
   padding: 1rem;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  background: white;
+  background: var(--surface-ffffff);
   color: var(--text-color);
   text-align: left;
   cursor: pointer;
@@ -1230,7 +1230,7 @@ const saveLesson = async () => {
   flex: 0 0 44px;
   border-radius: 12px;
   background: var(--primary-light);
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 
 .quiz-definition-copy {
@@ -1252,8 +1252,8 @@ const saveLesson = async () => {
 .pending-count {
   padding: 0.45rem 0.7rem;
   border-radius: var(--radius-full);
-  background: #fff7d6;
-  color: #806710;
+  background: var(--surface-fff7d6);
+  color: var(--ink-806710);
   font-weight: 800;
   font-size: 0.78rem;
 }
@@ -1265,7 +1265,7 @@ const saveLesson = async () => {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-weight: 700;
   cursor: pointer;
 }
@@ -1285,7 +1285,7 @@ const saveLesson = async () => {
   padding: 1rem;
   border: 1px solid var(--border-color);
   border-radius: 10px;
-  background: white;
+  background: var(--surface-ffffff);
   color: var(--text-color);
   text-align: left;
   cursor: pointer;
@@ -1306,7 +1306,7 @@ const saveLesson = async () => {
   height: 44px;
   border-radius: 10px;
   background: var(--primary-light);
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 .lesson-course-copy {
   display: flex;
@@ -1353,16 +1353,16 @@ const saveLesson = async () => {
   font-weight: 800;
 }
 .enrollment-status.pending {
-  background: #fff7d6;
-  color: #806710;
+  background: var(--surface-fff7d6);
+  color: var(--ink-806710);
 }
 .enrollment-status.approved {
-  background: #e8f5ef;
-  color: var(--primary-color);
+  background: var(--surface-e8f5ef);
+  color: var(--primary-ink);
 }
 .enrollment-status.rejected {
-  background: #feecec;
-  color: #b42318;
+  background: var(--surface-feecec);
+  color: var(--ink-b42318);
 }
 .enrollment-status-detail {
   display: flex;
@@ -1410,8 +1410,8 @@ const saveLesson = async () => {
 }
 .reject-request {
   border: 1px solid #ef4444;
-  background: white;
-  color: #b42318;
+  background: var(--surface-ffffff);
+  color: var(--ink-b42318);
 }
 .reject-request:hover {
   background: #dc2626;
@@ -1429,7 +1429,7 @@ const saveLesson = async () => {
   display: inline-flex;
   max-width: 280px;
   gap: 0.25rem;
-  color: #b42318;
+  color: var(--ink-b42318);
   line-height: 1.35;
   text-align: left;
 }
@@ -1446,12 +1446,12 @@ const saveLesson = async () => {
   display: grid;
   place-items: center;
   border-radius: 14px;
-  background: #feecec;
-  color: #b42318;
+  background: var(--surface-feecec);
+  color: var(--ink-b42318);
 }
 
 .reject-modal-heading > span {
-  color: #b42318;
+  color: var(--ink-b42318);
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -1478,7 +1478,7 @@ const saveLesson = async () => {
   gap: 1rem;
   border: 1px solid var(--border-color);
   border-radius: 10px;
-  background: #f8fafc;
+  background: var(--surface-f8fafc);
 }
 
 .reject-request-summary > div {
@@ -1502,7 +1502,7 @@ const saveLesson = async () => {
   width: 100%;
   padding: 0.75rem 0.85rem;
   resize: vertical;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--line-cbd5e1);
   border-radius: 9px;
   outline: none;
   color: var(--text-main);
@@ -1515,7 +1515,7 @@ const saveLesson = async () => {
 }
 
 .required-mark {
-  color: #dc2626;
+  color: var(--ink-dc2626);
 }
 
 .reason-counter {
@@ -1551,10 +1551,10 @@ const saveLesson = async () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #f0c5c5;
+  border: 1px solid var(--line-f0c5c5);
   border-radius: var(--radius-sm);
-  background: #fff7f7;
-  color: #b42318;
+  background: var(--surface-fff7f7);
+  color: var(--ink-b42318);
   cursor: pointer;
   transition:
     border-color 0.2s,
@@ -1563,7 +1563,7 @@ const saveLesson = async () => {
 
 .file-clear-btn:hover {
   border-color: #d92d20;
-  background: #fee4e2;
+  background: var(--surface-fee4e2);
 }
 
 .file-clear-btn:focus-visible {
@@ -1608,7 +1608,7 @@ const saveLesson = async () => {
   padding: 0.7rem 0.8rem;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  background: white;
+  background: var(--surface-ffffff);
   color: var(--text-muted);
   cursor: pointer;
   transition:
@@ -1618,13 +1618,13 @@ const saveLesson = async () => {
 }
 
 .video-source-option:hover {
-  border-color: #9ab9ae;
+  border-color: var(--line-9ab9ae);
 }
 
 .video-source-option.active {
   border-color: var(--primary-color);
   background: var(--primary-light);
-  color: var(--primary-color);
+  color: var(--primary-ink);
   box-shadow: 0 0 0 1px var(--primary-color);
 }
 
@@ -1665,7 +1665,7 @@ const saveLesson = async () => {
 .selected-video-note {
   display: block;
   margin-top: 0.5rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 
 .selected-file-meta {
@@ -1766,9 +1766,9 @@ const saveLesson = async () => {
 }
 
 select:disabled {
-  background-color: #f3f4f6;
-  color: #6b7280;
-  border: 1px solid #d1d5db;
+  background-color: var(--surface-f3f4f6);
+  color: var(--ink-6b7280);
+  border: 1px solid var(--line-d1d5db);
   cursor: not-allowed;
   opacity: 1;
 }
@@ -1792,10 +1792,10 @@ select:disabled {
   align-items: center;
   gap: 0.85rem;
   padding: 1rem;
-  border: 1px dashed #9db9ae;
+  border: 1px dashed var(--line-9db9ae);
   border-radius: var(--radius-md);
-  background: #f4f8f6;
-  color: var(--primary-color);
+  background: var(--surface-f4f8f6);
+  color: var(--primary-ink);
 }
 
 .rag-upload-box > div {
@@ -1811,7 +1811,7 @@ select:disabled {
 
 .rag-upload-message {
   margin: -0.45rem 0 0;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-weight: 600;
 }
 
@@ -1820,8 +1820,8 @@ select:disabled {
   align-items: center;
   padding: 0.25rem 0.55rem;
   border-radius: 999px;
-  background: #eef2f7;
-  color: #475569;
+  background: var(--surface-eef2f7);
+  color: var(--ink-475569);
   font-size: 0.75rem;
   font-weight: 700;
   white-space: nowrap;
@@ -1829,23 +1829,23 @@ select:disabled {
 
 .rag-status.status-indexing,
 .rag-status.status-pending {
-  background: #fff7d6;
-  color: #806710;
+  background: var(--surface-fff7d6);
+  color: var(--ink-806710);
 }
 
 .rag-status.status-indexed {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--surface-dcfce7);
+  color: var(--ink-166534);
 }
 
 .rag-status.status-failed {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: var(--surface-fee2e2);
+  color: var(--ink-b91c1c);
 }
 
 .rag-error-cell {
   min-width: 0;
-  color: #b91c1c;
+  color: var(--ink-b91c1c);
   white-space: normal;
   word-break: break-word;
   overflow-wrap: anywhere;
@@ -1894,10 +1894,10 @@ select:disabled {
   }
 }
 
-.embedded-content{padding:1.5rem}.lesson-modal-form{height:auto}.lesson-modal-body{max-height:none;overflow:visible;padding:0}.lesson-modal-footer{position:static;margin-top:1.5rem}.failed{color:#b91c1c}textarea{width:100%}
+.embedded-content{padding:1.5rem}.lesson-modal-form{height:auto}.lesson-modal-body{max-height:none;overflow:visible;padding:0}.lesson-modal-footer{position:static;margin-top:1.5rem}.failed{color:var(--ink-b91c1c)}textarea{width:100%}
 .procedure-form-fields{grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);align-items:start}
 .procedure-form-fields>.form-control{min-width:0;line-height:1.5}
 .procedure-form-fields+.document-remove{width:32px;height:36px}
 @media(max-width:700px){.procedure-form-fields{grid-template-columns:1fr}}
-.embedded-content .form-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}.supporting-section{border:1px solid var(--border-color);border-radius:12px;padding:1.25rem;margin-top:1.25rem}.supporting-section h2{font-size:1.05rem;color:var(--primary-color);margin:0}.section-description{font-size:.85rem;color:var(--text-muted);margin:.4rem 0 1rem}.card-header-row{justify-content:space-between}.embedded-content .lesson-modal-footer{position:sticky;bottom:0;z-index:5;display:flex;justify-content:flex-end;gap:.75rem;border-radius:0 0 10px 10px}.empty-state-box{padding:1.5rem;border:1px dashed #cbd5e1;border-radius:8px;color:var(--text-muted);text-align:center}@media(max-width:700px){.embedded-content{padding:1rem}.embedded-content .form-row{grid-template-columns:1fr}.supporting-section{padding:1rem}}
+.embedded-content .form-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}.supporting-section{border:1px solid var(--border-color);border-radius:12px;padding:1.25rem;margin-top:1.25rem}.supporting-section h2{font-size:1.05rem;color:var(--primary-ink);margin:0}.section-description{font-size:.85rem;color:var(--text-muted);margin:.4rem 0 1rem}.card-header-row{justify-content:space-between}.embedded-content .lesson-modal-footer{position:sticky;bottom:0;z-index:5;display:flex;justify-content:flex-end;gap:.75rem;border-radius:0 0 10px 10px}.empty-state-box{padding:1.5rem;border:1px dashed var(--line-cbd5e1);border-radius:8px;color:var(--text-muted);text-align:center}@media(max-width:700px){.embedded-content{padding:1rem}.embedded-content .form-row{grid-template-columns:1fr}.supporting-section{padding:1rem}}
 </style>

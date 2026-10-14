@@ -58,14 +58,14 @@ watch(() => props.url, renderDocument);
 </script>
 
 <style scoped>
-.word-preview { height: 100%; overflow: auto; padding: 1.5rem; background: #e8eeec; }
+.word-preview { height: 100%; overflow: auto; padding: 1.5rem; background: var(--surface-e8eeec); }
 .word-preview-content { min-height: 100%; }
 .word-preview-content :deep(.docx-wrapper) { padding: 20px; background: transparent; }
 .word-preview-content :deep(.docx-wrapper > section.docx-page) { margin: 0 auto 20px; box-shadow: 0 4px 18px rgba(15, 35, 29, .14); }
 .word-preview-state { min-height: 100%; display: grid; place-content: center; justify-items: center; gap: .65rem; color: var(--text-muted); text-align: center; }
-.word-preview-error svg { color: #b7791f; }
+.word-preview-error svg { color: var(--ink-b7791f); }
 .word-preview-error p { max-width: 460px; }
-.word-preview-spinner { color: var(--primary-color); animation: word-spin .8s linear infinite; }
+.word-preview-spinner { color: var(--primary-ink); animation: word-spin .8s linear infinite; }
 @keyframes word-spin { to { transform: rotate(360deg); } }
 @media (max-width: 600px) { .word-preview { padding: .5rem; } .word-preview-content :deep(.docx-wrapper) { padding: 0; } }
 </style>

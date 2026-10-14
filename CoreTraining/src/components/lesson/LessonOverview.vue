@@ -18,6 +18,7 @@
       <div><BookOpen :size="18" /><span><small>Khóa học</small><strong>{{ courseName }}</strong></span></div>
       <div><Layers3 :size="18" /><span><small>Nội dung</small><strong>Tài liệu, video & quy trình</strong></span></div>
       <div><ShieldCheck :size="18" /><span><small>Trạng thái</small><strong>{{ completed ? 'Đã hoàn thành' : 'Đang học' }}</strong></span></div>
+      <slot name="actions" />
     </aside>
   </div>
 </template>
@@ -40,10 +41,10 @@ const overviewText = computed(() => {
 .overview-text {
   margin: 0 0 1.25rem;
   padding: 1.15rem 1.25rem;
-  border: 1px solid #dce9e3;
+  border: 1px solid var(--line-dce9e3);
   border-radius: var(--radius-md);
-  background: #f7faf8;
-  color: #3f544b;
+  background: var(--surface-f7faf8);
+  color: var(--ink-3f544b);
   font-size: 0.95rem;
   line-height: 1.8;
   overflow-wrap: anywhere;
@@ -53,5 +54,5 @@ const overviewText = computed(() => {
     padding: 1rem;
   }
 }
-.procedure-content{display:flex;flex-direction:column;gap:1rem;margin:1.25rem 0}.procedure-content article{padding:1.25rem;background:white;border:1px solid var(--border-color);border-radius:12px}.procedure-content h3{font-size:1rem;color:var(--primary-color);margin-bottom:.75rem}.procedure-content ol{padding-left:1.25rem;line-height:1.7}.procedure-content li{padding:.2rem 0}
+.procedure-content{display:flex;flex-direction:column;gap:1rem;margin:1.25rem 0}.procedure-content article{padding:1.25rem;background:var(--surface-ffffff);border:1px solid var(--border-color);border-radius:12px}.procedure-content h3{font-size:1rem;color:var(--primary-ink);margin-bottom:.75rem}.procedure-content ol{padding-left:1.25rem;line-height:1.7}.procedure-content li{padding:.2rem 0}
 </style>

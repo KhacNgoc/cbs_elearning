@@ -1,5 +1,5 @@
 <template>
-  <div class="report-entry"><button type="button" @click="open=true"><Flag :size="16" /> Báo cáo nội dung không phù hợp</button><small>Gửi phản ánh riêng đến quản trị viên để xem xét.</small></div>
+  <section class="report-entry" aria-label="Phản ánh nội dung"><button type="button" @click="open=true"><Flag :size="18" /><span>Báo cáo nội dung không phù hợp</span></button><small>Gửi phản ánh riêng đến quản trị viên để xem xét.</small></section>
   <AdminModal :open="open" title="Báo cáo nội dung bài học" :busy="sending" submit-label="Gửi báo cáo" @close="open=false" @submit="submit">
     <p class="report-lesson">{{ lessonTitle }}</p>
     <label class="report-field">Nội dung báo cáo<textarea v-model="content" rows="6" maxlength="5000" required placeholder="Mô tả nội dung không phù hợp, vị trí trong bài học và lý do…"></textarea><small>{{ content.length }}/5.000 ký tự</small></label>
@@ -24,5 +24,11 @@ async function submit(){if(sending.value)return;if(!content.value.trim()){error.
 onBeforeUnmount(clear);
 </script>
 <style scoped>
-.report-entry{display:flex;align-items:center;flex-wrap:wrap;gap:.75rem;margin:1rem 0}.report-entry>button{display:flex;align-items:center;gap:.5rem;border:1px solid #e3c1b9;border-radius:8px;background:white;padding:.65rem .85rem;color:#9b3c2a;cursor:pointer}.report-entry small,.report-field small{color:var(--text-muted);font-size:.8rem}.report-field{display:grid;gap:.5rem;margin:1rem 0}.report-lesson{font-weight:700;color:var(--primary-color)}.report-error{color:#b91c1c;margin-top:1rem}.evidence-list{display:grid;gap:.5rem}.evidence-list>div{display:flex;align-items:center;gap:.75rem;padding:.5rem;border:1px solid var(--border-color);border-radius:8px}.evidence-list img{width:64px;height:64px;object-fit:cover}.evidence-list span{flex:1;overflow-wrap:anywhere}.evidence-list button{background:none;border:0;cursor:pointer}
+.report-entry{display:grid;gap:.7rem;margin:1.5rem 0 0;padding:1.1rem 0 0;border-top:1px solid var(--border-color)}
+.report-entry>button{display:flex;align-items:center;justify-content:flex-start;gap:.65rem;width:100%;padding:.85rem 1rem;min-height:48px;border:1px solid var(--danger-border);border-radius:10px;background:var(--danger-surface);color:var(--danger-ink);font-size:.85rem;line-height:1.5;font-weight:600;text-align:left;cursor:pointer}
+.report-entry>button svg{flex-shrink:0}
+.report-entry>button:hover{border-color:var(--danger-ink);box-shadow:var(--shadow-sm)}
+.report-entry>button:focus-visible{outline:2px solid var(--danger-ink);outline-offset:3px}
+.report-entry small{line-height:1.6}
+.report-entry small,.report-field small{color:var(--text-muted);font-size:.8rem}.report-field{display:grid;gap:.5rem;margin:1rem 0}.report-lesson{font-weight:700;color:var(--primary-ink)}.report-error{color:var(--ink-b91c1c);margin-top:1rem}.evidence-list{display:grid;gap:.5rem}.evidence-list>div{display:flex;align-items:center;gap:.75rem;padding:.5rem;border:1px solid var(--border-color);border-radius:8px}.evidence-list img{width:64px;height:64px;object-fit:cover}.evidence-list span{flex:1;overflow-wrap:anywhere}.evidence-list button{background:none;border:0;cursor:pointer}
 </style>

@@ -21,6 +21,7 @@
 
       <div class="nav-user-menu">
         <div id="learning-chatbot-launcher"></div>
+        <ThemeToggle />
         <NotificationCenter />
         <router-link to="/profile" class="nav-user" title="Xem hồ sơ cá nhân">
           <div class="nav-user-avatar">{{ userAvatarLetter }}</div>
@@ -31,6 +32,7 @@
         </button>
       </div>
     </nav>
+    <ThemeToggle v-if="!userStore.isAuthenticated || route.name === 'ChangePassword'" floating />
 
     <!-- Main Router View Content -->
     <main class="main-content">
@@ -57,6 +59,7 @@ import { useUserStore } from './stores/userStore';
 import { useCourseStore } from './stores/courseStore';
 import { useNavigationStore } from './stores/navigationStore';
 import NotificationCenter from './components/NotificationCenter.vue';
+import ThemeToggle from './components/ThemeToggle.vue';
 import LearningChatbot from './components/LearningChatbot.vue';
 import AdminLayout from './views/AdminLayout.vue';
 import { BookOpen, ClipboardCheck, HelpCircle, Home, LogOut, PanelLeftClose, PanelLeftOpen, Settings, Trophy, UserCircle, Users } from 'lucide-vue-next';
@@ -122,7 +125,7 @@ onMounted(async () => {
 }
 
 .nav-brand-group { display: flex; align-items: center; gap: .75rem; min-width: 0; }
-.sidebar-toggle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 40px; width: 40px; height: 40px; border: 1px solid var(--border-color); border-radius: 8px; background: white; color: var(--primary-color); cursor: pointer; }
+.sidebar-toggle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 40px; width: 40px; height: 40px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-ffffff); color: var(--primary-ink); cursor: pointer; }
 .sidebar-toggle:hover { background: var(--primary-light); }
 .sidebar-toggle:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 3px; }
 
@@ -144,7 +147,7 @@ onMounted(async () => {
 
 .nav-user:hover,
 .nav-user.router-link-active {
-  background: #d7e9e3;
+  background: var(--surface-d7e9e3);
   box-shadow: inset 0 0 0 1px rgba(0, 91, 65, 0.16);
 }
 
@@ -162,8 +165,8 @@ onMounted(async () => {
 }
 
 .btn-logout:hover {
-  background-color: #fee2e2;
-  color: #ef4444;
+  background-color: var(--surface-fee2e2);
+  color: var(--ink-ef4444);
 }
 
 .logout-icon {

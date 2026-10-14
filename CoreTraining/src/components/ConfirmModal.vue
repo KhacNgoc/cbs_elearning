@@ -11,5 +11,5 @@ withDefaults(defineProps<{open:boolean;title:string;message:string;confirmLabel?
 defineEmits<{confirm:[];cancel:[]}>();
 </script>
 <style scoped>
-.confirm-modal-icon{width:48px;height:48px;margin-bottom:1rem;display:grid;place-items:center;border-radius:12px;background:#feecec;color:#b42318}.confirm-message{margin:0;color:var(--text-muted);line-height:1.6;white-space:pre-line;overflow-wrap:anywhere}.btn-danger{background:#dc2626;color:white;border:1px solid #dc2626}
+.confirm-modal-icon{width:48px;height:48px;margin-bottom:1rem;display:grid;place-items:center;border-radius:12px;background:var(--surface-feecec);color:var(--ink-b42318)}.confirm-message{margin:0;color:var(--text-muted);line-height:1.6;white-space:pre-line;overflow-wrap:anywhere}.btn-danger{background:#dc2626;color:white;border:1px solid #dc2626}
 </style>

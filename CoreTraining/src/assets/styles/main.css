@@ -167,7 +167,7 @@ button:disabled {
   gap: 0.75rem;
   font-size: 1.35rem;
   font-weight: 700;
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 
 .nav-brand span {
@@ -210,7 +210,7 @@ button:disabled {
 }
 
 .nav-link:hover, .nav-link.router-link-active {
-  color: var(--primary-color);
+  color: var(--primary-ink);
   background-color: var(--primary-light);
 }
 
@@ -221,7 +221,7 @@ button:disabled {
   background: var(--primary-light);
   padding: 0.4rem 1rem;
   border-radius: var(--radius-full);
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-weight: 600;
 }
 
@@ -291,7 +291,7 @@ button:disabled {
 
 .btn-secondary {
   background-color: var(--primary-light);
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 
 .btn-secondary:hover:not(:disabled) {
@@ -301,7 +301,7 @@ button:disabled {
 .btn-outline {
   background-color: transparent;
   border: 1.5px solid var(--primary-color);
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 
 .btn-outline:hover:not(:disabled) {

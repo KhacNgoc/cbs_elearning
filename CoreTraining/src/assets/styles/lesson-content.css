@@ -5,8 +5,8 @@
 .lesson-rich-text h3, .lesson-writing-surface h3 { font-size: 1.1rem; }
 .lesson-rich-text ul, .lesson-rich-text ol, .lesson-writing-surface ul, .lesson-writing-surface ol { padding-left: 1.6rem; }
 .lesson-rich-text img, .lesson-writing-surface img { max-width: 100%; height: auto; border-radius: 8px; }
-.lesson-rich-text a, .lesson-writing-surface a { color: var(--primary-color); text-decoration: underline; }
-.lesson-rich-text blockquote, .lesson-writing-surface blockquote { border-left: 3px solid var(--primary-color); padding: .5rem 1rem; background: #f2f7f5; }
-.lesson-rich-text pre, .lesson-writing-surface pre { padding: 1rem; background: #f1f5f9; border-radius: 8px; overflow-x: auto; white-space: pre-wrap; }
+.lesson-rich-text a, .lesson-writing-surface a { color: var(--primary-ink); text-decoration: underline; }
+.lesson-rich-text blockquote, .lesson-writing-surface blockquote { border-left: 3px solid var(--primary-color); padding: .5rem 1rem; background: var(--surface-f2f7f5); }
+.lesson-rich-text pre, .lesson-writing-surface pre { padding: 1rem; background: var(--surface-f1f5f9); border-radius: 8px; overflow-x: auto; white-space: pre-wrap; }
 .lesson-rich-text table { border-collapse: collapse; width: 100%; display: block; overflow-x: auto; }
 .lesson-rich-text th, .lesson-rich-text td { border: 1px solid var(--border-color); padding: .6rem; }

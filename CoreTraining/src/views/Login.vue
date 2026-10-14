@@ -293,7 +293,7 @@ const handleForgotPassword = async () => {
 .login-header h2 {
   font-size: 1.6rem;
   font-weight: 700;
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 
 .login-header p {
@@ -319,8 +319,8 @@ const handleForgotPassword = async () => {
 }
 
 .error-banner {
-  background-color: #fee2e2;
-  color: #b91c1c;
+  background-color: var(--surface-fee2e2);
+  color: var(--ink-b91c1c);
   padding: 0.75rem 1rem;
   border-radius: var(--radius-sm);
   font-size: 0.85rem;
@@ -328,7 +328,7 @@ const handleForgotPassword = async () => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  border: 1px solid #fca5a5;
+  border: 1px solid var(--line-fca5a5);
   margin-bottom: 1.25rem;
 }
 
@@ -339,8 +339,8 @@ const handleForgotPassword = async () => {
 }
 
 .success-banner {
-  background-color: #ecfdf5;
-  color: #047857;
+  background-color: var(--surface-ecfdf5);
+  color: var(--ink-047857);
   padding: 0.75rem 1rem;
   border-radius: var(--radius-sm);
   font-size: 0.85rem;
@@ -348,7 +348,7 @@ const handleForgotPassword = async () => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  border: 1px solid #a7f3d0;
+  border: 1px solid var(--line-a7f3d0);
   margin-bottom: 1.25rem;
 }
 
@@ -379,7 +379,7 @@ const handleForgotPassword = async () => {
 .forgot-link {
   font-size: 0.8rem;
   font-weight: 600;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   text-decoration: none;
   transition: var(--transition);
 }
@@ -450,7 +450,7 @@ const handleForgotPassword = async () => {
 }
 
 .back-to-login a:hover {
-  color: var(--primary-color);
+  color: var(--primary-ink);
   text-decoration: underline;
 }
 
@@ -467,7 +467,7 @@ const handleForgotPassword = async () => {
   height: 20px;
   border: 3px solid rgba(255,255,255,0.3);
   border-radius: 50%;
-  border-top-color: white;
+  border-top-color: var(--line-ffffff);
   animation: spin 1s ease-in-out infinite;
   margin: 0 auto;
 }

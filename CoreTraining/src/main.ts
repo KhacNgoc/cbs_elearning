@@ -4,13 +4,17 @@ import router from './router';
 import './assets/styles/main.css';
 import './assets/styles/admin.css';
 import './assets/styles/tables.css';
+import './assets/styles/theme-palette.css';
+import './assets/styles/theme.css';
 import App from './App.vue';
+import { initializeTheme } from './composables/useTheme';
 import { Chart } from 'chart.js';
 
 // Canvas text does not inherit the page's CSS font.
 Chart.defaults.font.family = 'Arial, sans-serif';
 
 const app = createApp(App);
+initializeTheme();
 const pinia = createPinia();
 
 app.config.errorHandler = (error, instance, info) => {

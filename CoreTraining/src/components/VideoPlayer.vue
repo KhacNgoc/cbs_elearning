@@ -425,7 +425,7 @@ const openExternal = () => {
   display: flex;
   flex-direction: column;
   background-color: #1e1e1e;
-  border-color: #333;
+  border-color: var(--line-333333);
   padding: 1rem;
   color: #fff;
   min-height: 480px;
@@ -436,14 +436,14 @@ const openExternal = () => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--line-333333);
   padding-bottom: 0.5rem;
 }
 
 .video-filename {
   font-size: 0.9rem;
   font-weight: 500;
-  color: #ccc;
+  color: var(--ink-cccccc);
 }
 
 .video-player-wrapper {
@@ -577,7 +577,7 @@ const openExternal = () => {
 }
 
 .ctrl-btn:hover {
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 
 .icon-svg {
@@ -600,7 +600,7 @@ const openExternal = () => {
   cursor: pointer;
   background: linear-gradient(
     to right,
-    #ffffff var(--volume-progress),
+    var(--surface-ffffff) var(--volume-progress),
     rgba(255, 255, 255, 0.32) var(--volume-progress)
   );
 }
@@ -611,7 +611,7 @@ const openExternal = () => {
   border: 0;
   border-radius: 50%;
   appearance: none;
-  background: #fff;
+  background: var(--surface-ffffff);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
@@ -620,19 +620,19 @@ const openExternal = () => {
   height: 12px;
   border: 0;
   border-radius: 50%;
-  background: #fff;
+  background: var(--surface-ffffff);
 }
 
 .volume-value {
   min-width: 32px;
-  color: #d7dee8;
+  color: var(--ink-d7dee8);
   font-size: 0.68rem;
   font-variant-numeric: tabular-nums;
 }
 
 .time-display {
   font-size: 0.8rem;
-  color: #ccc;
+  color: var(--ink-cccccc);
   font-weight: 500;
 }
 
@@ -648,7 +648,7 @@ const openExternal = () => {
 
 .note-control:hover {
   color: #fff;
-  border-color: #fff;
+  border-color: var(--line-ffffff);
   background: rgba(255,255,255,.12);
 }
 
@@ -664,21 +664,21 @@ const openExternal = () => {
   gap: 0.5rem;
   margin-top: 1rem;
   padding-top: 0.5rem;
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--line-333333);
   font-size: 0.9rem;
-  color: #888;
+  color: var(--ink-888888);
 }
 
 .vid-play-icon {
   width: 16px;
   height: 16px;
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 
 .ext-btn {
   margin-left: auto;
   font-size: 0.8rem;
-  color: #aaa;
+  color: var(--ink-aaaaaa);
   cursor: pointer;
   display: flex;
   align-items: center;

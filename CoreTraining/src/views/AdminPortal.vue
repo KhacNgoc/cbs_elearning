@@ -1182,6 +1182,8 @@ import TablePagination from '../components/TablePagination.vue';
 import {useTablePagination} from '../composables/useTablePagination';
 import { axiosClient } from "../api/axiosClient";
 import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from "vue";
+import { useTheme } from "../composables/useTheme";
+const { isDark } = useTheme();
 import { useRoute, useRouter } from "vue-router";
 import {useUserStore} from '../stores/userStore';
 import { useCourseStore } from "../stores/courseStore";
@@ -1759,7 +1761,7 @@ const activityChartData = computed(() => {
       {
         label: "Bài học hoàn thành",
         data: [18, 24, 15, 29, 32, 12, 28],
-        borderColor: "#005B41", // BIDV Emerald Green
+        borderColor: isDark.value ? "#62dcb5" : "#005B41", // BIDV Emerald Green
         backgroundColor: "rgba(0, 91, 65, 0.1)",
         fill: true,
         tension: 0.3,
@@ -1772,7 +1774,7 @@ const activityChartData = computed(() => {
   };
 });
 
-const activityChartOptions = {
+const activityChartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
@@ -1781,15 +1783,15 @@ const activityChartOptions = {
   },
   scales: {
     y: {
-      grid: { color: "#F1F5F9" },
-      ticks: { color: "#64748B", font: { family: "Arial, sans-serif", size: 11 } },
+      grid: { color: isDark.value ? "#35465a" : "#F1F5F9" },
+      ticks: { color: isDark.value ? "#a8b8ca" : "#64748B", font: { family: "Arial, sans-serif", size: 11 } },
     },
     x: {
       grid: { display: false },
-      ticks: { color: "#64748B", font: { family: "Arial, sans-serif", size: 11 } },
+      ticks: { color: isDark.value ? "#a8b8ca" : "#64748B", font: { family: "Arial, sans-serif", size: 11 } },
     },
   },
-};
+}));
 
 // 2. Doughnut Chart: Competency Level
 const competencyChartData = computed(() => {
@@ -1830,20 +1832,20 @@ const competencyChartData = computed(() => {
   };
 });
 
-const competencyChartOptions = {
+const competencyChartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
     legend: {
       position: "right" as const,
       labels: {
-        color: "#1E293B",
+        color: isDark.value ? "#e6edf5" : "#1E293B",
         font: { family: "Arial, sans-serif", size: 11, weight: "bold" as const },
         boxWidth: 12,
       },
     },
   },
-};
+}));
 
 // 3. Bar Chart: Average Score by Course
 const courseScoreChartData = computed(() => {
@@ -1894,7 +1896,7 @@ const courseScoreChartData = computed(() => {
   };
 });
 
-const courseScoreChartOptions = {
+const courseScoreChartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
@@ -1904,18 +1906,18 @@ const courseScoreChartOptions = {
     y: {
       min: 0,
       max: 100,
-      grid: { color: "#F1F5F9" },
-      ticks: { color: "#64748B", font: { family: "Arial, sans-serif", size: 11 } },
+      grid: { color: isDark.value ? "#35465a" : "#F1F5F9" },
+      ticks: { color: isDark.value ? "#a8b8ca" : "#64748B", font: { family: "Arial, sans-serif", size: 11 } },
     },
     x: {
       grid: { display: false },
       ticks: {
-        color: "#64748B",
+        color: isDark.value ? "#a8b8ca" : "#64748B",
         font: { family: "Arial, sans-serif", size: 10, weight: "bold" as const },
       },
     },
   },
-};
+}));
 
 const enrollmentStatusLabel = (status: EnrollmentRequest["status"]) =>
   ({
@@ -2721,7 +2723,7 @@ void handleDeleteQuestion;
 .admin-portal-layout {
   display: flex;
   min-height: 100%;
-  background-color: white;
+  background-color: var(--surface-ffffff);
   font-family: var(--font-family);
 }
 
@@ -2767,8 +2769,8 @@ void handleDeleteQuestion;
 }
 
 .sidebar-item.active {
-  color: var(--primary-color);
-  background-color: white; /* White tab bg for clean contrast */
+  color: var(--primary-ink);
+  background-color: var(--surface-ffffff); /* White tab bg for clean contrast */
   box-shadow: var(--shadow-sm);
 }
 
@@ -2823,7 +2825,7 @@ void handleDeleteQuestion;
 .admin-top-header {
   padding: 1.5rem 2rem;
   border-left: 5px solid var(--primary-color);
-  background: white;
+  background: var(--surface-ffffff);
   box-shadow: var(--shadow-sm);
 }
 
@@ -2836,7 +2838,7 @@ void handleDeleteQuestion;
 
 .admin-top-header h1 {
   font-size: 1.6rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-weight: 700;
   margin-top: 0.1rem;
 }
@@ -2859,7 +2861,7 @@ void handleDeleteQuestion;
   align-items: center;
   gap: 1.25rem;
   padding: 1.5rem;
-  background: white;
+  background: var(--surface-ffffff);
 }
 
 .stat-icon-box {
@@ -2888,7 +2890,7 @@ void handleDeleteQuestion;
   background-color: var(--primary-color);
 }
 .questions-bg {
-  background-color: #8b5cf6;
+  background-color: var(--surface-8b5cf6);
 }
 
 .online-indicator-ping {
@@ -2897,8 +2899,8 @@ void handleDeleteQuestion;
   right: -3px;
   width: 10px;
   height: 10px;
-  background-color: #ef4444;
-  border: 2px solid white;
+  background-color: var(--surface-ef4444);
+  border: 2px solid var(--line-ffffff);
   border-radius: 50%;
   animation: pulse 1.5s infinite;
 }
@@ -2930,8 +2932,8 @@ void handleDeleteQuestion;
 .active-badge-lbl {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #10b981;
-  background-color: #dcfce7;
+  color: var(--ink-10b981);
+  background-color: var(--surface-dcfce7);
   padding: 0.1rem 0.4rem;
   border-radius: var(--radius-sm);
 }
@@ -2964,7 +2966,7 @@ void handleDeleteQuestion;
 
 .chart-card {
   padding: 1.5rem;
-  background: white;
+  background: var(--surface-ffffff);
 }
 
 .chart-container {
@@ -2977,7 +2979,7 @@ void handleDeleteQuestion;
 /* Real-time Sessions list Card */
 .sessions-card {
   padding: 1.5rem;
-  background: white;
+  background: var(--surface-ffffff);
   display: flex;
   flex-direction: column;
 }
@@ -3041,7 +3043,7 @@ void handleDeleteQuestion;
 
 .session-detail {
   font-size: 0.8rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -3058,7 +3060,7 @@ void handleDeleteQuestion;
 
 .session-course-tag {
   background-color: var(--primary-light);
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-weight: 700;
   padding: 0.1rem 0.4rem;
   border-radius: var(--radius-sm);
@@ -3120,7 +3122,7 @@ void handleDeleteQuestion;
 .users-manager,
 .lessons-manager,
 .exams-manager {
-  background: white;
+  background: var(--surface-ffffff);
   padding: 1.8rem;
   box-shadow: var(--shadow-sm);
 }
@@ -3154,7 +3156,7 @@ void handleDeleteQuestion;
 .code-badge {
   font-family: var(--font-family);
   background-color: var(--bg-main);
-  color: var(--primary-color);
+  color: var(--primary-ink);
   padding: 0.25rem 0.5rem;
   border-radius: var(--radius-sm);
   font-weight: 700;
@@ -3182,12 +3184,12 @@ void handleDeleteQuestion;
 
 .action-btn:hover {
   background-color: var(--bg-main);
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 
 .action-btn.delete:hover {
-  background-color: #fee2e2;
-  color: #ef4444;
+  background-color: var(--surface-fee2e2);
+  color: var(--ink-ef4444);
 }
 
 .action-btn svg {
@@ -3221,13 +3223,13 @@ void handleDeleteQuestion;
 }
 
 .role-tag.admin {
-  background-color: #fee2e2;
-  color: #ef4444;
+  background-color: var(--surface-fee2e2);
+  color: var(--ink-ef4444);
 }
 
 .role-tag.user {
-  background-color: #e0f2fe;
-  color: #0369a1;
+  background-color: var(--surface-e0f2fe);
+  color: var(--ink-0369a1);
 }
 
 /* Modal details */
@@ -3253,7 +3255,7 @@ void handleDeleteQuestion;
   max-height: calc(100vh - 2.5rem);
   overflow-y: auto;
   padding: 2rem;
-  background: white;
+  background: var(--surface-ffffff);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
 }
@@ -3275,7 +3277,7 @@ void handleDeleteQuestion;
 .lesson-modal-header {
   flex: 0 0 auto;
   padding: 1.35rem 1.75rem 0;
-  background: white;
+  background: var(--surface-ffffff);
 }
 
 .lesson-modal-header h3 {
@@ -3304,13 +3306,13 @@ void handleDeleteQuestion;
   margin-top: 0;
   padding: 1rem 1.75rem;
   border-top: 1px solid var(--border-color);
-  background: white;
+  background: var(--surface-ffffff);
   box-shadow: 0 -8px 20px rgba(15, 35, 29, 0.05);
 }
 
 .modal-content h3 {
   font-size: 1.15rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   margin-bottom: 1.25rem;
   border-bottom: 2px solid var(--primary-light);
   padding-bottom: 0.5rem;
@@ -3337,7 +3339,7 @@ void handleDeleteQuestion;
   padding: 0.6rem 0.8rem;
   font-size: 0.85rem;
   color: var(--text-main);
-  background-color: white;
+  background-color: var(--surface-ffffff);
   transition: var(--transition);
 }
 
@@ -3368,7 +3370,7 @@ void handleDeleteQuestion;
   align-items: center;
   gap: 0.45rem;
   margin-bottom: 0.7rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-size: 0.8rem;
   font-weight: 700;
 }
@@ -3398,10 +3400,10 @@ void handleDeleteQuestion;
   align-items: center;
   gap: 0.55rem;
   margin: 0 !important;
-  border: 1px dashed #9ab9ae;
+  border: 1px dashed var(--line-9ab9ae);
   border-radius: var(--radius-sm);
-  background: white;
-  color: var(--primary-color);
+  background: var(--surface-ffffff);
+  color: var(--primary-ink);
   cursor: pointer;
 }
 
@@ -3431,7 +3433,7 @@ void handleDeleteQuestion;
   padding: 0.2rem 0.45rem;
   border-radius: 999px;
   background: var(--primary-light);
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-size: 0.66rem;
   font-weight: 700;
 }
@@ -3453,7 +3455,7 @@ void handleDeleteQuestion;
   padding: 0 0.8rem;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  background: white;
+  background: var(--surface-ffffff);
   color: var(--text-muted);
 }
 
@@ -3479,7 +3481,7 @@ void handleDeleteQuestion;
   padding: 1rem;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  background: white;
+  background: var(--surface-ffffff);
   color: var(--text-color);
   text-align: left;
   cursor: pointer;
@@ -3503,7 +3505,7 @@ void handleDeleteQuestion;
   flex: 0 0 44px;
   border-radius: 12px;
   background: var(--primary-light);
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 
 .quiz-definition-copy {
@@ -3525,8 +3527,8 @@ void handleDeleteQuestion;
 .pending-count {
   padding: 0.45rem 0.7rem;
   border-radius: var(--radius-full);
-  background: #fff7d6;
-  color: #806710;
+  background: var(--surface-fff7d6);
+  color: var(--ink-806710);
   font-weight: 700;
   font-size: 0.78rem;
 }
@@ -3538,7 +3540,7 @@ void handleDeleteQuestion;
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-weight: 700;
   cursor: pointer;
 }
@@ -3558,7 +3560,7 @@ void handleDeleteQuestion;
   padding: 1rem;
   border: 1px solid var(--border-color);
   border-radius: 10px;
-  background: white;
+  background: var(--surface-ffffff);
   color: var(--text-color);
   text-align: left;
   cursor: pointer;
@@ -3579,7 +3581,7 @@ void handleDeleteQuestion;
   height: 44px;
   border-radius: 10px;
   background: var(--primary-light);
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 .lesson-course-copy {
   display: flex;
@@ -3626,16 +3628,16 @@ void handleDeleteQuestion;
   font-weight: 700;
 }
 .enrollment-status.pending {
-  background: #fff7d6;
-  color: #806710;
+  background: var(--surface-fff7d6);
+  color: var(--ink-806710);
 }
 .enrollment-status.approved {
-  background: #e8f5ef;
-  color: var(--primary-color);
+  background: var(--surface-e8f5ef);
+  color: var(--primary-ink);
 }
 .enrollment-status.rejected {
-  background: #feecec;
-  color: #b42318;
+  background: var(--surface-feecec);
+  color: var(--ink-b42318);
 }
 .enrollment-status-detail {
   display: flex;
@@ -3683,8 +3685,8 @@ void handleDeleteQuestion;
 }
 .reject-request {
   border: 1px solid #ef4444;
-  background: white;
-  color: #b42318;
+  background: var(--surface-ffffff);
+  color: var(--ink-b42318);
 }
 .reject-request:hover {
   background: #dc2626;
@@ -3702,7 +3704,7 @@ void handleDeleteQuestion;
   display: inline-flex;
   max-width: 280px;
   gap: 0.25rem;
-  color: #b42318;
+  color: var(--ink-b42318);
   line-height: 1.35;
   text-align: left;
 }
@@ -3719,12 +3721,12 @@ void handleDeleteQuestion;
   display: grid;
   place-items: center;
   border-radius: 14px;
-  background: #feecec;
-  color: #b42318;
+  background: var(--surface-feecec);
+  color: var(--ink-b42318);
 }
 
 .reject-modal-heading > span {
-  color: #b42318;
+  color: var(--ink-b42318);
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -3751,7 +3753,7 @@ void handleDeleteQuestion;
   gap: 1rem;
   border: 1px solid var(--border-color);
   border-radius: 10px;
-  background: #f8fafc;
+  background: var(--surface-f8fafc);
 }
 
 .reject-request-summary > div {
@@ -3775,7 +3777,7 @@ void handleDeleteQuestion;
   width: 100%;
   padding: 0.75rem 0.85rem;
   resize: vertical;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--line-cbd5e1);
   border-radius: 9px;
   outline: none;
   color: var(--text-main);
@@ -3788,7 +3790,7 @@ void handleDeleteQuestion;
 }
 
 .required-mark {
-  color: #dc2626;
+  color: var(--ink-dc2626);
 }
 
 .reason-counter {
@@ -3824,10 +3826,10 @@ void handleDeleteQuestion;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #f0c5c5;
+  border: 1px solid var(--line-f0c5c5);
   border-radius: var(--radius-sm);
-  background: #fff7f7;
-  color: #b42318;
+  background: var(--surface-fff7f7);
+  color: var(--ink-b42318);
   cursor: pointer;
   transition:
     border-color 0.2s,
@@ -3836,7 +3838,7 @@ void handleDeleteQuestion;
 
 .file-clear-btn:hover {
   border-color: #d92d20;
-  background: #fee4e2;
+  background: var(--surface-fee4e2);
 }
 
 .file-clear-btn:focus-visible {
@@ -3881,7 +3883,7 @@ void handleDeleteQuestion;
   padding: 0.7rem 0.8rem;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  background: white;
+  background: var(--surface-ffffff);
   color: var(--text-muted);
   cursor: pointer;
   transition:
@@ -3891,13 +3893,13 @@ void handleDeleteQuestion;
 }
 
 .video-source-option:hover {
-  border-color: #9ab9ae;
+  border-color: var(--line-9ab9ae);
 }
 
 .video-source-option.active {
   border-color: var(--primary-color);
   background: var(--primary-light);
-  color: var(--primary-color);
+  color: var(--primary-ink);
   box-shadow: 0 0 0 1px var(--primary-color);
 }
 
@@ -3938,7 +3940,7 @@ void handleDeleteQuestion;
 .selected-video-note {
   display: block;
   margin-top: 0.5rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 
 .selected-file-meta {
@@ -4039,9 +4041,9 @@ void handleDeleteQuestion;
 }
 
 select:disabled {
-  background-color: #f3f4f6;
-  color: #6b7280;
-  border: 1px solid #d1d5db;
+  background-color: var(--surface-f3f4f6);
+  color: var(--ink-6b7280);
+  border: 1px solid var(--line-d1d5db);
   cursor: not-allowed;
   opacity: 1;
 }
@@ -4065,10 +4067,10 @@ select:disabled {
   align-items: center;
   gap: 0.85rem;
   padding: 1rem;
-  border: 1px dashed #9db9ae;
+  border: 1px dashed var(--line-9db9ae);
   border-radius: var(--radius-md);
-  background: #f4f8f6;
-  color: var(--primary-color);
+  background: var(--surface-f4f8f6);
+  color: var(--primary-ink);
 }
 
 .rag-upload-box > div {
@@ -4084,7 +4086,7 @@ select:disabled {
 
 .rag-upload-message {
   margin: -0.45rem 0 0;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-weight: 600;
 }
 
@@ -4093,8 +4095,8 @@ select:disabled {
   align-items: center;
   padding: 0.25rem 0.55rem;
   border-radius: 999px;
-  background: #eef2f7;
-  color: #475569;
+  background: var(--surface-eef2f7);
+  color: var(--ink-475569);
   font-size: 0.75rem;
   font-weight: 700;
   white-space: nowrap;
@@ -4102,23 +4104,23 @@ select:disabled {
 
 .rag-status.status-indexing,
 .rag-status.status-pending {
-  background: #fff7d6;
-  color: #806710;
+  background: var(--surface-fff7d6);
+  color: var(--ink-806710);
 }
 
 .rag-status.status-indexed {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--surface-dcfce7);
+  color: var(--ink-166534);
 }
 
 .rag-status.status-failed {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: var(--surface-fee2e2);
+  color: var(--ink-b91c1c);
 }
 
 .rag-error-cell {
   min-width: 0;
-  color: #b91c1c;
+  color: var(--ink-b91c1c);
   white-space: normal;
   word-break: break-word;
   overflow-wrap: anywhere;
@@ -4161,7 +4163,7 @@ select:disabled {
 .rag-document-table .rag-document-actions {
   position: sticky;
   right: 0;
-  background: white;
+  background: var(--surface-ffffff);
   text-align: right;
 }
 

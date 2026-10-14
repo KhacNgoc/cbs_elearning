@@ -19,8 +19,8 @@ defineProps<{ to: string; label: string }>();
   height: 44px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  background: white;
-  color: var(--primary-color);
+  background: var(--surface-ffffff);
+  color: var(--primary-ink);
   transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
   touch-action: manipulation;
 }
@@ -29,7 +29,7 @@ defineProps<{ to: string; label: string }>();
   border-color: var(--primary-color);
   box-shadow: var(--shadow-sm);
 }
-.admin-back-button:active { background: #d7e9e3; }
+.admin-back-button:active { background: var(--surface-d7e9e3); }
 .admin-back-button:focus-visible { outline: 3px solid var(--accent-color); outline-offset: 3px; }
 @media(prefers-reduced-motion:reduce){.admin-back-button{transition:none}}
 </style>

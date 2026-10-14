@@ -108,33 +108,33 @@ td { padding: 1rem; border-bottom: 1px solid var(--border-color); vertical-align
 .toggle-column { width: 64px; padding-left: .75rem; padding-right: .75rem; }
 .order-column { width: 72px; text-align: left; white-space: nowrap; }
 .tree-table th:nth-child(3) { min-width: 240px; }
-.chapter-toggle { display: grid; place-items: center; flex-shrink: 0; width: 40px; height: 40px; border: 1px solid #b8d5c8; border-radius: 9px; background: #edf6f1; color: var(--primary-color); cursor: pointer; }
-.chapter-toggle:hover { background: #d7e9e3; border-color: var(--primary-color); }
+.chapter-toggle { display: grid; place-items: center; flex-shrink: 0; width: 40px; height: 40px; border: 1px solid var(--line-b8d5c8); border-radius: 9px; background: var(--surface-edf6f1); color: var(--primary-ink); cursor: pointer; }
+.chapter-toggle:hover { background: var(--surface-d7e9e3); border-color: var(--primary-color); }
 .chapter-toggle svg { transition: transform .18s ease; }
 .chapter-toggle[aria-expanded=true] svg { transform: rotate(90deg); }
-.chapter-row.expanded { background: #f5faf7; }
-.name-link { border: 0; background: none; cursor: pointer; text-align: left; color: var(--primary-color); font: inherit; font-weight: 700; }
+.chapter-row.expanded { background: var(--surface-f5faf7); }
+.name-link { border: 0; background: none; cursor: pointer; text-align: left; color: var(--primary-ink); font: inherit; font-weight: 700; }
 .name-link:hover { text-decoration: underline; text-underline-offset: 3px; }
 small { display: block; margin-top: .35rem; font-size: .75rem; color: var(--text-muted); }
-.lesson-count { color: #52665e; font-size: .8rem; white-space: nowrap; }
-.tree-lesson-row { display: table-row; background: #fafcfb; }
-.tree-lesson-row:hover { background: #f0f6f3; }
+.lesson-count { color: var(--ink-52665e); font-size: .8rem; white-space: nowrap; }
+.tree-lesson-row { display: table-row; background: var(--surface-fafcfb); }
+.tree-lesson-row:hover { background: var(--surface-f0f6f3); }
 .tree-lesson-row td { padding-top: .8rem; padding-bottom: .8rem; }
 .lesson-order { color: var(--text-muted); font-size: .8rem; }
 .lesson-number { display: inline-block; margin-left: 1.25rem; }
 .lesson-branch { display: flex; align-items: center; gap: .75rem; padding-left: 3rem; }
-.lesson-branch > svg { flex-shrink: 0; color: #789c8b; }
+.lesson-branch > svg { flex-shrink: 0; color: var(--ink-789c8b); }
 .lesson-branch > div { min-width: 0; }
 .lesson-name { font-weight: 500; color: var(--text-main); }
-.status { padding: .35rem .6rem; border-radius: 6px; font-size: .75rem; background: var(--primary-light); color: var(--primary-color); white-space: nowrap; }
+.status { padding: .35rem .6rem; border-radius: 6px; font-size: .75rem; background: var(--primary-light); color: var(--primary-ink); white-space: nowrap; }
 .quiz-label { color: var(--text-muted); font-size: .75rem; }
-.quiz-label.required { color: #805b00; }
+.quiz-label.required { color: var(--ink-805b00); }
 .row-actions { display: flex; align-items: center; gap: .45rem; white-space: nowrap; }
-.row-edit, .row-delete, .order-button { display: inline-flex; align-items: center; gap: .35rem; padding: .4rem .7rem; border: 1px solid var(--primary-color); border-radius: 6px; background: white; color: var(--primary-color); cursor: pointer; font-size: .8rem; white-space: nowrap; }
+.row-edit, .row-delete, .order-button { display: inline-flex; align-items: center; gap: .35rem; padding: .4rem .7rem; border: 1px solid var(--primary-color); border-radius: 6px; background: var(--surface-ffffff); color: var(--primary-ink); cursor: pointer; font-size: .8rem; white-space: nowrap; }
 .order-button { display: grid; place-items: center; padding: .3rem; color: var(--text-muted); border-color: var(--border-color); }
-.row-delete { border-color: #f0b7b7; color: #b91c1c; }
+.row-delete { border-color: var(--line-f0b7b7); color: var(--ink-b91c1c); }
 .row-edit:hover:not(:disabled), .order-button:hover:not(:disabled) { background: var(--primary-light); border-color: var(--primary-color); }
-.row-delete:hover:not(:disabled) { background: #fff1f2; border-color: #b91c1c; }
+.row-delete:hover:not(:disabled) { background: var(--surface-fff1f2); border-color: #b91c1c; }
 button:disabled { opacity: .45; cursor: not-allowed; }
 .readonly-label, .empty-chapter { color: var(--text-muted); font-size: .8rem; }
 .empty-chapter .name-link { font-size: .8rem; }

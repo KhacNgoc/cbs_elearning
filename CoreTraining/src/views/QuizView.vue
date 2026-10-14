@@ -352,7 +352,7 @@ const getBadgeIcon = (icon: string) => {
 .quiz-title {
   font-size: 1.75rem;
   font-weight: 700;
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 
 .quiz-subtitle {
@@ -378,7 +378,7 @@ const getBadgeIcon = (icon: string) => {
 .score-value {
   font-size: 1.25rem;
   font-weight: 800;
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 
 /* Active Quiz Card */
@@ -400,7 +400,7 @@ const getBadgeIcon = (icon: string) => {
 .question-progress {
   font-size: 0.85rem;
   font-weight: 700;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   background-color: var(--primary-light);
   padding: 0.25rem 0.75rem;
   border-radius: var(--radius-sm);
@@ -534,23 +534,23 @@ const getBadgeIcon = (icon: string) => {
 }
 
 .result-badge-icon.gold {
-  background: linear-gradient(135deg, #FFE082 0%, #FFB300 100%);
-  color: #FF6F00;
+  background: linear-gradient(135deg, var(--surface-ffe082) 0%, #FFB300 100%);
+  color: var(--ink-ff6f00);
 }
 
 .result-badge-icon.silver {
-  background: linear-gradient(135deg, #E0E0E0 0%, #9E9E9E 100%);
-  color: #424242;
+  background: linear-gradient(135deg, var(--surface-e0e0e0) 0%, var(--surface-9e9e9e) 100%);
+  color: var(--ink-424242);
 }
 
 .result-badge-icon.bronze {
-  background: linear-gradient(135deg, #FFCC80 0%, #CA8A04 100%);
-  color: #713F12;
+  background: linear-gradient(135deg, var(--surface-ffcc80) 0%, #CA8A04 100%);
+  color: var(--ink-713f12);
 }
 
 .result-badge-icon.fail {
-  background-color: #fee2e2;
-  color: #ef4444;
+  background-color: var(--surface-fee2e2);
+  color: var(--ink-ef4444);
 }
 
 .badge-icon {
@@ -560,7 +560,7 @@ const getBadgeIcon = (icon: string) => {
 
 .score-highlight {
   font-size: 1.35rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 
 /* Badge unlocked panel */
@@ -592,18 +592,18 @@ const getBadgeIcon = (icon: string) => {
 }
 
 .glowing-ring.gold {
-  background: linear-gradient(135deg, #FFE082 0%, #FFB300 100%);
-  color: #FF6F00;
+  background: linear-gradient(135deg, var(--surface-ffe082) 0%, #FFB300 100%);
+  color: var(--ink-ff6f00);
 }
 
 .glowing-ring.silver {
-  background: linear-gradient(135deg, #E0E0E0 0%, #9E9E9E 100%);
-  color: #424242;
+  background: linear-gradient(135deg, var(--surface-e0e0e0) 0%, var(--surface-9e9e9e) 100%);
+  color: var(--ink-424242);
 }
 
 .glowing-ring.bronze {
-  background: linear-gradient(135deg, #FFCC80 0%, #CA8A04 100%);
-  color: #713F12;
+  background: linear-gradient(135deg, var(--surface-ffcc80) 0%, #CA8A04 100%);
+  color: var(--ink-713f12);
 }
 
 .unlocked-icon {
@@ -642,19 +642,19 @@ const getBadgeIcon = (icon: string) => {
 
 .review-card { gap: 1.25rem; }
 .review-heading { width: 100%; display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color); }
-.review-eyebrow { color: var(--primary-color); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.review-eyebrow { color: var(--primary-ink); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .review-heading h2 { margin: .3rem 0; color: var(--text-main); }
 .review-heading p { color: var(--text-muted); }
-.review-passed-badge { flex: 0 0 auto; display: flex; align-items: center; gap: .35rem; padding: .5rem .75rem; border-radius: var(--radius-full); background: #e8f5ef; color: var(--primary-color); font-weight: 800; }
+.review-passed-badge { flex: 0 0 auto; display: flex; align-items: center; gap: .35rem; padding: .5rem .75rem; border-radius: var(--radius-full); background: var(--surface-e8f5ef); color: var(--primary-ink); font-weight: 800; }
 .review-list { width: 100%; display: grid; gap: .75rem; }
 .review-question-card { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: .75rem; padding: 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); }
-.review-question-card.correct { background: #f0fdf4; border-color: #bbf7d0; }
-.review-question-card.incorrect { background: #fef2f2; border-color: #fecaca; }
-.review-question-status { color: #10b981; }
-.review-question-card.incorrect .review-question-status { color: #ef4444; }
+.review-question-card.correct { background: var(--surface-f0fdf4); border-color: var(--line-bbf7d0); }
+.review-question-card.incorrect { background: var(--surface-fef2f2); border-color: var(--line-fecaca); }
+.review-question-status { color: var(--ink-10b981); }
+.review-question-card.incorrect .review-question-status { color: var(--ink-ef4444); }
 .review-question-card h3 { margin: 0 0 .55rem; font-size: .95rem; line-height: 1.45; }
-.review-question-card p { margin: .2rem 0; color: #52645d; font-size: .85rem; }
-.review-question-card .correct-answer { color: #067647; }
+.review-question-card p { margin: .2rem 0; color: var(--ink-52645d); font-size: .85rem; }
+.review-question-card .correct-answer { color: var(--ink-067647); }
 
 @media (max-width: 600px) {
   .review-heading { flex-direction: column; }

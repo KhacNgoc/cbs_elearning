@@ -190,8 +190,8 @@ onMounted(() => navigationStore.load());
 }
 
 .sidebar-item.active {
-  background: white;
-  color: var(--primary-color);
+  background: var(--surface-ffffff);
+  color: var(--primary-ink);
   box-shadow: var(--shadow-sm);
 }
 
@@ -199,7 +199,7 @@ onMounted(() => navigationStore.load());
 .sidebar-item>svg{flex-shrink:0}
 .sidebar-item>span{min-width:0;flex:1}
 .sidebar-group{flex-shrink:0}
-.group-toggle{color:#e5f0eb}
+.group-toggle{color:var(--ink-e5f0eb)}
 .contains-active>.group-toggle,.is-open>.group-toggle{background:rgba(255,255,255,.08);color:white}
 .group-chevron{margin-left:auto;transition:transform 180ms ease}
 .group-chevron.rotated{transform:rotate(180deg)}
@@ -223,7 +223,7 @@ onMounted(() => navigationStore.load());
   align-self: stretch;
   overflow-y: auto;
   overflow-x: hidden;
-  background: white;
+  background: var(--surface-ffffff);
   color: var(--text-main);
   font-size: var(--admin-text-body);
   line-height: 1.5;

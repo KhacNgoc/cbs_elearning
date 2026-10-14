@@ -59,7 +59,7 @@ defineProps({
 }
 
 .progress-value {
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-weight: 600;
 }
 </style>

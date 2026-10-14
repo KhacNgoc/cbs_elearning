@@ -91,10 +91,10 @@ onBeforeUnmount(() => {
 .powerpoint-preview-content { width: min(100%, 1180px); min-height: 100%; margin: 0 auto; }
 .powerpoint-preview-content :deep(.pptx-viewer-slide),
 .powerpoint-preview-content :deep([data-slide-index]) { margin: 0 auto 1.25rem; box-shadow: 0 8px 24px rgba(0, 0, 0, .32); }
-.powerpoint-preview-state { min-height: 100%; display: grid; place-content: center; justify-items: center; gap: .65rem; padding: 1rem; color: #cbd5e1; text-align: center; }
-.powerpoint-preview-error svg { color: #eab308; }
+.powerpoint-preview-state { min-height: 100%; display: grid; place-content: center; justify-items: center; gap: .65rem; padding: 1rem; color: var(--ink-cbd5e1); text-align: center; }
+.powerpoint-preview-error svg { color: var(--ink-eab308); }
 .powerpoint-preview-error p { max-width: 500px; }
-.powerpoint-preview-spinner { color: #22a06b; animation: powerpoint-spin .8s linear infinite; }
+.powerpoint-preview-spinner { color: var(--ink-22a06b); animation: powerpoint-spin .8s linear infinite; }
 @keyframes powerpoint-spin { to { transform: rotate(360deg); } }
 @media (max-width: 600px) { .powerpoint-preview-scroll { padding: .5rem; } }
 </style>

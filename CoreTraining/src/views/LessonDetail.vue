@@ -20,6 +20,7 @@
         ref="mediaStage"
         :lesson="lesson"
         :selected-document="selectedDocument"
+        :primary-content="primaryContent"
         :current-index="currentLessonIndex"
         :total-lessons="course?.lessons.length || 0"
         :initial-position-seconds="currentLessonProgress?.lastPositionSeconds || 0"
@@ -28,7 +29,7 @@
         :initial-scroll-offset="currentLessonProgress?.documentId === selectedDocument?.id ? currentLessonProgress?.scrollOffset || 0 : 0"
         @document-position="handleDocumentPosition"
         @adjacent="goToAdjacentLesson"
-        @close-document="selectedDocument = null"
+        @select-content="showPrimaryContent"
         @download-document="downloadDocument"
         @time-update="currentVideoTime = $event"
         @progress-update="handleVideoProgress"
@@ -70,12 +71,14 @@
     </div>
 
     <section class="lesson-information">
-      <LessonReportForm v-if="userStore.canLearn" :key="lesson.id" :lesson-id="lesson.id" :lesson-title="lesson.title" />
       <LessonOverview
         :lesson="lesson"
         :course-name="fullCourse?.name"
         :completed="isCompleted"
       >
+        <template #actions>
+          <LessonReportForm v-if="userStore.canLearn" :key="lesson.id" :lesson-id="lesson.id" :lesson-title="lesson.title" />
+        </template>
         <LessonVideoNotes
           ref="videoNotesPanel"
           :notes="videoNotes"
@@ -170,6 +173,7 @@ import LessonCourseSidebar from "../components/lesson/LessonCourseSidebar.vue";
 import LessonMediaStage from "../components/lesson/LessonMediaStage.vue";
 import LessonOverview from "../components/lesson/LessonOverview.vue";
 import LessonReportForm from "../components/lesson/LessonReportForm.vue";
+import { initialLessonContent } from "../utils/lessonContent";
 import LessonDiscussion from "../components/lesson/LessonDiscussion.vue";
 import LessonVideoNotes from "../components/lesson/LessonVideoNotes.vue";
 
@@ -182,6 +186,8 @@ const userStore = useUserStore();
 const mediaStage = ref<InstanceType<typeof LessonMediaStage> | null>(null);
 const videoNotesPanel = ref<InstanceType<typeof LessonVideoNotes> | null>(null);
 const selectedDocument = ref<LessonDocument | null>(null);
+const primaryContent = ref<'VIDEO' | 'TEXT'>('TEXT');
+const activeContentType = computed(() => selectedDocument.value ? 'DOCUMENT' : primaryContent.value);
 const pendingDocument = ref<{
   lessonId: string;
   document: LessonDocument;
@@ -251,8 +257,6 @@ const loadLessonData = async (lessonId: string) => {
     const activeChapter=outline.value.chapters.find(c=>c.id===lesson.value?.chapterId);
     const activeIndex=activeChapter?.lessons.findIndex(l=>l.id===lesson.value?.id) ?? -1;
     if(activeChapter && activeIndex>=0)activeChapter.lessons[activeIndex]=lesson.value;
-    if(!lesson.value.videoUrl && !lesson.value.textBody && lesson.value.documents.length)
-      selectedDocument.value=lesson.value.documents[0] || null;
   }
 
   // Guard check: course accessibility
@@ -274,20 +278,11 @@ const selectInitialContent = (requestedDocument?: LessonDocument) => {
   if (!lesson.value) return;
   const documents = lesson.value.documents || [];
   const saved=userStore.lessonProgress?.[lesson.value.id];
-  const requestedId=typeof route.query.documentId==='string'?Number(route.query.documentId):saved?.contentType==='DOCUMENT'?saved.documentId:undefined;
+  const requestedId=typeof route.query.documentId==='string'?Number(route.query.documentId):undefined;
   requestedDocument ||= documents.find(d=>d.id===requestedId);
-  if (requestedDocument) {
-    selectedDocument.value =
-      documents.find(
-        (document) =>
-          (requestedDocument.id != null && document.id === requestedDocument.id) ||
-          document.fileUrl === requestedDocument.fileUrl,
-      ) || requestedDocument;
-    return;
-  }
-  selectedDocument.value = lesson.value.videoUrl?.trim()
-    ? null
-    : documents[0] || null;
+  const initial = initialLessonContent(lesson.value, saved, requestedDocument);
+  primaryContent.value = initial.type === 'VIDEO' ? 'VIDEO' : 'TEXT';
+  selectedDocument.value = initial.document;
 };
 
 const loadVideoNotes = async (lessonId: string) => {
@@ -339,7 +334,7 @@ watch(
 );
 
 const handleVideoProgress = (progress: LessonProgressRequest) => {
-  if(selectedDocument.value)return;
+  if(activeContentType.value !== 'VIDEO')return;
   currentProgressSnapshot.value = { ...progress, contentType: 'VIDEO' };
   if (progressSaveTimer) clearTimeout(progressSaveTimer);
   progressSaveTimer = setTimeout(() => void persistCurrentProgress(), 5000);
@@ -353,9 +348,10 @@ const persistCurrentProgress = async () => {
   }
   return userStore.saveLessonProgress(lesson.value.id, {
     ...currentProgressSnapshot.value,
-    contentType: selectedDocument.value ? 'DOCUMENT' : lesson.value.videoUrl ? 'VIDEO' : 'TEXT',
+    contentType: activeContentType.value,
     documentId: selectedDocument.value?.id,
     documentPage: selectedDocument.value ? currentProgressSnapshot.value.documentPage || 1 : undefined,
+    scrollOffset: selectedDocument.value ? currentProgressSnapshot.value.scrollOffset : undefined,
   });
 };
 const handleDocumentPosition = (position:{page:number;scrollOffset:number}) => {
@@ -364,7 +360,7 @@ const handleDocumentPosition = (position:{page:number;scrollOffset:number}) => {
   if(progressSaveTimer)clearTimeout(progressSaveTimer);
   progressSaveTimer=setTimeout(()=>void persistCurrentProgress(),1000);
 };
-watch(selectedDocument, async document => {
+watch([selectedDocument, primaryContent], async ([document]) => {
   if(!bookmarkReady.value || !lesson.value)return;
   if(document){const saved=userStore.lessonProgress?.[lesson.value.id];currentProgressSnapshot.value={...currentProgressSnapshot.value,documentId:document.id,documentPage:saved && saved.documentId===document.id?saved.documentPage:1,scrollOffset:saved && saved.documentId===document.id?saved.scrollOffset:0};}
   await persistCurrentProgress();
@@ -416,6 +412,11 @@ const showDocument = async (lessonId: string, document: LessonDocument) => {
     return;
   }
   selectedDocument.value = document;
+};
+const showPrimaryContent = (type: 'VIDEO' | 'TEXT') => {
+  if (!lesson.value || (type === 'VIDEO' ? !lesson.value.videoUrl?.trim() : !lesson.value.textBody?.trim())) return;
+  primaryContent.value = type;
+  selectedDocument.value = null;
 };
 const downloadDocument = async (
   document: import("../types").LessonDocument,
@@ -603,8 +604,8 @@ const deleteVideoNote = async (note: VideoNote) => {
   }
 };
 const seekToNote = async (seconds: number) => {
-  if (selectedDocument.value) {
-    selectedDocument.value = null;
+  if (activeContentType.value !== 'VIDEO') {
+    showPrimaryContent('VIDEO');
     await nextTick();
   }
   mediaStage.value?.seekTo(seconds);
@@ -678,7 +679,7 @@ const deleteComment = async (commentId: number) => {
   width: min(480px, 100%);
   padding: 1.6rem;
   border-radius: 14px;
-  background: white;
+  background: var(--surface-ffffff);
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
   text-align: center;
 }
@@ -692,8 +693,8 @@ const deleteComment = async (commentId: number) => {
   place-items: center;
   border: 0;
   border-radius: 50%;
-  background: #f1f5f3;
-  color: #64748b;
+  background: var(--surface-f1f5f3);
+  color: var(--ink-64748b);
   cursor: pointer;
 }
 .quiz-gate-icon {
@@ -703,11 +704,11 @@ const deleteComment = async (commentId: number) => {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: #fff4cc;
-  color: #8a6b00;
+  background: var(--surface-fff4cc);
+  color: var(--ink-8a6b00);
 }
 .quiz-gate-eyebrow {
-  color: #8a6b00;
+  color: var(--ink-8a6b00);
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -717,11 +718,11 @@ const deleteComment = async (commentId: number) => {
   margin: 0.4rem 1.5rem 0.65rem;
   font-size: 1.25rem;
   line-height: 1.35;
-  color: #173c31;
+  color: var(--ink-173c31);
 }
 .quiz-gate-dialog p {
   margin: 0;
-  color: #52645d;
+  color: var(--ink-52645d);
   line-height: 1.6;
 }
 .quiz-gate-actions {
@@ -738,9 +739,9 @@ const deleteComment = async (commentId: number) => {
   font-weight: 700;
 }
 .quiz-gate-secondary {
-  border: 1px solid #cbd5d1;
-  background: white;
-  color: #42534c;
+  border: 1px solid var(--line-cbd5d1);
+  background: var(--surface-ffffff);
+  color: var(--ink-42534c);
 }
 .quiz-gate-primary {
   display: inline-flex;
@@ -800,7 +801,7 @@ const deleteComment = async (commentId: number) => {
   gap: 0.9rem;
 }
 .course-name {
-  color: #e4c760;
+  color: var(--ink-e4c760);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -825,7 +826,7 @@ const deleteComment = async (commentId: number) => {
   gap: 0.5rem;
 }
 .progress-summary {
-  color: #dbe7e3;
+  color: var(--ink-dbe7e3);
   font-size: 0.82rem;
 }
 .outline-action,
@@ -840,7 +841,7 @@ const deleteComment = async (commentId: number) => {
   font-weight: 600;
 }
 .outline-action:disabled {
-  color: #8ae2c2;
+  color: var(--ink-8ae2c2);
   border-color: rgba(138, 226, 194, 0.35);
   cursor: default;
 }
@@ -922,11 +923,11 @@ const deleteComment = async (commentId: number) => {
   gap: 0.4rem;
   background: transparent;
   border: 0;
-  color: #d5ddda;
+  color: var(--ink-d5ddda);
   cursor: pointer;
 }
 .viewer-navigation button:hover:not(:disabled) {
-  color: #e4c760;
+  color: var(--ink-e4c760);
 }
 .viewer-navigation button:disabled {
   opacity: 0.3;
@@ -939,7 +940,7 @@ const deleteComment = async (commentId: number) => {
   flex-direction: column;
 }
 .viewer-lesson-title span {
-  color: #8ba29a;
+  color: var(--ink-8ba29a);
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -957,8 +958,8 @@ const deleteComment = async (commentId: number) => {
   bottom: 0;
   width: 370px;
   min-width: 370px;
-  background: #fff;
-  border-left: 1px solid #dce5e1;
+  background: var(--surface-ffffff);
+  border-left: 1px solid var(--line-dce5e1);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -992,7 +993,7 @@ const deleteComment = async (commentId: number) => {
 }
 .sidebar-progress {
   height: 3px;
-  background: #e4eae8;
+  background: var(--surface-e4eae8);
 }
 .sidebar-progress span {
   display: block;
@@ -1010,15 +1011,15 @@ const deleteComment = async (commentId: number) => {
   display: flex;
   align-items: flex-start;
   gap: 0.7rem;
-  background: #fff;
+  background: var(--surface-ffffff);
   color: var(--text-main);
   border: 0;
-  border-bottom: 1px solid #edf1ef;
+  border-bottom: 1px solid var(--line-edf1ef);
   text-align: left;
   cursor: pointer;
 }
 .lesson-row:hover {
-  background: #f4f8f6;
+  background: var(--surface-f4f8f6);
 }
 .lesson-row.active {
   background: var(--primary-light);
@@ -1031,7 +1032,7 @@ const deleteComment = async (commentId: number) => {
   margin-top: 1px;
   display: grid;
   place-items: center;
-  border: 1.5px solid #94a3b8;
+  border: 1.5px solid var(--line-94a3b8);
   border-radius: 3px;
   padding: 0;
   background: transparent;
@@ -1068,31 +1069,31 @@ const deleteComment = async (commentId: number) => {
   color: var(--text-muted);
 }
 .lesson-row-copy .lesson-quiz-note {
-  color: #806710;
+  color: var(--ink-806710);
   font-weight: 700;
 }
 .quiz-box {
   margin: 0.8rem;
   padding: 0.9rem;
   border-radius: 9px;
-  background: #f5f0dc;
-  border: 1px solid #e7d692;
+  background: var(--surface-f5f0dc);
+  border: 1px solid var(--line-e7d692);
 }
 .quiz-box > div {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #6a5610;
+  color: var(--ink-6a5610);
 }
 .quiz-box p {
   margin: 0.4rem 0 0.7rem;
   font-size: 0.75rem;
-  color: #71683f;
+  color: var(--ink-71683f);
 }
 .quiz-box button {
   border: 0;
   background: transparent;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-weight: 700;
   display: flex;
   gap: 0.35rem;
@@ -1101,14 +1102,14 @@ const deleteComment = async (commentId: number) => {
 }
 .course-quiz-box {
   margin-top: 0;
-  background: #eaf5f1;
-  border-color: #b8d8cc;
+  background: var(--surface-eaf5f1);
+  border-color: var(--line-b8d8cc);
 }
 .course-quiz-box > div {
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 .course-quiz-box p {
-  color: #476158;
+  color: var(--ink-476158);
 }
 .sidebar-reopen {
   position: fixed;
@@ -1129,13 +1130,13 @@ const deleteComment = async (commentId: number) => {
 .procedure-viewer {
   overflow-y: auto;
   padding: 2rem;
-  background: #e9efed;
+  background: var(--surface-e9efed);
 }
 .procedure-document {
   max-width: 900px;
   margin: auto;
   padding: 2.5rem;
-  background: white;
+  background: var(--surface-ffffff);
   min-height: 100%;
 }
 .procedure-heading {
@@ -1145,7 +1146,7 @@ const deleteComment = async (commentId: number) => {
 }
 .procedure-heading span,
 .eyebrow {
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -1162,7 +1163,7 @@ const deleteComment = async (commentId: number) => {
 }
 .section-number {
   font-weight: 800;
-  color: #c5a539;
+  color: var(--ink-c5a539);
   font-size: 1.15rem;
 }
 .procedure-section h3 {
@@ -1171,7 +1172,7 @@ const deleteComment = async (commentId: number) => {
 }
 .procedure-section ul {
   padding-left: 1rem;
-  color: #46564f;
+  color: var(--ink-46564f);
 }
 .procedure-section li {
   margin: 0.4rem 0;
@@ -1183,15 +1184,15 @@ const deleteComment = async (commentId: number) => {
   justify-items: center;
   padding: 2rem;
   text-align: center;
-  color: #c5d5cf;
+  color: var(--ink-c5d5cf);
   background: radial-gradient(circle at center, #173c31 0%, #07110e 72%);
 }
 .discussion-viewer svg {
-  color: #e4c760;
+  color: var(--ink-e4c760);
   margin-bottom: 1rem;
 }
 .discussion-viewer span {
-  color: #79bfa6;
+  color: var(--ink-79bfa6);
   text-transform: uppercase;
   font-size: 0.75rem;
   font-weight: 700;
@@ -1203,7 +1204,7 @@ const deleteComment = async (commentId: number) => {
 }
 .discussion-viewer p {
   max-width: 520px;
-  color: #9db3ab;
+  color: var(--ink-9db3ab);
 }
 
 /* Multi-file document workspace */
@@ -1213,7 +1214,7 @@ const deleteComment = async (commentId: number) => {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
   position: relative;
-  background: #dfe8e5;
+  background: var(--surface-dfe8e5);
   overflow: hidden;
 }
 .document-library {
@@ -1221,8 +1222,8 @@ const deleteComment = async (commentId: number) => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #f8faf9;
-  border-right: 1px solid #d3ddd9;
+  background: var(--surface-f8faf9);
+  border-right: 1px solid var(--line-d3ddd9);
   z-index: 3;
 }
 .document-library-header {
@@ -1231,7 +1232,7 @@ const deleteComment = async (commentId: number) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #dbe4e0;
+  border-bottom: 1px solid var(--line-dbe4e0);
 }
 .document-library-header > div {
   display: flex;
@@ -1272,12 +1273,12 @@ const deleteComment = async (commentId: number) => {
   cursor: pointer;
 }
 .document-list button:hover {
-  background: #eef4f1;
+  background: var(--surface-eef4f1);
 }
 .document-list button.active {
   background: var(--primary-light);
   border-color: rgba(0, 91, 65, 0.18);
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 .document-type-icon {
   width: 36px;
@@ -1285,9 +1286,9 @@ const deleteComment = async (commentId: number) => {
   display: grid;
   place-items: center;
   border-radius: 6px;
-  background: white;
-  border: 1px solid #d7e0dc;
-  color: var(--primary-color);
+  background: var(--surface-ffffff);
+  border: 1px solid var(--line-d7e0dc);
+  color: var(--primary-ink);
 }
 .document-list button > span:nth-child(2) {
   min-width: 0;
@@ -1316,18 +1317,18 @@ const deleteComment = async (commentId: number) => {
   display: flex;
   align-items: center;
   gap: 0.8rem;
-  background: white;
-  border-bottom: 1px solid #d3ddd9;
+  background: var(--surface-ffffff);
+  border-bottom: 1px solid var(--line-d3ddd9);
 }
 .document-library-toggle {
   display: none;
   align-items: center;
   gap: 0.4rem;
-  border: 1px solid #ced9d5;
-  background: white;
+  border: 1px solid var(--line-ced9d5);
+  background: var(--surface-ffffff);
   border-radius: 6px;
   padding: 0.45rem 0.6rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   cursor: pointer;
 }
 .selected-file {
@@ -1335,7 +1336,7 @@ const deleteComment = async (commentId: number) => {
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 .selected-file > span {
   min-width: 0;
@@ -1358,7 +1359,7 @@ const deleteComment = async (commentId: number) => {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-size: 0.8rem;
   font-weight: 700;
   white-space: nowrap;
@@ -1377,7 +1378,7 @@ const deleteComment = async (commentId: number) => {
   height: 100%;
   min-height: 450px;
   border: 0;
-  background: white;
+  background: var(--surface-ffffff);
 }
 .external-document {
   min-height: 100%;
@@ -1385,7 +1386,7 @@ const deleteComment = async (commentId: number) => {
   place-content: center;
   justify-items: center;
   text-align: center;
-  background: white;
+  background: var(--surface-ffffff);
   color: var(--text-muted);
 }
 .external-document h3 {
@@ -1406,7 +1407,7 @@ const deleteComment = async (commentId: number) => {
   display: none;
 }
 .lesson-information {
-  background: white;
+  background: var(--surface-ffffff);
 }
 .content-tabs {
   z-index: 80;
@@ -1432,7 +1433,7 @@ const deleteComment = async (commentId: number) => {
   background: transparent;
   border: 1px solid transparent;
   border-radius: 7px;
-  color: #aebdb8;
+  color: var(--ink-aebdb8);
   white-space: nowrap;
   font-size: 0.86rem;
   font-weight: 600;
@@ -1459,10 +1460,10 @@ const deleteComment = async (commentId: number) => {
   border-color: rgba(126, 205, 177, 0.22);
 }
 .content-tabs button.active svg {
-  color: #e4c760;
+  color: var(--ink-e4c760);
 }
 .content-tabs button.active::after {
-  background: #e4c760;
+  background: var(--surface-e4c760);
 }
 .info-layout {
   max-width: 1280px;
@@ -1486,13 +1487,13 @@ const deleteComment = async (commentId: number) => {
   gap: 0.8rem;
   background: var(--primary-light);
   border-left: 4px solid var(--primary-color);
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 .hint-box svg {
   flex: 0 0 auto;
 }
 .hint-box p {
-  color: #3f5f54;
+  color: var(--ink-3f5f54);
   margin-top: 0.2rem;
 }
 .lesson-facts {
@@ -1506,7 +1507,7 @@ const deleteComment = async (commentId: number) => {
 .lesson-facts > div {
   display: flex;
   gap: 0.7rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   margin: 1rem 0;
 }
 .lesson-facts span {
@@ -1531,11 +1532,11 @@ const deleteComment = async (commentId: number) => {
   justify-content: space-between;
 }
 .section-title > svg {
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 .feedback-form {
   padding: 1.1rem;
-  background: #f8faf9;
+  background: var(--surface-f8faf9);
   border: 1px solid var(--border-color);
   border-radius: 10px;
 }
@@ -1549,7 +1550,7 @@ const deleteComment = async (commentId: number) => {
 .feedback-form textarea {
   width: 100%;
   resize: vertical;
-  border: 1px solid #cfd9d5;
+  border: 1px solid var(--line-cfd9d5);
   border-radius: 7px;
   padding: 0.8rem;
   outline: none;
@@ -1610,7 +1611,7 @@ const deleteComment = async (commentId: number) => {
 }
 .comment p {
   margin-top: 0.35rem;
-  color: #43534d;
+  color: var(--ink-43534d);
 }
 .loading-state {
   min-height: 60vh;
@@ -1838,8 +1839,8 @@ const deleteComment = async (commentId: number) => {
 }
 .lesson-entry {
   position: relative;
-  background: #fff;
-  border-bottom: 1px solid #edf1ef;
+  background: var(--surface-ffffff);
+  border-bottom: 1px solid var(--line-edf1ef);
   transition: background 0.2s ease;
 }
 .lesson-entry.active {
@@ -1867,15 +1868,15 @@ const deleteComment = async (commentId: number) => {
   gap: 0.35rem;
   border: 1px solid rgba(0, 91, 65, 0.22);
   border-radius: 6px;
-  background: #fff;
-  color: var(--primary-color);
+  background: var(--surface-ffffff);
+  color: var(--primary-ink);
   font-size: 0.72rem;
   font-weight: 700;
   cursor: pointer;
 }
 .lesson-resources-toggle:hover,
 .lesson-resources-toggle.expanded {
-  background: #e7f2ee;
+  background: var(--surface-e7f2ee);
   border-color: rgba(0, 91, 65, 0.4);
 }
 .lesson-resources-toggle > svg:last-child {
@@ -1900,7 +1901,7 @@ const deleteComment = async (commentId: number) => {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
-  border-left: 2px solid #b8d4ca;
+  border-left: 2px solid var(--line-b8d4ca);
 }
 .lesson-documents button {
   width: 100%;
@@ -1912,14 +1913,14 @@ const deleteComment = async (commentId: number) => {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #42534c;
+  color: var(--ink-42534c);
   text-align: left;
   cursor: pointer;
 }
 .lesson-documents button:hover,
 .lesson-documents button.selected {
-  background: #fff;
-  color: var(--primary-color);
+  background: var(--surface-ffffff);
+  color: var(--primary-ink);
   box-shadow: 0 1px 4px rgba(11, 42, 32, 0.09);
 }
 .lesson-documents button > span {
@@ -1947,73 +1948,6 @@ const deleteComment = async (commentId: number) => {
   overflow: hidden;
   background: #0f172a;
 }
-.selected-document-toolbar {
-  min-height: 54px;
-  padding: 0.55rem 0.9rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  background: #1d211f;
-  color: #fff;
-  border-bottom: 1px solid #343b38;
-}
-.selected-document-toolbar > div {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-}
-.selected-document-toolbar > div > svg {
-  color: #e4c760;
-  flex: 0 0 auto;
-}
-.selected-document-toolbar span {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.selected-document-toolbar strong {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 0.85rem;
-}
-.selected-document-toolbar small {
-  color: #92a39d;
-  font-size: 0.68rem;
-}
-.selected-document-toolbar button {
-  padding: 0.45rem 0.7rem;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  border: 1px solid #52605b;
-  border-radius: 6px;
-  background: transparent;
-  color: #dce7e3;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.selected-document-toolbar button:hover {
-  color: #fff;
-  border-color: #e4c760;
-}
-.selected-document-actions {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.selected-document-toolbar .download-document-button {
-  background: var(--primary-color);
-  border-color: var(--primary-color);
-  color: #fff;
-}
-.selected-document-toolbar .download-document-button:hover {
-  background: #087657;
-  border-color: #e4c760;
-}
 .selected-document-preview > .slide-viewer {
   flex: 1;
   min-height: 0;
@@ -2024,7 +1958,7 @@ const deleteComment = async (commentId: number) => {
   width: 100%;
   min-height: 0;
   border: 0;
-  background: #fff;
+  background: var(--surface-ffffff);
 }
 .selected-document-preview > .word-preview,
 .selected-document-preview > .powerpoint-preview {
@@ -2044,21 +1978,14 @@ const deleteComment = async (commentId: number) => {
     height: min(500px, calc(100vh - 122px));
     min-height: 360px;
   }
-  .selected-document-toolbar button {
-    font-size: 0;
-  }
-  .selected-document-toolbar button svg {
-    width: 18px;
-    height: 18px;
-  }
 }
 .learning-page .outline-action:hover:not(:disabled),
 .learning-page .mobile-content-button:hover,
-.learning-page .sidebar-reopen:hover{background:#294c40;border-color:#8ae2c2}
+.learning-page .sidebar-reopen:hover{background:#294c40;border-color:var(--line-8ae2c2)}
 .learning-page .sidebar-close:hover,.learning-page .lesson-check:hover,
-.learning-page .document-library-close:hover{background:var(--primary-light);color:var(--primary-color)}
+.learning-page .document-library-close:hover{background:var(--primary-light);color:var(--primary-ink)}
 .learning-page .lesson-row-copy:hover strong{text-decoration:underline;text-underline-offset:3px}
-.learning-page .quiz-box button:hover{background:#eadca8;border-radius:6px}
+.learning-page .quiz-box button:hover{background:var(--surface-eadca8);border-radius:6px}
 .learning-page .submit-button:hover:not(:disabled),.learning-page .quiz-gate-primary:hover{background:var(--primary-hover);box-shadow:0 3px 10px #005b4133}
 .learning-page .quiz-gate-secondary:hover{background:var(--primary-light)}
 .header-copy{overflow:hidden}.course-name{min-width:0;max-width:45%;overflow:hidden;text-overflow:ellipsis}
