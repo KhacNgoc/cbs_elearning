@@ -30,7 +30,9 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
         if (token == null || username == null)
             return false;
         try {
-            return tokens.matchesUser(token.toString(),((com.bidv.coretraining.security.CustomUserDetails)detailsService.loadUserById(tokens.getUserIdFromJWT(token.toString()))).getUser());
+            return tokens.matchesUser(token.toString(),
+                    ((com.bidv.coretraining.security.CustomUserDetails) detailsService
+                            .loadUserById(tokens.getUserIdFromJWT(token.toString()))).getUser());
         } catch (Exception ex) {
             return false;
         }

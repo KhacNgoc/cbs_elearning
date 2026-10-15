@@ -40,8 +40,8 @@ public class VideoController {
     @GetMapping("/stream")
     public ResponseEntity<?> stream(
             @RequestParam String token,
-            @org.springframework.web.bind.annotation.RequestHeader(
-                    value = "X-Accel-Supported", required = false) String accelSupported) throws IOException {
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-Accel-Supported", required = false) String accelSupported)
+            throws IOException {
         Path video = videoAccessService.authorizeStreamPath(token);
         if ("true".equalsIgnoreCase(accelSupported)) {
             return ResponseEntity.ok()

@@ -34,8 +34,7 @@ public class QuizController {
             @RequestBody QuizSubmitRequest request,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         return ResponseEntity.ok(
-                quizService.submitLessonQuiz(lessonId, request, userDetails.getUsername())
-        );
+                quizService.submitLessonQuiz(lessonId, request, userDetails.getUsername()));
     }
 
     @GetMapping("/lessons/{lessonId}/review")

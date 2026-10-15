@@ -29,9 +29,10 @@ public class DocumentService {
     private final LessonKnowledgeSourceRepository knowledgeSources;
     private final Path uploadDirectory;
 
-    public DocumentService(CourseDocumentRepository documentRepository, CourseRepository courseRepository, RagIngestionService ragIngestionService,
-                           LessonKnowledgeSourceRepository knowledgeSources,
-                           @Value("${app.upload-directory}") String uploadDirectory) {
+    public DocumentService(CourseDocumentRepository documentRepository, CourseRepository courseRepository,
+            RagIngestionService ragIngestionService,
+            LessonKnowledgeSourceRepository knowledgeSources,
+            @Value("${app.upload-directory}") String uploadDirectory) {
         this.documentRepository = documentRepository;
         this.courseRepository = courseRepository;
         this.ragIngestionService = ragIngestionService;
@@ -40,17 +41,22 @@ public class DocumentService {
     }
 
     public CourseDocumentDto upload(String courseId, MultipartFile file) {
-        if (file.isEmpty() || file.getOriginalFilename() == null) throw new BadRequestException("Tệp tải lên không hợp lệ");
+        if (file.isEmpty() || file.getOriginalFilename() == null)
+            throw new BadRequestException("Tệp tải lên không hợp lệ");
         String lowerName = file.getOriginalFilename().toLowerCase();
-        if (!lowerName.endsWith(".pdf") && !lowerName.endsWith(".docx")) throw new BadRequestException("Chỉ hỗ trợ PDF hoặc DOCX");
-        Course course = courseRepository.findById(courseId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khóa học: " + courseId));
+        if (!lowerName.endsWith(".pdf") && !lowerName.endsWith(".docx"))
+            throw new BadRequestException("Chỉ hỗ trợ PDF hoặc DOCX");
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khóa học: " + courseId));
         try {
             Files.createDirectories(uploadDirectory);
             String id = UUID.randomUUID().toString();
             Path destination = uploadDirectory.resolve(id + (lowerName.endsWith(".pdf") ? ".pdf" : ".docx"));
             file.transferTo(destination);
-            CourseDocument document = documentRepository.save(CourseDocument.builder().id(id).course(course).fileName(file.getOriginalFilename())
-                    .storagePath(destination.toAbsolutePath().toString()).contentType(file.getContentType() == null ? "application/octet-stream" : file.getContentType())
+            CourseDocument document = documentRepository.save(CourseDocument.builder().id(id).course(course)
+                    .fileName(file.getOriginalFilename())
+                    .storagePath(destination.toAbsolutePath().toString())
+                    .contentType(file.getContentType() == null ? "application/octet-stream" : file.getContentType())
                     .sizeBytes(file.getSize()).status(DocumentStatus.PENDING).createdAt(LocalDateTime.now()).build());
             ragIngestionService.ingestAsync(id);
             return CourseDocumentDto.from(document);
@@ -64,7 +70,8 @@ public class DocumentService {
         if (!courseRepository.existsById(courseId)) {
             throw new ResourceNotFoundException("Không tìm thấy khóa học: " + courseId);
         }
-        return documentRepository.findByCourseIdOrderByCreatedAtDesc(courseId).stream().map(CourseDocumentDto::from).toList();
+        return documentRepository.findByCourseIdOrderByCreatedAtDesc(courseId).stream().map(CourseDocumentDto::from)
+                .toList();
     }
 
     @Transactional
@@ -75,9 +82,11 @@ public class DocumentService {
             throw new ResourceNotFoundException("Không tìm thấy tài liệu trong khóa học này");
         }
         if (document.getStatus() == DocumentStatus.PENDING || document.getStatus() == DocumentStatus.INDEXING) {
-            throw new BadRequestException("Tài liệu đang chờ hoặc đang embedding. Vui lòng chờ xử lý hoàn tất trước khi xóa.");
+            throw new BadRequestException(
+                    "Tài liệu đang chờ hoặc đang embedding. Vui lòng chờ xử lý hoàn tất trước khi xóa.");
         }
-        // Remove vectors first; keep the record available for retry if RAG is unavailable.
+        // Remove vectors first; keep the record available for retry if RAG is
+        // unavailable.
         ragIngestionService.deleteIndex(documentId, courseId);
         try {
             Files.deleteIfExists(Path.of(document.getStoragePath()));

@@ -1,11 +1,17 @@
-const AUTH_STORAGE_KEYS = ['accessToken', 'userRole', 'username', 'fullName', 'mustChangePassword'] as const;
+const AUTH_STORAGE_KEYS = [
+  "accessToken",
+  "userRole",
+  "username",
+  "fullName",
+  "mustChangePassword",
+] as const;
 
 export interface AuthSession {
   role: string;
   roles?: string[];
-  roleNames?: Record<string,string>;
-  systemAdmin?:boolean;
-  permissionRevision?:number;
+  roleNames?: Record<string, string>;
+  systemAdmin?: boolean;
+  permissionRevision?: number;
   permissions?: string[];
   unitId?: string;
   scopeUnitIds?: string[];
@@ -35,7 +41,7 @@ export const clearAuthSession = () => {
 
 export const redirectToLogin = () => {
   clearAuthSession();
-  if (window.location.pathname !== '/login') {
-    window.location.replace('/login');
+  if (window.location.pathname !== "/login") {
+    window.location.replace("/login");
   }
 };

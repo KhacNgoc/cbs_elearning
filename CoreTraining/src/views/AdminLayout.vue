@@ -1,43 +1,90 @@
 <template>
   <div class="admin-shell">
-    <div class="admin-sidebar-frame" :class="{ 'is-collapsed': !sidebarVisible }" :inert="!sidebarVisible" :aria-hidden="!sidebarVisible">
-    <aside id="admin-navigation-sidebar" class="admin-shell-sidebar" aria-label="Điều hướng quản trị">
-      <nav aria-label="Menu chức năng">
-        <RouterLink
-          v-for="item in standaloneNavigation"
-          :key="item.id"
-          class="sidebar-item"
-          :to="item.route"
-          :class="{ active: activeSection === item.id }"
-          :aria-current="activeSection === item.id ? 'page' : undefined"
-          @click="emit('navigate')"
-        >
-          <component :is="navigationIcon(item.icon)" :size="18" />
-          <span>{{ item.label }}</span>
-        </RouterLink>
-        <section v-for="group in navigationGroups" :key="group.id" class="sidebar-group" :class="{ 'contains-active': activeGroup === group.id, 'is-open': openGroup === group.id }">
-          <button type="button" class="sidebar-item group-toggle" :aria-expanded="openGroup === group.id" :aria-controls="`sidebar-group-${group.id}`" @click="openGroup = openGroup === group.id ? null : group.id">
-            <component :is="group.icon" :size="18" />
-            <span>{{ group.label }}</span>
-            <ChevronDown :size="15" class="group-chevron" :class="{ rotated: openGroup === group.id }" />
-          </button>
-          <MotionCollapse :open="openGroup === group.id">
-            <div :id="`sidebar-group-${group.id}`" class="group-items">
-              <RouterLink v-for="item in group.items" :key="item.id" :to="item.route" class="sidebar-item group-item" :class="{ active: itemActive(item) }" :aria-current="itemActive(item) ? 'page' : undefined" @click="emit('navigate')">
-                <component :is="navigationIcon(item.icon)" :size="16" />
-                <span>{{ item.id === 'dashboard' ? 'Tổng quan học tập' : item.label }}</span>
-              </RouterLink>
-            </div>
-          </MotionCollapse>
-        </section>
-      </nav>
-      <div class="admin-shell-footer">
-        <Settings :size="18" />
-        <span>{{ user.roles.map(code=>user.roleNames[code] || code).join(', ') }}</span>
-      </div>
-    </aside>
+    <div
+      class="admin-sidebar-frame"
+      :class="{ 'is-collapsed': !sidebarVisible }"
+      :inert="!sidebarVisible"
+      :aria-hidden="!sidebarVisible"
+    >
+      <aside
+        id="admin-navigation-sidebar"
+        class="admin-shell-sidebar"
+        aria-label="Điều hướng quản trị"
+      >
+        <nav aria-label="Menu chức năng">
+          <RouterLink
+            v-for="item in standaloneNavigation"
+            :key="item.id"
+            class="sidebar-item"
+            :to="item.route"
+            :class="{ active: activeSection === item.id }"
+            :aria-current="activeSection === item.id ? 'page' : undefined"
+            @click="emit('navigate')"
+          >
+            <component :is="navigationIcon(item.icon)" :size="18" />
+            <span>{{ item.label }}</span>
+          </RouterLink>
+          <section
+            v-for="group in navigationGroups"
+            :key="group.id"
+            class="sidebar-group"
+            :class="{
+              'contains-active': activeGroup === group.id,
+              'is-open': openGroup === group.id,
+            }"
+          >
+            <button
+              type="button"
+              class="sidebar-item group-toggle"
+              :aria-expanded="openGroup === group.id"
+              :aria-controls="`sidebar-group-${group.id}`"
+              @click="openGroup = openGroup === group.id ? null : group.id"
+            >
+              <component :is="group.icon" :size="18" />
+              <span>{{ group.label }}</span>
+              <ChevronDown
+                :size="15"
+                class="group-chevron"
+                :class="{ rotated: openGroup === group.id }"
+              />
+            </button>
+            <MotionCollapse :open="openGroup === group.id">
+              <div :id="`sidebar-group-${group.id}`" class="group-items">
+                <RouterLink
+                  v-for="item in group.items"
+                  :key="item.id"
+                  :to="item.route"
+                  class="sidebar-item group-item"
+                  :class="{ active: itemActive(item) }"
+                  :aria-current="itemActive(item) ? 'page' : undefined"
+                  @click="emit('navigate')"
+                >
+                  <component :is="navigationIcon(item.icon)" :size="16" />
+                  <span>{{
+                    item.id === "dashboard" ? "Tổng quan học tập" : item.label
+                  }}</span>
+                </RouterLink>
+              </div>
+            </MotionCollapse>
+          </section>
+        </nav>
+        <div class="admin-shell-footer">
+          <Settings :size="18" />
+          <span>{{
+            user.roles.map((code) => user.roleNames[code] || code).join(", ")
+          }}</span>
+        </div>
+      </aside>
     </div>
-    <section class="admin-shell-content" :class="[route.path.startsWith('/admin') ? 'admin-management-content' : 'learning-shell-content', { 'permissions-shell-content': route.name === 'AdminPermissions' }]">
+    <section
+      class="admin-shell-content"
+      :class="[
+        route.path.startsWith('/admin')
+          ? 'admin-management-content'
+          : 'learning-shell-content',
+        { 'permissions-shell-content': route.name === 'AdminPermissions' },
+      ]"
+    >
       <slot><RouterView /></slot>
     </section>
   </div>
@@ -47,64 +94,162 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { useNavigationStore } from "../stores/navigationStore";
-import { BookOpen, ClipboardCheck, FileText, HelpCircle, Home, Trophy, Settings, Users, Building2, ShieldCheck, UsersRound, Library, Flag, ChevronDown, GraduationCap } from "lucide-vue-next";
-import MotionCollapse from '../components/MotionCollapse.vue';
-import type {NavigationItem} from '../api/navigationApi';
+import {
+  BookOpen,
+  ClipboardCheck,
+  FileText,
+  HelpCircle,
+  Home,
+  Trophy,
+  Settings,
+  Users,
+  Building2,
+  ShieldCheck,
+  UsersRound,
+  Library,
+  Flag,
+  ChevronDown,
+  GraduationCap,
+} from "lucide-vue-next";
+import MotionCollapse from "../components/MotionCollapse.vue";
+import type { NavigationItem } from "../api/navigationApi";
 
-import { useUserStore } from '../stores/userStore';
+import { useUserStore } from "../stores/userStore";
 
-withDefaults(defineProps<{ sidebarVisible?: boolean }>(), { sidebarVisible: true });
-const emit=defineEmits<{navigate:[]}>();
-const user=useUserStore();
+withDefaults(defineProps<{ sidebarVisible?: boolean }>(), {
+  sidebarVisible: true,
+});
+const emit = defineEmits<{ navigate: [] }>();
+const user = useUserStore();
 const route = useRoute();
 const navigationStore = useNavigationStore();
 const navigation = computed(() => navigationStore.adminItems);
-const learningNavigation = computed(() => user.canLearn ? navigationStore.mainItems.filter(item => item.id !== 'admin') : []);
-const iconRegistry = { BookOpen, ClipboardCheck, FileText, HelpCircle, Home, Trophy, Settings, Users, Building2, ShieldCheck, UsersRound, Library, Flag };
-const navigationIcon = (name: string) => iconRegistry[name as keyof typeof iconRegistry] || Settings;
+const learningNavigation = computed(() =>
+  user.canLearn
+    ? navigationStore.mainItems.filter((item) => item.id !== "admin")
+    : [],
+);
+const iconRegistry = {
+  BookOpen,
+  ClipboardCheck,
+  FileText,
+  HelpCircle,
+  Home,
+  Trophy,
+  Settings,
+  Users,
+  Building2,
+  ShieldCheck,
+  UsersRound,
+  Library,
+  Flag,
+};
+const navigationIcon = (name: string) =>
+  iconRegistry[name as keyof typeof iconRegistry] || Settings;
 const groupDefinitions = [
-  {id:'training',label:'Đào tạo & tài liệu',icon:BookOpen,ids:['admin.catalog','admin.courses','admin.lessons','admin.documents']},
-  {id:'assessment',label:'Kiểm tra & câu hỏi',icon:ClipboardCheck,ids:['admin.exams','admin.question-bank']},
-  {id:'learners',label:'Học viên & tổ chức',icon:Users,ids:['admin.users','admin.units','admin.groups','admin.enrollments']},
-  {id:'management',label:'Quản trị & kiểm duyệt',icon:ShieldCheck,ids:['admin.roles','admin.permissions','admin.content-reports']},
+  {
+    id: "training",
+    label: "Đào tạo & tài liệu",
+    icon: BookOpen,
+    ids: ["admin.catalog", "admin.courses", "admin.lessons", "admin.documents"],
+  },
+  {
+    id: "assessment",
+    label: "Kiểm tra & câu hỏi",
+    icon: ClipboardCheck,
+    ids: ["admin.exams", "admin.question-bank"],
+  },
+  {
+    id: "learners",
+    label: "Học viên & tổ chức",
+    icon: Users,
+    ids: ["admin.users", "admin.units", "admin.groups", "admin.enrollments"],
+  },
+  {
+    id: "management",
+    label: "Quản trị & kiểm duyệt",
+    icon: ShieldCheck,
+    ids: ["admin.roles", "admin.permissions", "admin.content-reports"],
+  },
 ];
-const groupedIds=new Set(groupDefinitions.flatMap(group=>group.ids));
-const standaloneNavigation=computed(()=>navigation.value.filter(item=>!groupedIds.has(item.id)));
-const navigationGroups=computed(()=>[
-  ...groupDefinitions.map(group=>({...group,items:group.ids.flatMap(id=>navigation.value.filter(item=>item.id===id))})),
-  {id:'learning',label:'Học tập',icon:GraduationCap,items:learningNavigation.value},
-].filter(group=>group.items.length));
-const openGroup=ref<string|null>(null);
+const groupedIds = new Set(groupDefinitions.flatMap((group) => group.ids));
+const standaloneNavigation = computed(() =>
+  navigation.value.filter((item) => !groupedIds.has(item.id)),
+);
+const navigationGroups = computed(() =>
+  [
+    ...groupDefinitions.map((group) => ({
+      ...group,
+      items: group.ids.flatMap((id) =>
+        navigation.value.filter((item) => item.id === id),
+      ),
+    })),
+    {
+      id: "learning",
+      label: "Học tập",
+      icon: GraduationCap,
+      items: learningNavigation.value,
+    },
+  ].filter((group) => group.items.length),
+);
+const openGroup = ref<string | null>(null);
 
 const activeSection = computed(() =>
-  route.path.startsWith("/admin/question-bank") ? "admin.question-bank"
-    : route.path.startsWith("/admin/content-reports") ? "admin.content-reports"
-    : route.path.startsWith("/admin/users") ? "admin.users"
-    : route.path.startsWith("/admin/units") ? "admin.units"
-    : route.path.startsWith("/admin/groups") ? "admin.groups"
-    : route.path.startsWith("/admin/roles") ? "admin.roles"
-    : route.path.startsWith("/admin/permissions") ? "admin.permissions"
-    : route.path.startsWith("/admin/catalog") ? "admin.catalog"
-    : route.path.startsWith("/admin/courses") || route.path.endsWith("/edit") ? "admin.courses"
-    : route.path.includes("/admin/quizzes")
-    ? "admin.exams"
-    : route.name === "AdminCourseLessons" || route.path.startsWith("/admin/lessons")
-      ? "admin.lessons"
-    : typeof route.query.tab === "string"
-      ? `admin.${route.query.tab}`
-          : route.path.startsWith('/admin') ? "admin.overview" : "",
+  route.path.startsWith("/admin/question-bank")
+    ? "admin.question-bank"
+    : route.path.startsWith("/admin/content-reports")
+      ? "admin.content-reports"
+      : route.path.startsWith("/admin/users")
+        ? "admin.users"
+        : route.path.startsWith("/admin/units")
+          ? "admin.units"
+          : route.path.startsWith("/admin/groups")
+            ? "admin.groups"
+            : route.path.startsWith("/admin/roles")
+              ? "admin.roles"
+              : route.path.startsWith("/admin/permissions")
+                ? "admin.permissions"
+                : route.path.startsWith("/admin/catalog")
+                  ? "admin.catalog"
+                  : route.path.startsWith("/admin/courses") ||
+                      route.path.endsWith("/edit")
+                    ? "admin.courses"
+                    : route.path.includes("/admin/quizzes")
+                      ? "admin.exams"
+                      : route.name === "AdminCourseLessons" ||
+                          route.path.startsWith("/admin/lessons")
+                        ? "admin.lessons"
+                        : typeof route.query.tab === "string"
+                          ? `admin.${route.query.tab}`
+                          : route.path.startsWith("/admin")
+                            ? "admin.overview"
+                            : "",
 );
 
-function itemActive(item:NavigationItem) {return item.area==='ADMIN' ? activeSection.value===item.id : !route.path.startsWith('/admin') && route.path===item.route;}
-const activeGroup=computed(()=>navigationGroups.value.find(group=>group.items.some(itemActive))?.id || null);
-watch([()=>route.fullPath,activeGroup],()=>{openGroup.value=activeGroup.value;},{immediate:true});
+function itemActive(item: NavigationItem) {
+  return item.area === "ADMIN"
+    ? activeSection.value === item.id
+    : !route.path.startsWith("/admin") && route.path === item.route;
+}
+const activeGroup = computed(
+  () =>
+    navigationGroups.value.find((group) => group.items.some(itemActive))?.id ||
+    null,
+);
+watch(
+  [() => route.fullPath, activeGroup],
+  () => {
+    openGroup.value = activeGroup.value;
+  },
+  { immediate: true },
+);
 onMounted(() => navigationStore.load());
 </script>
 
 <style scoped>
 .admin-shell {
   --sidebar-duration: 320ms;
-  --sidebar-easing: cubic-bezier(.22, 1, .36, 1);
+  --sidebar-easing: cubic-bezier(0.22, 1, 0.36, 1);
   --admin-text-caption: 0.75rem;
   --admin-text-label: 0.8125rem;
   --admin-text-body: 0.875rem;
@@ -126,16 +271,22 @@ onMounted(() => navigationStore.load());
   flex: 0 0 auto;
   min-height: 0;
   overflow: hidden;
-  transition: grid-template-columns var(--sidebar-duration) var(--sidebar-easing);
+  transition: grid-template-columns var(--sidebar-duration)
+    var(--sidebar-easing);
 }
 
-.admin-sidebar-frame.is-collapsed { grid-template-columns: 0px; }
+.admin-sidebar-frame.is-collapsed {
+  grid-template-columns: 0px;
+}
 .admin-sidebar-frame.is-collapsed .admin-shell-sidebar {
   transform: translateX(-100%);
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transition: transform var(--sidebar-duration) var(--sidebar-easing), opacity var(--sidebar-duration) var(--sidebar-easing), visibility 0s linear var(--sidebar-duration);
+  transition:
+    transform var(--sidebar-duration) var(--sidebar-easing),
+    opacity var(--sidebar-duration) var(--sidebar-easing),
+    visibility 0s linear var(--sidebar-duration);
 }
 
 .admin-shell-sidebar {
@@ -153,7 +304,10 @@ onMounted(() => navigationStore.load());
   transform: translateX(0);
   opacity: 1;
   visibility: visible;
-  transition: transform var(--sidebar-duration) var(--sidebar-easing), opacity var(--sidebar-duration) var(--sidebar-easing), visibility 0s;
+  transition:
+    transform var(--sidebar-duration) var(--sidebar-easing),
+    opacity var(--sidebar-duration) var(--sidebar-easing),
+    visibility 0s;
 }
 
 .admin-shell-sidebar nav {
@@ -161,7 +315,7 @@ onMounted(() => navigationStore.load());
   flex: 1;
   flex-direction: column;
   gap: 0.3rem;
-  padding: 1.25rem .9rem 1rem;
+  padding: 1.25rem 0.9rem 1rem;
   min-height: 0;
 }
 
@@ -169,8 +323,8 @@ onMounted(() => navigationStore.load());
   display: flex;
   width: 100%;
   align-items: center;
-  gap: .65rem;
-  padding: .7rem .85rem;
+  gap: 0.65rem;
+  padding: 0.7rem 0.85rem;
   min-height: 42px;
   border: 0;
   border-radius: 8px;
@@ -178,7 +332,7 @@ onMounted(() => navigationStore.load());
   color: rgba(255, 255, 255, 0.75);
   cursor: pointer;
   font-weight: 600;
-  font-size: .85rem;
+  font-size: 0.85rem;
   line-height: 1.4;
   text-align: left;
   text-decoration: none;
@@ -195,23 +349,56 @@ onMounted(() => navigationStore.load());
   box-shadow: var(--shadow-sm);
 }
 
-.sidebar-item:focus-visible{outline:2px solid #c4e8da;outline-offset:2px}
-.sidebar-item>svg{flex-shrink:0}
-.sidebar-item>span{min-width:0;flex:1}
-.sidebar-group{flex-shrink:0}
-.group-toggle{color:var(--ink-e5f0eb)}
-.contains-active>.group-toggle,.is-open>.group-toggle{background:rgba(255,255,255,.08);color:white}
-.group-chevron{margin-left:auto;transition:transform 180ms ease}
-.group-chevron.rotated{transform:rotate(180deg)}
-.group-items{display:flex;flex-direction:column;gap:.15rem;margin:.3rem .25rem .4rem 1.35rem;padding-left:.65rem;border-left:1px solid rgba(255,255,255,.22)}
-.group-item{padding:.55rem .65rem;min-height:38px;font-size:.8125rem;font-weight:500}
+.sidebar-item:focus-visible {
+  outline: 2px solid #c4e8da;
+  outline-offset: 2px;
+}
+.sidebar-item > svg {
+  flex-shrink: 0;
+}
+.sidebar-item > span {
+  min-width: 0;
+  flex: 1;
+}
+.sidebar-group {
+  flex-shrink: 0;
+}
+.group-toggle {
+  color: var(--ink-e5f0eb);
+}
+.contains-active > .group-toggle,
+.is-open > .group-toggle {
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+}
+.group-chevron {
+  margin-left: auto;
+  transition: transform 180ms ease;
+}
+.group-chevron.rotated {
+  transform: rotate(180deg);
+}
+.group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0.3rem 0.25rem 0.4rem 1.35rem;
+  padding-left: 0.65rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.22);
+}
+.group-item {
+  padding: 0.55rem 0.65rem;
+  min-height: 38px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
 
 .admin-shell-footer {
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  margin: 0 1rem .75rem;
-  padding: .75rem .5rem;
+  margin: 0 1rem 0.75rem;
+  padding: 0.75rem 0.5rem;
   border-top: 1px solid rgba(255, 255, 255, 0.15);
   font-size: 0.75rem;
   font-weight: 700;
@@ -236,7 +423,10 @@ onMounted(() => navigationStore.load());
   font-size: 1rem;
 }
 
-.permissions-shell-content { overflow: hidden; scrollbar-gutter: auto; }
+.permissions-shell-content {
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
 
 .admin-management-content :deep(.card-title) {
   font-size: var(--admin-heading-section);
@@ -272,7 +462,8 @@ onMounted(() => navigationStore.load());
   line-height: 1.4;
 }
 
-.admin-management-content :deep(.admin-tab-content .tab-pane:not(.overview-pane) .card) {
+.admin-management-content
+  :deep(.admin-tab-content .tab-pane:not(.overview-pane) .card) {
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -312,10 +503,12 @@ onMounted(() => navigationStore.load());
     grid-template-rows: 0px;
   }
 
-  .admin-sidebar-frame.is-collapsed .admin-shell-sidebar { transform: translateY(-100%); }
+  .admin-sidebar-frame.is-collapsed .admin-shell-sidebar {
+    transform: translateY(-100%);
+  }
 
   .admin-shell-sidebar nav {
-    padding: .75rem;
+    padding: 0.75rem;
   }
 
   .admin-shell-footer {
@@ -328,23 +521,55 @@ onMounted(() => navigationStore.load());
   }
 }
 
-@media(max-height:720px){
-  .admin-shell-sidebar nav{padding:.75rem;gap:.15rem}
-  .sidebar-item{min-height:36px;padding:.5rem .75rem}
-  .group-item{min-height:34px;padding:.4rem .6rem}
-  .admin-shell-footer{margin-bottom:.5rem;padding:.6rem .5rem}
+@media (max-height: 720px) {
+  .admin-shell-sidebar nav {
+    padding: 0.75rem;
+    gap: 0.15rem;
+  }
+  .sidebar-item {
+    min-height: 36px;
+    padding: 0.5rem 0.75rem;
+  }
+  .group-item {
+    min-height: 34px;
+    padding: 0.4rem 0.6rem;
+  }
+  .admin-shell-footer {
+    margin-bottom: 0.5rem;
+    padding: 0.6rem 0.5rem;
+  }
 }
-@media(max-height:560px){
-  .admin-shell-sidebar nav{padding:.5rem .75rem;gap:.1rem}
-  .sidebar-item{min-height:30px;padding:.35rem .65rem;font-size:.8rem}
-  .group-item{min-height:28px;padding:.3rem .55rem;font-size:.75rem}
-  .group-items{margin-top:.2rem;margin-bottom:.25rem;gap:0}
-  .admin-shell-footer{display:none}
+@media (max-height: 560px) {
+  .admin-shell-sidebar nav {
+    padding: 0.5rem 0.75rem;
+    gap: 0.1rem;
+  }
+  .sidebar-item {
+    min-height: 30px;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.8rem;
+  }
+  .group-item {
+    min-height: 28px;
+    padding: 0.3rem 0.55rem;
+    font-size: 0.75rem;
+  }
+  .group-items {
+    margin-top: 0.2rem;
+    margin-bottom: 0.25rem;
+    gap: 0;
+  }
+  .admin-shell-footer {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .admin-sidebar-frame,
   .admin-sidebar-frame.is-collapsed .admin-shell-sidebar,
-  .admin-shell-sidebar,.group-chevron { transition: none; }
+  .admin-shell-sidebar,
+  .group-chevron {
+    transition: none;
+  }
 }
 </style>

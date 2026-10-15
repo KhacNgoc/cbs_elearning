@@ -1,11 +1,16 @@
 <template>
-  <RouterLink :to="to" class="admin-back-button" :aria-label="label" :title="label">
+  <RouterLink
+    :to="to"
+    class="admin-back-button"
+    :aria-label="label"
+    :title="label"
+  >
     <ArrowLeft :size="21" aria-hidden="true" />
   </RouterLink>
 </template>
 
 <script setup lang="ts">
-import { ArrowLeft } from 'lucide-vue-next';
+import { ArrowLeft } from "lucide-vue-next";
 defineProps<{ to: string; label: string }>();
 </script>
 
@@ -21,7 +26,10 @@ defineProps<{ to: string; label: string }>();
   border-radius: var(--radius-md);
   background: var(--surface-ffffff);
   color: var(--primary-ink);
-  transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
   touch-action: manipulation;
 }
 .admin-back-button:hover {
@@ -29,7 +37,16 @@ defineProps<{ to: string; label: string }>();
   border-color: var(--primary-color);
   box-shadow: var(--shadow-sm);
 }
-.admin-back-button:active { background: var(--surface-d7e9e3); }
-.admin-back-button:focus-visible { outline: 3px solid var(--accent-color); outline-offset: 3px; }
-@media(prefers-reduced-motion:reduce){.admin-back-button{transition:none}}
+.admin-back-button:active {
+  background: var(--surface-d7e9e3);
+}
+.admin-back-button:focus-visible {
+  outline: 3px solid var(--accent-color);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-back-button {
+    transition: none;
+  }
+}
 </style>

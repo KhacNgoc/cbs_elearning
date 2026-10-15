@@ -7,6 +7,7 @@ import java.util.List;
 
 public interface LessonKnowledgeSourceRepository extends JpaRepository<LessonKnowledgeSource, Long> {
     void deleteByDocumentId(String documentId);
-    @EntityGraph(attributePaths = {"document", "document.course"})
+
+    @EntityGraph(attributePaths = { "document", "document.course" })
     List<LessonKnowledgeSource> findByLessonIdOrderByIdAsc(String lessonId);
 }

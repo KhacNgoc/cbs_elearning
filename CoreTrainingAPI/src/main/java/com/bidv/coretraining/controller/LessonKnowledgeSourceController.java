@@ -9,13 +9,21 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/admin")
 public class LessonKnowledgeSourceController {
-    @org.springframework.beans.factory.annotation.Autowired private com.bidv.coretraining.service.AuthorizationService authorization;
-    @org.springframework.beans.factory.annotation.Autowired private com.bidv.coretraining.repository.LessonRepository lessons;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bidv.coretraining.service.AuthorizationService authorization;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bidv.coretraining.repository.LessonRepository lessons;
     private final LessonKnowledgeSourceService service;
-    public LessonKnowledgeSourceController(LessonKnowledgeSourceService service) { this.service = service; }
+
+    public LessonKnowledgeSourceController(LessonKnowledgeSourceService service) {
+        this.service = service;
+    }
 
     @GetMapping("/lessons/{lessonId}/knowledge-sources")
-    public List<LessonKnowledgeSourceDto> list(@PathVariable String lessonId) { authorization.edit(lessons.findById(lessonId).orElseThrow().getCourse()); return service.list(lessonId); }
+    public List<LessonKnowledgeSourceDto> list(@PathVariable String lessonId) {
+        authorization.edit(lessons.findById(lessonId).orElseThrow().getCourse());
+        return service.list(lessonId);
+    }
 
     @PutMapping("/lessons/{lessonId}/knowledge-sources")
     public List<LessonKnowledgeSourceDto> save(@PathVariable String lessonId,

@@ -1,8 +1,8 @@
-import axios from 'axios';
-import { redirectToLogin } from '../utils/authSession';
+import axios from "axios";
+import { redirectToLogin } from "../utils/authSession";
 
-const baseURL = import.meta.env.VITE_API_URL || '';
-const CORRELATION_ID_HEADER = 'X-Correlation-Id';
+const baseURL = import.meta.env.VITE_API_URL || "";
+const CORRELATION_ID_HEADER = "X-Correlation-Id";
 const DEFAULT_API_TIMEOUT_MS = 15_000;
 
 const positiveTimeout = (value: unknown, fallback: number) => {
@@ -24,13 +24,17 @@ export const QUIZ_GENERATION_TIMEOUT_MS = positiveTimeout(
 
 export const isTimeoutError = (error: unknown): boolean => {
   if (!axios.isAxiosError(error)) return false;
-  return error.code === 'ECONNABORTED' ||
-    error.code === 'ETIMEDOUT' ||
-    String(error.message || '').toLowerCase().includes('timeout');
+  return (
+    error.code === "ECONNABORTED" ||
+    error.code === "ETIMEDOUT" ||
+    String(error.message || "")
+      .toLowerCase()
+      .includes("timeout")
+  );
 };
 
 const createCorrelationId = () =>
-  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+  typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
@@ -39,16 +43,24 @@ export const axiosClient = axios.create({
   withCredentials: true,
   timeout: DEFAULT_API_TIMEOUT_MS,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
 });
 
 // Request interceptor to append JWT Token
 axiosClient.interceptors.request.use(
   async (config) => {
-    if(!isMockApi() && !['get','head','options'].includes((config.method || 'get').toLowerCase())) {
-      const response=await axios.get<{token:string}>(`${baseURL}/api/auth/csrf`,{withCredentials:true});
-      config.headers.set('X-XSRF-TOKEN',response.data.token);
+    if (
+      !isMockApi() &&
+      !["get", "head", "options"].includes(
+        (config.method || "get").toLowerCase(),
+      )
+    ) {
+      const response = await axios.get<{ token: string }>(
+        `${baseURL}/api/auth/csrf`,
+        { withCredentials: true },
+      );
+      config.headers.set("X-XSRF-TOKEN", response.data.token);
     }
     if (config.headers) {
       config.headers[CORRELATION_ID_HEADER] = createCorrelationId();
@@ -57,7 +69,7 @@ axiosClient.interceptors.request.use(
   },
   (error) => {
     return Promise.reject(error);
-  }
+  },
 );
 
 // Response interceptor to catch unauthorized errors
@@ -65,10 +77,10 @@ axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
     const traceId =
-      error.response?.headers?.['x-correlation-id'] ||
+      error.response?.headers?.["x-correlation-id"] ||
       error.response?.data?.traceId ||
       error.config?.headers?.[CORRELATION_ID_HEADER];
-    console.error('API request failed', {
+    console.error("API request failed", {
       method: error.config?.method?.toUpperCase(),
       url: error.config?.url,
       status: error.response?.status,
@@ -76,7 +88,10 @@ axiosClient.interceptors.response.use(
       traceId,
     });
     if (error.response?.status === 401) {
-      const isLoginRequest = error.config && error.config.url && error.config.url.includes('/api/auth/login');
+      const isLoginRequest =
+        error.config &&
+        error.config.url &&
+        error.config.url.includes("/api/auth/login");
       if (!isLoginRequest) {
         redirectToLogin();
       }
@@ -84,12 +99,12 @@ axiosClient.interceptors.response.use(
     // The caller owns user-facing errors (toast, form validation, or retry state).
     // Emitting a second global notification here duplicates that feedback.
     return Promise.reject(error);
-  }
+  },
 );
 
 // Helper to check if mock mode is active
 export const isMockApi = (): boolean => {
-  return import.meta.env.VITE_USE_MOCK_API === 'true';
+  return import.meta.env.VITE_USE_MOCK_API === "true";
 };
 
 // Helper to simulate network delay for mock endpoints

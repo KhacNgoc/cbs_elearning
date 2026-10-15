@@ -17,21 +17,29 @@ import java.util.List;
 @RestController
 @RequestMapping("/api")
 public class DocumentController {
-    @org.springframework.beans.factory.annotation.Autowired private com.bidv.coretraining.service.AuthorizationService authorization;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bidv.coretraining.service.AuthorizationService authorization;
     private final DocumentService documentService;
     private final RagChatService ragChatService;
+
     public DocumentController(DocumentService documentService, RagChatService ragChatService) {
         this.documentService = documentService;
         this.ragChatService = ragChatService;
     }
 
     @PostMapping("/admin/courses/{courseId}/documents")
-    public ResponseEntity<CourseDocumentDto> upload(@PathVariable String courseId, @RequestParam("file") MultipartFile file) {
+    public ResponseEntity<CourseDocumentDto> upload(@PathVariable String courseId,
+            @RequestParam("file") MultipartFile file) {
         authorization.edit(courseId);
         return ResponseEntity.accepted().body(documentService.upload(courseId, file));
     }
+
     @GetMapping("/admin/courses/{courseId}/documents")
-    public ResponseEntity<List<CourseDocumentDto>> list(@PathVariable String courseId) { authorization.edit(courseId); return ResponseEntity.ok(documentService.list(courseId)); }
+    public ResponseEntity<List<CourseDocumentDto>> list(@PathVariable String courseId) {
+        authorization.edit(courseId);
+        return ResponseEntity.ok(documentService.list(courseId));
+    }
+
     @DeleteMapping("/admin/courses/{courseId}/documents/{documentId}")
     public ResponseEntity<Void> delete(@PathVariable String courseId, @PathVariable String documentId) {
         authorization.edit(courseId);

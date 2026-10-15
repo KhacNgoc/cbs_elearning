@@ -59,7 +59,8 @@ public class RagIngestionService {
             });
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-            ResponseEntity<Map> response = restTemplate.postForEntity(ragUrl + "/ingest", new HttpEntity<>(body, headers), Map.class);
+            ResponseEntity<Map> response = restTemplate.postForEntity(ragUrl + "/ingest",
+                    new HttpEntity<>(body, headers), Map.class);
             Map responseBody = response.getBody();
             if (!response.getStatusCode().is2xxSuccessful()
                     || responseBody == null

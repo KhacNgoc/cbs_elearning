@@ -1,283 +1,353 @@
-<template><section class="card embedded-content"><form class="lesson-modal-form" @submit.prevent="saveLesson">
-          <div ref="lessonModalBodyRef" class="lesson-modal-body">
-            <div class="form-row">
-              <div class="form-group col">
-                <label>Khóa học trực thuộc</label>
-                <select
-                  v-model="lessonForm.courseId"
-                  class="form-control"
-                  disabled
-                  required
-                >
-                  <option
-                    v-for="t in courseStore.courses"
-                    :key="t.id"
-                    :value="t.id"
-                  >
-                    {{ t.name }}
-                  </option>
-                </select>
-              </div>
-              <div class="form-group col">
-                <label>Mã bài học (Ví dụ: 'LN03', 'CIF05')</label>
+<template>
+  <section class="card embedded-content">
+    <form class="lesson-modal-form" @submit.prevent="saveLesson">
+      <div ref="lessonModalBodyRef" class="lesson-modal-body">
+        <div class="form-row">
+          <div class="form-group col">
+            <label>Khóa học trực thuộc</label>
+            <select
+              v-model="lessonForm.courseId"
+              class="form-control"
+              disabled
+              required
+            >
+              <option
+                v-for="t in courseStore.courses"
+                :key="t.id"
+                :value="t.id"
+              >
+                {{ t.name }}
+              </option>
+            </select>
+          </div>
+          <div class="form-group col">
+            <label>Mã bài học (Ví dụ: 'LN03', 'CIF05')</label>
+            <input
+              v-model="lessonForm.id"
+              type="text"
+              class="form-control"
+              required
+              :disabled="lessonModal.isEdit"
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Tiêu đề bài học</label>
+          <input
+            v-model="lessonForm.title"
+            type="text"
+            class="form-control"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label>Gợi ý nghiệp vụ nhanh (Hint)</label>
+          <input
+            v-model="lessonForm.hint"
+            type="text"
+            class="form-control"
+            required
+          />
+        </div>
+
+        <div class="form-group video-source-group">
+          <label id="video-source-label">Nguồn video bài học</label>
+          <div
+            class="video-source-options"
+            role="radiogroup"
+            aria-labelledby="video-source-label"
+          >
+            <label
+              class="video-source-option"
+              :class="{ active: lessonForm.videoSource === 'UPLOAD' }"
+            >
+              <input
+                v-model="lessonForm.videoSource"
+                type="radio"
+                value="UPLOAD"
+                name="video-source"
+              />
+              <Upload :size="19" />
+              <span>
+                <strong>Tải video lên</strong>
+                <small>Chọn file có sẵn trên máy</small>
+              </span>
+            </label>
+            <label
+              class="video-source-option"
+              :class="{ active: lessonForm.videoSource === 'URL' }"
+            >
+              <input
+                v-model="lessonForm.videoSource"
+                type="radio"
+                value="URL"
+                name="video-source"
+              />
+              <Link2 :size="19" />
+              <span>
+                <strong>Dán đường link</strong>
+                <small>Dùng link YouTube hoặc video trực tiếp</small>
+              </span>
+            </label>
+          </div>
+
+          <div
+            v-if="lessonForm.videoSource === 'UPLOAD'"
+            class="video-source-panel"
+          >
+            <div class="file-upload-control">
+              <label v-if="!readOnly" class="file-picker">
+                <Upload :size="18" />
+                <span>{{
+                  selectedVideoFileName || "Chọn file video từ máy"
+                }}</span>
                 <input
-                  v-model="lessonForm.id"
-                  type="text"
+                  type="file"
+                  accept="video/mp4,video/webm,.m4v"
+                  :disabled="loading"
+                  @change="handleVideoFileChange"
+                />
+              </label>
+              <button
+                v-if="!readOnly && selectedVideoFileName"
+                type="button"
+                class="file-clear-btn"
+                title="Gỡ video"
+                aria-label="Gỡ video đã chọn"
+                @click="clearVideoFile"
+              >
+                <X :size="16" />
+              </button>
+            </div>
+            <small class="video-source-help">
+              Tối đa {{ Math.floor(VIDEO_UPLOAD_MAX_BYTES / 1024 / 1024) }} MiB.
+              MP4/M4V: H.264/AAC; WebM: VP8/VP9, Opus/Vorbis.
+            </small>
+            <div v-if="videoUploadProgress !== null" role="status">
+              <progress
+                :value="videoUploadProgress"
+                max="100"
+                style="width: 100%"
+              ></progress>
+              <small>{{
+                videoUploadProgress < 100
+                  ? `Đang tải video: ${videoUploadProgress}%`
+                  : "Đã gửi video, đang kiểm tra định dạng…"
+              }}</small>
+            </div>
+            <small v-if="lessonForm.videoFile" class="selected-video-note">
+              Đã chọn: {{ lessonForm.videoFile.name }}
+            </small>
+          </div>
+
+          <div v-else class="video-source-panel">
+            <input
+              v-model="lessonForm.videoUrl"
+              type="url"
+              class="form-control"
+              style="width: 100%"
+              placeholder="Ví dụ: https://www.youtube.com/watch?v=..."
+            />
+            <small class="video-source-help">
+              Dán link YouTube hoặc đường dẫn trực tiếp đến video.
+            </small>
+          </div>
+        </div>
+
+        <LessonTextEditor
+          v-model="lessonForm.textBody"
+          :read-only="readOnly || loading"
+          @attach="addLessonDocument"
+        />
+        <div class="form-group supporting-section">
+          <h2>Quy trình thực hiện</h2>
+          <p class="section-description">
+            Chia hướng dẫn thành từng quy trình. Mỗi dòng tương ứng với một bước
+            thực hiện.
+          </p>
+          <div
+            v-for="(section, index) in lessonForm.procedureSteps"
+            :key="index"
+            class="document-form-card"
+          >
+            <div class="document-form-fields procedure-form-fields">
+              <input
+                v-model="section.title"
+                class="form-control"
+                placeholder="Tên quy trình"
+              />
+              <textarea
+                class="form-control"
+                :value="section.steps.join('\n')"
+                @input="
+                  section.steps = (
+                    $event.target as HTMLTextAreaElement
+                  ).value.split('\n')
+                "
+                rows="4"
+                placeholder="Mỗi dòng là một bước"
+              />
+            </div>
+            <button
+              v-if="!readOnly"
+              type="button"
+              class="action-btn delete document-remove"
+              :disabled="loading"
+              :aria-label="`Xóa quy trình ${index + 1}`"
+              title="Xóa quy trình"
+              @click="lessonForm.procedureSteps.splice(index, 1)"
+            >
+              <Trash2 :size="18" />
+            </button>
+          </div>
+          <button
+            v-if="!readOnly"
+            type="button"
+            class="btn btn-secondary"
+            @click="lessonForm.procedureSteps.push({ title: '', steps: [] })"
+          >
+            <Plus :size="15" /> Thêm quy trình
+          </button>
+        </div>
+        <!-- Lesson documents -->
+        <div class="form-group supporting-section">
+          <div
+            class="card-header-row"
+            style="display: flex; align-items: center; gap: 10px"
+          >
+            <div>
+              <h2>Tài liệu đính kèm</h2>
+              <p class="section-description">
+                Bổ sung tài liệu PDF, Word hoặc PowerPoint để học viên xem và
+                tải xuống.
+              </p>
+            </div>
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              v-if="!readOnly"
+              @click="addLessonDocument"
+              style="padding: 0.5rem 1rem !important"
+            >
+              <Plus :size="15" /> Thêm tài liệu
+            </button>
+          </div>
+          <div v-if="lessonForm.documents.length === 0" class="empty-state-box">
+            Bài học chưa có tài liệu đính kèm.
+          </div>
+          <div
+            v-for="(document, index) in lessonForm.documents"
+            :key="index"
+            class="document-form-card"
+          >
+            <div class="document-form-index">
+              <FileText :size="19" /><span>Tài liệu {{ index + 1 }}</span>
+            </div>
+            <div class="document-form-fields">
+              <div class="form-group">
+                <label>Tên hiển thị</label>
+                <input
+                  v-model="document.name"
                   class="form-control"
+                  placeholder="Ví dụ: Quy trình nghiệp vụ"
                   required
-                  :disabled="lessonModal.isEdit"
                 />
               </div>
-            </div>
-
-            <div class="form-group">
-              <label>Tiêu đề bài học</label>
-              <input
-                v-model="lessonForm.title"
-                type="text"
-                class="form-control"
-                required
-              />
-            </div>
-
-            <div class="form-group">
-              <label>Gợi ý nghiệp vụ nhanh (Hint)</label>
-              <input
-                v-model="lessonForm.hint"
-                type="text"
-                class="form-control"
-                required
-              />
-            </div>
-
-            <div class="form-group video-source-group">
-              <label id="video-source-label">Nguồn video bài học</label>
-              <div
-                class="video-source-options"
-                role="radiogroup"
-                aria-labelledby="video-source-label"
-              >
-                <label
-                  class="video-source-option"
-                  :class="{ active: lessonForm.videoSource === 'UPLOAD' }"
-                >
-                  <input
-                    v-model="lessonForm.videoSource"
-                    type="radio"
-                    value="UPLOAD"
-                    name="video-source"
-                  />
-                  <Upload :size="19" />
-                  <span>
-                    <strong>Tải video lên</strong>
-                    <small>Chọn file có sẵn trên máy</small>
-                  </span>
-                </label>
-                <label
-                  class="video-source-option"
-                  :class="{ active: lessonForm.videoSource === 'URL' }"
-                >
-                  <input
-                    v-model="lessonForm.videoSource"
-                    type="radio"
-                    value="URL"
-                    name="video-source"
-                  />
-                  <Link2 :size="19" />
-                  <span>
-                    <strong>Dán đường link</strong>
-                    <small>Dùng link YouTube hoặc video trực tiếp</small>
-                  </span>
-                </label>
-              </div>
-
-              <div
-                v-if="lessonForm.videoSource === 'UPLOAD'"
-                class="video-source-panel"
-              >
+              <div class="form-group document-file-field">
+                <label>Chọn file PDF, Word hoặc PowerPoint</label>
                 <div class="file-upload-control">
                   <label v-if="!readOnly" class="file-picker">
                     <Upload :size="18" />
                     <span>{{
-                      selectedVideoFileName || "Chọn file video từ máy"
+                      document.file?.name ||
+                      document.originalFileName ||
+                      "Chọn file từ máy"
                     }}</span>
                     <input
                       type="file"
-                      accept="video/mp4,video/webm,.m4v"
-                      :disabled="loading"
-                      @change="handleVideoFileChange"
+                      accept=".pdf,.doc,.docx,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                      :required="!document.fileUrl"
+                      @change="handleDocumentFileChange($event, index)"
                     />
                   </label>
                   <button
-                    v-if="!readOnly && selectedVideoFileName"
+                    v-if="!readOnly && (document.file || document.fileUrl)"
                     type="button"
                     class="file-clear-btn"
-                    title="Gỡ video"
-                    aria-label="Gỡ video đã chọn"
-                    @click="clearVideoFile"
+                    title="Gỡ file"
+                    :aria-label="`Gỡ file của tài liệu ${index + 1}`"
+                    @click="clearDocumentFile(index, $event)"
                   >
                     <X :size="16" />
                   </button>
                 </div>
-                <small class="video-source-help">
-                  Tối đa {{ Math.floor(VIDEO_UPLOAD_MAX_BYTES / 1024 / 1024) }} MiB. MP4/M4V: H.264/AAC; WebM: VP8/VP9, Opus/Vorbis.
-                </small>
-                <div v-if="videoUploadProgress !== null" role="status">
-                  <progress :value="videoUploadProgress" max="100" style="width: 100%"></progress>
-                  <small>{{ videoUploadProgress < 100 ? `Đang tải video: ${videoUploadProgress}%` : 'Đã gửi video, đang kiểm tra định dạng…' }}</small>
-                </div>
-                <small v-if="lessonForm.videoFile" class="selected-video-note">
-                  Đã chọn: {{ lessonForm.videoFile.name }}
-                </small>
-              </div>
-
-              <div v-else class="video-source-panel">
-                <input
-                  v-model="lessonForm.videoUrl"
-                  type="url"
-                  class="form-control"
-                  style="width: 100%"
-                  placeholder="Ví dụ: https://www.youtube.com/watch?v=..."
-                />
-                <small class="video-source-help">
-                  Dán link YouTube hoặc đường dẫn trực tiếp đến video.
-                </small>
-              </div>
-            </div>
-
-            <LessonTextEditor v-model="lessonForm.textBody" :read-only="readOnly || loading" @attach="addLessonDocument" />
-            <div class="form-group supporting-section">
-              <h2>Quy trình thực hiện</h2>
-              <p class="section-description">Chia hướng dẫn thành từng quy trình. Mỗi dòng tương ứng với một bước thực hiện.</p>
-              <div v-for="(section, index) in lessonForm.procedureSteps" :key="index" class="document-form-card">
-                <div class="document-form-fields procedure-form-fields">
-                  <input v-model="section.title" class="form-control" placeholder="Tên quy trình" />
-                  <textarea class="form-control" :value="section.steps.join('\n')" @input="section.steps = ($event.target as HTMLTextAreaElement).value.split('\n')" rows="4" placeholder="Mỗi dòng là một bước" />
-                </div>
-                <button v-if="!readOnly" type="button" class="action-btn delete document-remove" :disabled="loading" :aria-label="`Xóa quy trình ${index + 1}`" title="Xóa quy trình" @click="lessonForm.procedureSteps.splice(index, 1)"><Trash2 :size="18" /></button>
-              </div>
-              <button v-if="!readOnly" type="button" class="btn btn-secondary" @click="lessonForm.procedureSteps.push({title:'', steps:[]})"><Plus :size="15" /> Thêm quy trình</button>
-            </div>
-            <!-- Lesson documents -->
-            <div class="form-group supporting-section">
-              <div
-                class="card-header-row"
-                style="display: flex; align-items: center; gap: 10px"
-              >
-                <div><h2>Tài liệu đính kèm</h2><p class="section-description">Bổ sung tài liệu PDF, Word hoặc PowerPoint để học viên xem và tải xuống.</p></div>
-                <button
-                  type="button"
-                  class="btn btn-secondary btn-sm"
-                  v-if="!readOnly"
-                  @click="addLessonDocument"
-                  style="padding: 0.5rem 1rem !important"
+                <small
+                  v-if="document.file || document.fileSize"
+                  class="selected-file-meta"
                 >
-                  <Plus :size="15" /> Thêm tài liệu
-                </button>
-              </div>
-              <div
-                v-if="lessonForm.documents.length === 0"
-                class="empty-state-box"
-              >
-                Bài học chưa có tài liệu đính kèm.
-              </div>
-              <div
-                v-for="(document, index) in lessonForm.documents"
-                :key="index"
-                class="document-form-card"
-              >
-                <div class="document-form-index">
-                  <FileText :size="19" /><span>Tài liệu {{ index + 1 }}</span>
-                </div>
-                <div class="document-form-fields">
-                  <div class="form-group">
-                    <label>Tên hiển thị</label>
-                    <input
-                      v-model="document.name"
-                      class="form-control"
-                      placeholder="Ví dụ: Quy trình nghiệp vụ"
-                      required
-                    />
-                  </div>
-                  <div class="form-group document-file-field">
-                    <label>Chọn file PDF, Word hoặc PowerPoint</label>
-                    <div class="file-upload-control">
-                      <label v-if="!readOnly" class="file-picker">
-                        <Upload :size="18" />
-                        <span>{{
-                          document.file?.name ||
-                          document.originalFileName ||
-                          "Chọn file từ máy"
-                        }}</span>
-                        <input
-                          type="file"
-                          accept=".pdf,.doc,.docx,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                          :required="!document.fileUrl"
-                          @change="handleDocumentFileChange($event, index)"
-                        />
-                      </label>
-                      <button
-                        v-if="!readOnly && (document.file || document.fileUrl)"
-                        type="button"
-                        class="file-clear-btn"
-                        title="Gỡ file"
-                        :aria-label="`Gỡ file của tài liệu ${index + 1}`"
-                        @click="clearDocumentFile(index, $event)"
-                      >
-                        <X :size="16" />
-                      </button>
-                    </div>
-                    <small
-                      v-if="document.file || document.fileSize"
-                      class="selected-file-meta"
-                    >
-                      {{ document.documentType }} ·
-                      {{
-                        formatFileSize(document.file?.size || document.fileSize)
-                      }}
-                    </small>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  class="action-btn delete document-remove"
-                  v-if="!readOnly"
-                  title="Xóa tài liệu"
-                  @click="removeLessonDocument(index)"
-                >
-                  <Trash2 />
-                </button>
+                  {{ document.documentType }} ·
+                  {{ formatFileSize(document.file?.size || document.fileSize) }}
+                </small>
               </div>
             </div>
-          </div>
-          <footer v-if="!readOnly" class="modal-buttons lesson-modal-footer">
             <button
               type="button"
-              class="btn btn-secondary"
-              @click="emit('cancel')"
+              class="action-btn delete document-remove"
+              v-if="!readOnly"
+              title="Xóa tài liệu"
+              @click="removeLessonDocument(index)"
             >
-              Hủy
+              <Trash2 />
             </button>
-            <button type="submit" class="btn btn-primary" :disabled="loading">{{ loading ? "Đang lưu..." : "Lưu nội dung" }}</button>
-          </footer>
-        </form></section></template>
+          </div>
+        </div>
+      </div>
+      <footer v-if="!readOnly" class="modal-buttons lesson-modal-footer">
+        <button type="button" class="btn btn-secondary" @click="emit('cancel')">
+          Hủy
+        </button>
+        <button type="submit" class="btn btn-primary" :disabled="loading">
+          {{ loading ? "Đang lưu..." : "Lưu nội dung" }}
+        </button>
+      </footer>
+    </form>
+  </section>
+</template>
 <script setup lang="ts">
-import { ref, computed, nextTick, watch, defineAsyncComponent } from 'vue';
-import { Upload, Link2, Plus, FileText, X, Trash2 } from 'lucide-vue-next';
-import { useCourseStore } from '../stores/courseStore';
-import { adminApi, VIDEO_UPLOAD_MAX_BYTES } from '../api/adminApi';
-import { validateVideoUpload } from '../utils/videoAccess';
-import { showToast } from '../utils/toast';
-import type { Lesson, LessonDocument } from '../types';
-const LessonTextEditor = defineAsyncComponent(() => import('../components/lesson/LessonTextEditor.vue'));
-const props=defineProps<{lesson: Lesson; readOnly?: boolean}>();
-const emit=defineEmits<{saved:[]; cancel:[]; dirty:[value:boolean]}>();
-const courseStore=useCourseStore();
-const loading=ref(false), videoUploadProgress=ref<number|null>(null);
-const lessonModal=ref({show:true,isEdit:true});
-type LessonDocumentForm=LessonDocument & {file?:File};
-const lessonForm=ref({...props.lesson, textBody:props.lesson.textBody || '', videoFile:undefined as File|undefined, videoSource:props.lesson.videoSource || 'URL', videoUrl:props.lesson.videoUrl || '', documents:props.lesson.documents.map(d=>({...d})) as LessonDocumentForm[], procedureSteps:props.lesson.procedureSteps.map(s=>({...s,steps:[...s.steps]}))});
-watch(lessonForm,()=>emit('dirty',true),{deep:true});
+import { ref, computed, nextTick, watch, defineAsyncComponent } from "vue";
+import { Upload, Link2, Plus, FileText, X, Trash2 } from "lucide-vue-next";
+import { useCourseStore } from "../stores/courseStore";
+import { adminApi, VIDEO_UPLOAD_MAX_BYTES } from "../api/adminApi";
+import { validateVideoUpload } from "../utils/videoAccess";
+import { showToast } from "../utils/toast";
+import type { Lesson, LessonDocument } from "../types";
+const LessonTextEditor = defineAsyncComponent(
+  () => import("../components/lesson/LessonTextEditor.vue"),
+);
+const props = defineProps<{ lesson: Lesson; readOnly?: boolean }>();
+const emit = defineEmits<{ saved: []; cancel: []; dirty: [value: boolean] }>();
+const courseStore = useCourseStore();
+const loading = ref(false),
+  videoUploadProgress = ref<number | null>(null);
+const lessonModal = ref({ show: true, isEdit: true });
+type LessonDocumentForm = LessonDocument & { file?: File };
+const lessonForm = ref({
+  ...props.lesson,
+  textBody: props.lesson.textBody || "",
+  videoFile: undefined as File | undefined,
+  videoSource: props.lesson.videoSource || "URL",
+  videoUrl: props.lesson.videoUrl || "",
+  documents: props.lesson.documents.map((d) => ({
+    ...d,
+  })) as LessonDocumentForm[],
+  procedureSteps: props.lesson.procedureSteps.map((s) => ({
+    ...s,
+    steps: [...s.steps],
+  })),
+});
+watch(lessonForm, () => emit("dirty", true), { deep: true });
 const lessonModalBodyRef = ref<HTMLElement | null>(null);
 
 const selectedVideoFileName = computed(() => {
@@ -393,7 +463,9 @@ const saveLesson = async () => {
   try {
     const videoUrl =
       lessonForm.value.videoSource === "UPLOAD" && lessonForm.value.videoFile
-        ? await adminApi.uploadVideo(lessonForm.value.videoFile, percent => { videoUploadProgress.value = percent; })
+        ? await adminApi.uploadVideo(lessonForm.value.videoFile, (percent) => {
+            videoUploadProgress.value = percent;
+          })
         : lessonForm.value.videoUrl.trim();
     videoUploadProgress.value = null;
     const documents = await Promise.all(
@@ -424,27 +496,47 @@ const saveLesson = async () => {
     const saved = lessonModal.value.isEdit
       ? await adminApi.updateLesson(lessonForm.value.id, payload)
       : await adminApi.createLesson(payload);
-    lessonForm.value = {...lessonForm.value, ...saved, textBody:saved.textBody || '', videoSource:saved.videoSource || 'URL',
-      videoUrl:saved.videoUrl || '', videoFile:undefined, documents:saved.documents.map(d=>({...d})),
-      procedureSteps:saved.procedureSteps.map(s=>({...s,steps:[...s.steps]}))};
+    lessonForm.value = {
+      ...lessonForm.value,
+      ...saved,
+      textBody: saved.textBody || "",
+      videoSource: saved.videoSource || "URL",
+      videoUrl: saved.videoUrl || "",
+      videoFile: undefined,
+      documents: saved.documents.map((d) => ({ ...d })),
+      procedureSteps: saved.procedureSteps.map((s) => ({
+        ...s,
+        steps: [...s.steps],
+      })),
+    };
     await nextTick();
-    emit("saved"); emit("dirty", false);
-    showToast(lessonModal.value.isEdit ? "Cập nhật bài học thành công." : "Tạo bài học thành công.");
+    emit("saved");
+    emit("dirty", false);
+    showToast(
+      lessonModal.value.isEdit
+        ? "Cập nhật bài học thành công."
+        : "Tạo bài học thành công.",
+    );
     await courseStore.fetchCourses(true);
   } catch (err) {
-    const serverMessage = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-    showToast(serverMessage || (err instanceof Error ? err.message : "Không thể lưu bài học. Vui lòng kiểm tra dữ liệu và thử lại."), "error");
+    const serverMessage = (
+      err as { response?: { data?: { message?: string } } }
+    ).response?.data?.message;
+    showToast(
+      serverMessage ||
+        (err instanceof Error
+          ? err.message
+          : "Không thể lưu bài học. Vui lòng kiểm tra dữ liệu và thử lại."),
+      "error",
+    );
     console.error(err);
   } finally {
     videoUploadProgress.value = null;
     loading.value = false;
   }
 };
-
-
 </script>
 <style scoped>
-
 /* Redesigned Sidebar Layout */
 .admin-portal-layout {
   display: flex;
@@ -1859,13 +1951,27 @@ select:disabled {
   line-clamp: 3;
 }
 
-.rag-document-table { table-layout: fixed; }
-.rag-document-table th:nth-child(1) { width: 24%; }
-.rag-document-table th:nth-child(2) { width: 11%; }
-.rag-document-table th:nth-child(3) { width: 12%; }
-.rag-document-table th:nth-child(4) { width: 9%; }
-.rag-document-table th:nth-child(5) { width: 15%; }
-.rag-document-table th:nth-child(6) { width: 29%; }
+.rag-document-table {
+  table-layout: fixed;
+}
+.rag-document-table th:nth-child(1) {
+  width: 24%;
+}
+.rag-document-table th:nth-child(2) {
+  width: 11%;
+}
+.rag-document-table th:nth-child(3) {
+  width: 12%;
+}
+.rag-document-table th:nth-child(4) {
+  width: 9%;
+}
+.rag-document-table th:nth-child(5) {
+  width: 15%;
+}
+.rag-document-table th:nth-child(6) {
+  width: 29%;
+}
 
 .rag-empty-cell {
   padding: 2rem !important;
@@ -1894,10 +2000,93 @@ select:disabled {
   }
 }
 
-.embedded-content{padding:1.5rem}.lesson-modal-form{height:auto}.lesson-modal-body{max-height:none;overflow:visible;padding:0}.lesson-modal-footer{position:static;margin-top:1.5rem}.failed{color:var(--ink-b91c1c)}textarea{width:100%}
-.procedure-form-fields{grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);align-items:start}
-.procedure-form-fields>.form-control{min-width:0;line-height:1.5}
-.procedure-form-fields+.document-remove{width:32px;height:36px}
-@media(max-width:700px){.procedure-form-fields{grid-template-columns:1fr}}
-.embedded-content .form-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}.supporting-section{border:1px solid var(--border-color);border-radius:12px;padding:1.25rem;margin-top:1.25rem}.supporting-section h2{font-size:1.05rem;color:var(--primary-ink);margin:0}.section-description{font-size:.85rem;color:var(--text-muted);margin:.4rem 0 1rem}.card-header-row{justify-content:space-between}.embedded-content .lesson-modal-footer{position:sticky;bottom:0;z-index:5;display:flex;justify-content:flex-end;gap:.75rem;border-radius:0 0 10px 10px}.empty-state-box{padding:1.5rem;border:1px dashed var(--line-cbd5e1);border-radius:8px;color:var(--text-muted);text-align:center}@media(max-width:700px){.embedded-content{padding:1rem}.embedded-content .form-row{grid-template-columns:1fr}.supporting-section{padding:1rem}}
+.embedded-content {
+  padding: 1.5rem;
+}
+.lesson-modal-form {
+  height: auto;
+}
+.lesson-modal-body {
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+}
+.lesson-modal-footer {
+  position: static;
+  margin-top: 1.5rem;
+}
+.failed {
+  color: var(--ink-b91c1c);
+}
+textarea {
+  width: 100%;
+}
+.procedure-form-fields {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  align-items: start;
+}
+.procedure-form-fields > .form-control {
+  min-width: 0;
+  line-height: 1.5;
+}
+.procedure-form-fields + .document-remove {
+  width: 32px;
+  height: 36px;
+}
+@media (max-width: 700px) {
+  .procedure-form-fields {
+    grid-template-columns: 1fr;
+  }
+}
+.embedded-content .form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.supporting-section {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-top: 1.25rem;
+}
+.supporting-section h2 {
+  font-size: 1.05rem;
+  color: var(--primary-ink);
+  margin: 0;
+}
+.section-description {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0.4rem 0 1rem;
+}
+.card-header-row {
+  justify-content: space-between;
+}
+.embedded-content .lesson-modal-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  border-radius: 0 0 10px 10px;
+}
+.empty-state-box {
+  padding: 1.5rem;
+  border: 1px dashed var(--line-cbd5e1);
+  border-radius: 8px;
+  color: var(--text-muted);
+  text-align: center;
+}
+@media (max-width: 700px) {
+  .embedded-content {
+    padding: 1rem;
+  }
+  .embedded-content .form-row {
+    grid-template-columns: 1fr;
+  }
+  .supporting-section {
+    padding: 1rem;
+  }
+}
 </style>

@@ -36,7 +36,8 @@ public class JwtCookieService {
 
     public String resolve(HttpServletRequest request) {
         Cookie[] cookies = request.getCookies();
-        if (cookies == null) return null;
+        if (cookies == null)
+            return null;
         return Arrays.stream(cookies)
                 .filter(cookie -> COOKIE_NAME.equals(cookie.getName()))
                 .map(Cookie::getValue)

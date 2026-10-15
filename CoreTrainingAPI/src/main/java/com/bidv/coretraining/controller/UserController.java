@@ -15,9 +15,12 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/users")
 public class UserController {
 
-    @org.springframework.beans.factory.annotation.Autowired private com.bidv.coretraining.security.JwtTokenProvider tokens;
-    @org.springframework.beans.factory.annotation.Autowired private com.bidv.coretraining.security.JwtCookieService cookies;
-    @org.springframework.beans.factory.annotation.Autowired private com.bidv.coretraining.security.UserDetailsServiceImpl detailsService;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bidv.coretraining.security.JwtTokenProvider tokens;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bidv.coretraining.security.JwtCookieService cookies;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bidv.coretraining.security.UserDetailsServiceImpl detailsService;
     private final UserService userService;
     private final LessonProgressService lessonProgressService;
 
@@ -27,8 +30,9 @@ public class UserController {
     }
 
     @PatchMapping("/me/profile")
-    public ResponseEntity<UserProfileDto> updateProfile(@AuthenticationPrincipal CustomUserDetails user,@RequestBody java.util.Map<String,String> fields) {
-        return ResponseEntity.ok(userService.updateProfile(user.getUsername(),fields));
+    public ResponseEntity<UserProfileDto> updateProfile(@AuthenticationPrincipal CustomUserDetails user,
+            @RequestBody java.util.Map<String, String> fields) {
+        return ResponseEntity.ok(userService.updateProfile(user.getUsername(), fields));
     }
 
     @GetMapping("/me/profile")
@@ -95,10 +99,14 @@ public class UserController {
         if (newPassword == null || newPassword.trim().isEmpty()) {
             throw new com.bidv.coretraining.exception.BadRequestException("Mật khẩu mới không được để trống!");
         }
-        if(newPassword.length()<8) throw new com.bidv.coretraining.exception.BadRequestException("Mật khẩu phải có tối thiểu 8 ký tự");
+        if (newPassword.length() < 8)
+            throw new com.bidv.coretraining.exception.BadRequestException("Mật khẩu phải có tối thiểu 8 ký tự");
         userService.changePassword(userDetails.getUsername(), newPassword);
-        var fresh=detailsService.loadUserByUsername(userDetails.getUsername());
-        var auth=new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(fresh,null,fresh.getAuthorities());
-        return ResponseEntity.ok().header(org.springframework.http.HttpHeaders.SET_COOKIE,cookies.create(tokens.generateToken(auth))).body("Đổi mật khẩu thành công!");
+        var fresh = detailsService.loadUserByUsername(userDetails.getUsername());
+        var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(fresh, null,
+                fresh.getAuthorities());
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.SET_COOKIE, cookies.create(tokens.generateToken(auth)))
+                .body("Đổi mật khẩu thành công!");
     }
 }

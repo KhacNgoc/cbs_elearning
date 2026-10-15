@@ -16,7 +16,7 @@ public class JwtAuthenticationResponse {
     @Builder.Default
     private String tokenType = "Bearer";
     private String role;
-    private java.util.Map<String,String> roleNames;
+    private java.util.Map<String, String> roleNames;
     private long permissionRevision;
     private boolean systemAdmin;
     private java.util.Set<String> roles;

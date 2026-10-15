@@ -12,5 +12,6 @@ public interface LessonRepository extends JpaRepository<Lesson, String> {
     java.util.List<Lesson> findByAssetPath(@org.springframework.data.repository.query.Param("path") String path);
 
     List<Lesson> findByChapterIdOrderByLessonOrderAscIdAsc(String chapterId);
+
     List<Lesson> findByCourseIdOrderByLessonOrderAscIdAsc(String courseId);
 }

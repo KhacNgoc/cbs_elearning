@@ -1,12 +1,24 @@
-import { validateVideoUpload, MAX_VIDEO_UPLOAD_BYTES } from "../utils/videoAccess";
-import { axiosClient, isMockApi, mockDelay, QUIZ_GENERATION_TIMEOUT_MS } from "./axiosClient";
+import {
+  validateVideoUpload,
+  MAX_VIDEO_UPLOAD_BYTES,
+} from "../utils/videoAccess";
+import {
+  axiosClient,
+  isMockApi,
+  mockDelay,
+  QUIZ_GENERATION_TIMEOUT_MS,
+} from "./axiosClient";
 import type { Course, Lesson, LessonDocument, Question } from "../types";
 import { mockDbCourses, setMockDbCourses } from "./courseApi";
 import { mockDbQuestions, setMockDbQuestions } from "./quizApi";
 
-const configuredVideoMaxBytes = Number(import.meta.env.VITE_VIDEO_MAX_UPLOAD_BYTES);
-export const VIDEO_UPLOAD_MAX_BYTES = Number.isFinite(configuredVideoMaxBytes) && configuredVideoMaxBytes > 0
-  ? configuredVideoMaxBytes : MAX_VIDEO_UPLOAD_BYTES;
+const configuredVideoMaxBytes = Number(
+  import.meta.env.VITE_VIDEO_MAX_UPLOAD_BYTES,
+);
+export const VIDEO_UPLOAD_MAX_BYTES =
+  Number.isFinite(configuredVideoMaxBytes) && configuredVideoMaxBytes > 0
+    ? configuredVideoMaxBytes
+    : MAX_VIDEO_UPLOAD_BYTES;
 
 const normalizeUploadedPath = (value: string): string => {
   const uploadsIndex = value.indexOf("/uploads/");
@@ -36,14 +48,14 @@ export interface DocumentOutline {
 
 export interface AdminUser {
   id?: number;
-  allowedActions?:string[];
+  allowedActions?: string[];
   username: string;
   password?: string;
   fullName: string;
   avatarColor: string;
   role: string;
   roles?: string[];
-  roleNames?: Record<string,string>;
+  roleNames?: Record<string, string>;
   permissions?: string[];
   unitId?: string;
   scopeUnitIds?: string[];
@@ -186,7 +198,8 @@ export const adminApi = {
         fullName: localStorage.getItem("fullName") || "Học viên",
         courseId,
         courseName:
-          mockDbCourses.find((course) => course.id === courseId)?.name || courseId,
+          mockDbCourses.find((course) => course.id === courseId)?.name ||
+          courseId,
         status: "PENDING",
         requestedAt: new Date().toISOString(),
       }));
@@ -254,29 +267,63 @@ export const adminApi = {
     return response.data;
   },
 
-  async getCourseDocuments(courseId: string, page?: string): Promise<CourseDocument[]> {
+  async getCourseDocuments(
+    courseId: string,
+    page?: string,
+  ): Promise<CourseDocument[]> {
     const response = await axiosClient.get<CourseDocument[]>(
-      `/api/admin/courses/${courseId}/documents`,{params:{page}},
+      `/api/admin/courses/${courseId}/documents`,
+      { params: { page } },
     );
     return response.data;
   },
 
-  async deleteCourseDocument(courseId: string, documentId: string): Promise<void> {
+  async deleteCourseDocument(
+    courseId: string,
+    documentId: string,
+  ): Promise<void> {
     await axiosClient.delete(
       `/api/admin/courses/${encodeURIComponent(courseId)}/documents/${encodeURIComponent(documentId)}`,
     );
   },
 
-  async getLessonKnowledgeSources(lessonId: string, page?:string): Promise<LessonKnowledgeSource[]> {
-    return (await axiosClient.get<LessonKnowledgeSource[]>(`/api/admin/lessons/${encodeURIComponent(lessonId)}/knowledge-sources`,{params:{page}})).data;
+  async getLessonKnowledgeSources(
+    lessonId: string,
+    page?: string,
+  ): Promise<LessonKnowledgeSource[]> {
+    return (
+      await axiosClient.get<LessonKnowledgeSource[]>(
+        `/api/admin/lessons/${encodeURIComponent(lessonId)}/knowledge-sources`,
+        { params: { page } },
+      )
+    ).data;
   },
 
-  async saveLessonKnowledgeSources(lessonId: string, sources: LessonKnowledgeSource[], page?:string): Promise<LessonKnowledgeSource[]> {
-    return (await axiosClient.put<LessonKnowledgeSource[]>(`/api/admin/lessons/${encodeURIComponent(lessonId)}/knowledge-sources`, sources,{params:{page}})).data;
+  async saveLessonKnowledgeSources(
+    lessonId: string,
+    sources: LessonKnowledgeSource[],
+    page?: string,
+  ): Promise<LessonKnowledgeSource[]> {
+    return (
+      await axiosClient.put<LessonKnowledgeSource[]>(
+        `/api/admin/lessons/${encodeURIComponent(lessonId)}/knowledge-sources`,
+        sources,
+        { params: { page } },
+      )
+    ).data;
   },
 
-  async getDocumentOutline(courseId: string, documentId: string, page?:string): Promise<DocumentOutline> {
-    return (await axiosClient.get<DocumentOutline>(`/api/admin/courses/${encodeURIComponent(courseId)}/documents/${encodeURIComponent(documentId)}/outline`,{params:{page}})).data;
+  async getDocumentOutline(
+    courseId: string,
+    documentId: string,
+    page?: string,
+  ): Promise<DocumentOutline> {
+    return (
+      await axiosClient.get<DocumentOutline>(
+        `/api/admin/courses/${encodeURIComponent(courseId)}/documents/${encodeURIComponent(documentId)}/outline`,
+        { params: { page } },
+      )
+    ).data;
   },
 
   // ==========================================
@@ -355,7 +402,10 @@ export const adminApi = {
       setMockDbCourses([...mockDbCourses]);
       return newCourse;
     }
-    const response = await axiosClient.post<Course>("/api/admin/courses", course);
+    const response = await axiosClient.post<Course>(
+      "/api/admin/courses",
+      course,
+    );
     return response.data;
   },
 
@@ -420,7 +470,10 @@ export const adminApi = {
     };
   },
 
-  async uploadVideo(file: File, onProgress?: (percent: number) => void): Promise<string> {
+  async uploadVideo(
+    file: File,
+    onProgress?: (percent: number) => void,
+  ): Promise<string> {
     const validationError = validateVideoUpload(file, VIDEO_UPLOAD_MAX_BYTES);
     if (validationError) throw new Error(validationError);
     if (isMockApi()) {
@@ -436,12 +489,16 @@ export const adminApi = {
       {
         headers: { "Content-Type": "multipart/form-data" },
         timeout: (() => {
-          const configured = Number(import.meta.env.VITE_VIDEO_UPLOAD_TIMEOUT_MS);
-          return Number.isFinite(configured) && configured > 0 ? configured : 1_800_000;
+          const configured = Number(
+            import.meta.env.VITE_VIDEO_UPLOAD_TIMEOUT_MS,
+          );
+          return Number.isFinite(configured) && configured > 0
+            ? configured
+            : 1_800_000;
         })(),
-        onUploadProgress: event => {
+        onUploadProgress: (event) => {
           const total = event.total || file.size;
-          onProgress?.(Math.min(100, Math.round(event.loaded / total * 100)));
+          onProgress?.(Math.min(100, Math.round((event.loaded / total) * 100)));
         },
       },
     );
@@ -572,16 +629,24 @@ export const adminApi = {
   // ==========================================
   // Question Management
   // ==========================================
-  async getQuizQuestions(courseId: string, lessonId?: string): Promise<Question[]> {
+  async getQuizQuestions(
+    courseId: string,
+    lessonId?: string,
+  ): Promise<Question[]> {
     if (isMockApi()) {
       await mockDelay(200);
-      return mockDbQuestions.filter(question =>
-        lessonId ? question.lessonId === lessonId : question.courseId === courseId && !question.lessonId,
+      return mockDbQuestions.filter((question) =>
+        lessonId
+          ? question.lessonId === lessonId
+          : question.courseId === courseId && !question.lessonId,
       );
     }
-    const response = await axiosClient.get<Question[]>("/api/admin/quizzes/questions", {
-      params: { courseId, lessonId },
-    });
+    const response = await axiosClient.get<Question[]>(
+      "/api/admin/quizzes/questions",
+      {
+        params: { courseId, lessonId },
+      },
+    );
     return response.data;
   },
 
@@ -594,13 +659,15 @@ export const adminApi = {
   }): Promise<QuizGenerationResponse> {
     if (isMockApi()) {
       await mockDelay(500);
-      const sourceQuestions = mockDbQuestions.filter(question =>
-        request.lessonId
-          ? question.lessonId === request.lessonId
-          : question.courseId === request.courseId && !question.lessonId,
-      ).slice(0, request.singleChoiceCount + request.multipleChoiceCount);
+      const sourceQuestions = mockDbQuestions
+        .filter((question) =>
+          request.lessonId
+            ? question.lessonId === request.lessonId
+            : question.courseId === request.courseId && !question.lessonId,
+        )
+        .slice(0, request.singleChoiceCount + request.multipleChoiceCount);
       return {
-        questions: sourceQuestions.map(question => ({
+        questions: sourceQuestions.map((question) => ({
           type: question.type || "SINGLE_CHOICE",
           text: question.text,
           options: question.options,
@@ -609,7 +676,9 @@ export const adminApi = {
           sourceIds: [],
         })),
         sources: [],
-        warnings: sourceQuestions.length ? [] : ["Không có dữ liệu mẫu phù hợp."],
+        warnings: sourceQuestions.length
+          ? []
+          : ["Không có dữ liệu mẫu phù hợp."],
       };
     }
     const response = await axiosClient.post<QuizGenerationResponse>(
@@ -635,7 +704,9 @@ export const adminApi = {
           .find((item) => item.id === question.lessonId);
         if (lesson) lesson.hasQuiz = true;
       } else {
-        const course = mockDbCourses.find((item) => item.id === question.courseId);
+        const course = mockDbCourses.find(
+          (item) => item.id === question.courseId,
+        );
         if (course) course.hasQuiz = true;
       }
       setMockDbCourses([...mockDbCourses]);
@@ -717,7 +788,11 @@ export const adminApi = {
         const lesson = mockDbCourses
           .flatMap((course) => course.lessons)
           .find((item) => item.id === lessonId);
-        if (lesson) { lesson.quizPassingScore = passingScore; lesson.quizRequired = requiredForProgress; lesson.hasQuiz = true; }
+        if (lesson) {
+          lesson.quizPassingScore = passingScore;
+          lesson.quizRequired = requiredForProgress;
+          lesson.hasQuiz = true;
+        }
       } else {
         const course = mockDbCourses.find((item) => item.id === courseId);
         if (course) course.quizPassingScore = passingScore;
@@ -755,32 +830,38 @@ export const adminApi = {
       setMockDbCourses([...mockDbCourses]);
       return;
     }
-    await axiosClient.delete('/api/admin/quizzes', { params: { courseId, lessonId } });
+    await axiosClient.delete("/api/admin/quizzes", {
+      params: { courseId, lessonId },
+    });
   },
 
   async importUsersExcel(file: File): Promise<string> {
     if (isMockApi()) {
       await mockDelay(300);
-      return 'Mock Excel upload successful!';
+      return "Mock Excel upload successful!";
     }
     const formData = new FormData();
-    formData.append('file', file);
-    const response = await axiosClient.post<string>('/api/admin/users/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
+    formData.append("file", file);
+    const response = await axiosClient.post<string>(
+      "/api/admin/users/upload",
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+      },
+    );
     return response.data;
   },
 
   async downloadUserTemplate(): Promise<Blob> {
     if (isMockApi()) {
       await mockDelay(300);
-      return new Blob(['Mock Excel Content'], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      return new Blob(["Mock Excel Content"], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
     }
-    const response = await axiosClient.get<Blob>('/api/admin/users/template', {
-      responseType: 'blob'
+    const response = await axiosClient.get<Blob>("/api/admin/users/template", {
+      responseType: "blob",
     });
     return response.data;
-  }
+  },
 };

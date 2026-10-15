@@ -20,16 +20,13 @@ public class UserGroup {
 
     @Column(nullable = false)
     private String name;
-    @ManyToOne(fetch=FetchType.EAGER) @JoinColumn(name="unit_id")
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "unit_id")
     private OrganizationUnit organizationUnit;
- // e.g. "Giao dịch viên", "Quan hệ khách hàng", "Kiểm soát viên"
+    // e.g. "Giao dịch viên", "Quan hệ khách hàng", "Kiểm soát viên"
 
     @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-        name = "group_mandatory_courses",
-        joinColumns = @JoinColumn(name = "group_id"),
-        inverseJoinColumns = @JoinColumn(name = "course_id")
-    )
+    @JoinTable(name = "group_mandatory_courses", joinColumns = @JoinColumn(name = "group_id"), inverseJoinColumns = @JoinColumn(name = "course_id"))
     @Builder.Default
     @com.fasterxml.jackson.annotation.JsonIgnore
     private Set<Course> mandatoryCourses = new HashSet<>();

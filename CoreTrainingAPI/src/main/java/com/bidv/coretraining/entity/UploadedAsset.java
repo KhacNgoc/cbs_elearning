@@ -1,8 +1,17 @@
 package com.bidv.coretraining.entity;
+
 import jakarta.persistence.*;
 import lombok.*;
-@Entity @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+
+@Entity
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class UploadedAsset {
-    @Id private String path;
-    @Column(nullable=false) private String uploadedBy;
+    @Id
+    private String path;
+    @Column(nullable = false)
+    private String uploadedBy;
 }

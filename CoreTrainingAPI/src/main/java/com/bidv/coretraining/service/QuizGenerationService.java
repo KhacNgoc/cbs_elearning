@@ -62,7 +62,8 @@ public class QuizGenerationService {
             if (!lesson.getCourse().getId().equals(course.getId())) {
                 throw new BadRequestException("Bài học không thuộc khóa học đã chọn");
             }
-            // Deliberately send only the lesson title. Hint and procedure steps are not retrieval context.
+            // Deliberately send only the lesson title. Hint and procedure steps are not
+            // retrieval context.
             lessonName = lesson.getTitle();
             selectedSources = knowledgeSources.generationSources(lesson);
         }
@@ -70,7 +71,8 @@ public class QuizGenerationService {
         Map<String, Object> ragRequest = new LinkedHashMap<>();
         ragRequest.put("course_id", course.getId());
         ragRequest.put("course_name", course.getName());
-        if (lessonName != null) ragRequest.put("lesson_name", lessonName);
+        if (lessonName != null)
+            ragRequest.put("lesson_name", lessonName);
         if (selectedSources != null) {
             ragRequest.put("lesson_id", request.getLessonId());
             ragRequest.put("sources", selectedSources);

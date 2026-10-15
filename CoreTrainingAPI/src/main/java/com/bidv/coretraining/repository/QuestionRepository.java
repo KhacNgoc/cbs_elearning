@@ -9,9 +9,14 @@ import java.util.List;
 @Repository
 public interface QuestionRepository extends JpaRepository<Question, Long> {
     List<Question> findByCourseIdAndLessonIsNull(String courseId);
+
     List<Question> findByLessonId(String lessonId);
+
     boolean existsByCourseIdAndLessonIsNull(String courseId);
+
     boolean existsByLessonId(String lessonId);
+
     void deleteByLessonId(String lessonId);
+
     void deleteByCourseIdAndLessonIsNull(String courseId);
 }

@@ -1,4 +1,4 @@
-import { axiosClient, isMockApi, mockDelay } from './axiosClient';
+import { axiosClient, isMockApi, mockDelay } from "./axiosClient";
 
 export interface LoginRequest {
   username: string;
@@ -20,9 +20,9 @@ export interface LoginResponse {
   tokenType?: string;
   role: string;
   roles?: string[];
-  roleNames?: Record<string,string>;
-  systemAdmin?:boolean;
-  permissionRevision?:number;
+  roleNames?: Record<string, string>;
+  systemAdmin?: boolean;
+  permissionRevision?: number;
   permissions?: string[];
   unitId?: string;
   scopeUnitIds?: string[];
@@ -39,50 +39,66 @@ export const authApi = {
       await mockDelay(350);
       return {
         accessToken: `fake-jwt-token-${data.username}`,
-        tokenType: 'Bearer',
-        role: 'ROLE_USER',
+        tokenType: "Bearer",
+        role: "ROLE_USER",
         username: data.username,
-        fullName: data.username === 'quantrh' ? 'Quản Trị Hệ Thống (Bạn)' : data.username,
-        mustChangePassword: false
+        fullName:
+          data.username === "quantrh"
+            ? "Quản Trị Hệ Thống (Bạn)"
+            : data.username,
+        mustChangePassword: false,
       };
     }
-    const response = await axiosClient.post<LoginResponse>('/api/auth/login', data);
+    const response = await axiosClient.post<LoginResponse>(
+      "/api/auth/login",
+      data,
+    );
     return response.data;
   },
 
   async session(): Promise<LoginResponse> {
-    const response = await axiosClient.get<LoginResponse>('/api/auth/session');
+    const response = await axiosClient.get<LoginResponse>("/api/auth/session");
     return response.data;
   },
 
   async logout(): Promise<void> {
-    if (!isMockApi()) await axiosClient.post('/api/auth/logout');
+    if (!isMockApi()) await axiosClient.post("/api/auth/logout");
   },
 
   async register(data: RegisterRequest): Promise<string> {
     if (isMockApi()) {
       await mockDelay(300);
-      return 'User registered successfully';
+      return "User registered successfully";
     }
-    const response = await axiosClient.post<string>('/api/auth/register', data);
+    const response = await axiosClient.post<string>("/api/auth/register", data);
     return response.data;
   },
 
   async sendResetOtp(username: string, email: string): Promise<string> {
     if (isMockApi()) {
       await mockDelay(300);
-      return 'OTP sent successfully';
+      return "OTP sent successfully";
     }
-    const response = await axiosClient.post<string>('/api/auth/forgot-password-otp', { username, email });
+    const response = await axiosClient.post<string>(
+      "/api/auth/forgot-password-otp",
+      { username, email },
+    );
     return response.data;
   },
 
-  async resetPasswordWithOtp(username: string, otp: string, newPassword: string): Promise<string> {
+  async resetPasswordWithOtp(
+    username: string,
+    otp: string,
+    newPassword: string,
+  ): Promise<string> {
     if (isMockApi()) {
       await mockDelay(300);
-      return 'Password reset successfully';
+      return "Password reset successfully";
     }
-    const response = await axiosClient.post<string>('/api/auth/reset-password-otp', { username, otp, newPassword });
+    const response = await axiosClient.post<string>(
+      "/api/auth/reset-password-otp",
+      { username, otp, newPassword },
+    );
     return response.data;
-  }
+  },
 };

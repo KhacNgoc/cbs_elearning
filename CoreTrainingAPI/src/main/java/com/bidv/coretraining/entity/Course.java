@@ -20,30 +20,41 @@ public class Course {
 
     @Column(nullable = false)
     private String name;
-    @ManyToOne(fetch=FetchType.EAGER) @JoinColumn(name="owner_unit_id")
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "owner_unit_id")
     private OrganizationUnit ownerUnit;
-    @ElementCollection(fetch=FetchType.EAGER)
-    @CollectionTable(name="course_unit_grants",joinColumns=@JoinColumn(name="course_id"))
-    @MapKeyColumn(name="unit_id") @Column(name="grant_type",nullable=false) @Builder.Default
-    private java.util.Map<String,String> unitGrants=new java.util.HashMap<>();
-    @ElementCollection(fetch=FetchType.EAGER)
-    @CollectionTable(name="course_instructors",joinColumns=@JoinColumn(name="course_id"))
-    @Column(name="user_id",nullable=false) @Builder.Default
-    private java.util.Set<Long> instructorIds=new java.util.HashSet<>();
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "course_unit_grants", joinColumns = @JoinColumn(name = "course_id"))
+    @MapKeyColumn(name = "unit_id")
+    @Column(name = "grant_type", nullable = false)
+    @Builder.Default
+    private java.util.Map<String, String> unitGrants = new java.util.HashMap<>();
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "course_instructors", joinColumns = @JoinColumn(name = "course_id"))
+    @Column(name = "user_id", nullable = false)
+    @Builder.Default
+    private java.util.Set<Long> instructorIds = new java.util.HashSet<>();
 
-    @Column(nullable=false, unique=true) private String code;
-    @ManyToOne(fetch=FetchType.LAZY, optional=false) @JoinColumn(name="program_id", nullable=false)
+    @Column(nullable = false, unique = true)
+    private String code;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "program_id", nullable = false)
     private TrainingProgram program;
-    @Builder.Default private String status = "DRAFT";
-    @Column(columnDefinition="TEXT") private String description;
+    @Builder.Default
+    private String status = "DRAFT";
+    @Column(columnDefinition = "TEXT")
+    private String description;
     private String thumbnail;
     private String businessModule;
     private String level;
-    @Column(columnDefinition="TEXT") private String keywords;
+    @Column(columnDefinition = "TEXT")
+    private String keywords;
     private java.time.LocalDate completionDeadline;
-    @Version private Long version;
-    @OneToMany(mappedBy="course", cascade=CascadeType.ALL, orphanRemoval=true)
-    @OrderBy("chapterOrder ASC, id ASC") @Builder.Default
+    @Version
+    private Long version;
+    @OneToMany(mappedBy = "course", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("chapterOrder ASC, id ASC")
+    @Builder.Default
     private List<Chapter> chapters = new ArrayList<>();
 
     @Column(name = "icon_name")

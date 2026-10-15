@@ -21,8 +21,8 @@ public class NotificationServiceImpl implements NotificationService {
     private final NotificationWebSocketHandler socketHandler;
 
     public NotificationServiceImpl(NotificationRepository repository,
-                                   UserRepository userRepository,
-                                   NotificationWebSocketHandler socketHandler) {
+            UserRepository userRepository,
+            NotificationWebSocketHandler socketHandler) {
         this.repository = repository;
         this.userRepository = userRepository;
         this.socketHandler = socketHandler;
@@ -31,18 +31,23 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     @Transactional
     public NotificationDto create(String username, NotificationType type, String title,
-                                  String message, String targetUrl) {
+            String message, String targetUrl) {
         var user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
         Notification saved = repository.save(Notification.builder()
                 .recipient(user).type(type).title(title).message(message)
                 .targetUrl(targetUrl).createdAt(LocalDateTime.now()).build());
         NotificationDto dto = toDto(saved);
-        if(org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
-            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization(){
-                @Override public void afterCommit(){socketHandler.sendToUser(username,dto);}
-            });
-        } else socketHandler.sendToUser(username, dto);
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager
+                    .registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            socketHandler.sendToUser(username, dto);
+                        }
+                    });
+        } else
+            socketHandler.sendToUser(username, dto);
         return dto;
     }
 
@@ -53,10 +58,14 @@ public class NotificationServiceImpl implements NotificationService {
                 .forEach(admin -> create(admin.getUsername(), type, title, message, targetUrl));
     }
 
-    @Override @Transactional
-    public void createForUnitAdmins(com.bidv.coretraining.entity.OrganizationUnit unit,NotificationType type,String title,String message,String targetUrl) {
-        userRepository.findAll().stream().filter(u->u.activeAccount() && (com.bidv.coretraining.security.AccessPolicy.system(u) || com.bidv.coretraining.security.AccessPolicy.allows(u,"enrollments:update",unit)))
-                .forEach(u->create(u.getUsername(),type,title,message,targetUrl));
+    @Override
+    @Transactional
+    public void createForUnitAdmins(com.bidv.coretraining.entity.OrganizationUnit unit, NotificationType type,
+            String title, String message, String targetUrl) {
+        userRepository.findAll().stream()
+                .filter(u -> u.activeAccount() && (com.bidv.coretraining.security.AccessPolicy.system(u)
+                        || com.bidv.coretraining.security.AccessPolicy.allows(u, "enrollments:update", unit)))
+                .forEach(u -> create(u.getUsername(), type, title, message, targetUrl));
     }
 
     @Override

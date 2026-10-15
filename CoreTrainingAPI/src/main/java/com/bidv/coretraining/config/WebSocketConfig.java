@@ -18,8 +18,8 @@ public class WebSocketConfig implements WebSocketConfigurer {
     private final List<String> allowedOrigins;
 
     public WebSocketConfig(NotificationWebSocketHandler handler,
-                           JwtHandshakeInterceptor jwtHandshakeInterceptor,
-                           @Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
+            JwtHandshakeInterceptor jwtHandshakeInterceptor,
+            @Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
         this.handler = handler;
         this.jwtHandshakeInterceptor = jwtHandshakeInterceptor;
         this.allowedOrigins = allowedOrigins;

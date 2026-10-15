@@ -17,7 +17,7 @@ public class UserDto {
     private String fullName;
     private String avatarColor;
     private String role;
-    private java.util.Map<String,String> roleNames;
+    private java.util.Map<String, String> roleNames;
     private java.util.Set<String> roles;
     private java.util.Set<String> permissions;
     private String unitId;

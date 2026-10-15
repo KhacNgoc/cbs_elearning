@@ -50,21 +50,24 @@
         </div>
       </section>
     </Transition>
-    <Teleport to="body"><Transition name="toast">
-      <div
-        v-if="toast"
-        class="system-toast"
-        :class="`system-toast--${toast.variant}`"
-        :role="toast.variant === 'error' ? 'alert' : 'status'"
-      >
-        <CircleAlert v-if="toast.variant === 'error'" :size="19" />
-        <TriangleAlert v-else-if="toast.variant === 'warning'" :size="19" />
-        <CircleCheck v-else-if="toast.variant === 'success'" :size="19" />
-        <Info v-else :size="19" />
-        <span>{{ toast.message }}</span>
-        <button aria-label="Đóng" @click="toast = null"><X :size="16" /></button>
-      </div>
-    </Transition></Teleport>
+    <Teleport to="body"
+      ><Transition name="toast">
+        <div
+          v-if="toast"
+          class="system-toast"
+          :class="`system-toast--${toast.variant}`"
+          :role="toast.variant === 'error' ? 'alert' : 'status'"
+        >
+          <CircleAlert v-if="toast.variant === 'error'" :size="19" />
+          <TriangleAlert v-else-if="toast.variant === 'warning'" :size="19" />
+          <CircleCheck v-else-if="toast.variant === 'success'" :size="19" />
+          <Info v-else :size="19" />
+          <span>{{ toast.message }}</span>
+          <button aria-label="Đóng" @click="toast = null">
+            <X :size="16" />
+          </button>
+        </div> </Transition
+    ></Teleport>
   </div>
 </template>
 
@@ -152,7 +155,9 @@ const closeOnOutside = (event: MouseEvent) => {
     open.value = false;
 };
 const handleAppToast = (event: Event) => {
-  const detail = (event as CustomEvent<{ message?: string; variant?: ToastVariant }>).detail;
+  const detail = (
+    event as CustomEvent<{ message?: string; variant?: ToastVariant }>
+  ).detail;
   if (detail?.message) showToast(detail.message, detail.variant || "info");
 };
 
@@ -356,8 +361,14 @@ onBeforeUnmount(() => {
   background: var(--surface-ecfdf5);
   color: var(--ink-047857);
 }
-.system-toast > svg { flex-shrink: 0; }
-.system-toast > span { min-width: 0; overflow-wrap: anywhere; white-space: pre-line; }
+.system-toast > svg {
+  flex-shrink: 0;
+}
+.system-toast > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
 .system-toast--warning {
   border-color: var(--line-fde68a);
   background: var(--surface-fffbeb);

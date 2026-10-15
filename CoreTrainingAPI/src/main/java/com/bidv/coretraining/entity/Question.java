@@ -27,12 +27,14 @@ public class Question {
     @JoinColumn(name = "lesson_id")
     private Lesson lesson;
 
-    @ManyToOne(fetch=FetchType.LAZY, optional=false)
-    @JoinColumn(name="quiz_id", nullable=false) private Quiz quiz;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "quiz_id", nullable = false)
+    private Quiz quiz;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String text;
-    @Column(columnDefinition="TEXT") private String explanation;
+    @Column(columnDefinition = "TEXT")
+    private String explanation;
     // A snapshot remains usable even when the bank entry is edited or archived.
     private Long bankQuestionId;
     private String bankQuestionCode;

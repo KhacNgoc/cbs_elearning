@@ -1,7 +1,12 @@
 <template>
   <div class="page-loading-space">
     <Teleport to="body">
-      <div class="page-loading" role="status" aria-live="polite" aria-busy="true">
+      <div
+        class="page-loading"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+      >
         <span class="page-loading-ring" aria-hidden="true"></span>
         <p>{{ label }}</p>
       </div>
@@ -10,7 +15,9 @@
 </template>
 
 <script setup lang="ts">
-withDefaults(defineProps<{ label?: string }>(), { label: 'Đang tải dữ liệu...' });
+withDefaults(defineProps<{ label?: string }>(), {
+  label: "Đang tải dữ liệu...",
+});
 </script>
 
 <style scoped>
@@ -45,11 +52,13 @@ withDefaults(defineProps<{ label?: string }>(), { label: 'Đang tải dữ liệ
 .page-loading p {
   margin: 0;
   color: var(--text-muted);
-  font-size: .85rem;
+  font-size: 0.85rem;
   text-align: center;
 }
 
 @keyframes page-loading-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

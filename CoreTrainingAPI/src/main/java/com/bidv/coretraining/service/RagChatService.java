@@ -37,17 +37,17 @@ public class RagChatService {
     private final int recentCharacterLimit;
 
     public RagChatService(UserRepository userRepository,
-                          CourseRepository courseRepository,
-                          RagConversationRepository conversationRepository,
-                          RagConversationMessageRepository messageRepository,
-                          RagChatMessageRepository legacyMessageRepository,
-                          RagConversationSummaryService summaryService,
-                          TrainingStructureService structure,
-                          @Value("${app.rag-url}") String ragUrl,
-                          @Value("${app.rag.recent-message-limit:8}") int recentMessageLimit,
-                          @Value("${app.rag.recent-character-limit:12000}") int recentCharacterLimit,
-                          @Value("${app.rag.connect-timeout-ms:5000}") int connectTimeoutMs,
-                          @Value("${app.rag.read-timeout-ms:300000}") int readTimeoutMs) {
+            CourseRepository courseRepository,
+            RagConversationRepository conversationRepository,
+            RagConversationMessageRepository messageRepository,
+            RagChatMessageRepository legacyMessageRepository,
+            RagConversationSummaryService summaryService,
+            TrainingStructureService structure,
+            @Value("${app.rag-url}") String ragUrl,
+            @Value("${app.rag.recent-message-limit:8}") int recentMessageLimit,
+            @Value("${app.rag.recent-character-limit:12000}") int recentCharacterLimit,
+            @Value("${app.rag.connect-timeout-ms:5000}") int connectTimeoutMs,
+            @Value("${app.rag.read-timeout-ms:300000}") int readTimeoutMs) {
         this.userRepository = userRepository;
         this.courseRepository = courseRepository;
         this.conversationRepository = conversationRepository;
@@ -90,7 +90,8 @@ public class RagChatService {
         pythonRequest.put("question", question);
         pythonRequest.put("course_id", course.getId());
         pythonRequest.put("course_name", course.getName());
-        if (request.page() != null) pythonRequest.put("page", request.page());
+        if (request.page() != null)
+            pythonRequest.put("page", request.page());
         pythonRequest.put("conversation_summary", Objects.toString(conversation.getSummary(), ""));
         pythonRequest.put("recent_messages", recent.stream()
                 .map(message -> Map.of("role", message.getRole(), "content", message.getContent()))
@@ -148,7 +149,8 @@ public class RagChatService {
         }
 
         long elapsedMs = (System.nanoTime() - startedAt) / 1_000_000;
-        log.info("RAG chat completed conversationId={} userId={} courseId={} grounded={} clarification={} sources={} elapsedMs={}",
+        log.info(
+                "RAG chat completed conversationId={} userId={} courseId={} grounded={} clarification={} sources={} elapsedMs={}",
                 conversation.getId(), user.getId(), course.getId(), ragResponse.grounded(),
                 ragResponse.needsClarification(), sources.size(), elapsedMs);
         return new RagChatResponse(ragResponse.answer(), ragResponse.grounded(), sources,
@@ -162,10 +164,12 @@ public class RagChatService {
         Optional<RagConversation> selected = conversationId == null || conversationId.isBlank()
                 ? conversationRepository.findFirstByUserIdAndCourseIdOrderByUpdatedAtDesc(user.getId(), course.getId())
                 : Optional.of(requireOwnedConversation(user, course, conversationId));
-        if (selected.isEmpty()) return legacyHistory(user.getId(), course.getId());
+        if (selected.isEmpty())
+            return legacyHistory(user.getId(), course.getId());
 
         RagConversation conversation = selected.get();
-        List<RagConversationMessage> messages = messageRepository.findByConversationIdOrderByIdAsc(conversation.getId());
+        List<RagConversationMessage> messages = messageRepository
+                .findByConversationIdOrderByIdAsc(conversation.getId());
         List<RagChatHistoryDto> result = new ArrayList<>();
         RagConversationMessage pendingUser = null;
         for (RagConversationMessage message : messages) {
@@ -177,7 +181,8 @@ public class RagChatService {
                         message.getContent(), Boolean.TRUE.equals(message.getGrounded()),
                         Boolean.TRUE.equals(message.getNeedsClarification()),
                         message.getSources().stream().map(source -> new RagSourceDto(
-                                source.getDocumentId(), source.getDocumentName(), source.getPage(), source.getSection())).toList(),
+                                source.getDocumentId(), source.getDocumentName(), source.getPage(),
+                                source.getSection())).toList(),
                         message.getCreatedAt()));
                 pendingUser = null;
             }
@@ -193,7 +198,8 @@ public class RagChatService {
                 message.getId(), null, courseId, message.getQuestion(), message.getAnswer(),
                 message.isGrounded(), false,
                 message.getSources().stream().map(source -> new RagSourceDto(
-                        source.getDocumentId(), source.getDocumentName(), source.getPage(), source.getSection())).toList(),
+                        source.getDocumentId(), source.getDocumentName(), source.getPage(), source.getSection()))
+                        .toList(),
                 message.getCreatedAt())).toList();
     }
 
@@ -230,13 +236,16 @@ public class RagChatService {
         List<RagConversationMessage> selected = new ArrayList<>();
         int characters = 0;
         for (RagConversationMessage message : descending) {
-            if (selected.size() >= recentMessageLimit || characters + message.getContent().length() > recentCharacterLimit) break;
+            if (selected.size() >= recentMessageLimit
+                    || characters + message.getContent().length() > recentCharacterLimit)
+                break;
             selected.add(message);
             characters += message.getContent().length();
         }
         Collections.reverse(selected);
         // Avoid starting the window with an orphan assistant response.
-        if (!selected.isEmpty() && "assistant".equals(selected.get(0).getRole())) selected.remove(0);
+        if (!selected.isEmpty() && "assistant".equals(selected.get(0).getRole()))
+            selected.remove(0);
         return selected;
     }
 
@@ -253,7 +262,7 @@ public class RagChatService {
     private Course requireAccessibleCourse(User user, String courseId) {
         // Chat intentionally has no long transaction around the external AI call.
         // Reload and check learning relationships in a short service transaction.
-        structure.requireCourse(courseId,user.getUsername());
+        structure.requireCourse(courseId, user.getUsername());
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course", "id", courseId));
         return course;

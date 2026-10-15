@@ -6,10 +6,15 @@ import lombok.*;
 @Entity
 @Table(name = "lesson_knowledge_sources", indexes = {
         @Index(name = "idx_lesson_knowledge_source_lesson", columnList = "lesson_id"),
-        @Index(name = "idx_lesson_knowledge_source_document", columnList = "document_id")})
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+        @Index(name = "idx_lesson_knowledge_source_document", columnList = "document_id") })
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class LessonKnowledgeSource {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "lesson_id", nullable = false)

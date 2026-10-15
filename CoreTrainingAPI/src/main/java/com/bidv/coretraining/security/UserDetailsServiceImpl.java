@@ -11,17 +11,19 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class UserDetailsServiceImpl implements UserDetailsService {
 
-    @org.springframework.beans.factory.annotation.Autowired private com.bidv.coretraining.service.PermissionCache permissionCache;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bidv.coretraining.service.PermissionCache permissionCache;
     private final UserRepository userRepository;
 
     public UserDetailsServiceImpl(UserRepository userRepository) {
         this.userRepository = userRepository;
     }
 
-    @Transactional(readOnly=true)
+    @Transactional(readOnly = true)
     public UserDetails loadUserById(Long id) {
-        User user=userRepository.findById(id).orElseThrow(()->new UsernameNotFoundException("User not found"));
-        if(permissionCache!=null)permissionCache.attach(user);
+        User user = userRepository.findById(id).orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        if (permissionCache != null)
+            permissionCache.attach(user);
         return principal(user);
     }
 
@@ -30,14 +32,16 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with username: " + username));
-        if(permissionCache!=null)permissionCache.attach(user);
+        if (permissionCache != null)
+            permissionCache.attach(user);
         return principal(user);
     }
 
     private CustomUserDetails principal(User user) {
         // Authentication metadata is read after this transaction has closed.
         // Legacy users have no dynamic role names; do not leave a lazy fallback.
-        if (!user.isDynamicAccessInitialized()) user.setPolicySnapshot(java.util.List.of());
+        if (!user.isDynamicAccessInitialized())
+            user.setPolicySnapshot(java.util.List.of());
         return new CustomUserDetails(user);
     }
 }

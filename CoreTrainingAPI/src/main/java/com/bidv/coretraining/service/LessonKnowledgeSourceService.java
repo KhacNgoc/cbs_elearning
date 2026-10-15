@@ -46,7 +46,8 @@ public class LessonKnowledgeSourceService {
         if (!"DRAFT".equals(lesson.getCourse().getStatus())) {
             throw new BadRequestException("Chuyển khóa học về bản nháp để chỉnh sửa nguồn của bài học.");
         }
-        if (request.size() > 50) throw new BadRequestException("Chỉ chọn tối đa 50 phạm vi tài liệu.");
+        if (request.size() > 50)
+            throw new BadRequestException("Chỉ chọn tối đa 50 phạm vi tài liệu.");
         Set<LessonKnowledgeSourceDto> unique = new HashSet<>();
         List<LessonKnowledgeSource> selected = new ArrayList<>();
         Map<String, DocumentOutlineDto> outlines = new HashMap<>();
@@ -55,7 +56,8 @@ public class LessonKnowledgeSourceService {
                     || (selection.section() != null && selection.section().length() > 2000)) {
                 throw new BadRequestException("Nguồn tài liệu không hợp lệ.");
             }
-            if (!unique.add(selection)) throw new BadRequestException("Phạm vi tài liệu bị trùng.");
+            if (!unique.add(selection))
+                throw new BadRequestException("Phạm vi tài liệu bị trùng.");
             CourseDocument document = requireDocument(lesson.getCourse().getId(), selection.documentId());
             DocumentOutlineDto outline = outlines.computeIfAbsent(document.getId(),
                     id -> outline(document.getCourse().getId(), id));
@@ -94,20 +96,25 @@ public class LessonKnowledgeSourceService {
     public List<Map<String, Object>> generationSources(Lesson lesson) {
         List<LessonKnowledgeSource> assigned = sources.findByLessonIdOrderByIdAsc(lesson.getId());
         if (assigned.isEmpty()) {
-            throw new BadRequestException("Bài học chưa có nguồn kiến thức. Hãy chọn và lưu nguồn tài liệu trước khi tạo câu hỏi.");
+            throw new BadRequestException(
+                    "Bài học chưa có nguồn kiến thức. Hãy chọn và lưu nguồn tài liệu trước khi tạo câu hỏi.");
         }
         return assigned.stream().map(source -> {
             requireDocument(lesson.getCourse().getId(), source.getDocument().getId());
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("document_id", source.getDocument().getId());
-            if (source.getPageFrom() != null) entry.put("page_from", source.getPageFrom());
-            if (source.getPageTo() != null) entry.put("page_to", source.getPageTo());
-            if (source.getSection() != null) entry.put("section", source.getSection());
+            if (source.getPageFrom() != null)
+                entry.put("page_from", source.getPageFrom());
+            if (source.getPageTo() != null)
+                entry.put("page_to", source.getPageTo());
+            if (source.getSection() != null)
+                entry.put("section", source.getSection());
             return entry;
         }).toList();
     }
 
-    private void validateSelection(CourseDocument document, DocumentOutlineDto outline, LessonKnowledgeSourceDto source) {
+    private void validateSelection(CourseDocument document, DocumentOutlineDto outline,
+            LessonKnowledgeSourceDto source) {
         boolean range = source.pageFrom() != null || source.pageTo() != null;
         boolean section = source.section() != null && !source.section().isBlank();
         boolean pdf = document.getFileName().toLowerCase(Locale.ROOT).endsWith(".pdf");
@@ -115,7 +122,8 @@ public class LessonKnowledgeSourceService {
             if (!pdf || section || source.pageFrom() == null || source.pageTo() == null
                     || source.pageFrom() < 1 || source.pageFrom() > source.pageTo()
                     || source.pageTo() > Collections.max(outline.pages())
-                    || outline.pages().stream().noneMatch(page -> page >= source.pageFrom() && page <= source.pageTo())) {
+                    || outline.pages().stream()
+                            .noneMatch(page -> page >= source.pageFrom() && page <= source.pageTo())) {
                 throw new BadRequestException("Khoảng trang PDF không hợp lệ hoặc không có nội dung đã xử lý.");
             }
         }
@@ -131,12 +139,15 @@ public class LessonKnowledgeSourceService {
     private CourseDocument requireDocument(String courseId, String documentId) {
         CourseDocument document = documents.findWithCourseById(documentId)
                 .orElseThrow(() -> new ResourceNotFoundException("CourseDocument", "id", documentId));
-        if (!document.getCourse().getId().equals(courseId)) throw new BadRequestException("Tài liệu không thuộc khóa học của bài.");
-        if (document.getStatus() != DocumentStatus.INDEXED) throw new BadRequestException("Tài liệu chưa sẵn sàng. Hãy chờ xử lý xong.");
+        if (!document.getCourse().getId().equals(courseId))
+            throw new BadRequestException("Tài liệu không thuộc khóa học của bài.");
+        if (document.getStatus() != DocumentStatus.INDEXED)
+            throw new BadRequestException("Tài liệu chưa sẵn sàng. Hãy chờ xử lý xong.");
         return document;
     }
 
     private LessonKnowledgeSourceDto dto(LessonKnowledgeSource source) {
-        return new LessonKnowledgeSourceDto(source.getDocument().getId(), source.getPageFrom(), source.getPageTo(), source.getSection());
+        return new LessonKnowledgeSourceDto(source.getDocument().getId(), source.getPageFrom(), source.getPageTo(),
+                source.getSection());
     }
 }

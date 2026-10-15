@@ -8,7 +8,11 @@ import java.util.List;
 
 public interface CourseEnrollmentRequestRepository extends JpaRepository<CourseEnrollmentRequest, Long> {
     boolean existsByUserIdAndCourseIdAndStatus(Long userId, String courseId, EnrollmentStatus status);
+
     List<CourseEnrollmentRequest> findByUserIdAndStatus(Long userId, EnrollmentStatus status);
+
     List<CourseEnrollmentRequest> findAllByOrderByRequestedAtDesc();
-    List<CourseEnrollmentRequest> findByUserOrganizationUnitIdInOrderByRequestedAtDesc(java.util.Collection<String> unitIds);
+
+    List<CourseEnrollmentRequest> findByUserOrganizationUnitIdInOrderByRequestedAtDesc(
+            java.util.Collection<String> unitIds);
 }

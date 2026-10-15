@@ -14,7 +14,8 @@ import java.util.List;
 @Service
 public class LeaderboardServiceImpl implements LeaderboardService {
 
-    @org.springframework.beans.factory.annotation.Autowired private com.bidv.coretraining.service.AuthorizationService authorization;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bidv.coretraining.service.AuthorizationService authorization;
     private final UserRepository userRepository;
 
     public LeaderboardServiceImpl(UserRepository userRepository) {
@@ -25,10 +26,18 @@ public class LeaderboardServiceImpl implements LeaderboardService {
     @Transactional(readOnly = true)
     public List<LeaderboardUserDto> getLeaderboard() {
         // Fetch all users sorted by points descending
-        User actor=authorization.current();
-        List<User> users = userRepository.findAll(Sort.by(Sort.Direction.DESC, "points")).stream().filter(u->u.activeAccount() && (com.bidv.coretraining.security.AccessPolicy.system(actor)
-            || com.bidv.coretraining.security.AccessPolicy.permissions(actor).contains("overview:read") && com.bidv.coretraining.security.AccessPolicy.allows(actor,"overview:read",u.getOrganizationUnit())
-            || !com.bidv.coretraining.security.AccessPolicy.permissions(actor).contains("overview:read") && java.util.Objects.equals(actor.getOrganizationUnit()==null?null:actor.getOrganizationUnit().getId(),u.getOrganizationUnit()==null?null:u.getOrganizationUnit().getId()))).toList();
+        User actor = authorization.current();
+        List<User> users = userRepository.findAll(Sort.by(Sort.Direction.DESC, "points")).stream()
+                .filter(u -> u.activeAccount() && (com.bidv.coretraining.security.AccessPolicy.system(actor)
+                        || com.bidv.coretraining.security.AccessPolicy.permissions(actor).contains("overview:read")
+                                && com.bidv.coretraining.security.AccessPolicy.allows(actor, "overview:read",
+                                        u.getOrganizationUnit())
+                        || !com.bidv.coretraining.security.AccessPolicy.permissions(actor).contains("overview:read")
+                                && java.util.Objects.equals(
+                                        actor.getOrganizationUnit() == null ? null
+                                                : actor.getOrganizationUnit().getId(),
+                                        u.getOrganizationUnit() == null ? null : u.getOrganizationUnit().getId())))
+                .toList();
         List<LeaderboardUserDto> leaderboard = new ArrayList<>();
 
         for (int i = 0; i < users.size(); i++) {

@@ -17,7 +17,7 @@ public class UserProfileDto {
     private String employeeId;
     private String avatarColor;
     private String role;
-    private java.util.Map<String,String> roleNames;
+    private java.util.Map<String, String> roleNames;
     private boolean systemAdmin;
     private java.util.Set<String> roles;
     private java.util.Set<String> permissions;

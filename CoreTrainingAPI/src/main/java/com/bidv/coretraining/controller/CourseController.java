@@ -21,7 +21,8 @@ import java.util.List;
 public class CourseController {
 
     private final CourseService courseService;
-    @org.springframework.beans.factory.annotation.Autowired private com.bidv.coretraining.service.TrainingStructureService structure;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bidv.coretraining.service.TrainingStructureService structure;
 
     public CourseController(CourseService courseService) {
         this.courseService = courseService;
@@ -38,8 +39,9 @@ public class CourseController {
     }
 
     @GetMapping("/lessons/{id}")
-    public ResponseEntity<LessonDto> getLessonById(@PathVariable String id, @AuthenticationPrincipal CustomUserDetails userDetails) {
-        structure.requireLesson(id,userDetails.getUsername());
+    public ResponseEntity<LessonDto> getLessonById(@PathVariable String id,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        structure.requireLesson(id, userDetails.getUsername());
         return ResponseEntity.ok(courseService.getLessonById(id));
     }
 
@@ -59,8 +61,7 @@ public class CourseController {
             @Valid @RequestBody CommentReplyRequest request,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         return ResponseEntity.ok(
-                courseService.replyToComment(lessonId, commentId, request, userDetails.getUsername())
-        );
+                courseService.replyToComment(lessonId, commentId, request, userDetails.getUsername()));
     }
 
     @DeleteMapping("/lessons/{lessonId}/comments/{commentId}")

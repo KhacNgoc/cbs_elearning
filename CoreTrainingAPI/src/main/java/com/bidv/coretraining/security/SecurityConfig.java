@@ -25,9 +25,12 @@ import java.util.Arrays;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    @org.springframework.beans.factory.annotation.Autowired private AdminRequestAuthorization adminAuthorization;
-    @org.springframework.beans.factory.annotation.Value("${app.jwt.cookie-secure:false}") private boolean csrfCookieSecure;
-    @org.springframework.beans.factory.annotation.Value("${app.jwt.cookie-same-site:Lax}") private String csrfCookieSameSite;
+    @org.springframework.beans.factory.annotation.Autowired
+    private AdminRequestAuthorization adminAuthorization;
+    @org.springframework.beans.factory.annotation.Value("${app.jwt.cookie-secure:false}")
+    private boolean csrfCookieSecure;
+    @org.springframework.beans.factory.annotation.Value("${app.jwt.cookie-same-site:Lax}")
+    private String csrfCookieSameSite;
     private final JwtTokenProvider tokenProvider;
     private final UserDetailsServiceImpl userDetailsService;
     private final JwtCookieService jwtCookieService;
@@ -36,7 +39,7 @@ public class SecurityConfig {
     private java.util.List<String> allowedOrigins;
 
     public SecurityConfig(JwtTokenProvider tokenProvider, UserDetailsServiceImpl userDetailsService,
-                          JwtCookieService jwtCookieService) {
+            JwtCookieService jwtCookieService) {
         this.tokenProvider = tokenProvider;
         this.userDetailsService = userDetailsService;
         this.jwtCookieService = jwtCookieService;
@@ -48,7 +51,8 @@ public class SecurityConfig {
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration)
+            throws Exception {
         return authenticationConfiguration.getAuthenticationManager();
     }
 
@@ -58,47 +62,43 @@ public class SecurityConfig {
                 tokenProvider, userDetailsService, jwtCookieService);
         RequestLoggingFilter requestLoggingFilter = new RequestLoggingFilter();
 
-        var csrfCookies=org.springframework.security.web.csrf.CookieCsrfTokenRepository.withHttpOnlyFalse();
-        csrfCookies.setCookieCustomizer(cookie->cookie.secure(csrfCookieSecure).sameSite(csrfCookieSameSite));
+        var csrfCookies = org.springframework.security.web.csrf.CookieCsrfTokenRepository.withHttpOnlyFalse();
+        csrfCookies.setCookieCustomizer(cookie -> cookie.secure(csrfCookieSecure).sameSite(csrfCookieSameSite));
         http.headers(headers -> headers
-                        .frameOptions(frame -> frame.disable())
-                        .contentSecurityPolicy(csp -> csp.policyDirectives(
-                                "frame-ancestors 'self'"
-                        )))
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .csrf(csrf -> csrf.csrfTokenRepository(csrfCookies)
-               .csrfTokenRequestHandler(new org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler()))
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .exceptionHandling(exceptions -> exceptions
-                .accessDeniedHandler((request, response, exception) -> {
-                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                    response.setContentType("application/json;charset=UTF-8");
-                    response.getWriter().write("{\"message\":\"Bạn không có quyền thực hiện thao tác này\"}");
-                })
-                .authenticationEntryPoint((request, response, exception) ->
-                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized"))
-            )
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/session", "/api/auth/logout").authenticated()
-                .requestMatchers("/api/auth/register", "/api/auth/reset-password-direct").denyAll()
-                .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/ws/**").permitAll()
-                .requestMatchers("/uploads/videos/**").denyAll()
-                .requestMatchers("/api/videos/stream").permitAll()
-                .requestMatchers("/uploads/documents/**").authenticated()
-                .requestMatchers("/api/admin/**").access(adminAuthorization)
-                .anyRequest().authenticated()
-            );
+                .frameOptions(frame -> frame.disable())
+                .contentSecurityPolicy(csp -> csp.policyDirectives(
+                        "frame-ancestors 'self'")))
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .csrf(csrf -> csrf.csrfTokenRepository(csrfCookies)
+                        .csrfTokenRequestHandler(
+                                new org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler()))
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(exceptions -> exceptions
+                        .accessDeniedHandler((request, response, exception) -> {
+                            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                            response.setContentType("application/json;charset=UTF-8");
+                            response.getWriter().write("{\"message\":\"Bạn không có quyền thực hiện thao tác này\"}");
+                        })
+                        .authenticationEntryPoint((request, response, exception) -> response
+                                .sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")))
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/api/auth/session", "/api/auth/logout").authenticated()
+                        .requestMatchers("/api/auth/register", "/api/auth/reset-password-direct").denyAll()
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/ws/**").permitAll()
+                        .requestMatchers("/uploads/videos/**").denyAll()
+                        .requestMatchers("/api/videos/stream").permitAll()
+                        .requestMatchers("/uploads/documents/**").authenticated()
+                        .requestMatchers("/api/admin/**").access(adminAuthorization)
+                        .anyRequest().authenticated());
 
         http.addFilterBefore(
                 jwtAuthenticationFilter,
-                UsernamePasswordAuthenticationFilter.class
-        );
+                UsernamePasswordAuthenticationFilter.class);
 
         http.addFilterBefore(
                 requestLoggingFilter,
-                JwtAuthenticationFilter.class
-        );
+                JwtAuthenticationFilter.class);
 
         return http.build();
     }

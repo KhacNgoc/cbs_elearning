@@ -24,7 +24,8 @@ import java.util.List;
 
 @Service
 public class CourseServiceImpl implements CourseService {
-    @org.springframework.beans.factory.annotation.Autowired private com.bidv.coretraining.service.AuthorizationService authorization;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bidv.coretraining.service.AuthorizationService authorization;
 
     private final CourseRepository courseRepository;
     private final LessonRepository lessonRepository;
@@ -35,9 +36,9 @@ public class CourseServiceImpl implements CourseService {
     private final NotificationService notificationService;
 
     public CourseServiceImpl(CourseRepository courseRepository, LessonRepository lessonRepository,
-                             CommentRepository commentRepository, UserRepository userRepository,
-                             VideoNoteRepository videoNoteRepository, CourseMapper courseMapper,
-                             NotificationService notificationService) {
+            CommentRepository commentRepository, UserRepository userRepository,
+            VideoNoteRepository videoNoteRepository, CourseMapper courseMapper,
+            NotificationService notificationService) {
         this.courseRepository = courseRepository;
         this.lessonRepository = lessonRepository;
         this.commentRepository = commentRepository;
@@ -50,13 +51,28 @@ public class CourseServiceImpl implements CourseService {
     @Override
     @Transactional(readOnly = true)
     public List<CourseDto> getAllCourses() {
-        User user=authorization.current();
-        List<Course> courses=courseRepository.findAll().stream().filter(c->com.bidv.coretraining.security.AccessPolicy.canReadCourse(user,c) || "PUBLISHED".equals(c.getStatus()) && com.bidv.coretraining.security.AccessPolicy.visible(user,c)).toList();
-        List<CourseDto> result=courseMapper.toCourseDtoList(courses);
-        for(int i=0;i<courses.size();i++) {
-            boolean editor=com.bidv.coretraining.security.AccessPolicy.canReadCourse(user,courses.get(i));result.get(i).setCanEdit(editor);result.get(i).setAllowedActions(com.bidv.coretraining.security.AccessPolicy.courseActions(user,courses.get(i)));
-            final Course item=courses.get(i);result.get(i).setAdminActions(java.util.stream.Stream.of("courses","exams","documents").collect(java.util.stream.Collectors.toMap(page->page,page->java.util.stream.Stream.of("read","create","update","delete").filter(a->com.bidv.coretraining.security.AccessPolicy.allowsCourse(user,page+":"+a,item)).collect(java.util.stream.Collectors.toSet()))));
-            if(!editor) result.get(i).getLessons().forEach(com.bidv.coretraining.service.TrainingStructureService::outlineOnly);
+        User user = authorization.current();
+        List<Course> courses = courseRepository.findAll().stream()
+                .filter(c -> com.bidv.coretraining.security.AccessPolicy.canReadCourse(user, c)
+                        || "PUBLISHED".equals(c.getStatus())
+                                && com.bidv.coretraining.security.AccessPolicy.visible(user, c))
+                .toList();
+        List<CourseDto> result = courseMapper.toCourseDtoList(courses);
+        for (int i = 0; i < courses.size(); i++) {
+            boolean editor = com.bidv.coretraining.security.AccessPolicy.canReadCourse(user, courses.get(i));
+            result.get(i).setCanEdit(editor);
+            result.get(i)
+                    .setAllowedActions(com.bidv.coretraining.security.AccessPolicy.courseActions(user, courses.get(i)));
+            final Course item = courses.get(i);
+            result.get(i)
+                    .setAdminActions(java.util.stream.Stream.of("courses", "exams", "documents")
+                            .collect(java.util.stream.Collectors.toMap(page -> page,
+                                    page -> java.util.stream.Stream.of("read", "create", "update", "delete")
+                                            .filter(a -> com.bidv.coretraining.security.AccessPolicy.allowsCourse(user,
+                                                    page + ":" + a, item))
+                                            .collect(java.util.stream.Collectors.toSet()))));
+            if (!editor)
+                result.get(i).getLessons().forEach(com.bidv.coretraining.service.TrainingStructureService::outlineOnly);
         }
         return result;
     }
@@ -66,12 +82,14 @@ public class CourseServiceImpl implements CourseService {
     public CourseDto getCourseById(String id) {
         Course course = courseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Course", "id", id));
-        User user=authorization.current();
-        boolean editor=com.bidv.coretraining.security.AccessPolicy.canReadCourse(user,course);
-        com.bidv.coretraining.security.AccessPolicy.require(editor || "PUBLISHED".equals(course.getStatus()) && com.bidv.coretraining.security.AccessPolicy.visible(user,course));
-        CourseDto result=courseMapper.toCourseDto(course);
+        User user = authorization.current();
+        boolean editor = com.bidv.coretraining.security.AccessPolicy.canReadCourse(user, course);
+        com.bidv.coretraining.security.AccessPolicy.require(editor || "PUBLISHED".equals(course.getStatus())
+                && com.bidv.coretraining.security.AccessPolicy.visible(user, course));
+        CourseDto result = courseMapper.toCourseDto(course);
         result.setCanEdit(editor);
-        if(!editor) result.getLessons().forEach(com.bidv.coretraining.service.TrainingStructureService::outlineOnly);
+        if (!editor)
+            result.getLessons().forEach(com.bidv.coretraining.service.TrainingStructureService::outlineOnly);
         return result;
     }
 
@@ -86,7 +104,7 @@ public class CourseServiceImpl implements CourseService {
     @Override
     @Transactional
     public CommentDto addCommentToLesson(String lessonId, CommentRequest commentRequest, String username) {
-        requireInteraction(lessonId,username);
+        requireInteraction(lessonId, username);
         Lesson lesson = lessonRepository.findById(lessonId)
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
 
@@ -108,8 +126,8 @@ public class CourseServiceImpl implements CourseService {
     @Override
     @Transactional
     public CommentDto replyToComment(String lessonId, Long commentId,
-                                     CommentReplyRequest request, String username) {
-        requireInteraction(lessonId,username);
+            CommentReplyRequest request, String username) {
+        requireInteraction(lessonId, username);
         Lesson lesson = lessonRepository.findById(lessonId)
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
         Comment requestedParent = commentRepository.findById(commentId)
@@ -157,13 +175,14 @@ public class CourseServiceImpl implements CourseService {
     @Transactional
     public void deleteComment(
             String lessonId, Long commentId, String username, boolean isAdmin) {
-        requireInteraction(lessonId,username);
+        requireInteraction(lessonId, username);
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Comment", "id", commentId));
         if (!comment.getLesson().getId().equals(lessonId)) {
             throw new ResourceNotFoundException("Comment", "id", commentId);
         }
-        if (!com.bidv.coretraining.security.AccessPolicy.canEdit(authorization.current(),comment.getLesson().getCourse()) && !comment.getUsername().equals(username)) {
+        if (!com.bidv.coretraining.security.AccessPolicy.canEdit(authorization.current(),
+                comment.getLesson().getCourse()) && !comment.getUsername().equals(username)) {
             throw new AccessDeniedException("Bạn chỉ có thể gỡ bình luận của chính mình");
         }
         commentRepository.delete(comment);
@@ -172,7 +191,7 @@ public class CourseServiceImpl implements CourseService {
     @Override
     @Transactional(readOnly = true)
     public List<VideoNoteDto> getVideoNotes(String lessonId, String username) {
-        requireInteraction(lessonId,username);
+        requireInteraction(lessonId, username);
         if (!lessonRepository.existsById(lessonId)) {
             throw new ResourceNotFoundException("Lesson", "id", lessonId);
         }
@@ -187,7 +206,7 @@ public class CourseServiceImpl implements CourseService {
     @Override
     @Transactional
     public VideoNoteDto createVideoNote(String lessonId, VideoNoteRequest request, String username) {
-        requireInteraction(lessonId,username);
+        requireInteraction(lessonId, username);
         Lesson lesson = lessonRepository.findById(lessonId)
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
         User user = userRepository.findByUsername(username)
@@ -210,7 +229,7 @@ public class CourseServiceImpl implements CourseService {
     @Transactional
     public VideoNoteDto updateVideoNote(
             String lessonId, Long noteId, VideoNoteRequest request, String username) {
-        requireInteraction(lessonId,username);
+        requireInteraction(lessonId, username);
         VideoNote note = findOwnedVideoNote(lessonId, noteId, username);
         note.setTimestampSeconds(request.getTimestampSeconds());
         note.setContent(request.getContent().trim());
@@ -221,7 +240,7 @@ public class CourseServiceImpl implements CourseService {
     @Override
     @Transactional
     public void deleteVideoNote(String lessonId, Long noteId, String username) {
-        requireInteraction(lessonId,username);
+        requireInteraction(lessonId, username);
         videoNoteRepository.delete(findOwnedVideoNote(lessonId, noteId, username));
     }
 
@@ -230,10 +249,10 @@ public class CourseServiceImpl implements CourseService {
                 .orElseThrow(() -> new ResourceNotFoundException("Video note", "id", noteId));
     }
 
-    private void requireInteraction(String lessonId,String username) {
-        Lesson lesson=lessonRepository.findById(lessonId).orElseThrow(()->new ResourceNotFoundException("Lesson"));
-        User user=userRepository.findByUsername(username).orElseThrow(()->new ResourceNotFoundException("User"));
-        com.bidv.coretraining.service.LearningPolicy.assertLessonAccess(user,lesson);
+    private void requireInteraction(String lessonId, String username) {
+        Lesson lesson = lessonRepository.findById(lessonId).orElseThrow(() -> new ResourceNotFoundException("Lesson"));
+        User user = userRepository.findByUsername(username).orElseThrow(() -> new ResourceNotFoundException("User"));
+        com.bidv.coretraining.service.LearningPolicy.assertLessonAccess(user, lesson);
     }
 
     private VideoNoteDto toVideoNoteDto(VideoNote note) {

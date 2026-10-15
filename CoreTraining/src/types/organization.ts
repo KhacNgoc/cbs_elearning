@@ -4,7 +4,7 @@ export interface OrganizationUnit {
   type: string;
   parentId?: string | null;
   active: boolean;
-  allowedActions?:string[];
+  allowedActions?: string[];
 }
 export interface UnitBranch {
   unit: OrganizationUnit;

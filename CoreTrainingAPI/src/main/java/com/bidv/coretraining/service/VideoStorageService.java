@@ -25,7 +25,7 @@ public class VideoStorageService {
     private final VideoMediaValidator mediaValidator;
 
     public VideoStorageService(@Value("${app.storage.videos-directory:uploads/videos}") String storageDirectory,
-                               VideoMediaValidator mediaValidator) {
+            VideoMediaValidator mediaValidator) {
         this.storageDirectory = Path.of(storageDirectory).toAbsolutePath().normalize();
         this.mediaValidator = mediaValidator;
     }
@@ -40,10 +40,12 @@ public class VideoStorageService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File video không được để trống");
         }
 
-        String originalName = StringUtils.cleanPath(file.getOriginalFilename() == null ? "video" : file.getOriginalFilename());
+        String originalName = StringUtils
+                .cleanPath(file.getOriginalFilename() == null ? "video" : file.getOriginalFilename());
         String extension = getExtension(originalName);
         if (!ALLOWED_EXTENSIONS.contains(extension)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chỉ hỗ trợ MP4/M4V (H.264/AAC) hoặc WebM (VP8/VP9, Opus/Vorbis)");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Chỉ hỗ trợ MP4/M4V (H.264/AAC) hoặc WebM (VP8/VP9, Opus/Vorbis)");
         }
 
         String storedName = UUID.randomUUID() + "." + extension;

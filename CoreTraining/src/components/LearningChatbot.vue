@@ -52,8 +52,17 @@
         <template v-else>
           <div class="chat-course-filter">
             <label for="chat-course">Khóa học</label>
-            <select id="chat-course" v-model="selectedCourseId" :disabled="sending" @change="loadHistory">
-              <option v-for="course in accessibleCourses" :key="course.id" :value="course.id">
+            <select
+              id="chat-course"
+              v-model="selectedCourseId"
+              :disabled="sending"
+              @change="loadHistory"
+            >
+              <option
+                v-for="course in accessibleCourses"
+                :key="course.id"
+                :value="course.id"
+              >
                 {{ course.name }}
               </option>
             </select>
@@ -61,7 +70,9 @@
 
           <div ref="chatBody" class="chat-body">
             <div class="chat-date">Hôm nay</div>
-            <div v-if="loadingHistory" class="chat-loading">Đang tải lịch sử trao đổi...</div>
+            <div v-if="loadingHistory" class="chat-loading">
+              Đang tải lịch sử trao đổi...
+            </div>
             <div v-else-if="messages.length === 0" class="assistant-message">
               <span class="message-avatar"><Bot :size="17" /></span>
               <div>
@@ -73,21 +84,40 @@
               </div>
             </div>
 
-            <article v-for="message in messages" :key="message.id" class="chat-exchange">
-              <div class="user-message"><p>{{ message.question }}</p></div>
+            <article
+              v-for="message in messages"
+              :key="message.id"
+              class="chat-exchange"
+            >
+              <div class="user-message">
+                <p>{{ message.question }}</p>
+              </div>
               <div class="assistant-message">
                 <span class="message-avatar"><Bot :size="17" /></span>
                 <div class="assistant-answer">
                   <p>{{ message.answer }}</p>
-                  <span class="grounding-state" :class="{ grounded: message.grounded }">
-                    {{ message.needsClarification
-                      ? 'Cần làm rõ câu hỏi'
-                      : message.grounded ? 'Có nguồn tài liệu' : 'Không tìm thấy trong tài liệu' }}
+                  <span
+                    class="grounding-state"
+                    :class="{ grounded: message.grounded }"
+                  >
+                    {{
+                      message.needsClarification
+                        ? "Cần làm rõ câu hỏi"
+                        : message.grounded
+                          ? "Có nguồn tài liệu"
+                          : "Không tìm thấy trong tài liệu"
+                    }}
                   </span>
                   <ul v-if="message.sources.length" class="chat-sources">
-                    <li v-for="source in message.sources" :key="`${message.id}-${source.documentId}-${source.page}-${source.section}`">
+                    <li
+                      v-for="source in message.sources"
+                      :key="`${message.id}-${source.documentId}-${source.page}-${source.section}`"
+                    >
                       <FileText :size="13" />
-                      <span><strong>{{ source.documentName }}</strong> · Trang {{ source.page }} · {{ source.section }}</span>
+                      <span
+                        ><strong>{{ source.documentName }}</strong> · Trang
+                        {{ source.page }} · {{ source.section }}</span
+                      >
                     </li>
                   </ul>
                   <small>{{ formatTime(message.createdAt) }}</small>
@@ -96,22 +126,35 @@
             </article>
 
             <template v-if="pendingQuestion">
-              <div class="user-message"><p>{{ pendingQuestion }}</p></div>
+              <div class="user-message">
+                <p>{{ pendingQuestion }}</p>
+              </div>
               <div class="assistant-message chat-thinking">
                 <span class="message-avatar"><Bot :size="17" /></span>
                 <p>
                   <LoaderCircle :size="15" />
-                  {{ longWait
-                    ? 'Mô hình đang tổng hợp câu trả lời, quá trình này có thể mất thêm một chút thời gian...'
-                    : 'Đang tìm trong tài liệu khóa học...' }}
+                  {{
+                    longWait
+                      ? "Mô hình đang tổng hợp câu trả lời, quá trình này có thể mất thêm một chút thời gian..."
+                      : "Đang tìm trong tài liệu khóa học..."
+                  }}
                 </p>
               </div>
             </template>
 
             <p v-if="chatError" class="chat-error">{{ chatError }}</p>
 
-            <div v-if="messages.length === 0 && !loadingHistory" class="quick-prompts" aria-label="Câu hỏi gợi ý">
-              <button v-for="prompt in quickPrompts" :key="prompt" type="button" @click="askPrompt(prompt)">
+            <div
+              v-if="messages.length === 0 && !loadingHistory"
+              class="quick-prompts"
+              aria-label="Câu hỏi gợi ý"
+            >
+              <button
+                v-for="prompt in quickPrompts"
+                :key="prompt"
+                type="button"
+                @click="askPrompt(prompt)"
+              >
                 {{ prompt }}
               </button>
             </div>
@@ -129,17 +172,21 @@
               :disabled="sending || !selectedCourseId"
               @keydown.enter.exact="handleQuestionEnter"
             ></textarea>
-            <button type="submit" aria-label="Gửi câu hỏi" :disabled="sending || !question.trim() || !selectedCourseId">
+            <button
+              type="submit"
+              aria-label="Gửi câu hỏi"
+              :disabled="sending || !question.trim() || !selectedCourseId"
+            >
               <SendHorizontal :size="19" />
             </button>
             <p>
-              <Sparkles :size="13" /> Chỉ trả lời từ tài liệu của khóa học đã chọn
+              <Sparkles :size="13" /> Chỉ trả lời từ tài liệu của khóa học đã
+              chọn
             </p>
           </form>
         </template>
       </section>
     </Transition>
-
   </aside>
   <Teleport defer to="#learning-chatbot-launcher">
     <button
@@ -147,7 +194,13 @@
       class="chat-launcher"
       :class="{ 'is-locked': locked, 'is-active': open }"
       type="button"
-      :aria-label="open ? 'Đóng trợ lý học tập' : locked ? 'Trợ lý học tập đang bị khóa' : 'Mở trợ lý học tập'"
+      :aria-label="
+        open
+          ? 'Đóng trợ lý học tập'
+          : locked
+            ? 'Trợ lý học tập đang bị khóa'
+            : 'Mở trợ lý học tập'
+      "
       :aria-expanded="open"
       aria-controls="learning-chatbot-panel"
       :title="locked ? 'Trợ lý tạm khóa trong bài thi' : 'Trợ lý học tập'"
@@ -161,7 +214,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import { useRoute } from "vue-router";
 import { useCourseStore } from "../stores/courseStore";
 import { useUserStore } from "../stores/userStore";
@@ -215,7 +275,9 @@ const clearLongWaitTimer = () => {
 };
 
 const accessibleCourses = computed(() =>
-  courseStore.courses.filter(course => userStore.isCourseAccessible(course.id)),
+  courseStore.courses.filter((course) =>
+    userStore.isCourseAccessible(course.id),
+  ),
 );
 
 const scrollToLatest = async () => {
@@ -224,14 +286,17 @@ const scrollToLatest = async () => {
 };
 
 const selectCourseFromContext = () => {
-  const contextualCourseId = route.name === "LessonDetail"
-    ? courseStore.currentCourse?.id
-    : undefined;
-  const nextCourseId = contextualCourseId && accessibleCourses.value.some(course => course.id === contextualCourseId)
-    ? contextualCourseId
-    : accessibleCourses.value.some(course => course.id === selectedCourseId.value)
-      ? selectedCourseId.value
-      : accessibleCourses.value[0]?.id || "";
+  const contextualCourseId =
+    route.name === "LessonDetail" ? courseStore.currentCourse?.id : undefined;
+  const nextCourseId =
+    contextualCourseId &&
+    accessibleCourses.value.some((course) => course.id === contextualCourseId)
+      ? contextualCourseId
+      : accessibleCourses.value.some(
+            (course) => course.id === selectedCourseId.value,
+          )
+        ? selectedCourseId.value
+        : accessibleCourses.value[0]?.id || "";
   const changed = nextCourseId !== selectedCourseId.value;
   selectedCourseId.value = nextCourseId;
   if (changed) messages.value = [];
@@ -251,7 +316,8 @@ const loadHistory = async () => {
       conversationIds.value[selectedCourseId.value],
     );
     const loadedConversationId = messages.value[0]?.conversationId;
-    if (loadedConversationId) conversationIds.value[selectedCourseId.value] = loadedConversationId;
+    if (loadedConversationId)
+      conversationIds.value[selectedCourseId.value] = loadedConversationId;
     await scrollToLatest();
   } catch (error) {
     console.error("Failed to load chat history:", error);
@@ -296,11 +362,12 @@ const sendQuestion = async () => {
     console.error("Failed to ask learning assistant:", error);
     question.value = content;
     const status = error?.response?.status;
-    chatError.value = isTimeoutError(error) || status === 504
-      ? "Trợ lý chưa hoàn tất câu trả lời trong thời gian cho phép. Câu hỏi đã được giữ lại để bạn có thể thử lại."
-      : status === 502
-        ? "Trợ lý chưa tạo được câu trả lời hoàn chỉnh. Vui lòng thử lại."
-        : "Không thể kết nối tới trợ lý học tập. Vui lòng thử lại.";
+    chatError.value =
+      isTimeoutError(error) || status === 504
+        ? "Trợ lý chưa hoàn tất câu trả lời trong thời gian cho phép. Câu hỏi đã được giữ lại để bạn có thể thử lại."
+        : status === 502
+          ? "Trợ lý chưa tạo được câu trả lời hoàn chỉnh. Vui lòng thử lại."
+          : "Không thể kết nối tới trợ lý học tập. Vui lòng thử lại.";
   } finally {
     clearLongWaitTimer();
     pendingQuestion.value = "";
@@ -313,7 +380,8 @@ const handleQuestionEnter = (event: KeyboardEvent) => {
   // With Vietnamese and other IMEs, the text visible in the textarea can still
   // be composing and therefore not yet be reflected in Vue's v-model. Let the
   // first Enter commit that text instead of sending a stale question value.
-  if (event.isComposing || event.key === "Process" || event.keyCode === 229) return;
+  if (event.isComposing || event.key === "Process" || event.keyCode === 229)
+    return;
   event.preventDefault();
   void sendQuestion();
 };
@@ -323,10 +391,11 @@ const askPrompt = (prompt: string) => {
   void sendQuestion();
 };
 
-const formatTime = (value: string) => new Intl.DateTimeFormat("vi-VN", {
-  hour: "2-digit",
-  minute: "2-digit",
-}).format(new Date(value));
+const formatTime = (value: string) =>
+  new Intl.DateTimeFormat("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 
 const clampPosition = () => {
   const element = chatbotElement.value;
@@ -412,7 +481,11 @@ watch(
 );
 
 watch(
-  () => [route.name, courseStore.currentCourse?.id, accessibleCourses.value.map(course => course.id).join(",")],
+  () => [
+    route.name,
+    courseStore.currentCourse?.id,
+    accessibleCourses.value.map((course) => course.id).join(","),
+  ],
   () => {
     const changed = selectCourseFromContext();
     if (open.value && changed) void loadHistory();
@@ -921,7 +994,9 @@ onBeforeUnmount(() => {
 }
 
 @keyframes chat-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .sr-only {
@@ -959,6 +1034,5 @@ onBeforeUnmount(() => {
   .chat-panel-leave-active {
     transition: none;
   }
-
 }
 </style>

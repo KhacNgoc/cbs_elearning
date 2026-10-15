@@ -5,7 +5,10 @@
       :key="star"
       type="button"
       class="star-btn"
-      :class="{ 'is-active': star <= (hoverRating || modelValue), 'is-readonly': readonly }"
+      :class="{
+        'is-active': star <= (hoverRating || modelValue),
+        'is-readonly': readonly,
+      }"
       @mouseenter="onMouseEnter(star)"
       @mouseleave="onMouseLeave"
       @click="onClick(star)"
@@ -21,27 +24,29 @@
         stroke-linejoin="round"
         class="star-icon"
       >
-        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+        <polygon
+          points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+        />
       </svg>
     </button>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref } from "vue";
 
 const props = defineProps({
   modelValue: {
     type: Number,
-    default: 0
+    default: 0,
   },
   readonly: {
     type: Boolean,
-    default: false
-  }
+    default: false,
+  },
 });
 
-const emit = defineEmits(['update:modelValue']);
+const emit = defineEmits(["update:modelValue"]);
 const hoverRating = ref(0);
 
 const onMouseEnter = (star: number) => {
@@ -58,7 +63,7 @@ const onMouseLeave = () => {
 
 const onClick = (star: number) => {
   if (!props.readonly) {
-    emit('update:modelValue', star);
+    emit("update:modelValue", star);
   }
 };
 </script>
@@ -75,7 +80,9 @@ const onClick = (star: number) => {
   padding: 0;
   cursor: pointer;
   color: var(--border-color);
-  transition: transform 0.15s ease, color 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    color 0.15s ease;
 }
 
 .star-btn:not(.is-readonly):hover {

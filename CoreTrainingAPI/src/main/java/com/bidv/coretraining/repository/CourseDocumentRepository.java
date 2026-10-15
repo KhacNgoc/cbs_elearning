@@ -14,6 +14,7 @@ public interface CourseDocumentRepository extends JpaRepository<CourseDocument, 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select document from CourseDocument document where document.id = :id")
     Optional<CourseDocument> findForDeletionById(@Param("id") String id);
+
     List<CourseDocument> findByCourseIdOrderByCreatedAtDesc(String courseId);
 
     @EntityGraph(attributePaths = "course")

@@ -6,8 +6,8 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "lesson_progress", uniqueConstraints =
-        @UniqueConstraint(name = "uk_lesson_progress_user_lesson", columnNames = {"user_id", "lesson_id"}))
+@Table(name = "lesson_progress", uniqueConstraints = @UniqueConstraint(name = "uk_lesson_progress_user_lesson", columnNames = {
+        "user_id", "lesson_id" }))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -45,5 +45,7 @@ public class LessonProgress {
     private Integer documentPage;
     private Double scrollOffset;
 
-    @Builder.Default @Column(nullable=false) private boolean contentCompleted = false;
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean contentCompleted = false;
 }
