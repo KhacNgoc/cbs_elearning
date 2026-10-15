@@ -127,6 +127,7 @@
 </template>
 
 <script setup lang="ts">
+import { scrollWithin } from "../../utils/scrollWithin";
 import { computed, nextTick, ref } from "vue";
 import {
   Clock3,
@@ -176,8 +177,8 @@ const openAt = async (seconds: number) => {
   composerTimestamp.value = Math.max(0, Math.floor(seconds));
   composerOpen.value = true;
   await nextTick();
-  sectionElement.value?.scrollIntoView({ behavior: "smooth", block: "start" });
-  composerTextarea.value?.focus();
+  scrollWithin(sectionElement.value);
+  composerTextarea.value?.focus({ preventScroll: true });
 };
 
 const closeComposer = () => {

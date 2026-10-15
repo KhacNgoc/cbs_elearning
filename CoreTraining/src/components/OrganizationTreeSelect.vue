@@ -109,6 +109,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import { scrollWithin } from "../utils/scrollWithin";
 import {
   computed,
   nextTick,
@@ -255,10 +256,8 @@ async function show() {
   open.value = true;
   await nextTick();
   positionPopup();
-  input.value?.focus();
-  popup.value
-    ?.querySelector<HTMLElement>("[role=treeitem][aria-selected=true]")
-    ?.scrollIntoView({ block: "nearest" });
+  input.value?.focus({ preventScroll: true });
+  scrollWithin(popup.value?.querySelector<HTMLElement>("[role=treeitem][aria-selected=true]"), "nearest", false);
 }
 function onFocus() {
   if (!restoringFocus) void show();

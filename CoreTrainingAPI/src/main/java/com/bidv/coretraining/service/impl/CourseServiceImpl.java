@@ -113,7 +113,7 @@ public class CourseServiceImpl implements CourseService {
         Comment comment = Comment.builder()
                 .username(username)
                 .avatar(avatar)
-                .rating(commentRequest.getRating())
+                .rating(null)
                 .content(commentRequest.getContent())
                 .createdAt(LocalDateTime.now())
                 .lesson(lesson)

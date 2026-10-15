@@ -30,6 +30,12 @@ public final class LearningPolicy {
         return !lessons.isEmpty() && lessons.stream().allMatch(l -> completed(user, l));
     }
 
+    public static boolean courseCompleted(User user, Course course) {
+        var chapters = publishedChapters(course);
+        return !chapters.isEmpty() && chapters.stream().allMatch(ch -> chapterCompleted(user, ch)
+                && publishedLessons(ch).stream().allMatch(l -> !l.isQuizRequired() || quizPassed(user, l)));
+    }
+
     public static boolean chapterUnlocked(User user, Chapter chapter) {
         return publishedChapters(chapter.getCourse()).stream()
                 .takeWhile(c -> !c.getId().equals(chapter.getId())).allMatch(c -> chapterCompleted(user, c));

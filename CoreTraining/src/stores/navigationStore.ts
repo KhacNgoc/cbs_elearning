@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { navigationApi } from "../api/navigationApi";
 import type { NavigationItem } from "../api/navigationApi";
+import { navigationHome } from "../utils/navigationHome";
 
 let navigationRequest: Promise<void> | null = null;
 
@@ -10,6 +11,7 @@ export const useNavigationStore = defineStore("navigation", {
     loaded: false,
   }),
   getters: {
+    homeRoute: (state) => navigationHome(state.items),
     mainItems: (state) =>
       state.items.filter((item) => item.area === "MAIN" && item.visible),
     adminItems: (state) =>

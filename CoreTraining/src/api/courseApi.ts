@@ -55,7 +55,7 @@ export const courseApi = {
 
   async addComment(
     lessonId: string,
-    rating: number,
+    rating: number | null,
     content: string,
   ): Promise<Comment> {
     const username = localStorage.getItem("username") || "quantrh";
@@ -69,7 +69,7 @@ export const courseApi = {
         id: Date.now(),
         user: username,
         avatar: username.charAt(0).toUpperCase(),
-        rating,
+        rating: rating ?? undefined,
         content,
         date: new Date().toISOString().split("T")[0],
         replies: [],

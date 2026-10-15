@@ -6,7 +6,7 @@ import LessonDetail from '../views/LessonDetail.vue';
 import QuizView from '../views/QuizView.vue';
 import Leaderboard from '../views/Leaderboard.vue';
 import Login from '../views/Login.vue';
-import AdminPortal from '../views/AdminPortal.vue';
+import AdminOverview from '../views/AdminOverview.vue';
 import AdminQuizDetail from '../views/AdminQuizDetail.vue';
 import Profile from '../views/Profile.vue';
 import { useNavigationStore } from '../stores/navigationStore';
@@ -18,6 +18,7 @@ import LessonEditor from '../views/LessonEditor.vue';
 import CourseOutline from '../views/CourseOutline.vue';
 
 const routes: Array<RouteRecordRaw> = [
+  ...(import.meta.env.DEV ? [{ path: '/mockups/reports', name: 'ReportsMockup', component: () => import('../views/ReportsPreview.vue') }] : []),
   {
     path: '/login',
     name: 'Login',
@@ -82,7 +83,7 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: '',
         name: 'AdminPortal',
-        component: AdminPortal
+        component: AdminOverview
       },
       {
         path: 'lessons/:courseId',
@@ -116,7 +117,7 @@ const router = createRouter({
 });
 
 // Navigation Guard to protect routes
-router.beforeEach(async (to, _, next) => {
+router.beforeEach(async (to, from, next) => {
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
   const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin);
   const isMock = import.meta.env.VITE_USE_MOCK_API === 'true';
@@ -158,6 +159,10 @@ router.beforeEach(async (to, _, next) => {
       try {
         const navigationStore = useNavigationStore();
         await navigationStore.load(true);
+        if (to.name === 'Dashboard' && (!from.matched.length || from.name === 'Login' || from.name === 'ChangePassword') && navigationStore.homeRoute !== '/') {
+          next({path:navigationStore.homeRoute,replace:true});
+          return;
+        }
         const tabKey = to.path === '/admin' && typeof to.query.tab === 'string'
           ? `admin.${to.query.tab}`
           : undefined;
@@ -165,7 +170,7 @@ router.beforeEach(async (to, _, next) => {
           .map(record => record.meta.pageKey as string | undefined)
           .find(Boolean);
         if (pageKey && !navigationStore.allowedPageIds.has(pageKey)) {
-          next(requiresAdmin && to.path==='/admin' ? navigationStore.adminItems[0]?.route || '/' : '/');
+          next(requiresAdmin && to.path==='/admin' ? navigationStore.homeRoute : '/');
           return;
         }
       } catch (error) {

@@ -1454,6 +1454,7 @@
 </template>
 
 <script setup lang="ts">
+import { scrollWithin } from "../utils/scrollWithin";
 import { showToast } from "../utils/toast";
 import AdminModal from "../components/AdminModal.vue";
 import TablePagination from "../components/TablePagination.vue";
@@ -2786,7 +2787,7 @@ const addLessonDocument = async () => {
   const newCard = cards?.[cards.length - 1];
   if (!newCard) return;
 
-  newCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  scrollWithin(newCard, "nearest");
   window.setTimeout(() => {
     newCard.querySelector<HTMLInputElement>("input.form-control")?.focus({
       preventScroll: true,

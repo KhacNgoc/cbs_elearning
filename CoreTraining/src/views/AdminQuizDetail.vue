@@ -455,7 +455,6 @@ const editQuestion = (question: Question) => {
   form.type = question.type || ((question.correctAnswers?.length || 1) > 1 ? "MULTIPLE_CHOICE" : "SINGLE_CHOICE");
   form.correctAnswers = questionCorrectAnswers(question);
   showQuestionForm.value = true;
-  window.scrollTo({ top: 360, behavior: "smooth" });
 };
 const saveQuestion = async () => {
   const text = form.text.trim();

@@ -92,7 +92,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useNavigationStore } from "../stores/navigationStore";
 import {
   BookOpen,
@@ -110,8 +110,10 @@ import {
   Flag,
   ChevronDown,
   GraduationCap,
+  ChartNoAxesCombined,
 } from "lucide-vue-next";
 import MotionCollapse from "../components/MotionCollapse.vue";
+import { reportMenuViews as reportViews } from "../utils/reportingViews";
 import type { NavigationItem } from "../api/navigationApi";
 
 import { useUserStore } from "../stores/userStore";
@@ -122,6 +124,7 @@ withDefaults(defineProps<{ sidebarVisible?: boolean }>(), {
 const emit = defineEmits<{ navigate: [] }>();
 const user = useUserStore();
 const route = useRoute();
+const router = useRouter();
 const navigationStore = useNavigationStore();
 const navigation = computed(() => navigationStore.adminItems);
 const learningNavigation = computed(() =>
@@ -130,6 +133,7 @@ const learningNavigation = computed(() =>
     : [],
 );
 const iconRegistry = {
+  ChartNoAxesCombined,
   BookOpen,
   ClipboardCheck,
   FileText,
@@ -178,6 +182,28 @@ const standaloneNavigation = computed(() =>
 );
 const navigationGroups = computed(() =>
   [
+    {
+      id: "reports",
+      label: "Thống kê & báo cáo",
+      icon: ChartNoAxesCombined,
+      items: navigationStore.allowedPageIds.has("admin.overview")
+        ? reportViews.map((view, index): NavigationItem => ({
+            id: `admin.reports.${view.id}`,
+            label: view.label,
+            route: router.resolve({
+              path: "/admin",
+              query: {
+                ...Object.fromEntries(Object.entries(route.query).filter(([key]) => !["report", "tab"].includes(key))),
+                report: view.id,
+              },
+            }).fullPath,
+            icon: "ChartNoAxesCombined",
+            area: "ADMIN",
+            sortOrder: index,
+            visible: true,
+          }))
+        : [],
+    },
     ...groupDefinitions.map((group) => ({
       ...group,
       items: group.ids.flatMap((id) =>
@@ -195,7 +221,9 @@ const navigationGroups = computed(() =>
 const openGroup = ref<string | null>(null);
 
 const activeSection = computed(() =>
-  route.path.startsWith("/admin/question-bank")
+  route.path==='/admin' && route.query.report
+    ? `admin.reports.${String(route.query.report)}`
+    : route.path.startsWith("/admin/question-bank")
     ? "admin.question-bank"
     : route.path.startsWith("/admin/content-reports")
       ? "admin.content-reports"
@@ -260,7 +288,7 @@ onMounted(() => navigationStore.load());
   height: calc(100% + 4rem);
   min-height: 0;
   margin: -2rem;
-  overflow: hidden;
+  overflow: clip;
   background: var(--bg-main);
 }
 
@@ -317,6 +345,7 @@ onMounted(() => navigationStore.load());
   gap: 0.3rem;
   padding: 1.25rem 0.9rem 1rem;
   min-height: 0;
+  overflow-y: auto;
 }
 
 .sidebar-item {
@@ -474,7 +503,7 @@ onMounted(() => navigationStore.load());
   .admin-shell {
     height: calc(100% + 2rem);
     margin: -1rem;
-    overflow: hidden;
+    overflow: clip;
     flex-direction: column;
   }
 

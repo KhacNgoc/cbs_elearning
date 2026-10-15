@@ -113,9 +113,7 @@ public class LearnerWorkspaceService {
                                                                         .anyMatch(a -> a.courseId().equals(c.getId()))
                                                         || user.getQuizScores().stream().anyMatch(
                                                                         q -> q.getCourse().getId().equals(c.getId()));
-                                        boolean complete = enrolled && !lessons.isEmpty() && completed == lessons.size()
-                                                        && lessons.stream().allMatch(l -> !l.isQuizRequired()
-                                                                        || LearningPolicy.quizPassed(user, l));
+                                        boolean complete = enrolled && LearningPolicy.courseCompleted(user, c);
                                         String status = !enrolled ? source
                                                         : complete ? "COMPLETED"
                                                                         : started ? "IN_PROGRESS" : "NOT_STARTED";

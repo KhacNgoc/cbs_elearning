@@ -1,6 +1,7 @@
 <template>
   <div
     v-if="lesson && chapter"
+    ref="learningPage"
     class="learning-page"
     :class="{ 'sidebar-visible': sidebarOpen }"
   >
@@ -109,7 +110,6 @@
           :comments="lesson.comments"
           :current-username="userStore.username"
           :is-admin="Boolean(fullCourse?.canEdit)"
-          v-model:rating="userRating"
           v-model:comment="commentText"
           @submit="submitFeedback"
           @reply="submitReply"
@@ -195,6 +195,7 @@
 </template>
 
 <script setup lang="ts">
+import { scrollWithin } from "../utils/scrollWithin";
 import {
   ref,
   computed,
@@ -232,6 +233,7 @@ const bookmarkReady = ref(false);
 const courseStore = useCourseStore();
 const userStore = useUserStore();
 const mediaStage = ref<InstanceType<typeof LessonMediaStage> | null>(null);
+const learningPage = ref<HTMLElement | null>(null);
 const videoNotesPanel = ref<InstanceType<typeof LessonVideoNotes> | null>(null);
 const selectedDocument = ref<LessonDocument | null>(null);
 const primaryContent = ref<"VIDEO" | "TEXT">("TEXT");
@@ -242,7 +244,6 @@ const pendingDocument = ref<{
   lessonId: string;
   document: LessonDocument;
 } | null>(null);
-const userRating = ref(5);
 const commentText = ref("");
 const sidebarOpen = ref(true);
 const currentVideoTime = ref(0);
@@ -765,7 +766,7 @@ const seekToNote = async (seconds: number) => {
     await nextTick();
   }
   mediaStage.value?.seekTo(seconds);
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  scrollWithin(learningPage.value);
 };
 const openNoteComposer = (seconds: number) => {
   videoNotesPanel.value?.openAt(seconds);
@@ -774,11 +775,10 @@ const submitFeedback = async () => {
   if (!commentText.value.trim() || !lesson.value) return;
   await courseStore.addComment(
     lesson.value.id,
-    userRating.value,
+    null,
     commentText.value,
   );
   commentText.value = "";
-  userRating.value = 5;
 };
 const submitReply = async (
   rootCommentId: number,

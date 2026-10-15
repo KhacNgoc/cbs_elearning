@@ -45,6 +45,7 @@
           tra tùy chọn vẫn có thể làm để ôn luyện.
         </p>
       </div>
+      <CourseRatingForm v-if="outline.completed&&user.canLearn" :course-id="String(route.params.courseId)"/>
       <section
         v-for="(chapter, index) in outline.chapters"
         :key="chapter.id"
@@ -144,6 +145,7 @@ import { useUserStore } from "../stores/userStore";
 import type { CourseOutline, Chapter, Lesson } from "../types";
 import CourseThumbnail from "../components/CourseThumbnail.vue";
 import { resumeRoute } from "../utils/learning";
+import CourseRatingForm from '../components/CourseRatingForm.vue';
 const route = useRoute(),
   router = useRouter(),
   user = useUserStore(),

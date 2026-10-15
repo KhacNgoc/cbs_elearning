@@ -8,13 +8,6 @@
       <MessageSquare :size="24" />
     </div>
     <div class="feedback-form">
-      <div class="rating-row">
-        <span>Đánh giá bài học</span>
-        <StarRating
-          :model-value="rating"
-          @update:model-value="$emit('update:rating', $event)"
-        />
-      </div>
       <textarea
         :value="comment"
         rows="4"
@@ -50,11 +43,7 @@
                 <strong>{{ item.user }}</strong
                 ><span>{{ item.date }}</span>
               </div>
-              <StarRating
-                v-if="item.rating"
-                :model-value="item.rating"
-                readonly
-              />
+              <div v-if="item.rating" class="historical-lesson-rating"><small>Đánh giá bài học trước đây</small><StarRating :model-value="item.rating" readonly/></div>
               <p>{{ item.content }}</p>
             </div>
             <div class="comment-actions">
@@ -160,13 +149,11 @@ import StarRating from "../StarRating.vue";
 
 const props = defineProps<{
   comments: Comment[];
-  rating: number;
   comment: string;
   currentUsername: string;
   isAdmin: boolean;
 }>();
 const emit = defineEmits<{
-  "update:rating": [value: number];
   "update:comment": [value: string];
   submit: [];
   reply: [rootCommentId: number, replyToCommentId: number, content: string];

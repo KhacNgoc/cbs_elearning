@@ -316,6 +316,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import { scrollWithin } from "../utils/scrollWithin";
 import { ref, computed, nextTick, watch, defineAsyncComponent } from "vue";
 import { Upload, Link2, Plus, FileText, X, Trash2 } from "lucide-vue-next";
 import { useCourseStore } from "../stores/courseStore";
@@ -399,7 +400,7 @@ const addLessonDocument = async () => {
   const newCard = cards?.[cards.length - 1];
   if (!newCard) return;
 
-  newCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  scrollWithin(newCard, "nearest");
   window.setTimeout(() => {
     newCard.querySelector<HTMLInputElement>("input.form-control")?.focus({
       preventScroll: true,

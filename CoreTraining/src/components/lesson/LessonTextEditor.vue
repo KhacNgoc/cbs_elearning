@@ -437,9 +437,9 @@ onBeforeUnmount(() =>
   padding: 1.75rem 2rem;
   border: 0;
   outline-offset: -2px;
-  font:
-    0.95rem/1.8 Consolas,
-    monospace;
+  font-family: var(--font-family);
+  font-size: 0.95rem;
+  line-height: 1.8;
   box-sizing: border-box;
 }
 .content-preview {

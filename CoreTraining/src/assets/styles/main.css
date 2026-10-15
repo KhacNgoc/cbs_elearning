@@ -139,7 +139,7 @@ button:disabled {
 .app-container.admin-route {
   height: 100dvh;
   min-height: 0;
-  overflow: hidden;
+  overflow: clip;
 }
 
 .navbar {
@@ -245,7 +245,7 @@ button:disabled {
 
 .admin-route .main-content {
   min-height: 0;
-  overflow: hidden;
+  overflow: clip;
 }
 
 /* Glassmorphism Cards */

@@ -173,7 +173,13 @@ export const useUserStore = defineStore("user", {
         setCachedAuthSession(res);
 
         await this.fetchProgress();
-        await navigate(this.mustChangePassword ? "/change-password" : "/");
+        if (this.mustChangePassword) {
+          await navigate("/change-password");
+        } else {
+          const navigation = useNavigationStore();
+          await navigation.load(true);
+          await navigate(navigation.homeRoute);
+        }
       } catch (error) {
         console.error("Login failed:", error);
         throw error;

@@ -3,6 +3,8 @@
     <!-- Navbar Header (only when logged in and not on change-password page) -->
     <nav
       class="navbar"
+      :class="{ 'learner-navbar': !userStore.hasAdminAccess }"
+      aria-label="Điều hướng chính"
       v-if="userStore.isAuthenticated && route.name !== 'ChangePassword'"
     >
       <div class="nav-brand-group">
@@ -23,12 +25,14 @@
         </button>
         <router-link
           :to="
-            showAdminSidebar ? navigationStore.adminItems[0]?.route || '/' : '/'
+            showAdminSidebar ? navigationStore.homeRoute : '/'
           "
           class="nav-brand"
+          aria-label="BIDV Core Training — Trang chủ"
         >
           <div class="nav-logo">B</div>
-          <span>BIDV Core Training</span>
+          <span class="nav-brand-full" aria-hidden="true">BIDV Core Training</span>
+          <span class="nav-brand-short" aria-hidden="true">BIDV</span>
         </router-link>
       </div>
 
@@ -42,6 +46,8 @@
           :key="item.id"
           :to="item.route"
           class="nav-link"
+          :aria-label="item.label"
+          :title="item.label"
         >
           <component :is="navigationIcon(item.icon)" class="nav-icon" />
           <span>{{ item.label }}</span>
@@ -52,11 +58,11 @@
         <div id="learning-chatbot-launcher"></div>
         <ThemeToggle />
         <NotificationCenter />
-        <router-link to="/profile" class="nav-user" title="Xem hồ sơ cá nhân">
+        <router-link to="/profile" class="nav-user" title="Xem hồ sơ cá nhân" :aria-label="`Hồ sơ cá nhân: ${userStore.fullName}`">
           <div class="nav-user-avatar">{{ userAvatarLetter }}</div>
           <span>{{ userStore.fullName || "quantrh" }}</span>
         </router-link>
-        <button class="btn-logout" @click="handleLogout" title="Đăng xuất">
+        <button class="btn-logout" @click="handleLogout" title="Đăng xuất" aria-label="Đăng xuất">
           <LogOut class="logout-icon" />
         </button>
       </div>
@@ -207,6 +213,19 @@ onMounted(async () => {
   gap: 0.75rem;
   min-width: 0;
 }
+.nav-brand-short {
+  display: none;
+}
+.nav-logo,
+.nav-user-avatar {
+  flex-shrink: 0;
+}
+.nav-user > span {
+  max-width: 180px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .sidebar-toggle {
   display: inline-flex;
   align-items: center;
@@ -285,6 +304,95 @@ onMounted(async () => {
 
   .nav-user-menu {
     gap: 0.35rem;
+  }
+}
+
+/* Learner navigation has a dedicated second row on tablet and mobile. */
+@media (max-width: 1100px) {
+  .navbar.learner-navbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px 12px;
+    padding: 12px 16px 8px;
+  }
+  .learner-navbar .nav-brand-group {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .learner-navbar .nav-brand {
+    font-size: 1.1rem;
+    gap: 8px;
+  }
+  .learner-navbar .nav-user-menu {
+    grid-column: 2;
+    grid-row: 1;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .learner-navbar .nav-links {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    justify-content: flex-start;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-color);
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .learner-navbar .nav-link {
+    flex: 1 0 120px;
+    justify-content: center;
+    min-height: 44px;
+    padding: 8px 12px;
+    white-space: nowrap;
+    font-size: 0.8125rem;
+  }
+  .learner-navbar .nav-link > span {
+    display: inline;
+  }
+  .learner-navbar .nav-user > span {
+    display: none;
+  }
+  .learner-navbar .nav-user {
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+  }
+  .learner-navbar .btn-logout {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+  }
+}
+@media (max-width: 560px) {
+  .navbar.learner-navbar {
+    padding-inline: 12px;
+    column-gap: 8px;
+  }
+  .learner-navbar .nav-brand-full {
+    display: none;
+  }
+  .learner-navbar .nav-brand-short {
+    display: inline;
+  }
+  .learner-navbar .nav-link {
+    padding-inline: 8px;
+    gap: 6px;
+  }
+  .learner-navbar .nav-user-menu {
+    gap: 4px;
+  }
+  .learner-navbar .theme-toggle,
+  .learner-navbar .notification-trigger {
+    width: 44px;
+    height: 44px;
+  }
+}
+@media (max-width: 360px) {
+  .learner-navbar .nav-brand-short {
+    display: none;
   }
 }
 </style>

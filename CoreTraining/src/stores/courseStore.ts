@@ -91,7 +91,7 @@ export const useCourseStore = defineStore("course", {
       }
     },
 
-    async addComment(lessonId: string, rating: number, content: string) {
+    async addComment(lessonId: string, rating: number | null, content: string) {
       try {
         const newComment = await courseApi.addComment(
           lessonId,

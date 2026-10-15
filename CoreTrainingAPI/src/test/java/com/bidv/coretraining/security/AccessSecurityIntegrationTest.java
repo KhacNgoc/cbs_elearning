@@ -76,6 +76,24 @@ class AccessSecurityIntegrationTest {
     }
     Map<String,Object> userBody(User u){Map<String,Object> r=new HashMap<>();r.put("username",u.getUsername());r.put("fullName",u.getFullName());r.put("role",u.getRole());r.put("roles",u.effectiveRoles());r.put("unitId",u.getOrganizationUnit()==null?null:u.getOrganizationUnit().getId());r.put("status",u.getStatus());r.put("points",0);return r;}
 
+    @Test void trainingReportsReadPersistedProgressAndEnforceScope() throws Exception {
+        learner.getCompletedLessons().add(la);
+        learner.getCompletedCourses().put("CA",java.time.LocalDateTime.of(2026,10,10,9,0));
+        learner.getCourseDeadlines().put("CA",java.time.LocalDate.of(2026,10,20));
+        users.saveAndFlush(learner);
+        mvc.perform(get("/api/admin/reports/training").cookie(login(viewer))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.rows.length()").value(1))
+                .andExpect(jsonPath("$.rows[0].courseId").value("CA"))
+                .andExpect(jsonPath("$.rows[0].completed").value(true))
+                .andExpect(jsonPath("$.rows[0].assessmentAverage").isEmpty())
+                .andExpect(jsonPath("$.rows[0].dueDate").value("2026-10-20"))
+                .andExpect(jsonPath("$.rows[0].completedAt").value("2026-10-10"));
+        mvc.perform(get("/api/admin/reports/training").cookie(login(ub))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.rows.length()").value(0));
+        mvc.perform(get("/api/admin/reports/training").cookie(login(learner))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/admin/reports/training")).andExpect(status().isUnauthorized());
+    }
+
     @Test void learnerWorkspaceUsesOnlyVisibleCoursesAndRestoresDocumentAndVideoBookmarks() throws Exception {
         Cookie jwt=login(learner);
         mvc.perform(get("/api/users/me/learning").cookie(jwt)).andExpect(status().isOk())
