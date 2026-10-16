@@ -103,8 +103,7 @@ onBeforeUnmount(release);
     ><Transition name="modal"
       ><div
         v-if="open"
-        class="admin-modal-overlay cursor-pointer"
-        @click.self="close"
+        class="admin-modal-overlay"
         @keydown="keydown"
       >
         <form

@@ -27,6 +27,6 @@ public class UserProfileDto {
     private String status;
     private String learnerType;
     private Integer points;
-    private String groupId;
+    private java.util.List<String> groupIds;
     private String groupName;
 }

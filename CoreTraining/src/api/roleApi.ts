@@ -8,6 +8,7 @@ export interface AccessRole {
   active: boolean;
   protectedRole: boolean;
   learningEnabled: boolean;
+  learnerRole: boolean;
   assignedCoursesOnly: boolean;
   version: number;
   permissions: string[];

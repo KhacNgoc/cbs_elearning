@@ -82,7 +82,8 @@ public class UserController {
         return ResponseEntity.ok(userService.getUserProgress(userDetails.getUsername()));
     }
 
-    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('LEARN')")
+    // The service checks LEARN and returns a specific, user-facing reason when it is missing.
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     @PostMapping("/me/register-course/{courseId}")
     public ResponseEntity<UserProgressDto> registerCourse(
             @PathVariable String courseId,

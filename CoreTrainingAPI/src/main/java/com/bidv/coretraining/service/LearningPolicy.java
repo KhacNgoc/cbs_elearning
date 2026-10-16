@@ -55,8 +55,7 @@ public final class LearningPolicy {
                         && com.bidv.coretraining.security.AccessPolicy.visible(user, course));
         boolean enrolled = com.bidv.coretraining.security.AccessPolicy.mandatory(user, course)
                 || user.getRegisteredCourses().stream().anyMatch(c -> c.getId().equals(course.getId()))
-                || user.getUserGroup() != null && user.getUserGroup().getMandatoryCourses().stream()
-                        .anyMatch(c -> c.getId().equals(course.getId()));
+                || user.hasGroupMandatoryCourse(course.getId());
         if (!"PUBLISHED".equals(course.getStatus()) || !enrolled)
             throw new AccessDeniedException("Bạn chưa được cấp quyền học khóa này");
     }

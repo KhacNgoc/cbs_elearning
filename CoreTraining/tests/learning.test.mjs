@@ -1,6 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { learningSummary, groupAttempts, competencyScores, normalizeSearch, deadlineState, resumeRoute } from '../src/utils/learning.ts';
+import { courseRegistrationError } from '../src/utils/courseRegistrationError.ts';
+
+test('registration shows the exact permission reason from the server', () => {
+  const message = 'Bạn chưa có quyền tham gia học tập nên không thể đăng ký khóa học.';
+  assert.equal(courseRegistrationError({ response: { status: 403, data: { message } } }), message);
+});
+
+test('registration distinguishes forbidden responses from connection failures', () => {
+  assert.match(courseRegistrationError({ response: { status: 403, data: { message: 'Access Denied' } } }), /chưa có quyền đăng ký/);
+  assert.match(courseRegistrationError({ response: { status: 403 } }), /chưa có quyền đăng ký/);
+  assert.match(courseRegistrationError(new Error('Network Error')), /Vui lòng thử lại sau/);
+  assert.match(courseRegistrationError(null), /Vui lòng thử lại sau/);
+});
 
 const course=(id,source,total,completed,extra={})=>({course:{id,name:id,domainId:id,domainName:id},source,totalCount:total,completedCount:completed,learningStatus:completed===total?'COMPLETED':'IN_PROGRESS',mandatory:false,...extra});
 const attempt=(id,score,total,date,revision=1)=>({id,quizId:'Q1',courseId:'A',lessonId:'L1',title:'Đánh giá',domainId:'A',domainName:'A',score,total,takenAt:date,revision,passingScore:80,passed:score/total>=.8});

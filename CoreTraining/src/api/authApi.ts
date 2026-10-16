@@ -12,7 +12,7 @@ export interface RegisterRequest {
   employeeId: string;
   email: string;
   avatarColor?: string;
-  userGroupId?: string;
+
 }
 
 export interface LoginResponse {

@@ -38,6 +38,8 @@ class AccessSecurityIntegrationTest {
     @Autowired CourseRepository courses;
     @Autowired ChapterRepository chapters;
     @Autowired LessonRepository lessons;
+    @Autowired UserGroupRepository groups;
+    @Autowired CourseEnrollmentRequestRepository enrollmentRequests;
     OrganizationUnit a,b,child;
     Course ca,cb;
     Lesson la,lb;
@@ -267,8 +269,90 @@ class AccessSecurityIntegrationTest {
         write(post("/api/admin/groups"),jwt,Map.of("id","FOREIGN","name","Foreign","unitId","B","mandatoryCourseIds",List.of())).andExpect(status().isForbidden());
         write(post("/api/admin/groups"),jwt,Map.of("id","LOCAL","name","Local","unitId","A1","mandatoryCourseIds",List.of("CA"))).andExpect(status().isOk());
         var body=userBody(learner);body.put("username","child-user");body.put("unitId","A1");body.put("password",password);body.put("userGroupId","LOCAL");
-        write(post("/api/admin/users"),jwt,body).andExpect(status().isOk());
+        write(post("/api/admin/users"),jwt,body).andExpect(status().isOk())
+                .andExpect(jsonPath("$.userGroupIds.length()").value(0));
         body.put("username","foreign-user");body.put("unitId","B");write(post("/api/admin/users"),jwt,body).andExpect(status().isForbidden());
+    }
+
+    @Test void learnerCanJoinMultipleGroupsAndCoursesAreUnioned() throws Exception {
+        UserGroup first=groups.save(UserGroup.builder().id("G1").name("First").organizationUnit(a)
+                .mandatoryCourses(new HashSet<>(Set.of(ca))).build());
+        var secondCourse=courses.save(Course.builder().id("CA2").name("Course A2").code("CA2")
+                .ownerUnit(a).program(ca.getProgram()).status("PUBLISHED").build());
+        groups.save(UserGroup.builder().id("G2").name("Second").organizationUnit(a)
+                .mandatoryCourses(new HashSet<>(Set.of(ca,secondCourse))).build());
+        Cookie jwt=login(ua);
+        write(put("/api/admin/groups/G1/members"),jwt,Map.of("addUserIds",List.of(learner.getId())))
+                .andExpect(status().isOk());
+        write(put("/api/admin/groups/G2/members"),jwt,Map.of("addUserIds",List.of(learner.getId())))
+                .andExpect(status().isOk());
+        users.flush();
+        assertThat(users.findById(learner.getId()).orElseThrow().groupIds()).containsExactly("G1","G2");
+        assertThat(users.hasMandatoryCourse(learner.getUsername(),"CA2")).isTrue();
+        Cookie learnerJwt=login(learner);
+        mvc.perform(get("/api/users/me").cookie(learnerJwt)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.groupIds.length()").value(2))
+                .andExpect(jsonPath("$.mandatoryCourses.length()").value(2));
+        write(put("/api/admin/groups/G1/members"),jwt,Map.of("removeUserIds",List.of(learner.getId())))
+                .andExpect(status().isOk());
+        assertThat(users.findById(learner.getId()).orElseThrow().groupIds()).containsExactly("G2");
+        mvc.perform(get("/api/users/me").cookie(learnerJwt)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.mandatoryCourses.length()").value(2));
+        write(delete("/api/admin/groups/G2"),jwt,null).andExpect(status().isBadRequest());
+        write(delete("/api/admin/groups/G1"),jwt,null).andExpect(status().isOk());
+    }
+
+    @Test void membersCanBeSearchedAndPagedWithinGroupScope() throws Exception {
+        groups.save(UserGroup.builder().id("LOCAL").name("Local").organizationUnit(a).build());
+        user("child-member","ROLE_USER",child);
+        Cookie jwt=login(ua);
+        mvc.perform(get("/api/admin/groups/LOCAL/members").param("query","child-member").param("size","1").cookie(jwt))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.items[0].username").value("child-member"));
+        mvc.perform(get("/api/admin/groups/LOCAL/members").param("query","admin-b").cookie(jwt))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+        mvc.perform(get("/api/admin/groups/LOCAL/members").param("membersOnly","true").cookie(jwt))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+        mvc.perform(get("/api/admin/groups/LOCAL/members").param("size","101").cookie(jwt))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test void groupMembershipChangesEnforcePermissionsAndUnitRulesAtomically() throws Exception {
+        groups.save(UserGroup.builder().id("LOCAL").name("Local").organizationUnit(a).build());
+        Cookie jwt=login(ua);
+        write(put("/api/admin/groups/LOCAL/members"),jwt,
+                Map.of("addUserIds",List.of(learner.getId(),ub.getId()))).andExpect(status().isForbidden());
+        assertThat(users.findById(learner.getId()).orElseThrow().getUserGroups()).isEmpty();
+        write(put("/api/admin/groups/LOCAL/members"),login(learner),
+                Map.of("addUserIds",List.of(learner.getId()))).andExpect(status().isForbidden());
+        write(put("/api/admin/groups/LOCAL/members"),login(admin),
+                Map.of("addUserIds",List.of(ub.getId()))).andExpect(status().isBadRequest());
+        write(put("/api/admin/groups/LOCAL/members"),jwt,
+                Map.of("addUserIds",List.of(learner.getId()),"removeUserIds",List.of(learner.getId())))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test void editingAccountDoesNotOverwriteItsGroups() throws Exception {
+        var group=groups.save(UserGroup.builder().id("LOCAL").name("Local").organizationUnit(a).build());
+        learner.getUserGroups().add(group);users.saveAndFlush(learner);
+        var body=userBody(learner);
+        body.put("userGroupIds",List.of());
+        write(put("/api/admin/users/"+learner.getId()),login(ua),body).andExpect(status().isOk())
+                .andExpect(jsonPath("$.userGroupIds[0]").value("LOCAL"));
+    }
+
+    @Test void globalAdminCanSeeAndRemoveLegacyMemberWithoutUnitButCannotAddUnassignedAccounts() throws Exception {
+        var group=groups.save(UserGroup.builder().id("LOCAL").name("Local").organizationUnit(a).build());
+        var unassigned=user("legacy-unassigned","ROLE_USER",null);
+        unassigned.getUserGroups().add(group);users.saveAndFlush(unassigned);
+        Cookie jwt=login(admin);
+        mvc.perform(get("/api/admin/groups/LOCAL/members").param("membersOnly","true").cookie(jwt))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.items[0].selectable").value(true));
+        write(put("/api/admin/groups/LOCAL/members"),jwt,Map.of("removeUserIds",List.of(unassigned.getId())))
+                .andExpect(status().isOk());
+        write(put("/api/admin/groups/LOCAL/members"),jwt,Map.of("addUserIds",List.of(unassigned.getId())))
+                .andExpect(status().isBadRequest());
     }
 
     @Test void excelImportDoesNotCreatePredictablePasswords() throws Exception {
@@ -300,6 +384,82 @@ class AccessSecurityIntegrationTest {
     AccessRole dynamicRole(String code,Set<String> p,Set<String> scope){return dynamicRoles.save(AccessRole.builder().code(code).name(code).learningEnabled(false).permissions(new HashSet<>(p)).unitIds(new HashSet<>(scope)).build());}
     void assignDynamic(User u,AccessRole...roles){u.setDynamicAccessInitialized(true);u.setPolicySnapshot(null);u.setAssignedRoles(new HashSet<>(List.of(roles)));users.saveAndFlush(u);permissionCache.invalidate();}
     void programmeScope(){ca.getProgram().getUnits().add(a);programs.saveAndFlush(ca.getProgram());}
+
+    @Test void learnerRoleNeedsNoDetailedGrantsAndWorksAcrossAccountUnits() throws Exception {
+        Cookie global=login(admin);
+        var result=write(post("/api/admin/rbac/roles"),global,Map.of("code","LEARN_ONLY","name","Learners",
+                "active",true,"learnerRole",true,"learningEnabled",false)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.learnerRole").value(true)).andExpect(jsonPath("$.learningEnabled").value(true))
+                .andExpect(jsonPath("$.unitIds").isEmpty()).andExpect(jsonPath("$.permissions").isEmpty()).andReturn();
+        String id=json.readTree(result.getResponse().getContentAsString()).get("id").asText();
+        write(put("/api/admin/rbac/permissions/"+id),global,
+                Map.of("permissions",List.of("courses:read"),"unitIds",List.of("B")))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/admin/rbac/role-options").cookie(global)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.code == 'LEARN_ONLY')]").isEmpty());
+        write(put("/api/admin/rbac/roles/"+id+"/members"),global,
+                Map.of("userIds",List.of(learner.getId(),ub.getId()))).andExpect(status().isOk());
+        write(post("/api/users/me/register-course/CA"),login(learner),null).andExpect(status().isOk());
+        write(post("/api/users/me/register-course/CB"),login(learner),null).andExpect(status().isForbidden());
+        write(post("/api/users/me/register-course/CB"),login(ub),null).andExpect(status().isOk());
+    }
+
+    @Test void switchingToLearnerRoleRemovesAdministrativeGrantsWithoutRemovingMemberships() throws Exception {
+        var role=dynamicRole("SWITCH_ROLE",Set.of("courses:read"),Set.of("B"));
+        assignDynamic(viewer,role);
+        write(put("/api/admin/rbac/roles/"+role.getId()),login(admin),Map.of("code",role.getCode(),
+                "name",role.getName(),"active",true,"learnerRole",true,"learningEnabled",false))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.permissions").isEmpty())
+                .andExpect(jsonPath("$.unitIds").isEmpty()).andExpect(jsonPath("$.userIds[0]").value(viewer.getId()));
+        Cookie jwt=login(viewer);
+        mvc.perform(get("/api/admin/courses").cookie(jwt)).andExpect(status().isForbidden());
+        write(post("/api/users/me/register-course/CA"),jwt,null).andExpect(status().isOk());
+    }
+
+    @Test void learnerFlagDoesNotGrantAdministrativeAccessEvenWithStaleGrants() throws Exception {
+        var role=dynamicRole("STALE_LEARNER",Set.of("courses:read"),Set.of("B"));
+        role.setLearnerRole(true);dynamicRoles.saveAndFlush(role);
+        assignDynamic(viewer,role);
+        Cookie jwt=login(viewer);
+        mvc.perform(get("/api/admin/courses").cookie(jwt)).andExpect(status().isForbidden());
+        write(post("/api/users/me/register-course/CB"),jwt,null).andExpect(status().isForbidden());
+    }
+
+    @Test void registrationExplainsMissingLearningPermissionWithoutCreatingARequest() throws Exception {
+        var noLearning=user("unassigned-learner","UNASSIGNED",a);
+        assignDynamic(noLearning);
+        write(post("/api/users/me/register-course/CA"),login(noLearning),null)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Bạn chưa có quyền tham gia học tập nên không thể đăng ký khóa học. Vui lòng liên hệ quản trị viên để được cấp quyền."));
+        assertThat(enrollmentRequests.existsByUserIdAndCourseIdAndStatus(noLearning.getId(),"CA",EnrollmentStatus.PENDING)).isFalse();
+    }
+
+    @Test void registrationExplainsCourseScopeAndPublicationFailures() throws Exception {
+        Cookie jwt=login(learner);
+        write(post("/api/users/me/register-course/CB"),jwt,null).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Bạn chưa có quyền truy cập khóa học này. Vui lòng liên hệ quản trị viên."));
+        ca.setStatus("DRAFT");courses.saveAndFlush(ca);
+        write(post("/api/users/me/register-course/CA"),jwt,null).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Khóa học chưa được xuất bản hoặc đã ngừng sử dụng nên không thể đăng ký."));
+    }
+
+    @Test void groupManagerDoesNotNeedAccountEditingPermissionAndReaderCannotChangeMembers() throws Exception {
+        groups.save(UserGroup.builder().id("LOCAL").name("Local").organizationUnit(a).build());
+        var managerRole=dynamicRole("GROUP_MANAGER",Set.of("groups:read","groups:update"),Set.of("A"));
+        assignDynamic(ua,managerRole);
+        Cookie manager=login(ua);
+        mvc.perform(get("/api/admin/groups/LOCAL/members").cookie(manager)).andExpect(status().isOk());
+        write(put("/api/admin/groups/LOCAL/members"),manager,Map.of("addUserIds",List.of(learner.getId())))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/admin/users").cookie(manager)).andExpect(status().isForbidden());
+        var readerRole=dynamicRole("GROUP_READER",Set.of("groups:read"),Set.of("A"));
+        assignDynamic(viewer,readerRole);
+        Cookie reader=login(viewer);
+        mvc.perform(get("/api/admin/groups/LOCAL/members").param("membersOnly","true").cookie(reader))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].selectable").value(false));
+        write(put("/api/admin/groups/LOCAL/members"),reader,Map.of("removeUserIds",List.of(learner.getId())))
+                .andExpect(status().isForbidden());
+    }
 
     @Test void jwtContainsOnlyImmutableUserIdAndSessionVersion() throws Exception {
         Cookie token=login(admin);var claims=json.readTree(Base64.getUrlDecoder().decode(token.getValue().split("\\.")[1]));

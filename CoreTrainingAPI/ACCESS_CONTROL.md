@@ -10,7 +10,28 @@
 
 Một tài khoản có nhiều vai trò. `roles` là danh sách chính; trường `role` còn lại để tương thích. Với dữ liệu cũ chưa có `roles`, backend dùng `role` hiện có. Vai trò không có trong danh sách hợp lệ bị từ chối.
 
-`unitId` là đơn vị công tác chính; nhóm đào tạo là `userGroupId`. `scopeUnitIds` là các gốc phạm vi quản lý/xem báo cáo; nếu trống, dùng đơn vị công tác. Mỗi gốc bao gồm đơn vị con. Không cấp vai trò toàn cục, đơn vị hoặc phạm vi vượt quyền của người thực hiện. Quản trị viên đơn vị không được sửa tài khoản quản trị toàn hệ thống hoặc tự mở rộng quyền/phạm vi.
+`unitId` là đơn vị công tác chính; một học viên có nhiều nhóm đào tạo, trả về qua `userGroupIds` trong API quản trị và `groupIds` trong hồ sơ/tiến độ. `scopeUnitIds` là các gốc phạm vi quản lý/xem báo cáo; nếu trống, dùng đơn vị công tác. Mỗi gốc bao gồm đơn vị con. Không cấp vai trò toàn cục, đơn vị hoặc phạm vi vượt quyền của người thực hiện. Quản trị viên đơn vị không được sửa tài khoản quản trị toàn hệ thống hoặc tự mở rộng quyền/phạm vi.
+
+## Loại role và phạm vi quản trị
+
+Khi tạo/sửa role, bật **Role học viên** để tạo role chỉ tham gia học tập. Role này luôn có quyền `LEARN`, không có quyền quản trị chi tiết, không cấu hình đơn vị cho role. Danh mục học được xác định theo đơn vị công tác của tài khoản (và chương trình giao cho đơn vị cấp trên). Một role học viên có thể dùng cho tài khoản thuộc nhiều đơn vị.
+
+Role học viên không có nút **Phân quyền** và không xuất hiện trong danh sách role của menu **Phân quyền**. Backend từ chối `PUT /api/admin/rbac/permissions/{id}` đối với loại này, đồng thời không sử dụng quyền quản trị/phạm vi đơn vị còn sót lại trong dữ liệu của role học viên.
+
+Tắt **Role học viên** để cấu hình role quản trị; phần **Phạm vi quản trị dữ liệu** giới hạn dữ liệu cho các quyền quản trị đã cấp. Role quản trị vẫn có thể bật **Cho phép tham gia học tập** nếu cần. Chuyển sang role học viên sẽ xóa quyền quản trị và phạm vi đơn vị của chính role đó; form thông báo trước khi lưu, giữ nguyên danh sách tài khoản và các role khác của họ.
+
+Trường API mới là `learnerRole`. Khi khởi động, `LearnerRoleMigration` phân loại một lần những role cũ chỉ có quyền học tập, không có quyền quản trị và không phải role hệ thống/phân công giảng viên; phạm vi đơn vị cũ không còn cần thiết của chúng được gỡ. Role quản trị và lựa chọn loại role đã lưu không bị tự phân loại lại. Với schema quản lý thủ công, chạy `src/main/resources/migrations/20261016_learner_roles.sql` trước khi triển khai; với `ddl-auto=update`, ứng dụng tạo cột và chuyển đổi khi khởi động.
+
+## Thành viên nhóm học viên
+
+Tạo nhóm và cấu hình khóa bắt buộc tại **Nhóm học viên**, sau đó chọn **Thành viên**. Màn hình có danh sách thành viên hiện tại, nút **Thêm thành viên**, tìm theo tên/tài khoản/mã nhân viên/email và phân trang. Lựa chọn trên nhiều trang được giữ đến khi bấm **Lưu thành viên**. Tạo/sửa tài khoản, đăng ký và nhập Excel không gán nhóm; sửa tài khoản không thay đổi các nhóm hiện có.
+
+- `GET /api/admin/groups/{id}/members?query=&page=1&size=10&membersOnly=true`: đọc danh sách trong phạm vi quyền `groups:read`. Bỏ `membersOnly` để tìm học viên phù hợp với đơn vị của nhóm và các đơn vị con.
+- `PUT /api/admin/groups/{id}/members`: nhận `addUserIds` và `removeUserIds`; yêu cầu `groups:update` với cả nhóm và từng học viên. Thay đổi chỉ tác động nhóm đang mở, không thay thế các nhóm khác. Tài khoản quản trị toàn hệ thống không được thêm vào nhóm học viên.
+- Khóa bắt buộc là hợp của các khóa được giao qua mọi nhóm và qua đơn vị, không lặp khóa. Bỏ một nhóm không bỏ khóa vẫn được giao bởi nhóm khác hoặc đơn vị; lịch sử học vẫn được giữ.
+- Không xóa/chuyển đơn vị của nhóm còn thành viên. Khi chuyển đơn vị tài khoản, cần bỏ các nhóm không còn phù hợp trước.
+
+Quan hệ được lưu tại `user_group_memberships`. Với `ddl-auto=update`, Hibernate tạo bảng và `GroupMembershipMigration` tự chuyển dữ liệu cũ từ `users.group_id` trong một transaction khi khởi động. Cột cũ được đặt `NULL` sau khi chuyển để việc khởi động lại không khôi phục thành viên đã bỏ. Với schema quản lý thủ công, chạy `src/main/resources/migrations/20261016_group_memberships.sql` trước khi triển khai. Sao lưu database trước khi nâng cấp; triển khai đồng thời frontend và backend.
 
 `OPTIONAL` cho phép nhìn thấy và gửi yêu cầu đăng ký học; phải được duyệt trước khi học. `MANDATORY` giao học trực tiếp, áp dụng cả đơn vị con. Việc chia sẻ không cấp quyền biên tập. Muốn chia sẻ ra ngoài phạm vi quản trị đơn vị cần quản trị toàn hệ thống thực hiện. Những chia sẻ/phân công ngoài phạm vi đã được quản trị toàn hệ thống tạo phải được quản trị đơn vị giữ nguyên khi cập nhật.
 
@@ -20,7 +41,7 @@ Vào các menu riêng **Tài khoản** (`/admin/users`), **Đơn vị / phòng**
 
 1. Tạo cây đơn vị/phòng (quản trị toàn hệ thống). Cấm vòng lặp; có thể ngừng hoạt động, giữ lịch sử.
 2. Tạo nhóm và giao khóa bắt buộc theo nhóm.
-3. Tạo/sửa tài khoản: đơn vị, nhóm, loại học viên, đa vai trò, phạm vi và trạng thái.
+3. Tạo/sửa tài khoản: đơn vị, loại học viên, đa vai trò, phạm vi và trạng thái; sau đó thêm học viên vào các nhóm tại **Nhóm học viên → Thành viên**.
 4. Chọn khóa, gán đơn vị sở hữu, giảng viên, các đơn vị nhận chia sẻ/giao học.
 
 Quản trị viên đơn vị chỉ thấy dữ liệu trong phạm vi. Giảng viên dùng màn hình nội dung hiện có, chỉ thấy khóa phụ trách trong khu vực quản trị. Người dùng sửa tên/email trong hồ sơ cá nhân; API không cho sửa vai trò/đơn vị qua hồ sơ.

@@ -39,7 +39,7 @@ public class TrainingReportService {
                 if(actor.isDynamicAccessInitialized() && !AccessPolicy.system(actor) && AccessPolicy.policies(actor).stream().noneMatch(r->r.active()
                         && r.permissions().contains("overview:read") && AccessPolicy.roleScope(r,learner.getOrganizationUnit())
                         && (!r.assignedCoursesOnly()||course.getInstructorIds().contains(actor.getId())))) continue;
-                boolean mandatory=AccessPolicy.mandatory(learner,course) || learner.getUserGroup()!=null && learner.getUserGroup().getMandatoryCourses().stream().anyMatch(c->c.getId().equals(course.getId()));
+                boolean mandatory=AccessPolicy.mandatory(learner,course) || learner.hasGroupMandatoryCourse(course.getId());
                 boolean registered=learner.getRegisteredCourses().stream().anyMatch(c->c.getId().equals(course.getId()));
                 if(!mandatory&&!registered) continue;
                 var lessons=LearningPolicy.publishedChapters(course).stream().flatMap(c->LearningPolicy.publishedLessons(c).stream()).toList();
@@ -59,7 +59,7 @@ public class TrainingReportService {
                 var completedAt=complete?learner.getCompletedCourses().get(course.getId()):null;
                 rows.add(new Row(learner.getId()+":"+course.getId(),String.valueOf(learner.getId()),learner.getFullName(),
                         learner.getOrganizationUnit()==null?"Chưa có đơn vị":learner.getOrganizationUnit().getName(),
-                        learner.getUserGroup()==null?"Chưa có nhóm":learner.getUserGroup().getName(),course.getId(),course.getName(),
+                        learner.getUserGroups().isEmpty()?"Chưa có nhóm":learner.groupNames(),course.getId(),course.getName(),
                         course.getProgram().getName(),course.getProgram().getDomain().getName(),
                         lessons.isEmpty()?0:(int)Math.round(done*100.0/lessons.size()),mandatory,
                         learner.getCourseDeadlines().getOrDefault(course.getId(),course.getCompletionDeadline()),completedAt==null?null:completedAt.toLocalDate(),

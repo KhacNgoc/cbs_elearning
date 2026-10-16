@@ -89,9 +89,7 @@ public class LearnerWorkspaceService {
                                 .filter(c -> "PUBLISHED".equals(c.getStatus()) && AccessPolicy.visible(user, c))
                                 .map(c -> {
                                         boolean mandatory = AccessPolicy.mandatory(user, c)
-                                                        || user.getUserGroup() != null && user.getUserGroup()
-                                                                        .getMandatoryCourses().stream()
-                                                                        .anyMatch(x -> x.getId().equals(c.getId()));
+                                                        || user.hasGroupMandatoryCourse(c.getId());
                                         boolean registered = user.getRegisteredCourses().stream()
                                                         .anyMatch(x -> x.getId().equals(c.getId()));
                                         boolean enrolled = mandatory || registered;

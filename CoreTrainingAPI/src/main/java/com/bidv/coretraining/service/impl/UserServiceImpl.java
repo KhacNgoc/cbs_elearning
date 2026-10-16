@@ -111,8 +111,8 @@ public class UserServiceImpl implements UserService {
                                 .unitName(user.getOrganizationUnit() == null ? null
                                                 : user.getOrganizationUnit().getName())
                                 .points(user.getPoints())
-                                .groupId(user.getUserGroup() != null ? user.getUserGroup().getId() : null)
-                                .groupName(user.getUserGroup() != null ? user.getUserGroup().getName() : null)
+                                .groupIds(user.groupIds())
+                                .groupName(user.groupNames())
                                 .build();
         }
 
@@ -192,21 +192,27 @@ public class UserServiceImpl implements UserService {
         @Transactional
         public UserProgressDto registerCourse(String username, String courseId) {
                 User actor = userRepository.findByUsername(username).orElseThrow();
-                com.bidv.coretraining.security.AccessPolicy.require(
-                                com.bidv.coretraining.security.AccessPolicy.permissions(actor).contains("LEARN")
-                                                && actor.activeAccount());
-                Course target = courseRepository.findById(courseId).orElseThrow();
-                com.bidv.coretraining.security.AccessPolicy
-                                .require(com.bidv.coretraining.security.AccessPolicy.visible(actor, target)
-                                                && "PUBLISHED".equals(target.getStatus()));
+                if (!com.bidv.coretraining.security.AccessPolicy.permissions(actor).contains("LEARN"))
+                        throw new org.springframework.security.access.AccessDeniedException(
+                                        "Bạn chưa có quyền tham gia học tập nên không thể đăng ký khóa học. Vui lòng liên hệ quản trị viên để được cấp quyền.");
+                if (!actor.activeAccount())
+                        throw new org.springframework.security.access.AccessDeniedException(
+                                        "Tài khoản chưa hoạt động nên không thể đăng ký khóa học.");
+                Course target = courseRepository.findById(courseId)
+                                .orElseThrow(() -> new ResourceNotFoundException("Course", "id", courseId));
+                if (!com.bidv.coretraining.security.AccessPolicy.visible(actor, target))
+                        throw new org.springframework.security.access.AccessDeniedException(
+                                        "Bạn chưa có quyền truy cập khóa học này. Vui lòng liên hệ quản trị viên.");
+                if (!"PUBLISHED".equals(target.getStatus()))
+                        throw new org.springframework.security.access.AccessDeniedException(
+                                        "Khóa học chưa được xuất bản hoặc đã ngừng sử dụng nên không thể đăng ký.");
                 User user = userRepository.findByUsername(username)
                                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
                 com.bidv.coretraining.entity.Course course = courseRepository.findById(courseId)
                                 .orElseThrow(() -> new ResourceNotFoundException("Course", "id", courseId));
 
                 if (user.getRegisteredCourses().contains(course)
-                                || (user.getUserGroup() != null
-                                                && user.getUserGroup().getMandatoryCourses().contains(course))) {
+                                || user.hasGroupMandatoryCourse(course.getId())) {
                         return buildUserProgressDto(user);
                 }
                 if (enrollmentRequestRepository.existsByUserIdAndCourseIdAndStatus(
@@ -252,16 +258,9 @@ public class UserServiceImpl implements UserService {
                         }
                 }
 
-                String groupId = null;
-                String groupName = null;
-                java.util.List<String> mandatoryCourses = new ArrayList<>();
-                if (user.getUserGroup() != null) {
-                        groupId = user.getUserGroup().getId();
-                        groupName = user.getUserGroup().getName();
-                        mandatoryCourses = user.getUserGroup().getMandatoryCourses().stream()
-                                        .map(com.bidv.coretraining.entity.Course::getId)
-                                        .collect(Collectors.toList());
-                }
+                java.util.List<String> mandatoryCourses = user.getUserGroups().stream()
+                                .flatMap(group -> group.getMandatoryCourses().stream())
+                                .map(Course::getId).distinct().collect(Collectors.toCollection(ArrayList::new));
 
                 courseRepository.findAll().stream()
                                 .filter(c -> "PUBLISHED".equals(c.getStatus())
@@ -287,9 +286,9 @@ public class UserServiceImpl implements UserService {
                                 .points(user.getPoints())
                                 .unlockedBadges(userMapper
                                                 .toUserBadgeDtoList(new ArrayList<>(user.getUnlockedBadges())))
-                                .groupId(groupId)
-                                .groupName(groupName)
-                                .mandatoryCourses(mandatoryCourses)
+                                .groupIds(user.groupIds())
+                                .groupName(user.groupNames())
+                                .mandatoryCourses(mandatoryCourses.stream().distinct().toList())
                                 .registeredCourses(registeredCourses)
                                 .pendingCourses(pendingCourses)
                                 .mustChangePassword(user.isMustChangePassword())

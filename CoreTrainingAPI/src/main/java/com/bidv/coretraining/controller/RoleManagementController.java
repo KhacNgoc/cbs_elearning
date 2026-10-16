@@ -21,7 +21,7 @@ public class RoleManagementController {
 
     @GetMapping("/role-options")
     public List<RoleDto> options() {
-        return service.list();
+        return service.list().stream().filter(r -> !r.learnerRole()).toList();
     }
 
     @GetMapping("/roles/member-options")

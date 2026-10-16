@@ -74,10 +74,14 @@
               {{ summary.joined.length }} khóa tham gia</small
             >
           </div>
+          <div class="status-counts" role="group" aria-label="Số khóa học theo trạng thái">
           <button
             v-for="stat in statusCounts"
             :key="stat.status"
+            type="button"
             class="status-count"
+            :class="{ 'is-selected': tab === 'mine' && filters.status === stat.status }"
+            :aria-pressed="tab === 'mine' && filters.status === stat.status"
             @click="
               tab = 'mine';
               filters.status = stat.status;
@@ -86,6 +90,7 @@
             <strong>{{ stat.count }}</strong
             ><span>{{ learningStatusLabel(stat.status) }}</span>
           </button>
+          </div>
         </section>
         <nav
           class="learning-tabs"
@@ -332,6 +337,7 @@ import AdminModal from "../components/AdminModal.vue";
 import MotionCollapse from "../components/MotionCollapse.vue";
 import PageLoading from "../components/PageLoading.vue";
 import { showToast } from "../utils/toast";
+import { courseRegistrationError } from "../utils/courseRegistrationError";
 const user = useUserStore(),
   learning = useLearningStore(),
   router = useRouter();
@@ -557,8 +563,8 @@ async function register() {
     registerTarget.value = null;
     await learning.load();
     showToast("Đã gửi yêu cầu đăng ký.");
-  } catch {
-    showToast("Không gửi được yêu cầu đăng ký.", "error");
+  } catch (error) {
+    showToast(courseRegistrationError(error), "error");
   } finally {
     registering.value = false;
   }
@@ -647,23 +653,57 @@ onMounted(refresh);
 .overall small {
   color: var(--text-muted);
 }
+.status-counts {
+  flex: 3;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  padding: 0.9rem 0;
+  background: var(--primary-light);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+}
 .status-count {
   flex: 1;
+  min-width: 0;
   border: 0;
-  background: none;
+  background: transparent;
+  color: var(--text-main);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.5rem;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+}
+.status-count + .status-count {
+  border-left: 1px solid var(--line-b8d5c8);
+}
+.status-count:hover,
+.status-count.is-selected {
+  color: var(--primary-ink);
+}
+.status-count.is-selected span {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.status-count:focus-visible {
+  outline: 2px solid var(--primary-ink);
+  outline-offset: -3px;
 }
 .status-count strong {
-  font-size: 1.8rem;
-  color: var(--text-main);
+  font-size: 2rem;
+  font-weight: 750;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: inherit;
 }
 .status-count span {
   font-size: 0.8rem;
-  color: var(--text-muted);
+  font-weight: 600;
+  line-height: 1.4;
+  color: inherit;
 }
 .learning-tabs {
   display: flex;
@@ -886,8 +926,11 @@ select {
   .progress-overview {
     gap: 0.8rem;
   }
+  .status-counts {
+    flex-basis: 100%;
+  }
   .status-count {
-    min-width: 85px;
+    padding-inline: 0.4rem;
   }
   .welcome h1 {
     font-size: 1.45rem;

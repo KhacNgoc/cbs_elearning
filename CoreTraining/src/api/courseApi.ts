@@ -272,7 +272,7 @@ export const courseApi = {
         unlockedBadges: JSON.parse(
           localStorage.getItem("mockUnlockedBadges") || "[]",
         ),
-        groupId: "GDV",
+        groupIds: ["GDV"],
         groupName: "Giao dịch viên",
         mandatoryCourses: ["CIF", "TIEN_GUI", "TELLER", "THE"],
         registeredCourses: mockRegistered,

@@ -4,7 +4,8 @@
       <div>
         <h1>Quản lý role</h1>
         <p>
-          Tạo vai trò và gán tài khoản. Một tài khoản có thể thuộc nhiều role.
+          Tạo role học viên hoặc role quản trị và gán tài khoản. Một tài khoản
+          có thể thuộc nhiều role.
         </p>
       </div>
       <button class="btn btn-secondary" :disabled="busy" @click="load">
@@ -50,7 +51,7 @@
             <tr>
               <th>Role</th>
               <th>Tài khoản</th>
-              <th>Phạm vi đơn vị</th>
+              <th>Phạm vi áp dụng</th>
               <th>Trạng thái</th>
               <th>Thao tác</th>
             </tr>
@@ -61,7 +62,8 @@
                 <strong>{{ r.name }}</strong
                 ><small
                   >{{ r.code
-                  }}<span v-if="r.protectedRole"> · Role hệ thống</span></small
+                  }}<span v-if="r.protectedRole"> · Role hệ thống</span>
+                  <span v-else-if="r.learnerRole"> · Học viên</span></small
                 ><small v-if="r.description">{{ r.description }}</small>
               </td>
               <td>{{ r.userIds.length }}</td>
@@ -69,9 +71,11 @@
                 {{
                   r.protectedRole
                     ? "Toàn hệ thống"
-                    : r.assignedCoursesOnly
-                      ? "Khóa học được phân công"
-                      : `${r.unitIds.length} đơn vị`
+                    : r.learnerRole
+                      ? "Theo đơn vị của tài khoản"
+                      : r.assignedCoursesOnly
+                        ? "Khóa học được phân công"
+                        : `${r.unitIds.length} đơn vị`
                 }}
               </td>
               <td>
@@ -97,7 +101,7 @@
                     >
                       <Users :size="14" /> Gán tài khoản</button
                     ><button
-                      v-if="user.can('permissions', 'read')"
+                      v-if="!r.learnerRole && user.can('permissions', 'read')"
                       class="admin-row-edit"
                       @click="
                         router.push({
@@ -161,16 +165,36 @@
         /></label>
       </div>
       <label class="admin-form-field"
-        >Mô tả<textarea v-model="form.description" rows="3" /></label
-      ><ToggleSwitch
-        v-model="form.active"
-        label="Đang hoạt động"
-      /><ToggleSwitch
-        v-model="form.learningEnabled"
-        label="Cho phép tham gia học tập"
-      />
-      <p class="admin-modal-help">
-        Quyền quản trị và phạm vi đơn vị được cấu hình tại menu Phân quyền.
+        >Mô tả<textarea v-model="form.description" rows="3" />
+      </label>
+      <div class="role-form-toggles">
+        <ToggleSwitch
+          v-model="form.learnerRole"
+          label="Là học viên"
+          :disabled="busy"
+        />
+        <ToggleSwitch v-model="form.active" label="Đang hoạt động" />
+        <ToggleSwitch
+          v-if="!form.learnerRole"
+          v-model="form.learningEnabled"
+          label="Cho phép tham gia học tập"
+        />
+      </div>
+      <p v-if="form.learnerRole" class="admin-modal-help">
+        Vai trò học viên được tham gia học tập theo đơn vị công tác của từng tài
+        khoản, không cần phân quyền chi tiết hoặc chọn đơn vị cho role.
+      </p>
+      <p v-else class="admin-modal-help">
+        Cấu hình quyền quản trị và phạm vi quản trị dữ liệu tại menu Phân quyền,
+        sau đó gán tài khoản vào role.
+      </p>
+      <p
+        v-if="form.learnerRole && convertingToLearner"
+        class="admin-notice"
+        role="status"
+      >
+        Khi lưu, toàn bộ quyền quản trị và phạm vi đơn vị của role này sẽ được
+        gỡ. Các tài khoản vẫn giữ quyền được cấp từ những role khác.
       </p>
     </AdminModal>
     <AdminModal
@@ -302,8 +326,19 @@ const form = ref({
   name: "",
   description: "",
   active: true,
+  learnerRole: true,
   learningEnabled: true,
   version: 0,
+});
+const convertingToLearner = computed(() => {
+  const original = roles.value.find((r) => r.id === form.value.id);
+  return (
+    !!original &&
+    !original.learnerRole &&
+    (original.permissions.length > 0 ||
+      original.unitIds.length > 0 ||
+      original.assignedCoursesOnly)
+  );
 });
 const filtered = computed(() =>
   roles.value.filter(
@@ -375,6 +410,7 @@ function edit(r?: AccessRole) {
     name: r?.name || "",
     description: r?.description || "",
     active: r?.active ?? true,
+    learnerRole: r?.learnerRole ?? user.canLearn,
     learningEnabled: r?.learningEnabled ?? user.canLearn,
     version: r?.version || 0,
   };
@@ -383,7 +419,10 @@ function edit(r?: AccessRole) {
 async function save() {
   busy.value = true;
   try {
-    await roleApi.save(form.value);
+    await roleApi.save({
+      ...form.value,
+      learningEnabled: form.value.learnerRole || form.value.learningEnabled,
+    });
     editor.value = "";
     await load();
     await user.refreshAccess();
@@ -440,6 +479,13 @@ async function remove() {
 onMounted(load);
 </script>
 <style scoped>
+.role-form-toggles {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+  margin: 0.25rem 0 0.75rem;
+}
 .admin-page-heading .btn,
 .admin-section-heading .btn,
 .admin-row-edit {

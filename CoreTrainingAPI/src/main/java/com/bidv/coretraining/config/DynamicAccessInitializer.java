@@ -123,9 +123,10 @@ public class DynamicAccessInitializer {
                                                 : String.join(", ", new TreeSet<>(scope)))))
                                 .protectedRole(code.equals("ROLE_ADMIN"))
                                 .learningEnabled(Set.of("ROLE_ADMIN", "ROLE_USER").contains(code))
+                                .learnerRole(code.equals("ROLE_USER"))
                                 .assignedCoursesOnly(code.equals("ROLE_INSTRUCTOR"))
                                 .legacyOwnerScope(code.equals("ROLE_UNIT_ADMIN")).permissions(permissions)
-                                .unitIds(new HashSet<>(scope)).build());
+                                .unitIds(new HashSet<>(code.equals("ROLE_USER") ? Set.of() : scope)).build());
                     }
                     memberships.add(role);
                 }

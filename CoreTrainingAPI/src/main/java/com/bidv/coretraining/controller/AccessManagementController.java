@@ -49,6 +49,18 @@ public class AccessManagementController {
         service.deleteGroup(id);
     }
 
+    @GetMapping("/groups/{id}/members")
+    public GroupMembersPage members(@PathVariable String id,
+            @RequestParam(defaultValue = "") String query, @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size, @RequestParam(defaultValue = "false") boolean membersOnly) {
+        return service.members(id, query, page, size, membersOnly);
+    }
+
+    @PutMapping("/groups/{id}/members")
+    public void updateMembers(@PathVariable String id, @RequestBody MembershipChanges changes) {
+        service.updateMembers(id, changes);
+    }
+
     @GetMapping("/courses/{id}/access")
     public CourseAccessDto access(@PathVariable String id) {
         return service.courseAccess(id);

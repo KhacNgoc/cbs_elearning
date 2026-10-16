@@ -22,7 +22,7 @@ export const userApi = {
         avatarColor: "#005B41",
         role: localStorage.getItem("userRole") || "ROLE_USER",
         points: 1000,
-        groupId: "GDV",
+        groupIds: ["GDV"],
         groupName: "Giao dịch viên",
       };
     }

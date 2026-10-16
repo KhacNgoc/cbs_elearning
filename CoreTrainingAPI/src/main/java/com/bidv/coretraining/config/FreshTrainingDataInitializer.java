@@ -105,6 +105,6 @@ public class FreshTrainingDataInitializer implements CommandLineRunner {
                         users.save(User.builder().username("quantrh").password(passwords.encode(initialPassword))
                                         .fullName("Học viên nghiệp vụ").role("ROLE_USER").avatarColor("#005B41")
                                         .mustChangePassword(false)
-                                        .userGroup(group).build());
+                                        .userGroups(new HashSet<>(Set.of(group))).build());
         }
 }

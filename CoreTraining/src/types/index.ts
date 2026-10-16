@@ -149,7 +149,7 @@ export interface UserProgress {
   lessonProgress?: Record<string, LessonProgress>;
   points: number; // Experience points
   unlockedBadges: Badge[];
-  groupId?: string;
+  groupIds?: string[];
   groupName?: string;
   mandatoryCourses: string[];
   registeredCourses: string[];
@@ -251,7 +251,7 @@ export interface UserProfile {
   status?: string;
   learnerType?: string;
   points: number;
-  groupId?: string;
+  groupIds?: string[];
   groupName?: string;
 }
 

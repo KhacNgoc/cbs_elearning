@@ -4,11 +4,9 @@ import com.bidv.coretraining.dto.JwtAuthenticationResponse;
 import com.bidv.coretraining.dto.LoginRequest;
 import com.bidv.coretraining.dto.RegisterRequest;
 import com.bidv.coretraining.entity.User;
-import com.bidv.coretraining.entity.UserGroup;
 import com.bidv.coretraining.entity.PasswordResetOtp;
 import com.bidv.coretraining.exception.BadRequestException;
 import com.bidv.coretraining.repository.UserRepository;
-import com.bidv.coretraining.repository.UserGroupRepository;
 import com.bidv.coretraining.repository.PasswordResetOtpRepository;
 import com.bidv.coretraining.security.CustomUserDetails;
 import com.bidv.coretraining.security.JwtTokenProvider;
@@ -34,17 +32,15 @@ public class AuthServiceImpl implements AuthService {
     @org.springframework.beans.factory.annotation.Autowired
     private com.bidv.coretraining.service.PermissionCache permissionCache;
     private final JwtTokenProvider tokenProvider;
-    private final UserGroupRepository userGroupRepository;
     private final PasswordResetOtpRepository passwordResetOtpRepository;
 
     public AuthServiceImpl(AuthenticationManager authenticationManager, UserRepository userRepository,
             PasswordEncoder passwordEncoder, JwtTokenProvider tokenProvider,
-            UserGroupRepository userGroupRepository, PasswordResetOtpRepository passwordResetOtpRepository) {
+            PasswordResetOtpRepository passwordResetOtpRepository) {
         this.authenticationManager = authenticationManager;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenProvider = tokenProvider;
-        this.userGroupRepository = userGroupRepository;
         this.passwordResetOtpRepository = passwordResetOtpRepository;
     }
 
@@ -91,14 +87,6 @@ public class AuthServiceImpl implements AuthService {
             throw new BadRequestException("Username is already taken!");
         }
 
-        String groupId = registerRequest.getUserGroupId();
-        if (groupId == null || groupId.trim().isEmpty()) {
-            groupId = "CIF"; // default group
-        }
-        UserGroup userGroup = userGroupRepository.findById(groupId)
-                .orElseThrow(() -> new BadRequestException(
-                        "User group not found with id: " + registerRequest.getUserGroupId()));
-
         User user = User.builder()
                 .username(registerRequest.getUsername())
                 .password(passwordEncoder.encode(registerRequest.getPassword()))
@@ -108,7 +96,6 @@ public class AuthServiceImpl implements AuthService {
                 .email(registerRequest.getEmail())
                 .role("ROLE_USER")
                 .points(1000) // Initial default points to match mock representation
-                .userGroup(userGroup)
                 .build();
 
         userRepository.save(user);

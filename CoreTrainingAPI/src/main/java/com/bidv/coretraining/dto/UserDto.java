@@ -25,7 +25,8 @@ public class UserDto {
     private String status;
     private String learnerType; // e.g., "ROLE_USER", "ROLE_ADMIN"
     private Integer points;
-    private String userGroupId;
+    private java.util.List<String> userGroupIds;
+    private String groupNames;
     private String employeeId;
     private String email;
 }

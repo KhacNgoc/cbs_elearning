@@ -4,8 +4,8 @@
       <div>
         <h1>Phân quyền</h1>
         <p>
-          Chọn role, cấp quyền theo trang quản trị và thiết lập phạm vi dữ liệu
-          theo đơn vị.
+          Chọn role quản trị, cấp quyền theo trang và thiết lập phạm vi quản trị dữ liệu.
+          Role học viên không cần cấu hình tại đây; nội dung học dựa trên đơn vị của tài khoản.
         </p>
       </div>
       <button class="btn btn-secondary" :disabled="busy || dirty" @click="load">
@@ -71,7 +71,7 @@
               ><ChevronRight :size="16" />
             </button>
             <p v-if="!filteredRoles.length" class="admin-empty">
-              {{ loading ? "Đang tải…" : "Không có role phù hợp." }}
+              {{ loading ? "Đang tải…" : "Không có role quản trị phù hợp." }}
             </p>
           </div>
         </section>
@@ -176,7 +176,7 @@
         >
           <header>
             <div>
-              <h2>Phạm vi đơn vị</h2>
+              <h2>Phạm vi quản trị dữ liệu</h2>
               <small>{{
                 selected?.protectedRole
                   ? "Toàn hệ thống"
@@ -186,8 +186,8 @@
           </header>
           <div class="panel-body">
             <p class="permission-help">
-              Chọn cấp cha bao gồm các cấp con. Role được xem chương trình của
-              đơn vị đã chọn và toàn bộ khóa học thuộc chương trình.
+              Chọn cấp cha bao gồm các cấp con. Phạm vi này giới hạn dữ liệu được
+              xem hoặc thao tác bằng các quyền quản trị của role.
             </p>
             <OrganizationCheckTree
               fill-height
@@ -202,7 +202,7 @@
               v-if="!scope.length && selected && !selected.protectedRole"
               class="scope-empty"
             >
-              Chưa chọn đơn vị: chưa có phạm vi dữ liệu đào tạo.
+              Chưa chọn đơn vị: các quyền quản trị chưa có phạm vi dữ liệu để áp dụng.
             </p>
           </div>
         </section>
@@ -362,6 +362,7 @@ async function load() {
       roleApi.units(),
     ]);
     [roles.value, pages.value, units.value] = data;
+    roles.value = roles.value.filter((r) => !r.learnerRole);
     const r =
       roles.value.find(
         (r) => r.id === (route.query.role || selected.value?.id),

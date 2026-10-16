@@ -39,8 +39,7 @@ public class LearnerDeadlineController {
         private boolean enrolled(User user, Course c) {
                 return AccessPolicy.visible(user, c) && (AccessPolicy.mandatory(user, c)
                                 || user.getRegisteredCourses().stream().anyMatch(x -> x.getId().equals(c.getId()))
-                                || user.getUserGroup() != null && user.getUserGroup().getMandatoryCourses().stream()
-                                                .anyMatch(x -> x.getId().equals(c.getId())));
+                                || user.hasGroupMandatoryCourse(c.getId()));
         }
 
         @GetMapping

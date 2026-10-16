@@ -140,7 +140,7 @@ class DetachedPrincipalIntegrationTest {
             User user=users.findById(learnerId).orElseThrow();user.getRegisteredCourses().clear();
             var group=UserGroup.builder().id(id("G")).name("Mandatory group").organizationUnit(user.getOrganizationUnit()).build();
             group.getMandatoryCourses().add(courses.findById(id("C")).orElseThrow());
-            user.setUserGroup(groups.save(group));
+            user.getUserGroups().add(groups.save(group));
         });
         mvc.perform(get("/uploads/documents/"+id("file0.pdf")).cookie(cookie(id("learner")))).andExpect(status().isOk());
     }

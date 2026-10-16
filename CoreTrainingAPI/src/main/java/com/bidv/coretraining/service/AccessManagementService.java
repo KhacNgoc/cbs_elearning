@@ -19,11 +19,19 @@ public class AccessManagementService {
     }
 
     public record GroupDto(String id, String name, String unitId, Set<String> mandatoryCourseIds,
-            Set<String> allowedActions) {
+            Set<String> allowedActions, long memberCount) {
         public GroupDto(String id, String name, String unitId, Set<String> courses) {
-            this(id, name, unitId, courses, Set.of());
+            this(id, name, unitId, courses, Set.of(), 0);
         }
     }
+
+    public record GroupMemberDto(Long id, String username, String fullName, String employeeId,
+            String unitName, String status, boolean member, boolean selectable) {}
+
+    public record GroupMembersPage(List<GroupMemberDto> items, long total, int page, int pageCount,
+            long memberCount) {}
+
+    public record MembershipChanges(Set<Long> addUserIds, Set<Long> removeUserIds) {}
 
     public record CourseAccessDto(String ownerUnitId, Map<String, String> unitGrants, Set<Long> instructorIds) {
     }
@@ -97,7 +105,7 @@ public class AccessManagementService {
         return new GroupDto(g.getId(), g.getName(),
                 g.getOrganizationUnit() == null ? null : g.getOrganizationUnit().getId(),
                 g.getMandatoryCourses().stream().map(Course::getId).collect(java.util.stream.Collectors.toSet()),
-                actions("groups", g.getOrganizationUnit()));
+                actions("groups", g.getOrganizationUnit()), users.countByUserGroupsId(g.getId()));
     }
 
     public GroupDto saveGroup(String id, GroupDto r) {
@@ -124,8 +132,7 @@ public class AccessManagementService {
         // scope.
         if (id != null
                 && !Objects.equals(g.getOrganizationUnit() == null ? null : g.getOrganizationUnit().getId(), r.unitId())
-                && users.findAll().stream()
-                        .anyMatch(u -> u.getUserGroup() != null && u.getUserGroup().getId().equals(id)))
+                && users.existsByUserGroupsId(id))
             throw new BadRequestException("Nhóm đang có thành viên; hãy chuyển thành viên trước khi đổi đơn vị");
         g.setOrganizationUnit(unit);
         g.setName(r.name().trim());
@@ -137,9 +144,90 @@ public class AccessManagementService {
         auth.permission("GROUP_MANAGE");
         UserGroup g = groups.findById(id).orElseThrow(() -> new ResourceNotFoundException("Group"));
         auth.scope(g.getOrganizationUnit());
-        if (users.findAll().stream().anyMatch(u -> u.getUserGroup() != null && u.getUserGroup().getId().equals(id)))
+        if (users.existsByUserGroupsId(id))
             throw new BadRequestException("Nhóm đang có thành viên");
         groups.delete(g);
+    }
+
+    private UserGroup memberGroup(String id, String action) {
+        auth.requireOperation("groups", action);
+        UserGroup group = groups.findById(id).orElseThrow(() -> new ResourceNotFoundException("Group"));
+        AccessPolicy.require(AccessPolicy.allows(auth.current(), "groups:" + action, group.getOrganizationUnit()));
+        return group;
+    }
+
+    private boolean eligibleUnit(UserGroup group, OrganizationUnit unit) {
+        return unit != null && (group.getOrganizationUnit() == null
+                || AccessPolicy.ancestors(unit).contains(group.getOrganizationUnit().getId()));
+    }
+
+    @Transactional(readOnly = true)
+    public GroupMembersPage members(String id, String query, int page, int size, boolean membersOnly) {
+        UserGroup group = memberGroup(id, "read");
+        if (page < 1 || size < 1 || size > 100)
+            throw new BadRequestException("Phân trang không hợp lệ");
+        User actor = auth.current();
+        var scopedUnits = units.findAll().stream()
+                .filter(unit -> AccessPolicy.allows(actor, "groups:read", unit)).toList();
+        var scopeUnitIds = scopedUnits.stream().map(OrganizationUnit::getId).toList();
+        var unitIds = scopedUnits.stream().filter(unit -> eligibleUnit(group, unit))
+                .map(OrganizationUnit::getId).toList();
+        boolean includeUnassigned = AccessPolicy.system(actor);
+        long memberCount = users.countByUserGroupsId(id);
+        if (scopeUnitIds.isEmpty() && !includeUnassigned)
+            return new GroupMembersPage(List.of(), 0, 1, 1, memberCount);
+        String search = "%" + (query == null ? "" : query.trim().toLowerCase(Locale.ROOT)
+                .replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")) + "%";
+        var request = org.springframework.data.domain.PageRequest.of(page - 1, size,
+                org.springframework.data.domain.Sort.by("fullName", "id"));
+        var result = users.findGroupCandidates(unitIds, scopeUnitIds, includeUnassigned, id, membersOnly, search, request);
+        int pageCount = Math.max(1, result.getTotalPages());
+        if (page > pageCount) {
+            page = pageCount;
+            result = users.findGroupCandidates(unitIds, scopeUnitIds, includeUnassigned, id, membersOnly,
+                    search, request.withPage(page - 1));
+        }
+        var items = result.getContent().stream().map(u -> new GroupMemberDto(u.getId(), u.getUsername(),
+                u.getFullName(), u.getEmployeeId(), u.getOrganizationUnit() == null
+                        ? "Chưa có đơn vị" : u.getOrganizationUnit().getName(), u.getStatus(),
+                u.getUserGroups().stream().anyMatch(g -> g.getId().equals(id)),
+                (!AccessPolicy.system(u) || u.getUserGroups().stream().anyMatch(g -> g.getId().equals(id)))
+                        && AccessPolicy.allows(actor, "groups:update", group.getOrganizationUnit())
+                        && AccessPolicy.allows(actor, "groups:update", u.getOrganizationUnit())))
+                .toList();
+        return new GroupMembersPage(items, result.getTotalElements(), page, pageCount, memberCount);
+    }
+
+    public void updateMembers(String id, MembershipChanges changes) {
+        UserGroup group = memberGroup(id, "update");
+        Set<Long> add = changes.addUserIds() == null ? Set.of() : changes.addUserIds();
+        Set<Long> remove = changes.removeUserIds() == null ? Set.of() : changes.removeUserIds();
+        if (!Collections.disjoint(add, remove))
+            throw new BadRequestException("Không thể vừa thêm vừa bỏ cùng một thành viên");
+        Set<Long> ids = new HashSet<>(add);
+        ids.addAll(remove);
+        if (ids.contains(null)) throw new BadRequestException("Học viên không hợp lệ");
+        var targets = users.findAllById(ids);
+        if (targets.size() != ids.size()) throw new BadRequestException("Học viên không tồn tại");
+        User actor = auth.current();
+        for (User target : targets) {
+            AccessPolicy.require(AccessPolicy.allows(actor, "groups:update", target.getOrganizationUnit()));
+            if (add.contains(target.getId())) {
+                AccessPolicy.require(!AccessPolicy.system(target));
+                if (!eligibleUnit(group, target.getOrganizationUnit()))
+                    throw new BadRequestException("Học viên phải thuộc đơn vị của nhóm hoặc đơn vị con");
+            }
+        }
+        for (User target : targets) {
+            if (add.contains(target.getId())) {
+                if (target.getUserGroups().stream().noneMatch(g -> g.getId().equals(id)))
+                    target.getUserGroups().add(group);
+            } else {
+                target.getUserGroups().removeIf(g -> g.getId().equals(id));
+            }
+        }
+        users.saveAll(targets);
+        cache.invalidateAfterCommit();
     }
 
     public CourseAccessDto courseAccess(String id) {

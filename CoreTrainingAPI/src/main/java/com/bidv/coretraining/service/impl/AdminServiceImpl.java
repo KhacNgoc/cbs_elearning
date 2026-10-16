@@ -504,7 +504,7 @@ public class AdminServiceImpl implements AdminService {
                 .unitId(user.getOrganizationUnit() == null ? null : user.getOrganizationUnit().getId())
                 .scopeUnitIds(user.getScopeUnitIds()).status(user.getStatus()).learnerType(user.getLearnerType())
                 .points(user.getPoints())
-                .userGroupId(user.getUserGroup() != null ? user.getUserGroup().getId() : null)
+                .userGroupIds(user.groupIds()).groupNames(user.groupNames())
                 .employeeId(user.getEmployeeId())
                 .email(user.getEmail())
                 .build();
@@ -522,10 +522,6 @@ public class AdminServiceImpl implements AdminService {
     @Transactional
     public UserDto createUser(UserDto userDto) {
         authorization.permission("USER_MANAGE");
-        UserGroup userGroup = userDto.getUserGroupId() == null || userDto.getUserGroupId().isBlank()
-                ? null
-                : userGroupRepository.findById(userDto.getUserGroupId())
-                        .orElseThrow(() -> new BadRequestException("Nhóm không tồn tại"));
         String rawPassword = userDto.getPassword() != null && !userDto.getPassword().isBlank()
                 ? userDto.getPassword()
                 : java.util.UUID.randomUUID().toString();
@@ -542,7 +538,6 @@ public class AdminServiceImpl implements AdminService {
                         ? userDto.getRole()
                         : "ROLE_USER")
                 .points(userDto.getPoints() != null ? userDto.getPoints() : 0)
-                .userGroup(userGroup)
                 .employeeId(userDto.getEmployeeId())
                 .email(userDto.getEmail())
                 .mustChangePassword(true)
@@ -562,11 +557,6 @@ public class AdminServiceImpl implements AdminService {
         user.setAvatarColor(userDto.getAvatarColor());
 
         user.setPoints(userDto.getPoints());
-        UserGroup userGroup = userDto.getUserGroupId() == null || userDto.getUserGroupId().isBlank()
-                ? null
-                : userGroupRepository.findById(userDto.getUserGroupId())
-                        .orElseThrow(() -> new BadRequestException("Nhóm không tồn tại"));
-        user.setUserGroup(userGroup);
         user.setEmployeeId(userDto.getEmployeeId());
         user.setEmail(userDto.getEmail());
         if (userDto.getPassword() != null && !userDto.getPassword().trim().isEmpty()) {
@@ -606,20 +596,15 @@ public class AdminServiceImpl implements AdminService {
                 String employeeId = cellValue(row.getCell(1)).trim();
                 String email = cellValue(row.getCell(2)).trim();
                 String fullName = cellValue(row.getCell(3)).trim();
-                String groupText = cellValue(row.getCell(4)).trim().toUpperCase();
                 if (employeeId.isEmpty() || email.isEmpty() || fullName.isEmpty()
                         || userRepository.existsByUsername(email))
                     continue;
 
-                String groupId = groupText.contains("GDV") || groupText.contains("GIAO DỊCH") ? "GDV"
-                        : groupText.contains("QHKH") || groupText.contains("QUAN HỆ") ? "QHKH"
-                                : groupText.contains("KSV") || groupText.contains("KIỂM SOÁT") ? "KSV" : null;
-                UserGroup group = groupId == null ? null : userGroupRepository.findById(groupId).orElse(null);
                 String[] colors = { "#005B41", "#4F46E5", "#10B981", "#F59E0B", "#EF4444" };
                 userRepository.save(User.builder()
                         .username(email).email(email).employeeId(employeeId).fullName(fullName)
                         .password(passwordEncoder.encode(java.util.UUID.randomUUID().toString()))
-                        .role("UNASSIGNED").dynamicAccessInitialized(true).points(0).userGroup(group)
+                        .role("UNASSIGNED").dynamicAccessInitialized(true).points(0)
                         .avatarColor(colors[Math.abs(employeeId.hashCode()) % colors.length])
                         .mustChangePassword(true)
                         .build());
@@ -666,12 +651,12 @@ public class AdminServiceImpl implements AdminService {
                 : dto.getLearnerType();
         if (!java.util.Set.of("NEW_STAFF", "TRANSFERRED_STAFF", "CURRENT_STAFF", "EXTERNAL").contains(learnerType))
             throw new BadRequestException("Đối tượng học viên không hợp lệ");
-        if (user.getUserGroup() != null && user.getUserGroup().getOrganizationUnit() != null
-                && !com.bidv.coretraining.security.AccessPolicy.ancestors(unit)
-                        .contains(user.getUserGroup().getOrganizationUnit().getId()))
-            throw new BadRequestException("Nhóm không thuộc đơn vị của người dùng");
-        if (user.getUserGroup() != null && !system)
-            authorization.scope(user.getUserGroup().getOrganizationUnit());
+        for (UserGroup group : user.getUserGroups()) {
+            if (group.getOrganizationUnit() != null
+                    && !com.bidv.coretraining.security.AccessPolicy.ancestors(unit)
+                            .contains(group.getOrganizationUnit().getId()))
+                throw new BadRequestException("Hãy bỏ học viên khỏi nhóm không phù hợp trước khi đổi đơn vị");
+        }
         if (user.getId() != null)
             user.setTokenVersion(user.getTokenVersion() + 1);
         if (!user.isDynamicAccessInitialized()) {
@@ -702,8 +687,7 @@ public class AdminServiceImpl implements AdminService {
         try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             Sheet sheet = workbook.createSheet("Import Template");
             Row header = sheet.createRow(0);
-            String[] labels = { "STT", "Mã nhân viên (*)", "User email (*)", "Tên nhân viên (*)",
-                    "Nhóm (GDV / QHKH / KSV)" };
+            String[] labels = { "STT", "Mã nhân viên (*)", "User email (*)", "Tên nhân viên (*)" };
             for (int i = 0; i < labels.length; i++)
                 header.createCell(i).setCellValue(labels[i]);
             Row sample = sheet.createRow(1);
@@ -711,7 +695,6 @@ public class AdminServiceImpl implements AdminService {
             sample.createCell(1).setCellValue("NV0982");
             sample.createCell(2).setCellValue("nguyenvanan@bidv.com.vn");
             sample.createCell(3).setCellValue("Nguyễn Văn An");
-            sample.createCell(4).setCellValue("GDV");
             for (int i = 0; i < labels.length; i++)
                 sheet.autoSizeColumn(i);
             workbook.write(output);

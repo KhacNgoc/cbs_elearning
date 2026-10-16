@@ -27,6 +27,12 @@ public class AccessRole {
     private boolean protectedRole;
     @Builder.Default
     private boolean learningEnabled = true;
+    // Nullable only for existing rows awaiting the one-time classification migration.
+    private Boolean learnerRole;
+
+    public boolean isLearnerRole() {
+        return Boolean.TRUE.equals(learnerRole);
+    }
     // Only legacy migration can create a course-assignment scope. New roles use
     // unit scope.
     private boolean assignedCoursesOnly;

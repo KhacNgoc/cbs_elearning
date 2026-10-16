@@ -6,15 +6,13 @@
       aria-label="Cơ cấu đơn vị và phòng"
     >
       <colgroup>
-        <col style="width: 43%" />
-        <col style="width: 22%" />
-        <col style="width: 13%" />
-        <col style="width: 22%" />
+        <col style="width: 60%" />
+        <col style="width: 15%" />
+        <col style="width: 25%" />
       </colgroup>
       <thead>
         <tr>
           <th>Đơn vị / phòng</th>
-          <th>Trực thuộc</th>
           <th>Trạng thái</th>
           <th>Thao tác</th>
         </tr>
@@ -64,9 +62,6 @@
             </div>
           </td>
           <td>
-            {{ row.unit.parentId ? parentName(row.unit.parentId) : "Cấp gốc" }}
-          </td>
-          <td>
             <span
               class="admin-status"
               :class="row.unit.active ? 'active' : 'inactive'"
@@ -96,7 +91,7 @@
           </td>
         </tr>
         <tr v-if="!rows.length">
-          <td colspan="4" class="admin-empty">Không có đơn vị phù hợp.</td>
+          <td colspan="3" class="admin-empty">Không có đơn vị phù hợp.</td>
         </tr>
       </tbody>
     </table>
@@ -108,7 +103,6 @@ import type { OrganizationUnit, UnitTreeRow } from "../types/organization";
 defineProps<{
   rows: UnitTreeRow[];
   expandedIds: ReadonlySet<string>;
-  parentName: (id: string) => string;
   canEdit: boolean;
   canCreate?: boolean;
   busy: boolean;
@@ -122,7 +116,7 @@ defineEmits<{
 </script>
 <style scoped>
 .unit-tree-table {
-  min-width: 760px;
+  min-width: 620px;
 }
 .unit-tree-table th:first-child {
   min-width: 310px;

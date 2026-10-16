@@ -326,7 +326,7 @@
                   </td>
                   <td>{{ u.employeeId || "-" }}</td>
                   <td>{{ u.email || "-" }}</td>
-                  <td>{{ u.userGroupId || "-" }}</td>
+                  <td>{{ u.groupNames || "-" }}</td>
                   <td>
                     <span
                       class="role-tag"
@@ -1098,15 +1098,7 @@
           required
         />
       </div>
-      <div class="form-group">
-        <label>Nhóm nghiệp vụ</label>
-        <select v-model="userForm.userGroupId" class="form-control">
-          <option value="">Không phân nhóm</option>
-          <option value="GDV">Giao dịch viên</option>
-          <option value="QHKH">Quan hệ khách hàng</option>
-          <option value="KSV">Kiểm soát viên</option>
-        </select>
-      </div>
+      <p class="admin-modal-help">Quản lý nhóm của tài khoản tại menu Nhóm học viên → Thành viên.</p>
       <div class="form-group">
         <label>Vai trò hệ thống</label>
         <select v-model="userForm.role" class="form-control">
@@ -1661,7 +1653,6 @@ const userForm = ref({
   avatarColor: "#005B41",
   role: "ROLE_USER",
   points: 0,
-  userGroupId: "",
   employeeId: "",
   email: "",
 });
@@ -2598,7 +2589,6 @@ const openUserModal = (user?: AdminUser) => {
       avatarColor: user.avatarColor || "#005B41",
       role: user.role,
       points: user.points,
-      userGroupId: user.userGroupId || "",
       employeeId: user.employeeId || "",
       email: user.email || "",
     };
@@ -2611,7 +2601,6 @@ const openUserModal = (user?: AdminUser) => {
       avatarColor: "#005B41",
       role: "ROLE_USER",
       points: 0,
-      userGroupId: "",
       employeeId: "",
       email: "",
     };

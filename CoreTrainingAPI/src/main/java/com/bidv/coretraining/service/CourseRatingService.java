@@ -26,7 +26,7 @@ public class CourseRatingService {
     public CourseRatingService(CourseRatingRepository ratings,CourseRepository courses,UserRepository users,AuthorizationService auth){this.ratings=ratings;this.courses=courses;this.users=users;this.auth=auth;}
     public static boolean eligible(User user,Course course) {
         boolean enrolled=user.getRegisteredCourses().stream().anyMatch(c->c.getId().equals(course.getId()))
-                || AccessPolicy.mandatory(user,course) || user.getUserGroup()!=null&&user.getUserGroup().getMandatoryCourses().stream().anyMatch(c->c.getId().equals(course.getId()));
+                || AccessPolicy.mandatory(user,course) || user.hasGroupMandatoryCourse(course.getId());
         return AccessPolicy.has(user,"LEARN") && "PUBLISHED".equals(course.getStatus()) && enrolled
                 && LearningPolicy.courseCompleted(user,course);
     }

@@ -104,10 +104,7 @@
                 </td>
                 <td>
                   {{ unitName(u.unitId)
-                  }}<small v-if="u.userGroupId">{{
-                    groups.find((g) => g.id === u.userGroupId)?.name ||
-                    u.userGroupId
-                  }}</small>
+                  }}<small v-if="u.groupNames">{{ u.groupNames }}</small>
                 </td>
                 <td>
                   {{
@@ -220,7 +217,6 @@
         <OrganizationTreeTable
           :rows="visibleUnitRows"
           :expanded-ids="effectiveUnitExpansion"
-          :parent-name="unitName"
           :can-edit="user.can('units', 'update')"
           :can-create="user.can('units', 'create')"
           :busy="busy"
@@ -273,16 +269,18 @@
         <div class="admin-table-scroll">
           <table class="admin-data-table">
             <colgroup>
-              <col style="width: 30%" />
-              <col style="width: 25%" />
               <col style="width: 25%" />
               <col style="width: 20%" />
+              <col style="width: 15%" />
+              <col style="width: 15%" />
+              <col style="width: 25%" />
             </colgroup>
             <thead>
               <tr>
                 <th>Nhóm học viên</th>
                 <th>Đơn vị</th>
                 <th>Khóa bắt buộc</th>
+                <th>Thành viên</th>
                 <th>Thao tác</th>
               </tr>
             </thead>
@@ -294,8 +292,16 @@
                 </td>
                 <td>{{ unitName(g.unitId) }}</td>
                 <td>{{ g.mandatoryCourseIds.length }} khóa học</td>
+                <td>{{ g.memberCount || 0 }} học viên</td>
                 <td>
                   <div class="admin-row-actions">
+                    <button
+                      v-if="g.allowedActions?.includes('read')"
+                      type="button"
+                      class="admin-row-edit"
+                      :disabled="busy"
+                      @click="openGroupMembers(g)"
+                    >Thành viên</button>
                     <button
                       v-if="g.allowedActions?.includes('update')"
                       class="admin-row-edit"
@@ -315,7 +321,7 @@
                 </td>
               </tr>
               <tr v-if="!groupTotal">
-                <td colspan="4" class="admin-empty">Không có nhóm phù hợp.</td>
+                <td colspan="5" class="admin-empty">Không có nhóm phù hợp.</td>
               </tr>
             </tbody>
           </table>
@@ -350,7 +356,10 @@
           ><label class="admin-form-field"
             >Email<input v-model="userForm.email" type="email" /></label
           ><label class="admin-form-field"
-            >Mã nhân viên<input v-model="userForm.employeeId"
+            >Mã nhân viên<input
+              v-model.trim="userForm.employeeId"
+              type="text"
+              placeholder="Ví dụ: NV0001"
           /></label>
         </div>
         <label class="admin-form-field"
@@ -398,15 +407,12 @@
                 {{ u.name }}
               </option>
             </select></label
-          ><label class="admin-form-field"
-            >Nhóm học viên<select v-model="userForm.userGroupId">
-              <option value="">Chưa phân nhóm</option>
-              <option v-for="g in eligibleGroups" :key="g.id" :value="g.id">
-                {{ g.name }}
-              </option>
-            </select></label
           >
         </div>
+        <p class="admin-modal-help">
+          Thêm hoặc bỏ nhóm cho tài khoản tại menu Nhóm học viên → Thành viên.
+          Một học viên có thể thuộc nhiều nhóm.
+        </p>
         <p class="admin-modal-help">
           Vai trò hiện tại:
           {{
@@ -477,20 +483,147 @@
         >
         <fieldset class="admin-choice-group">
           <legend>Khóa học bắt buộc</legend>
-          <div v-for="c in courses" :key="c.id" class="admin-choice-row">
-            <ToggleSwitch
-              :model-value="groupForm.mandatoryCourseIds.includes(c.id)"
-              :label="c.name"
+          <div class="admin-search-box group-course-search">
+            <Search :size="18" aria-hidden="true" />
+            <input
+              v-model="groupCourseQuery"
+              type="search"
+              placeholder="Tìm theo tên hoặc mã khóa học…"
+              aria-label="Tìm khóa học bắt buộc"
               :disabled="busy"
-              @update:model-value="
-                (checked) =>
-                  toggleSelection(groupForm.mandatoryCourseIds, c.id, checked)
-              "
+              @keydown.enter.prevent
             />
           </div>
+          <p class="group-course-summary" role="status">
+            Đã chọn {{ groupForm.mandatoryCourseIds.length }} khóa học
+            · {{ groupCourseTotal }} kết quả
+          </p>
+          <div
+            v-for="c in paginatedGroupCourses"
+            :key="c.id"
+            class="admin-choice-row group-course-row"
+          >
+            <div class="group-course-choice">
+              <ToggleSwitch
+                :model-value="groupForm.mandatoryCourseIds.includes(c.id)"
+                :label="c.name"
+                :disabled="busy"
+                @update:model-value="
+                  (checked) =>
+                    toggleSelection(groupForm.mandatoryCourseIds, c.id, checked)
+                "
+              />
+              <small v-if="c.code">Mã khóa học: {{ c.code }}</small>
+            </div>
+          </div>
           <p v-if="!courses.length">Chưa có khóa học để giao cho nhóm.</p>
+          <p v-else-if="!groupCourseTotal" class="admin-empty">
+            Không tìm thấy khóa học phù hợp. Hãy thử tên hoặc mã khác.
+          </p>
+          <TablePagination
+            v-if="groupCourseTotal"
+            v-model:page="groupCoursePage"
+            v-model:page-size="groupCoursePageSize"
+            :total="groupCourseTotal"
+            :page-count="groupCoursePageCount"
+            :sizes="[5, 10, 20]"
+            unit="khóa học"
+            unit-label="Khóa học"
+          />
         </fieldset>
       </template>
+    </AdminModal>
+    <AdminModal
+      :open="!!memberGroup"
+      :title="`Thành viên nhóm ${memberGroup?.name || ''}`"
+      :busy="memberSaving"
+      :width="850"
+      submit-label="Lưu thành viên"
+      :submit-disabled="!memberChangeCount || memberLoading"
+      @close="closeGroupMembers"
+      @submit="saveGroupMembers"
+    >
+      <p class="admin-modal-help">
+        Chọn học viên thuộc đơn vị của nhóm hoặc đơn vị con. Mỗi học viên có thể
+        tham gia nhiều nhóm và nhận các khóa học bắt buộc từ tất cả nhóm đó.
+        Tài khoản cần có đơn vị công tác trước khi thêm vào nhóm.
+      </p>
+      <div class="admin-table-toolbar group-members-toolbar">
+        <button
+          v-if="memberGroup?.allowedActions?.includes('update')"
+          type="button"
+          class="btn btn-secondary"
+          :disabled="memberSaving"
+          @click="membersOnly = false"
+        ><Plus :size="16" /> Thêm thành viên</button>
+        <div class="admin-search-box">
+          <Search :size="18" aria-hidden="true" />
+          <input
+            v-model="memberQuery"
+            type="search"
+            aria-label="Tìm học viên"
+            placeholder="Tìm tên, tài khoản, mã nhân viên hoặc email…"
+            :disabled="memberSaving"
+            @keydown.enter.prevent
+          />
+        </div>
+        <label class="group-members-filter">
+          <input v-model="membersOnly" type="checkbox" :disabled="memberSaving" />
+          Chỉ thành viên hiện tại
+        </label>
+      </div>
+      <p role="status" class="admin-modal-help">
+        Hiện có {{ memberCount }} thành viên
+        <template v-if="memberChangeCount"> · {{ memberChangeCount }} thay đổi chưa lưu</template>.
+        Lựa chọn được giữ khi tìm kiếm hoặc chuyển trang.
+      </p>
+      <p v-if="memberError" class="admin-notice error" role="alert">
+        {{ memberError }}
+        <button type="button" class="btn btn-secondary" @click="loadGroupMembers">Thử lại</button>
+      </p>
+      <div class="admin-table-scroll" :aria-busy="memberLoading">
+        <table class="admin-data-table group-members-table">
+          <thead>
+            <tr>
+              <th>Trong nhóm</th>
+              <th>Học viên</th>
+              <th>Mã nhân viên</th>
+              <th>Đơn vị</th>
+              <th>Trạng thái</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="memberLoading"><td colspan="5" class="admin-empty">Đang tải học viên…</td></tr>
+            <template v-else>
+              <tr v-for="m in memberRows" :key="m.id">
+                <td>
+                  <input
+                    type="checkbox"
+                    :checked="memberChanges[m.id] ?? m.member"
+                    :disabled="memberSaving || !m.selectable"
+                    :aria-label="`Thành viên nhóm: ${m.fullName}`"
+                    @change="toggleGroupMember(m, ($event.target as HTMLInputElement).checked)"
+                  />
+                </td>
+                <td><strong>{{ m.fullName }}</strong><small>{{ m.username }}</small></td>
+                <td>{{ m.employeeId || 'Chưa cập nhật' }}</td>
+                <td>{{ m.unitName }}</td>
+                <td>{{ statusNames[m.status] || m.status }}</td>
+              </tr>
+              <tr v-if="!memberRows.length && !memberError"><td colspan="5" class="admin-empty">Không có học viên phù hợp.</td></tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+      <TablePagination
+        v-model:page="memberPage"
+        v-model:page-size="memberPageSize"
+        :total="memberTotal"
+        :page-count="memberPageCount"
+        :sizes="[10, 20, 50]"
+        unit="học viên"
+        unit-label="Học viên"
+      />
     </AdminModal>
     <ConfirmModal
       :open="!!deleteTarget"
@@ -540,6 +673,17 @@ interface Group {
   unitId: string;
   mandatoryCourseIds: string[];
   allowedActions?: string[];
+  memberCount?: number;
+}
+interface GroupMember {
+  id: number;
+  username: string;
+  fullName: string;
+  employeeId?: string;
+  unitName: string;
+  status: string;
+  member: boolean;
+  selectable: boolean;
 }
 const route = useRoute(),
   router = useRouter(),
@@ -591,6 +735,32 @@ const unitName = (id?: string | null) =>
   units.value.find((u) => u.id === id)?.name || id || "Chưa gán";
 const matches = (text: string, query: string) =>
   text.toLocaleLowerCase("vi").includes(query.trim().toLocaleLowerCase("vi"));
+const groupCourseQuery = ref("");
+const normalizeCourseSearch = (text: string) =>
+  text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[đĐ]/g, "d")
+    .toLocaleLowerCase("vi")
+    .trim();
+const filteredGroupCourses = computed(() => {
+  const search = normalizeCourseSearch(groupCourseQuery.value);
+  return courses.value.filter((course) =>
+    normalizeCourseSearch(
+      `${course.name} ${course.code || ""} ${course.id}`,
+    ).includes(search),
+  );
+});
+const {
+  page: groupCoursePage,
+  pageSize: groupCoursePageSize,
+  total: groupCourseTotal,
+  pageCount: groupCoursePageCount,
+  paginated: paginatedGroupCourses,
+  reset: resetGroupCourses,
+} = useTablePagination(filteredGroupCourses);
+groupCoursePageSize.value = 5;
+watch(groupCourseQuery, resetGroupCourses);
 const filteredUsers = computed(() =>
   users.value.filter(
     (u) =>
@@ -734,7 +904,6 @@ const blankUser = () => ({
   learnerType: "CURRENT_STAFF",
   unitId: "",
   scopeUnitIds: [] as string[],
-  userGroupId: "",
 });
 const userForm = ref(blankUser()),
   unitForm = ref<Unit>({
@@ -759,15 +928,6 @@ function addChildUnit(unit: Unit) {
   expandedUnitIds.value = new Set([...expandedUnitIds.value, unit.id]);
   editUnit(undefined, unit.id);
 }
-const eligibleGroups = computed(() => {
-  const ancestors = new Set<string>();
-  let current = userForm.value.unitId;
-  while (current && !ancestors.has(current)) {
-    ancestors.add(current);
-    current = units.value.find((u) => u.id === current)?.parentId || "";
-  }
-  return groups.value.filter((g) => !g.unitId || ancestors.has(g.unitId));
-});
 const excelInput = ref<HTMLInputElement | null>(null);
 function error(e: any) {
   showToast(
@@ -818,7 +978,6 @@ function editUser(u?: AdminUser) {
     ...u,
     password: "",
     unitId: u?.unitId || "",
-    userGroupId: u?.userGroupId || "",
     roles: [...(u?.roles || [])],
     scopeUnitIds: [...(u?.scopeUnitIds || [])],
     status: u?.status || "ACTIVE",
@@ -834,11 +993,112 @@ function editUnit(u?: Unit, parentId = "") {
   editor.value = "unit";
 }
 function editGroup(g?: Group) {
+  groupCourseQuery.value = "";
+  groupCoursePageSize.value = 5;
+  resetGroupCourses();
   editingId.value = g?.id || null;
   groupForm.value = g
     ? { ...g, mandatoryCourseIds: [...g.mandatoryCourseIds] }
     : { id: "", name: "", unitId: "", mandatoryCourseIds: [] };
   editor.value = "group";
+}
+const memberGroup = ref<Group | null>(null);
+const memberRows = ref<GroupMember[]>([]);
+const memberQuery = ref("");
+const membersOnly = ref(true);
+const memberPage = ref(1);
+const memberPageSize = ref(10);
+const memberTotal = ref(0);
+const memberPageCount = ref(1);
+const memberCount = ref(0);
+const memberLoading = ref(false);
+const memberSaving = ref(false);
+const memberError = ref("");
+const memberChanges = ref<Record<number, boolean>>({});
+const memberChangeCount = computed(() => Object.keys(memberChanges.value).length);
+let memberRequest = 0;
+function openGroupMembers(group: Group) {
+  memberChanges.value = {};
+  memberRows.value = [];
+  memberQuery.value = "";
+  membersOnly.value = true;
+  memberPage.value = 1;
+  memberPageSize.value = 10;
+  memberTotal.value = 0;
+  memberPageCount.value = 1;
+  memberCount.value = group.memberCount || 0;
+  memberError.value = "";
+  memberGroup.value = group;
+}
+function closeGroupMembers() {
+  if (memberSaving.value) return;
+  memberRequest++;
+  memberGroup.value = null;
+}
+async function loadGroupMembers() {
+  const group = memberGroup.value;
+  if (!group) return;
+  const request = ++memberRequest;
+  memberLoading.value = true;
+  memberError.value = "";
+  try {
+    const { data } = await axiosClient.get<{
+      items: GroupMember[]; total: number; page: number; pageCount: number; memberCount: number;
+    }>(`/api/admin/groups/${encodeURIComponent(group.id)}/members`, {
+      params: { query: memberQuery.value, page: memberPage.value, size: memberPageSize.value, membersOnly: membersOnly.value },
+    });
+    if (request !== memberRequest) return;
+    memberRows.value = data.items;
+    memberTotal.value = data.total;
+    memberPageCount.value = data.pageCount;
+    memberCount.value = data.memberCount;
+    memberPage.value = data.page;
+  } catch (e: any) {
+    if (request !== memberRequest) return;
+    memberRows.value = [];
+    memberError.value = e.response?.data?.message || "Không tải được danh sách học viên.";
+  } finally {
+    if (request === memberRequest) memberLoading.value = false;
+  }
+}
+watch(
+  [() => memberGroup.value?.id, memberQuery, membersOnly, memberPageSize, memberPage],
+  (values, previous, onCleanup) => {
+    memberRequest++;
+    if (!values[0]) return;
+    if (values.slice(0, 4).some((value, index) => value !== previous[index]) && memberPage.value !== 1) {
+      memberPage.value = 1;
+      return;
+    }
+    memberLoading.value = true;
+    const timer = setTimeout(() => void loadGroupMembers(), values[1] !== previous[1] ? 250 : 0);
+    onCleanup(() => clearTimeout(timer));
+  },
+);
+function toggleGroupMember(member: GroupMember, selected: boolean) {
+  if (!member.selectable || memberSaving.value) return;
+  if (selected === member.member) delete memberChanges.value[member.id];
+  else memberChanges.value[member.id] = selected;
+}
+async function saveGroupMembers() {
+  if (!memberGroup.value || !memberChangeCount.value || memberLoading.value || memberSaving.value) return;
+  memberSaving.value = true;
+  try {
+    const entries = Object.entries(memberChanges.value);
+    await axiosClient.put(`/api/admin/groups/${encodeURIComponent(memberGroup.value.id)}/members`, {
+      addUserIds: entries.filter(([, selected]) => selected).map(([id]) => Number(id)),
+      removeUserIds: entries.filter(([, selected]) => !selected).map(([id]) => Number(id)),
+    });
+    memberRequest++;
+    memberGroup.value = null;
+    memberChanges.value = {};
+    showToast("Đã cập nhật thành viên nhóm", "success");
+    await load();
+  } catch (e) {
+    error(e);
+  } finally {
+    memberSaving.value = false;
+  }
 }
 async function saveEditor() {
   busy.value = true;
@@ -941,6 +1201,59 @@ async function importExcel(event: Event) {
 onMounted(load);
 </script>
 <style scoped>
+.group-members-toolbar {
+  margin-top: 1rem;
+}
+.group-members-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+}
+.group-members-table {
+  margin-bottom: 1rem;
+}
+.group-members-table input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary-color);
+}
+.group-course-search {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.group-course-search:focus-within {
+  border-color: var(--primary-color);
+}
+.group-course-search input {
+  min-width: 0;
+  color: var(--text-main);
+}
+.group-course-search > svg {
+  flex-shrink: 0;
+}
+.group-course-summary {
+  margin: 0.65rem 0;
+}
+.group-course-choice {
+  min-width: 0;
+  width: 100%;
+}
+.group-course-choice :deep(.toggle-switch) {
+  width: 100%;
+  min-width: 0;
+}
+.group-course-choice :deep(.toggle-label) {
+  overflow-wrap: anywhere;
+}
+.group-course-choice small {
+  margin-left: calc(38px + 0.65rem);
+  overflow-wrap: anywhere;
+}
+.group-course-row:last-of-type {
+  border-bottom: 0;
+}
 .unit-tree-toolbar {
   display: flex;
   align-items: center;

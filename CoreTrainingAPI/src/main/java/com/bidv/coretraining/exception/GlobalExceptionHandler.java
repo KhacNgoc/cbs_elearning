@@ -101,11 +101,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDeniedException(AccessDeniedException ex, WebRequest request) {
         log.warn("Access denied: {}", ex.getMessage());
+        String message = ex.getMessage();
+        if (message == null || message.isBlank() || "Access Denied".equalsIgnoreCase(message)
+                || "Forbidden".equalsIgnoreCase(message))
+            message = "Bạn chưa có quyền thực hiện thao tác này. Vui lòng liên hệ quản trị viên.";
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.FORBIDDEN.value())
                 .error(HttpStatus.FORBIDDEN.getReasonPhrase())
-                .message("You do not have permission to access this resource: " + ex.getMessage())
+                .message(message)
                 .path(request.getDescription(false).replace("uri=", ""))
                 .traceId(currentTraceId())
                 .build();

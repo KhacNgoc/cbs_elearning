@@ -13,12 +13,12 @@ import java.util.stream.Collectors;
 @Transactional
 public class RoleManagementService {
     public record RoleDto(String id, String code, String name, String description, boolean active,
-            boolean protectedRole, boolean learningEnabled, boolean assignedCoursesOnly, Long version,
+            boolean protectedRole, boolean learningEnabled, boolean learnerRole, boolean assignedCoursesOnly, Long version,
             Set<String> permissions, Set<String> unitIds, Set<Long> userIds) {
     }
 
     public record RoleRequest(String code, String name, String description, boolean active, boolean learningEnabled,
-            Long version) {
+            Boolean learnerRole, Long version) {
     }
 
     public record GrantRequest(Set<String> permissions, Set<String> unitIds, Long version) {
@@ -63,7 +63,7 @@ public class RoleManagementService {
             return true;
         if (r.isProtectedRole() || r.isAssignedCoursesOnly())
             return false;
-        if (r.isLearningEnabled() && !AccessPolicy.has(a, "LEARN"))
+        if ((r.isLearnerRole() || r.isLearningEnabled()) && !AccessPolicy.has(a, "LEARN"))
             return false;
         var op = AdminOperation.current("roles", "read");
         return r.getPermissions().stream().allMatch(p -> AccessPolicy.has(a, p))
@@ -77,7 +77,7 @@ public class RoleManagementService {
 
     private RoleDto dto(AccessRole r) {
         return new RoleDto(r.getId(), r.getCode(), r.getName(), r.getDescription(), r.isActive(), r.isProtectedRole(),
-                r.isLearningEnabled(), r.isAssignedCoursesOnly(), r.getVersion(), Set.copyOf(r.getPermissions()),
+                r.isLearningEnabled(), r.isLearnerRole(), r.isAssignedCoursesOnly(), r.getVersion(), Set.copyOf(r.getPermissions()),
                 Set.copyOf(r.getUnitIds()), new HashSet<>(users.findIdsByAssignedRole(r.getId())));
     }
 
@@ -114,12 +114,20 @@ public class RoleManagementService {
             if (!other.getId().equals(r.getId()))
                 throw new BadRequestException("Mã role đã tồn tại");
         });
-        AccessPolicy.require(!request.learningEnabled() || AccessPolicy.has(auth.current(), "LEARN"));
+        boolean learner = request.learnerRole() == null ? r.isLearnerRole() : request.learnerRole();
+        AccessPolicy.require(!(learner || request.learningEnabled()) || AccessPolicy.has(auth.current(), "LEARN"));
         r.setCode(code);
         r.setName(request.name().trim());
         r.setDescription(request.description());
         r.setActive(request.active());
-        r.setLearningEnabled(request.learningEnabled());
+        r.setLearnerRole(learner);
+        r.setLearningEnabled(learner || request.learningEnabled());
+        if (learner) {
+            r.setPermissions(new HashSet<>());
+            r.setUnitIds(new HashSet<>());
+            r.setAssignedCoursesOnly(false);
+            r.setLegacyOwnerScope(false);
+        }
         roles.saveAndFlush(r);
         cache.invalidateAfterCommit();
         return dto(r);
@@ -129,6 +137,8 @@ public class RoleManagementService {
         auth.requireOperation("permissions", "update");
         AccessRole r = role(id);
         mutate(r);
+        if (r.isLearnerRole())
+            throw new BadRequestException("Role học viên không có phân quyền quản trị chi tiết. Nội dung học được xác định theo đơn vị của tài khoản.");
         checkVersion(r, request.version());
         Set<String> p = new HashSet<>(request.permissions() == null ? Set.of() : request.permissions()),
                 scope = new HashSet<>(request.unitIds() == null ? Set.of() : request.unitIds());

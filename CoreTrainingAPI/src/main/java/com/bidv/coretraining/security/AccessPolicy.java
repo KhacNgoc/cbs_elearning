@@ -28,7 +28,8 @@ public final class AccessPolicy {
     }
 
     public static boolean roleScope(RolePolicy r, OrganizationUnit unit) {
-        return unit != null && activeUnit(unit) && ancestors(unit).stream().anyMatch(r.unitIds()::contains);
+        return !r.learnerRole() && unit != null && activeUnit(unit)
+                && ancestors(unit).stream().anyMatch(r.unitIds()::contains);
     }
 
     public static boolean allows(User u, String permission, OrganizationUnit unit) {
@@ -53,7 +54,7 @@ public final class AccessPolicy {
             return true;
         if (!u.isDynamicAccessInitialized())
             return canEdit(u, c);
-        return policies(u).stream().anyMatch(r -> r.active() && r.permissions().contains(permission) &&
+        return policies(u).stream().anyMatch(r -> r.active() && !r.learnerRole() && r.permissions().contains(permission) &&
                 (r.assignedCoursesOnly() ? c.getInstructorIds().contains(u.getId())
                         : r.legacyOwnerScope() ? roleScope(r, c.getOwnerUnit())
                                 : c.getProgram() != null
@@ -75,8 +76,8 @@ public final class AccessPolicy {
             Set<String> result = new HashSet<>();
             for (RolePolicy r : policies(u))
                 if (r.active()) {
-                    result.addAll(r.permissions());
-                    if (r.learningEnabled())
+                    if (!r.learnerRole()) result.addAll(r.permissions());
+                    if (r.learnerRole() || r.learningEnabled())
                         result.add("LEARN");
                 }
             // Compatibility aliases for existing non-route gates; route and resource checks

@@ -39,7 +39,7 @@ export const useUserStore = defineStore("user", {
     lessonProgress: {},
     points: 0,
     unlockedBadges: [],
-    groupId: "",
+    groupIds: [] as string[],
     groupName: "",
     mandatoryCourses: [],
     registeredCourses: [],
@@ -212,7 +212,7 @@ export const useUserStore = defineStore("user", {
       this.lessonProgress = {};
       this.points = 0;
       this.unlockedBadges = [];
-      this.groupId = "";
+      this.groupIds = [];
       this.groupName = "";
       this.mandatoryCourses = [];
       this.registeredCourses = [];
@@ -247,7 +247,7 @@ export const useUserStore = defineStore("user", {
           this.lessonProgress = progress.lessonProgress || {};
           this.points = progress.points || 0;
           this.unlockedBadges = progress.unlockedBadges || [];
-          this.groupId = progress.groupId || "";
+          this.groupIds = progress.groupIds || [];
           this.groupName = progress.groupName || "";
           this.mandatoryCourses = progress.mandatoryCourses || [];
           this.registeredCourses = progress.registeredCourses || [];
@@ -355,7 +355,7 @@ export const useUserStore = defineStore("user", {
         this.registeredCourses = updatedProgress.registeredCourses || [];
         this.pendingCourses = updatedProgress.pendingCourses || [];
         this.mandatoryCourses = updatedProgress.mandatoryCourses || [];
-        this.groupId = updatedProgress.groupId || "";
+        this.groupIds = updatedProgress.groupIds || [];
         this.groupName = updatedProgress.groupName || "";
       } catch (error) {
         console.error("Failed to register course:", error);

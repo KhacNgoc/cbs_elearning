@@ -49,7 +49,8 @@ public class AdminOptionsController {
                         .toList(),
                 "courses",
                 courses.findAll().stream().filter(c -> AccessPolicy.allowsCourse(u, permission, c))
-                        .map(c -> java.util.Map.of("id", c.getId(), "name", c.getName())).toList(),
+                        .map(c -> java.util.Map.of("id", c.getId(), "name", c.getName(),
+                                "code", c.getCode() == null ? "" : c.getCode())).toList(),
                 "domains",
                 domains.findAll().stream()
                         .map(d -> new TrainingStructureService.DomainDto(d.getId(), d.getCode(), d.getName(),
