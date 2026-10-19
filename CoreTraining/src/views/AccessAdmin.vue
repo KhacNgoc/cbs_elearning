@@ -76,10 +76,10 @@
         <div class="admin-table-scroll">
           <table class="admin-data-table account-table">
             <colgroup>
-              <col style="width: 25%" />
-              <col style="width: 23%" />
+              <col style="width: 24%" />
               <col style="width: 22%" />
-              <col style="width: 12%" />
+              <col style="width: 21%" />
+              <col style="width: 15%" />
               <col style="width: 18%" />
             </colgroup>
             <thead>

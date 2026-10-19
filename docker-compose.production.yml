@@ -1,4 +1,4 @@
-# Apply behind an HTTPS reverse proxy on the host. See VIDEO_DEPLOYMENT.md.
+# Apply behind an HTTPS reverse proxy on the host. See DEPLOYMENT.md.
 services:
   backend:
     environment:
@@ -11,11 +11,10 @@ services:
     ports: !override
       - "127.0.0.1:5173:80"
   postgres:
-    ports: !override
-      - "127.0.0.1:5432:5432"
+    ports: !override []
   pgadmin:
-    ports: !override
-      - "127.0.0.1:5050:80"
+    profiles: ["db-tools"]
+    ports: !override []
   rag-service:
     ports: !override
       - "127.0.0.1:8001:8001"

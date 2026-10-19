@@ -232,6 +232,7 @@ const getBadgeIcon = (icon: string) => {
 }
 
 .profile-info {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -274,7 +275,7 @@ const getBadgeIcon = (icon: string) => {
 /* Leaderboard layout grid */
 .leaderboard-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 2rem;
 }
 
@@ -358,6 +359,8 @@ const getBadgeIcon = (icon: string) => {
 }
 
 .rank-username-box {
+  min-width: 0;
+  overflow-wrap: anywhere;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -565,6 +568,43 @@ const getBadgeIcon = (icon: string) => {
 @media (max-width: 1024px) {
   .leaderboard-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .profile-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1.25rem;
+  }
+  .profile-info h1 {
+    font-size: 1.5rem;
+    overflow-wrap: anywhere;
+  }
+  .profile-stats-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .5rem;
+  }
+  .dot-separator {
+    display: none;
+  }
+  .ranks-col, .badges-col {
+    min-width: 0;
+    padding: 1rem;
+  }
+  .rank-row {
+    flex-wrap: wrap;
+    gap: .5rem;
+    padding: .75rem .5rem;
+  }
+  .rank-num, .rank-avatar, .user-big-avatar {
+    flex-shrink: 0;
+  }
+  .rank-points {
+    margin-left: auto;
+    white-space: nowrap;
   }
 }
 </style>

@@ -32,7 +32,7 @@
             aria-label="Tìm role"
           />
         </div>
-        <select v-model="status">
+        <select v-model="status" aria-label="Lọc trạng thái role">
           <option value="">Tất cả trạng thái</option>
           <option value="active">Hoạt động</option>
           <option value="inactive">Ngừng hoạt động</option>
@@ -41,10 +41,10 @@
       <div class="admin-table-scroll">
         <table class="admin-data-table">
           <colgroup>
-            <col style="width: 30%" />
-            <col style="width: 8%" />
+            <col style="width: 24%" />
+            <col style="width: 12%" />
             <col style="width: 20%" />
-            <col style="width: 14%" />
+            <col style="width: 16%" />
             <col style="width: 28%" />
           </colgroup>
           <thead>
@@ -216,64 +216,71 @@
           placeholder="Tìm họ tên hoặc tài khoản…"
         />
       </div>
-      <table class="admin-data-table">
-        <colgroup>
-          <col style="width: 48px" />
-          <col />
-          <col style="width: 25%" />
-          <col style="width: 30%" />
-        </colgroup>
-        <thead>
-          <tr>
-            <th>
-              <input
-                type="checkbox"
-                :checked="allMembers"
-                :indeterminate="someMembers && !allMembers"
-                aria-label="Chọn tất cả tài khoản phù hợp"
-                @change="
-                  toggleMembers(($event.target as HTMLInputElement).checked)
-                "
-              />
-            </th>
-            <th>Tài khoản</th>
-            <th>Đơn vị</th>
-            <th>Role hiện tại</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="m in memberRows" :key="m.id">
-            <td>
-              <input
-                v-model="memberIds"
-                :value="m.id"
-                type="checkbox"
-                :aria-label="`Gán ${m.fullName}`"
-              />
-            </td>
-            <td>
-              <strong>{{ m.fullName }}</strong
-              ><small>{{ m.username }}</small>
-            </td>
-            <td>
-              {{
-                units.find((u) => u.id === m.unitId)?.name ||
-                m.unitId ||
-                "Chưa gán"
-              }}
-            </td>
-            <td>
-              {{
-                m.roles
-                  .map(
-                    (code) => roles.find((r) => r.code === code)?.name || code,
-                  )
-                  .join(", ") || "Chưa gán role"
-              }}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div
+        class="admin-table-scroll"
+        tabindex="0"
+        role="region"
+        aria-label="Danh sách tài khoản để gán role"
+      >
+        <table class="admin-data-table">
+          <colgroup>
+            <col style="width: 48px" />
+            <col />
+            <col style="width: 25%" />
+            <col style="width: 30%" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>
+                <input
+                  type="checkbox"
+                  :checked="allMembers"
+                  :indeterminate="someMembers && !allMembers"
+                  aria-label="Chọn tất cả tài khoản phù hợp"
+                  @change="
+                    toggleMembers(($event.target as HTMLInputElement).checked)
+                  "
+                />
+              </th>
+              <th>Tài khoản</th>
+              <th>Đơn vị</th>
+              <th>Role hiện tại</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="m in memberRows" :key="m.id">
+              <td>
+                <input
+                  v-model="memberIds"
+                  :value="m.id"
+                  type="checkbox"
+                  :aria-label="`Gán ${m.fullName}`"
+                />
+              </td>
+              <td>
+                <strong>{{ m.fullName }}</strong
+                ><small>{{ m.username }}</small>
+              </td>
+              <td>
+                {{
+                  units.find((u) => u.id === m.unitId)?.name ||
+                  m.unitId ||
+                  "Chưa gán"
+                }}
+              </td>
+              <td>
+                {{
+                  m.roles
+                    .map(
+                      (code) => roles.find((r) => r.code === code)?.name || code,
+                    )
+                    .join(", ") || "Chưa gán role"
+                }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <TablePagination
         v-model:page="memberPage"
         v-model:page-size="memberSize"

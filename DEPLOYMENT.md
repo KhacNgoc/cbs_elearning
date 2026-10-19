@@ -90,8 +90,30 @@ docker compose --env-file .env.production \
   -f docker-compose.yml -f docker-compose.production.yml up -d --build
 ```
 
-Override bật cookie Secure, hỗ trợ forwarded headers cho backend và giới
-hạn cổng dịch vụ vào loopback. Đặt reverse proxy HTTPS trên cùng máy trỏ
+Override bật cookie Secure, hỗ trợ forwarded headers cho backend, bỏ hoàn
+toàn port mapping của PostgreSQL và không chạy pgAdmin mặc định (profile
+`db-tools`). Backend vẫn kết nối database qua `postgres:5432` trong mạng
+Docker; giữ `SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/coretraining`.
+Không bật profile `db-tools` hoặc `--profile '*'` trên production. pgAdmin
+cũng không có port mapping trong cấu hình production.
+
+Nếu pgAdmin đã chạy từ cấu hình cũ, dừng và xóa container trước khi áp dụng
+override (các lệnh này giữ nguyên volume dữ liệu):
+
+```sh
+docker compose --env-file .env.production -f docker-compose.yml stop pgadmin
+docker compose --env-file .env.production -f docker-compose.yml rm -f pgadmin
+docker compose --env-file .env.production \
+  -f docker-compose.yml -f docker-compose.production.yml up -d --build
+```
+
+Kiểm tra bằng `docker ps --format 'table {{.Names}}\t{{.Ports}}'`: PostgreSQL
+không có mapping dạng `5432->5432`, và không có container
+`coretraining-db-ide` đang chạy. Docker có thể vẫn hiển thị `5432/tcp`, đây
+là cổng bên trong container, không phải cổng publish ra host.
+
+Các cổng frontend và dịch vụ AI trong override chỉ bind loopback.
+Đặt reverse proxy HTTPS trên cùng máy trỏ
 đến `http://127.0.0.1:5173`; API và video cùng tên miền với frontend.
 Proxy ngoài cần ghi đè Host và X-Forwarded-Proto, giữ nguyên Range, hỗ trợ
 upload 510 MiB và thời gian chờ upload 30 phút. Ví dụ bên trong server HTTPS:

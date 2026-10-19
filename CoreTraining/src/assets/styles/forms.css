@@ -1,0 +1,50 @@
+/* Shared native select skin for filters, editors and pagination in both themes.
+   Keep multiple/listbox selects native so their rows remain usable. */
+:root select:not([multiple]):not([size]) {
+  appearance: none;
+  -webkit-appearance: none;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 40px;
+  padding: .6rem 2.25rem .6rem .75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background-color: var(--bg-card);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  color: var(--text-main);
+  font: inherit;
+  font-size: .875rem;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+}
+
+:root select:not([multiple]):not([size]):hover:enabled {
+  border-color: var(--primary-ink);
+}
+
+:root select:focus-visible {
+  outline: 2px solid var(--primary-ink);
+  outline-offset: 2px;
+}
+
+:root select:disabled {
+  background-color: var(--bg-subtle);
+  color: var(--text-muted);
+  opacity: .65;
+}
+
+:root select option {
+  background: var(--bg-card);
+  color: var(--text-main);
+}
+
+:root :is(.page-size, .page-size-control) select:not([multiple]):not([size]) {
+  min-height: 36px;
+  padding-block: .35rem;
+  font-size: .8rem;
+}

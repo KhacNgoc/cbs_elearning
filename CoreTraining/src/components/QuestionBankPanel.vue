@@ -619,6 +619,16 @@ onMounted(load);
   overflow-wrap: anywhere;
 }
 @media (max-width: 650px) {
+  .bank-filters > input,
+  .bank-filters > select {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+  }
+  .bank-selection {
+    flex-wrap: wrap;
+    gap: .75rem;
+  }
   .bank-form-grid {
     grid-template-columns: 1fr;
   }

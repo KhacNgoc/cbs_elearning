@@ -239,6 +239,7 @@ button:disabled {
 
 .main-content {
   flex: 1;
+  min-width: 0;
   padding: 2rem;
   width: 100%;
 }
