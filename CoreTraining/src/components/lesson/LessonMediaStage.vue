@@ -1,5 +1,25 @@
 <template>
   <main class="viewer-area">
+    <nav
+      v-if="hasVideo && hasText"
+      class="lesson-content-switcher"
+      aria-label="Chọn nội dung bài học"
+    >
+      <button
+        type="button"
+        :aria-pressed="!selectedDocument && primaryContent === 'VIDEO'"
+        @click="$emit('select-content', 'VIDEO')"
+      >
+        <PlayCircle :size="17" /><span>Video</span>
+      </button>
+      <button
+        type="button"
+        :aria-pressed="!selectedDocument && primaryContent === 'TEXT'"
+        @click="$emit('select-content', 'TEXT')"
+      >
+        <FileText :size="17" /><span>Nội dung bài học</span>
+      </button>
+    </nav>
     <div v-if="selectedDocument" class="lesson-viewer-toolbar">
       <div class="viewer-content-title">
         <FileText :size="18" />
@@ -14,7 +34,7 @@
       </div>
       <div class="viewer-toolbar-actions">
         <button
-          v-if="hasText || hasVideo"
+          v-if="(hasText || hasVideo) && !(hasVideo && hasText)"
           type="button"
           class="viewer-back"
           @click="$emit('select-content', hasText ? 'TEXT' : 'VIDEO')"
@@ -109,6 +129,7 @@ import {
   ChevronRight,
   Download,
   FileText,
+  PlayCircle,
 } from "lucide-vue-next";
 import type {
   Lesson,
@@ -157,6 +178,53 @@ const resolveDocumentUrl = (url: string) => {
 </script>
 
 <style scoped>
+.lesson-content-switcher {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.6rem 0.9rem;
+  flex-shrink: 0;
+  background: #162c24;
+  border-bottom: 1px solid #344d42;
+}
+.lesson-content-switcher button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 40px;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #c4d5cc;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.lesson-content-switcher button:hover {
+  background: #253f33;
+  color: #fff;
+}
+.lesson-content-switcher button[aria-pressed="true"] {
+  background: #005b41;
+  border-color: #629b83;
+  color: #fff;
+}
+.lesson-content-switcher button:focus-visible {
+  outline: 2px solid #e4c760;
+  outline-offset: 2px;
+}
+@media (max-width: 600px) {
+  .lesson-content-switcher {
+    padding: 0.5rem 0.75rem;
+  }
+  .lesson-content-switcher button {
+    flex: 1;
+    min-height: 44px;
+    padding: 0.5rem;
+    font-size: 0.8rem;
+  }
+}
 .lesson-viewer-toolbar {
   display: flex;
   align-items: center;
