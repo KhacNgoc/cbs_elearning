@@ -8,10 +8,15 @@ import com.bidv.coretraining.dto.QuizReviewDto;
 import java.util.List;
 
 public interface QuizService {
-    List<QuizQuestionDto> getQuestionsForTopic(String topicId);
-    QuizResultDto submitQuiz(String topicId, QuizSubmitRequest request, String username);
+    List<QuizQuestionDto> getQuestionsForCourse(String courseId);
+
+    QuizResultDto submitQuiz(String courseId, QuizSubmitRequest request, String username);
+
     List<QuizQuestionDto> getQuestionsForLesson(String lessonId);
+
     QuizResultDto submitLessonQuiz(String lessonId, QuizSubmitRequest request, String username);
-    QuizReviewDto getTopicQuizReview(String topicId, String username);
+
+    QuizReviewDto getCourseQuizReview(String courseId, String username);
+
     QuizReviewDto getLessonQuizReview(String lessonId, String username);
 }

@@ -1,12 +1,24 @@
-import { validateVideoUpload, MAX_VIDEO_UPLOAD_BYTES } from "../utils/videoAccess";
-import { axiosClient, isMockApi, mockDelay, QUIZ_GENERATION_TIMEOUT_MS } from "./axiosClient";
-import type { Topic, Lesson, LessonDocument, Question } from "../types";
-import { mockDbTopics, setMockDbTopics } from "./courseApi";
+import {
+  validateVideoUpload,
+  MAX_VIDEO_UPLOAD_BYTES,
+} from "../utils/videoAccess";
+import {
+  axiosClient,
+  isMockApi,
+  mockDelay,
+  QUIZ_GENERATION_TIMEOUT_MS,
+} from "./axiosClient";
+import type { Course, Lesson, LessonDocument, Question } from "../types";
+import { mockDbCourses, setMockDbCourses } from "./courseApi";
 import { mockDbQuestions, setMockDbQuestions } from "./quizApi";
 
-const configuredVideoMaxBytes = Number(import.meta.env.VITE_VIDEO_MAX_UPLOAD_BYTES);
-export const VIDEO_UPLOAD_MAX_BYTES = Number.isFinite(configuredVideoMaxBytes) && configuredVideoMaxBytes > 0
-  ? configuredVideoMaxBytes : MAX_VIDEO_UPLOAD_BYTES;
+const configuredVideoMaxBytes = Number(
+  import.meta.env.VITE_VIDEO_MAX_UPLOAD_BYTES,
+);
+export const VIDEO_UPLOAD_MAX_BYTES =
+  Number.isFinite(configuredVideoMaxBytes) && configuredVideoMaxBytes > 0
+    ? configuredVideoMaxBytes
+    : MAX_VIDEO_UPLOAD_BYTES;
 
 const normalizeUploadedPath = (value: string): string => {
   const uploadsIndex = value.indexOf("/uploads/");
@@ -20,15 +32,38 @@ const getDocumentType = (fileName: string): LessonDocument["documentType"] => {
   return "WORD";
 };
 
+export interface LessonKnowledgeSource {
+  documentId: string;
+  pageFrom?: number | null;
+  pageTo?: number | null;
+  section?: string | null;
+}
+
+export interface DocumentOutline {
+  documentId: string;
+  pages: number[];
+  sections: string[];
+  excerpts: { page: number; section: string; excerpt: string }[];
+}
+
 export interface AdminUser {
   id?: number;
+  allowedActions?: string[];
   username: string;
   password?: string;
   fullName: string;
   avatarColor: string;
   role: string;
+  roles?: string[];
+  roleNames?: Record<string, string>;
+  permissions?: string[];
+  unitId?: string;
+  scopeUnitIds?: string[];
+  status?: string;
+  learnerType?: string;
   points: number;
-  userGroupId?: string;
+  userGroupIds?: string[];
+  groupNames?: string;
   employeeId?: string;
   email?: string;
 }
@@ -38,8 +73,8 @@ export interface EnrollmentRequest {
   userId: number;
   username: string;
   fullName: string;
-  topicId: string;
-  topicName: string;
+  courseId: string;
+  courseName: string;
   status: "PENDING" | "APPROVED" | "REJECTED";
   requestedAt: string;
   reviewedAt?: string;
@@ -49,7 +84,7 @@ export interface EnrollmentRequest {
 
 export interface CourseDocument {
   id: string;
-  topicId: string;
+  courseId: string;
   fileName: string;
   contentType: string;
   sizeBytes: number;
@@ -155,16 +190,17 @@ export const adminApi = {
   async getEnrollmentRequests(): Promise<EnrollmentRequest[]> {
     if (isMockApi()) {
       const pending: string[] = JSON.parse(
-        localStorage.getItem("mockPendingTopics") || "[]",
+        localStorage.getItem("mockPendingCourses") || "[]",
       );
-      return pending.map((topicId, index) => ({
+      return pending.map((courseId, index) => ({
         id: index + 1,
         userId: 2,
         username: localStorage.getItem("username") || "quantrh",
         fullName: localStorage.getItem("fullName") || "Học viên",
-        topicId,
-        topicName:
-          mockDbTopics.find((topic) => topic.id === topicId)?.name || topicId,
+        courseId,
+        courseName:
+          mockDbCourses.find((course) => course.id === courseId)?.name ||
+          courseId,
         status: "PENDING",
         requestedAt: new Date().toISOString(),
       }));
@@ -185,20 +221,20 @@ export const adminApi = {
       const request = requests.find((item) => item.id === id);
       if (!request) throw new Error("Enrollment request not found");
       const pending: string[] = JSON.parse(
-        localStorage.getItem("mockPendingTopics") || "[]",
+        localStorage.getItem("mockPendingCourses") || "[]",
       );
       localStorage.setItem(
-        "mockPendingTopics",
-        JSON.stringify(pending.filter((item) => item !== request.topicId)),
+        "mockPendingCourses",
+        JSON.stringify(pending.filter((item) => item !== request.courseId)),
       );
       if (approve) {
         const registered: string[] = JSON.parse(
-          localStorage.getItem("mockRegisteredTopics") || "[]",
+          localStorage.getItem("mockRegisteredCourses") || "[]",
         );
-        if (!registered.includes(request.topicId))
-          registered.push(request.topicId);
+        if (!registered.includes(request.courseId))
+          registered.push(request.courseId);
         localStorage.setItem(
-          "mockRegisteredTopics",
+          "mockRegisteredCourses",
           JSON.stringify(registered),
         );
       }
@@ -217,13 +253,13 @@ export const adminApi = {
   },
 
   async uploadCourseDocument(
-    topicId: string,
+    courseId: string,
     file: File,
   ): Promise<CourseDocument> {
     const formData = new FormData();
     formData.append("file", file);
     const response = await axiosClient.post<CourseDocument>(
-      `/api/admin/topics/${topicId}/documents`,
+      `/api/admin/courses/${courseId}/documents`,
       formData,
       {
         headers: { "Content-Type": "multipart/form-data" },
@@ -232,11 +268,63 @@ export const adminApi = {
     return response.data;
   },
 
-  async getCourseDocuments(topicId: string): Promise<CourseDocument[]> {
+  async getCourseDocuments(
+    courseId: string,
+    page?: string,
+  ): Promise<CourseDocument[]> {
     const response = await axiosClient.get<CourseDocument[]>(
-      `/api/admin/topics/${topicId}/documents`,
+      `/api/admin/courses/${courseId}/documents`,
+      { params: { page } },
     );
     return response.data;
+  },
+
+  async deleteCourseDocument(
+    courseId: string,
+    documentId: string,
+  ): Promise<void> {
+    await axiosClient.delete(
+      `/api/admin/courses/${encodeURIComponent(courseId)}/documents/${encodeURIComponent(documentId)}`,
+    );
+  },
+
+  async getLessonKnowledgeSources(
+    lessonId: string,
+    page?: string,
+  ): Promise<LessonKnowledgeSource[]> {
+    return (
+      await axiosClient.get<LessonKnowledgeSource[]>(
+        `/api/admin/lessons/${encodeURIComponent(lessonId)}/knowledge-sources`,
+        { params: { page } },
+      )
+    ).data;
+  },
+
+  async saveLessonKnowledgeSources(
+    lessonId: string,
+    sources: LessonKnowledgeSource[],
+    page?: string,
+  ): Promise<LessonKnowledgeSource[]> {
+    return (
+      await axiosClient.put<LessonKnowledgeSource[]>(
+        `/api/admin/lessons/${encodeURIComponent(lessonId)}/knowledge-sources`,
+        sources,
+        { params: { page } },
+      )
+    ).data;
+  },
+
+  async getDocumentOutline(
+    courseId: string,
+    documentId: string,
+    page?: string,
+  ): Promise<DocumentOutline> {
+    return (
+      await axiosClient.get<DocumentOutline>(
+        `/api/admin/courses/${encodeURIComponent(courseId)}/documents/${encodeURIComponent(documentId)}/outline`,
+        { params: { page } },
+      )
+    ).data;
   },
 
   // ==========================================
@@ -305,49 +393,52 @@ export const adminApi = {
   },
 
   // ==========================================
-  // Topic Management
+  // Course Management
   // ==========================================
-  async createTopic(topic: Topic): Promise<Topic> {
+  async createCourse(course: Course): Promise<Course> {
     if (isMockApi()) {
       await mockDelay(300);
-      const newTopic: Topic = { ...topic, lessons: [] };
-      mockDbTopics.push(newTopic);
-      setMockDbTopics([...mockDbTopics]);
-      return newTopic;
+      const newCourse: Course = { ...course, lessons: [] };
+      mockDbCourses.push(newCourse);
+      setMockDbCourses([...mockDbCourses]);
+      return newCourse;
     }
-    const response = await axiosClient.post<Topic>("/api/admin/topics", topic);
-    return response.data;
-  },
-
-  async updateTopic(id: string, topic: Topic): Promise<Topic> {
-    if (isMockApi()) {
-      await mockDelay(300);
-      const index = mockDbTopics.findIndex((t) => t.id === id);
-      if (index === -1) throw new Error(`Topic not found with id: ${id}`);
-
-      mockDbTopics[index] = {
-        ...mockDbTopics[index],
-        name: topic.name,
-        iconName: topic.iconName,
-      };
-      setMockDbTopics([...mockDbTopics]);
-      return mockDbTopics[index];
-    }
-    const response = await axiosClient.put<Topic>(
-      `/api/admin/topics/${id}`,
-      topic,
+    const response = await axiosClient.post<Course>(
+      "/api/admin/courses",
+      course,
     );
     return response.data;
   },
 
-  async deleteTopic(id: string): Promise<void> {
+  async updateCourse(id: string, course: Course): Promise<Course> {
     if (isMockApi()) {
       await mockDelay(300);
-      const filtered = mockDbTopics.filter((t) => t.id !== id);
-      setMockDbTopics(filtered);
+      const index = mockDbCourses.findIndex((t) => t.id === id);
+      if (index === -1) throw new Error(`Course not found with id: ${id}`);
+
+      mockDbCourses[index] = {
+        ...mockDbCourses[index],
+        name: course.name,
+        iconName: course.iconName,
+      };
+      setMockDbCourses([...mockDbCourses]);
+      return mockDbCourses[index];
+    }
+    const response = await axiosClient.put<Course>(
+      `/api/admin/courses/${id}`,
+      course,
+    );
+    return response.data;
+  },
+
+  async deleteCourse(id: string): Promise<void> {
+    if (isMockApi()) {
+      await mockDelay(300);
+      const filtered = mockDbCourses.filter((t) => t.id !== id);
+      setMockDbCourses(filtered);
       return;
     }
-    await axiosClient.delete(`/api/admin/topics/${id}`);
+    await axiosClient.delete(`/api/admin/courses/${id}`);
   },
 
   // ==========================================
@@ -380,7 +471,10 @@ export const adminApi = {
     };
   },
 
-  async uploadVideo(file: File, onProgress?: (percent: number) => void): Promise<string> {
+  async uploadVideo(
+    file: File,
+    onProgress?: (percent: number) => void,
+  ): Promise<string> {
     const validationError = validateVideoUpload(file, VIDEO_UPLOAD_MAX_BYTES);
     if (validationError) throw new Error(validationError);
     if (isMockApi()) {
@@ -396,12 +490,16 @@ export const adminApi = {
       {
         headers: { "Content-Type": "multipart/form-data" },
         timeout: (() => {
-          const configured = Number(import.meta.env.VITE_VIDEO_UPLOAD_TIMEOUT_MS);
-          return Number.isFinite(configured) && configured > 0 ? configured : 1_800_000;
+          const configured = Number(
+            import.meta.env.VITE_VIDEO_UPLOAD_TIMEOUT_MS,
+          );
+          return Number.isFinite(configured) && configured > 0
+            ? configured
+            : 1_800_000;
         })(),
-        onUploadProgress: event => {
+        onUploadProgress: (event) => {
           const total = event.total || file.size;
-          onProgress?.(Math.min(100, Math.round(event.loaded / total * 100)));
+          onProgress?.(Math.min(100, Math.round((event.loaded / total) * 100)));
         },
       },
     );
@@ -409,7 +507,7 @@ export const adminApi = {
   },
 
   async createLesson(
-    lesson: Omit<Lesson, "comments"> & { topicId: string },
+    lesson: Omit<Lesson, "comments"> & { courseId: string },
   ): Promise<Lesson> {
     if (isMockApi()) {
       await mockDelay(300);
@@ -418,10 +516,10 @@ export const adminApi = {
         comments: [],
         procedureSteps: lesson.procedureSteps || [],
       };
-      const topic = mockDbTopics.find((t) => t.id === lesson.topicId);
-      if (topic) {
-        topic.lessons.push(newLesson);
-        setMockDbTopics([...mockDbTopics]);
+      const course = mockDbCourses.find((t) => t.id === lesson.courseId);
+      if (course) {
+        course.lessons.push(newLesson);
+        setMockDbCourses([...mockDbCourses]);
       }
       return newLesson;
     }
@@ -434,18 +532,18 @@ export const adminApi = {
 
   async updateLesson(
     id: string,
-    lesson: Omit<Lesson, "comments"> & { topicId: string },
+    lesson: Omit<Lesson, "comments"> & { courseId: string },
   ): Promise<Lesson> {
     if (isMockApi()) {
       await mockDelay(300);
       let foundLesson: Lesson | null = null;
 
-      // Remove from old topic if topicId changed, or just update in place
-      for (const t of mockDbTopics) {
+      // Remove from old course if courseId changed, or just update in place
+      for (const t of mockDbCourses) {
         const idx = t.lessons.findIndex((l) => l.id === id);
         if (idx !== -1) {
           foundLesson = t.lessons[idx];
-          if (t.id !== lesson.topicId) {
+          if (t.id !== lesson.courseId) {
             t.lessons.splice(idx, 1); // remove
           }
           break;
@@ -459,7 +557,7 @@ export const adminApi = {
       const updatedLesson: Lesson = {
         ...targetLesson,
         title: lesson.title,
-        topicId: lesson.topicId,
+        courseId: lesson.courseId,
         hint: lesson.hint,
         videoUrl: lesson.videoUrl,
         videoSource: lesson.videoSource,
@@ -467,13 +565,13 @@ export const adminApi = {
         procedureSteps: lesson.procedureSteps || [],
       };
 
-      if (targetLesson.topicId !== lesson.topicId) {
-        const destTopic = mockDbTopics.find((t) => t.id === lesson.topicId);
-        if (destTopic) {
-          destTopic.lessons.push(updatedLesson);
+      if (targetLesson.courseId !== lesson.courseId) {
+        const destCourse = mockDbCourses.find((t) => t.id === lesson.courseId);
+        if (destCourse) {
+          destCourse.lessons.push(updatedLesson);
         }
       } else {
-        for (const t of mockDbTopics) {
+        for (const t of mockDbCourses) {
           const idx = t.lessons.findIndex((l) => l.id === id);
           if (idx !== -1) {
             t.lessons[idx] = updatedLesson;
@@ -482,7 +580,7 @@ export const adminApi = {
         }
       }
 
-      setMockDbTopics([...mockDbTopics]);
+      setMockDbCourses([...mockDbCourses]);
       return updatedLesson;
     }
     const response = await axiosClient.put<Lesson>(
@@ -495,35 +593,35 @@ export const adminApi = {
   async deleteLesson(id: string): Promise<void> {
     if (isMockApi()) {
       await mockDelay(300);
-      mockDbTopics.forEach((t) => {
+      mockDbCourses.forEach((t) => {
         t.lessons = t.lessons.filter((l) => l.id !== id);
       });
-      setMockDbTopics([...mockDbTopics]);
+      setMockDbCourses([...mockDbCourses]);
       return;
     }
     await axiosClient.delete(`/api/admin/lessons/${id}`);
   },
 
   async reorderLessons(
-    topicId: string,
+    courseId: string,
     lessonIds: string[],
   ): Promise<Lesson[]> {
     if (isMockApi()) {
       await mockDelay(200);
-      const topic = mockDbTopics.find((item) => item.id === topicId);
-      if (!topic) throw new Error(`Topic not found with id: ${topicId}`);
+      const course = mockDbCourses.find((item) => item.id === courseId);
+      if (!course) throw new Error(`Course not found with id: ${courseId}`);
       const lessonsById = new Map(
-        topic.lessons.map((lesson) => [lesson.id, lesson]),
+        course.lessons.map((lesson) => [lesson.id, lesson]),
       );
-      topic.lessons = lessonIds.map((id, index) => ({
+      course.lessons = lessonIds.map((id, index) => ({
         ...lessonsById.get(id)!,
         lessonOrder: index,
       }));
-      setMockDbTopics([...mockDbTopics]);
-      return topic.lessons;
+      setMockDbCourses([...mockDbCourses]);
+      return course.lessons;
     }
     const response = await axiosClient.put<Lesson[]>(
-      `/api/admin/topics/${encodeURIComponent(topicId)}/lessons/order`,
+      `/api/admin/courses/${encodeURIComponent(courseId)}/lessons/order`,
       lessonIds,
     );
     return response.data;
@@ -532,21 +630,29 @@ export const adminApi = {
   // ==========================================
   // Question Management
   // ==========================================
-  async getQuizQuestions(topicId: string, lessonId?: string): Promise<Question[]> {
+  async getQuizQuestions(
+    courseId: string,
+    lessonId?: string,
+  ): Promise<Question[]> {
     if (isMockApi()) {
       await mockDelay(200);
-      return mockDbQuestions.filter(question =>
-        lessonId ? question.lessonId === lessonId : question.topicId === topicId && !question.lessonId,
+      return mockDbQuestions.filter((question) =>
+        lessonId
+          ? question.lessonId === lessonId
+          : question.courseId === courseId && !question.lessonId,
       );
     }
-    const response = await axiosClient.get<Question[]>("/api/admin/quizzes/questions", {
-      params: { topicId, lessonId },
-    });
+    const response = await axiosClient.get<Question[]>(
+      "/api/admin/quizzes/questions",
+      {
+        params: { courseId, lessonId },
+      },
+    );
     return response.data;
   },
 
   async generateQuizQuestions(request: {
-    topicId: string;
+    courseId: string;
     lessonId?: string;
     singleChoiceCount: number;
     multipleChoiceCount: number;
@@ -554,13 +660,15 @@ export const adminApi = {
   }): Promise<QuizGenerationResponse> {
     if (isMockApi()) {
       await mockDelay(500);
-      const sourceQuestions = mockDbQuestions.filter(question =>
-        request.lessonId
-          ? question.lessonId === request.lessonId
-          : question.topicId === request.topicId && !question.lessonId,
-      ).slice(0, request.singleChoiceCount + request.multipleChoiceCount);
+      const sourceQuestions = mockDbQuestions
+        .filter((question) =>
+          request.lessonId
+            ? question.lessonId === request.lessonId
+            : question.courseId === request.courseId && !question.lessonId,
+        )
+        .slice(0, request.singleChoiceCount + request.multipleChoiceCount);
       return {
-        questions: sourceQuestions.map(question => ({
+        questions: sourceQuestions.map((question) => ({
           type: question.type || "SINGLE_CHOICE",
           text: question.text,
           options: question.options,
@@ -569,7 +677,9 @@ export const adminApi = {
           sourceIds: [],
         })),
         sources: [],
-        warnings: sourceQuestions.length ? [] : ["Không có dữ liệu mẫu phù hợp."],
+        warnings: sourceQuestions.length
+          ? []
+          : ["Không có dữ liệu mẫu phù hợp."],
       };
     }
     const response = await axiosClient.post<QuizGenerationResponse>(
@@ -590,15 +700,17 @@ export const adminApi = {
       mockDbQuestions.push(newQuestion);
       setMockDbQuestions([...mockDbQuestions]);
       if (question.lessonId) {
-        const lesson = mockDbTopics
-          .flatMap((topic) => topic.lessons)
+        const lesson = mockDbCourses
+          .flatMap((course) => course.lessons)
           .find((item) => item.id === question.lessonId);
         if (lesson) lesson.hasQuiz = true;
       } else {
-        const topic = mockDbTopics.find((item) => item.id === question.topicId);
-        if (topic) topic.hasQuiz = true;
+        const course = mockDbCourses.find(
+          (item) => item.id === question.courseId,
+        );
+        if (course) course.hasQuiz = true;
       }
-      setMockDbTopics([...mockDbTopics]);
+      setMockDbCourses([...mockDbCourses]);
       return newQuestion;
     }
     const response = await axiosClient.post<Question>(
@@ -621,7 +733,7 @@ export const adminApi = {
         correctAnswer: question.correctAnswer,
         correctAnswers: question.correctAnswers,
         type: question.type,
-        topicId: question.topicId,
+        courseId: question.courseId,
         lessonId: question.lessonId,
       };
       setMockDbQuestions([...mockDbQuestions]);
@@ -641,104 +753,116 @@ export const adminApi = {
       const filtered = mockDbQuestions.filter((q) => q.id !== id);
       setMockDbQuestions(filtered);
       if (deletedQuestion?.lessonId) {
-        const lesson = mockDbTopics
-          .flatMap((topic) => topic.lessons)
+        const lesson = mockDbCourses
+          .flatMap((course) => course.lessons)
           .find((item) => item.id === deletedQuestion.lessonId);
         if (lesson)
           lesson.hasQuiz = filtered.some(
             (question) => question.lessonId === deletedQuestion.lessonId,
           );
       } else if (deletedQuestion) {
-        const topic = mockDbTopics.find(
-          (item) => item.id === deletedQuestion.topicId,
+        const course = mockDbCourses.find(
+          (item) => item.id === deletedQuestion.courseId,
         );
-        if (topic)
-          topic.hasQuiz = filtered.some(
+        if (course)
+          course.hasQuiz = filtered.some(
             (question) =>
-              question.topicId === deletedQuestion.topicId &&
+              question.courseId === deletedQuestion.courseId &&
               !question.lessonId,
           );
       }
-      setMockDbTopics([...mockDbTopics]);
+      setMockDbCourses([...mockDbCourses]);
       return;
     }
     await axiosClient.delete(`/api/admin/questions/${id}`);
   },
 
   async updateQuizSettings(
-    topicId: string,
+    courseId: string,
     lessonId: string | undefined,
     passingScore: number,
+    requiredForProgress = true,
   ): Promise<void> {
     if (isMockApi()) {
       await mockDelay(200);
       if (lessonId) {
-        const lesson = mockDbTopics
-          .flatMap((topic) => topic.lessons)
+        const lesson = mockDbCourses
+          .flatMap((course) => course.lessons)
           .find((item) => item.id === lessonId);
-        if (lesson) lesson.quizPassingScore = passingScore;
+        if (lesson) {
+          lesson.quizPassingScore = passingScore;
+          lesson.quizRequired = requiredForProgress;
+          lesson.hasQuiz = true;
+        }
       } else {
-        const topic = mockDbTopics.find((item) => item.id === topicId);
-        if (topic) topic.quizPassingScore = passingScore;
+        const course = mockDbCourses.find((item) => item.id === courseId);
+        if (course) course.quizPassingScore = passingScore;
       }
-      setMockDbTopics([...mockDbTopics]);
+      setMockDbCourses([...mockDbCourses]);
       return;
     }
     await axiosClient.put("/api/admin/quizzes/settings", {
-      topicId,
+      courseId,
       lessonId,
       passingScore,
+      requiredForProgress,
     });
   },
 
-  async deleteQuiz(topicId: string, lessonId?: string): Promise<void> {
+  async deleteQuiz(courseId: string, lessonId?: string): Promise<void> {
     if (isMockApi()) {
       await mockDelay(250);
       setMockDbQuestions(
         mockDbQuestions.filter((question) =>
           lessonId
             ? question.lessonId !== lessonId
-            : !(question.topicId === topicId && !question.lessonId),
+            : !(question.courseId === courseId && !question.lessonId),
         ),
       );
       if (lessonId) {
-        const lesson = mockDbTopics
-          .flatMap((topic) => topic.lessons)
+        const lesson = mockDbCourses
+          .flatMap((course) => course.lessons)
           .find((item) => item.id === lessonId);
         if (lesson) lesson.hasQuiz = false;
       } else {
-        const topic = mockDbTopics.find((item) => item.id === topicId);
-        if (topic) topic.hasQuiz = false;
+        const course = mockDbCourses.find((item) => item.id === courseId);
+        if (course) course.hasQuiz = false;
       }
-      setMockDbTopics([...mockDbTopics]);
+      setMockDbCourses([...mockDbCourses]);
       return;
     }
-    await axiosClient.delete('/api/admin/quizzes', { params: { topicId, lessonId } });
+    await axiosClient.delete("/api/admin/quizzes", {
+      params: { courseId, lessonId },
+    });
   },
 
   async importUsersExcel(file: File): Promise<string> {
     if (isMockApi()) {
       await mockDelay(300);
-      return 'Mock Excel upload successful!';
+      return "Mock Excel upload successful!";
     }
     const formData = new FormData();
-    formData.append('file', file);
-    const response = await axiosClient.post<string>('/api/admin/users/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
+    formData.append("file", file);
+    const response = await axiosClient.post<string>(
+      "/api/admin/users/upload",
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+      },
+    );
     return response.data;
   },
 
   async downloadUserTemplate(): Promise<Blob> {
     if (isMockApi()) {
       await mockDelay(300);
-      return new Blob(['Mock Excel Content'], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      return new Blob(["Mock Excel Content"], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
     }
-    const response = await axiosClient.get<Blob>('/api/admin/users/template', {
-      responseType: 'blob'
+    const response = await axiosClient.get<Blob>("/api/admin/users/template", {
+      responseType: "blob",
     });
     return response.data;
-  }
+  },
 };

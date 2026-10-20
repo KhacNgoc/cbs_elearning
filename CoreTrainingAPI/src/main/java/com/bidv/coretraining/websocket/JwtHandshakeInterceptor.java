@@ -17,6 +17,8 @@ import java.util.Map;
 @Slf4j
 public class JwtHandshakeInterceptor implements HandshakeInterceptor {
     public static final String USERNAME_ATTRIBUTE = "username";
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bidv.coretraining.security.UserDetailsServiceImpl detailsService;
     private final JwtTokenProvider tokenProvider;
 
     public JwtHandshakeInterceptor(JwtTokenProvider tokenProvider) {
@@ -25,9 +27,9 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
 
     @Override
     public boolean beforeHandshake(ServerHttpRequest request,
-                                   ServerHttpResponse response,
-                                   WebSocketHandler wsHandler,
-                                   Map<String, Object> attributes) {
+            ServerHttpResponse response,
+            WebSocketHandler wsHandler,
+            Map<String, Object> attributes) {
         String token = resolveToken(request);
         if (!StringUtils.hasText(token) || !tokenProvider.validateToken(token)) {
             log.warn("Rejected WebSocket handshake remote={} reason=invalid_or_missing_token",
@@ -36,7 +38,20 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
             return false;
         }
 
-        String username = tokenProvider.getUsernameFromJWT(token);
+        com.bidv.coretraining.entity.User user;
+        try {
+            user = ((com.bidv.coretraining.security.CustomUserDetails) detailsService
+                    .loadUserById(tokenProvider.getUserIdFromJWT(token))).getUser();
+        } catch (Exception ex) {
+            response.setStatusCode(HttpStatus.UNAUTHORIZED);
+            return false;
+        }
+        String username = user.getUsername();
+        if (!tokenProvider.matchesUser(token, user)) {
+            response.setStatusCode(HttpStatus.UNAUTHORIZED);
+            return false;
+        }
+        attributes.put("token", token);
         attributes.put(USERNAME_ATTRIBUTE, username);
         log.debug("Accepted WebSocket handshake user={} remote={}",
                 username, request.getRemoteAddress());
@@ -45,9 +60,9 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
 
     @Override
     public void afterHandshake(ServerHttpRequest request,
-                               ServerHttpResponse response,
-                               WebSocketHandler wsHandler,
-                               Exception exception) {
+            ServerHttpResponse response,
+            WebSocketHandler wsHandler,
+            Exception exception) {
         if (exception != null) {
             log.warn("WebSocket handshake failed remote={}", request.getRemoteAddress(), exception);
         }

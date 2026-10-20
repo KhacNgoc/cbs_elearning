@@ -4,7 +4,7 @@ import com.bidv.coretraining.entity.Comment;
 import com.bidv.coretraining.entity.Lesson;
 import com.bidv.coretraining.entity.LessonDocument;
 import com.bidv.coretraining.entity.ProcedureSection;
-import com.bidv.coretraining.entity.Topic;
+import com.bidv.coretraining.entity.Course;
 import com.bidv.coretraining.entity.VideoSource;
 import org.mapstruct.AfterMapping;
 import org.mapstruct.Mapper;
@@ -18,59 +18,69 @@ import java.util.Comparator;
 @Mapper(componentModel = "spring")
 public interface CourseMapper {
 
-    @Mapping(
-            target = "hasQuiz",
-            expression = "java(topic.getQuestions() != null && topic.getQuestions().stream().anyMatch(question -> question.getLesson() == null))"
-    )
-    TopicDto toTopicDto(Topic topic);
+        @Mapping(target = "hasQuiz", expression = "java(course.getQuestions() != null && course.getQuestions().stream().anyMatch(question -> question.getLesson() == null))")
+        @Mapping(source = "program.id", target = "programId")
+        @Mapping(source = "program.name", target = "programName")
+        @Mapping(source = "program.domain.name", target = "domainName")
+        @Mapping(source = "program.domain.id", target = "domainId")
+        CourseDto toCourseDto(Course course);
 
-    List<TopicDto> toTopicDtoList(List<Topic> topics);
+        List<CourseDto> toCourseDtoList(List<Course> courses);
 
-    @Mapping(source = "topic.id", target = "topicId")
-    @Mapping(
-            target = "hasQuiz",
-            expression = "java(lesson.getQuizQuestions() != null && !lesson.getQuizQuestions().isEmpty())"
-    )
-    @Mapping(target = "comments", qualifiedByName = "rootComments")
-    LessonDto toLessonDto(Lesson lesson);
-
-    @AfterMapping
-    default void inferLegacyVideoSource(Lesson lesson, @MappingTarget LessonDto dto) {
-        if (dto.getVideoSource() == null) {
-            String videoUrl = lesson.getVideoUrl();
-            dto.setVideoSource(videoUrl != null && videoUrl.contains("/uploads/")
-                    ? VideoSource.UPLOAD
-                    : VideoSource.URL);
+        @AfterMapping
+        default void chapterOrder(Course course, @MappingTarget CourseDto dto) {
+                dto.setLessons(toLessonDtoList(course.getChapters().stream()
+                                .sorted(Comparator.comparing(com.bidv.coretraining.entity.Chapter::getChapterOrder))
+                                .flatMap(chapter -> chapter.getLessons().stream()
+                                                .sorted(Comparator.comparing(Lesson::getLessonOrder)))
+                                .toList()));
         }
-    }
 
-    List<LessonDto> toLessonDtoList(List<Lesson> lessons);
+        @Mapping(source = "course.id", target = "courseId")
+        @Mapping(source = "chapter.id", target = "chapterId")
+        @Mapping(target = "quizRequired", expression = "java(lesson.getQuiz() != null && lesson.getQuiz().isRequiredForProgress())")
+        @Mapping(target = "hasQuiz", expression = "java(lesson.hasQuiz())")
+        @Mapping(target = "comments", qualifiedByName = "rootComments")
+        LessonDto toLessonDto(Lesson lesson);
 
-    LessonDocumentDto toLessonDocumentDto(LessonDocument document);
+        @AfterMapping
+        default void inferLegacyVideoSource(Lesson lesson, @MappingTarget LessonDto dto) {
+                if (dto.getVideoSource() == null) {
+                        String videoUrl = lesson.getVideoUrl();
+                        dto.setVideoSource(videoUrl != null && videoUrl.contains("/uploads/")
+                                        ? VideoSource.UPLOAD
+                                        : VideoSource.URL);
+                }
+        }
 
-    List<LessonDocumentDto> toLessonDocumentDtoList(List<LessonDocument> documents);
+        List<LessonDto> toLessonDtoList(List<Lesson> lessons);
 
-    ProcedureSectionDto toProcedureSectionDto(ProcedureSection section);
+        LessonDocumentDto toLessonDocumentDto(LessonDocument document);
 
-    List<ProcedureSectionDto> toProcedureSectionDtoList(List<ProcedureSection> sections);
+        List<LessonDocumentDto> toLessonDocumentDtoList(List<LessonDocument> documents);
 
-    @Mapping(source = "username", target = "user")
-    @Mapping(source = "createdAt", target = "date", dateFormat = "yyyy-MM-dd")
-    @Mapping(source = "parent.id", target = "parentId")
-    @Mapping(source = "replyToUsername", target = "replyToUser")
-    @Mapping(target = "replies", qualifiedByName = "allComments")
-    CommentDto toCommentDto(Comment comment);
+        ProcedureSectionDto toProcedureSectionDto(ProcedureSection section);
 
-    @Named("allComments")
-    List<CommentDto> toCommentDtoList(List<Comment> comments);
+        List<ProcedureSectionDto> toProcedureSectionDtoList(List<ProcedureSection> sections);
 
-    @Named("rootComments")
-    default List<CommentDto> toRootCommentDtoList(List<Comment> comments) {
-        if (comments == null) return List.of();
-        return comments.stream()
-                .filter(comment -> comment.getParent() == null)
-                .sorted(Comparator.comparing(Comment::getCreatedAt).reversed())
-                .map(this::toCommentDto)
-                .toList();
-    }
+        @Mapping(source = "username", target = "user")
+        @Mapping(source = "createdAt", target = "date", dateFormat = "yyyy-MM-dd")
+        @Mapping(source = "parent.id", target = "parentId")
+        @Mapping(source = "replyToUsername", target = "replyToUser")
+        @Mapping(target = "replies", qualifiedByName = "allComments")
+        CommentDto toCommentDto(Comment comment);
+
+        @Named("allComments")
+        List<CommentDto> toCommentDtoList(List<Comment> comments);
+
+        @Named("rootComments")
+        default List<CommentDto> toRootCommentDtoList(List<Comment> comments) {
+                if (comments == null)
+                        return List.of();
+                return comments.stream()
+                                .filter(comment -> comment.getParent() == null)
+                                .sorted(Comparator.comparing(Comment::getCreatedAt).reversed())
+                                .map(this::toCommentDto)
+                                .toList();
+        }
 }

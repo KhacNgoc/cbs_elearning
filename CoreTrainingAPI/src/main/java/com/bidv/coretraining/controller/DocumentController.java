@@ -17,19 +17,36 @@ import java.util.List;
 @RestController
 @RequestMapping("/api")
 public class DocumentController {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bidv.coretraining.service.AuthorizationService authorization;
     private final DocumentService documentService;
     private final RagChatService ragChatService;
+
     public DocumentController(DocumentService documentService, RagChatService ragChatService) {
         this.documentService = documentService;
         this.ragChatService = ragChatService;
     }
 
-    @PostMapping("/admin/topics/{topicId}/documents")
-    public ResponseEntity<CourseDocumentDto> upload(@PathVariable String topicId, @RequestParam("file") MultipartFile file) {
-        return ResponseEntity.accepted().body(documentService.upload(topicId, file));
+    @PostMapping("/admin/courses/{courseId}/documents")
+    public ResponseEntity<CourseDocumentDto> upload(@PathVariable String courseId,
+            @RequestParam("file") MultipartFile file) {
+        authorization.edit(courseId);
+        return ResponseEntity.accepted().body(documentService.upload(courseId, file));
     }
-    @GetMapping("/admin/topics/{topicId}/documents")
-    public ResponseEntity<List<CourseDocumentDto>> list(@PathVariable String topicId) { return ResponseEntity.ok(documentService.list(topicId)); }
+
+    @GetMapping("/admin/courses/{courseId}/documents")
+    public ResponseEntity<List<CourseDocumentDto>> list(@PathVariable String courseId) {
+        authorization.edit(courseId);
+        return ResponseEntity.ok(documentService.list(courseId));
+    }
+
+    @DeleteMapping("/admin/courses/{courseId}/documents/{documentId}")
+    public ResponseEntity<Void> delete(@PathVariable String courseId, @PathVariable String documentId) {
+        authorization.edit(courseId);
+        documentService.delete(courseId, documentId);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/rag/chat")
     public ResponseEntity<RagChatResponse> chat(
             @Valid @RequestBody RagChatRequest request,

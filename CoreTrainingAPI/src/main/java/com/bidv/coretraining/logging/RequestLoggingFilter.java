@@ -24,8 +24,8 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain)
+            HttpServletResponse response,
+            FilterChain filterChain)
             throws ServletException, IOException {
         String traceId = resolveTraceId(request.getHeader(CORRELATION_ID_HEADER));
         long startedAt = System.nanoTime();

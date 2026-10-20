@@ -7,11 +7,22 @@
         <span class="user-status-tag">HỌC VIÊN CHÍNH THỨC</span>
         <h1>Quản Trị Hệ Thống</h1>
         <p class="profile-stats-row">
-          <span>Điểm tích lũy: <strong>{{ userStore.points }} PTS</strong></span>
+          <span
+            >Điểm tích lũy: <strong>{{ userStore.points }} PTS</strong></span
+          >
           <span class="dot-separator">•</span>
-          <span>Bài học hoàn thành: <strong>{{ userStore.completedLessonsCount }} / {{ userStore.totalLessonsCount }}</strong></span>
+          <span
+            >Bài học hoàn thành:
+            <strong
+              >{{ userStore.completedLessonsCount }} /
+              {{ userStore.totalLessonsCount }}</strong
+            ></span
+          >
           <span class="dot-separator">•</span>
-          <span>Huy hiệu đạt được: <strong>{{ userStore.unlockedBadges.length }}</strong></span>
+          <span
+            >Huy hiệu đạt được:
+            <strong>{{ userStore.unlockedBadges.length }}</strong></span
+          >
         </p>
       </div>
     </div>
@@ -20,30 +31,36 @@
       <!-- Left Column: Rank List -->
       <div class="ranks-col card">
         <h2 class="card-title">BẢNG VINH DANH CHI NHÁNH</h2>
-        <p class="card-subtitle">Bảng xếp hạng năng lực học tập dựa trên điểm tích lũy (PTS)</p>
-        
+        <p class="card-subtitle">
+          Bảng xếp hạng năng lực học tập dựa trên điểm tích lũy (PTS)
+        </p>
+
         <div class="ranks-list">
-          <div 
-            v-for="user in sortedLeaderboard" 
-            :key="user.username" 
+          <div
+            v-for="user in sortedLeaderboard"
+            :key="user.username"
             class="rank-row"
             :class="{ 'is-current-user': user.username === 'quantrh' }"
           >
             <div class="rank-num" :class="getRankClass(user.rank)">
               {{ user.rank }}
             </div>
-            
-            <div class="rank-avatar" :style="{ backgroundColor: user.avatarColor }">
+
+            <div
+              class="rank-avatar"
+              :style="{ backgroundColor: user.avatarColor }"
+            >
               {{ user.username.charAt(0).toUpperCase() }}
             </div>
-            
+
             <div class="rank-username-box">
               <span class="rank-fullname">{{ user.fullName }}</span>
               <span class="rank-details">
-                {{ user.completedLessonsCount }} bài học • {{ user.badgesCount }} huy hiệu
+                {{ user.completedLessonsCount }} bài học •
+                {{ user.badgesCount }} huy hiệu
               </span>
             </div>
-            
+
             <div class="rank-points">
               {{ user.points }} <span class="pts-lbl">PTS</span>
             </div>
@@ -54,30 +71,40 @@
       <!-- Right Column: Badges Collection Cabinet -->
       <div class="badges-col card">
         <h2 class="card-title">HỘP HUY HIỆU NĂNG LỰC</h2>
-        <p class="card-subtitle">Bộ sưu tập huy hiệu nghiệp vụ ngân hàng của bạn</p>
-        
+        <p class="card-subtitle">
+          Bộ sưu tập huy hiệu nghiệp vụ ngân hàng của bạn
+        </p>
+
         <div class="cabinet-group">
           <h3>Huy hiệu nghiệp vụ đã nhận</h3>
-          
+
           <div class="badge-cabinet" v-if="userStore.unlockedBadges.length > 0">
-            <div 
-              v-for="badge in userStore.unlockedBadges" 
-              :key="badge.id" 
+            <div
+              v-for="badge in userStore.unlockedBadges"
+              :key="badge.id"
               class="cabinet-badge-card"
               :class="badge.type"
             >
               <div class="cabinet-badge-icon-box">
-                <component :is="getBadgeIcon(badge.icon)" class="cabinet-badge-icon" />
+                <component
+                  :is="getBadgeIcon(badge.icon)"
+                  class="cabinet-badge-icon"
+                />
               </div>
               <div class="cabinet-badge-text">
                 <h4>{{ badge.title }}</h4>
-                <p>Nghiệp vụ {{ badge.topicName }}</p>
-                <span class="unlocked-date">Mở khóa: {{ badge.unlockedAt }}</span>
+                <p>Nghiệp vụ {{ badge.courseName }}</p>
+                <span class="unlocked-date"
+                  >Mở khóa: {{ badge.unlockedAt }}</span
+                >
               </div>
             </div>
           </div>
           <div class="empty-cabinet" v-else>
-            <p>Bạn chưa đạt được huy hiệu nào. Hãy tham gia thi thử trắc nghiệm đạt 80% trở lên!</p>
+            <p>
+              Bạn chưa đạt được huy hiệu nào. Hãy tham gia thi thử trắc nghiệm
+              đạt 80% trở lên!
+            </p>
           </div>
         </div>
 
@@ -88,21 +115,34 @@
               <div class="rule-icon-box gold"><Award class="rule-icon" /></div>
               <div class="rule-text">
                 <strong>Huy hiệu Vàng (Gold Badge)</strong>
-                <span>Đạt điểm tối đa <strong>100%</strong> trong bài thi thử nghiệp vụ.</span>
+                <span
+                  >Đạt điểm tối đa <strong>100%</strong> trong bài thi thử
+                  nghiệp vụ.</span
+                >
               </div>
             </div>
             <div class="rule-item">
-              <div class="rule-icon-box silver"><Medal class="rule-icon" /></div>
+              <div class="rule-icon-box silver">
+                <Medal class="rule-icon" />
+              </div>
               <div class="rule-text">
                 <strong>Huy hiệu Bạc (Silver Badge)</strong>
-                <span>Đạt kết quả thi thử trên <strong>90%</strong> câu hỏi chính xác.</span>
+                <span
+                  >Đạt kết quả thi thử trên <strong>90%</strong> câu hỏi chính
+                  xác.</span
+                >
               </div>
             </div>
             <div class="rule-item">
-              <div class="rule-icon-box bronze"><Shield class="rule-icon" /></div>
+              <div class="rule-icon-box bronze">
+                <Shield class="rule-icon" />
+              </div>
               <div class="rule-text">
                 <strong>Huy hiệu Đồng (Bronze Badge)</strong>
-                <span>Đạt kết quả thi thử từ <strong>80% trở lên</strong> câu hỏi chính xác.</span>
+                <span
+                  >Đạt kết quả thi thử từ <strong>80% trở lên</strong> câu hỏi
+                  chính xác.</span
+                >
               </div>
             </div>
           </div>
@@ -113,18 +153,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
-import { useUserStore } from '../stores/userStore';
-import { leaderboardApi } from '../api/leaderboardApi';
-import type { LeaderboardUser } from '../types';
-import { Award, Shield, Medal } from 'lucide-vue-next';
+import { ref, computed, onMounted } from "vue";
+import { showToast } from "../utils/toast";
+import { useUserStore } from "../stores/userStore";
+import { leaderboardApi } from "../api/leaderboardApi";
+import type { LeaderboardUser } from "../types";
+import { Award, Shield, Medal } from "lucide-vue-next";
 
 const userStore = useUserStore();
 const leaderboardUsers = ref<LeaderboardUser[]>([]);
 
 onMounted(async () => {
   await userStore.fetchProgress();
-  leaderboardUsers.value = await leaderboardApi.getLeaderboard();
+  try {
+    leaderboardUsers.value = await leaderboardApi.getLeaderboard();
+  } catch {
+    showToast("Không thể tải bảng vinh danh. Vui lòng thử lại.", "error");
+  }
 });
 
 // Dynamically construct and sort leaderboard based on user points from API
@@ -133,18 +178,22 @@ const sortedLeaderboard = computed(() => {
 });
 
 const getRankClass = (rank: number) => {
-  if (rank === 1) return 'rank-first';
-  if (rank === 2) return 'rank-second';
-  if (rank === 3) return 'rank-third';
-  return '';
+  if (rank === 1) return "rank-first";
+  if (rank === 2) return "rank-second";
+  if (rank === 3) return "rank-third";
+  return "";
 };
 
 const getBadgeIcon = (icon: string) => {
   switch (icon) {
-    case 'Award': return Award;
-    case 'Medal': return Medal;
-    case 'Shield': return Shield;
-    default: return Shield;
+    case "Award":
+      return Award;
+    case "Medal":
+      return Medal;
+    case "Shield":
+      return Shield;
+    default:
+      return Shield;
   }
 };
 </script>
@@ -157,7 +206,7 @@ const getBadgeIcon = (icon: string) => {
 }
 
 .profile-hero {
-  background: linear-gradient(to right, #005B41 0%, #003d2b 100%);
+  background: linear-gradient(to right, #005b41 0%, #003d2b 100%);
   color: white;
   display: flex;
   align-items: center;
@@ -173,7 +222,7 @@ const getBadgeIcon = (icon: string) => {
   height: 90px;
   border-radius: 50%;
   background-color: var(--accent-color);
-  color: #000;
+  color: var(--ink-000000);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -183,6 +232,7 @@ const getBadgeIcon = (icon: string) => {
 }
 
 .profile-info {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -225,7 +275,7 @@ const getBadgeIcon = (icon: string) => {
 /* Leaderboard layout grid */
 .leaderboard-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 2rem;
 }
 
@@ -279,18 +329,22 @@ const getBadgeIcon = (icon: string) => {
 }
 
 .rank-first {
-  background: linear-gradient(135deg, #FFE082 0%, #FFB300 100%);
-  color: #FF6F00;
+  background: linear-gradient(135deg, var(--surface-ffe082) 0%, #ffb300 100%);
+  color: var(--ink-ff6f00);
 }
 
 .rank-second {
-  background: linear-gradient(135deg, #E0E0E0 0%, #9E9E9E 100%);
-  color: #424242;
+  background: linear-gradient(
+    135deg,
+    var(--surface-e0e0e0) 0%,
+    var(--surface-9e9e9e) 100%
+  );
+  color: var(--ink-424242);
 }
 
 .rank-third {
-  background: linear-gradient(135deg, #FFCC80 0%, #CA8A04 100%);
-  color: #713F12;
+  background: linear-gradient(135deg, var(--surface-ffcc80) 0%, #ca8a04 100%);
+  color: var(--ink-713f12);
 }
 
 .rank-avatar {
@@ -305,6 +359,8 @@ const getBadgeIcon = (icon: string) => {
 }
 
 .rank-username-box {
+  min-width: 0;
+  overflow-wrap: anywhere;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -324,7 +380,7 @@ const getBadgeIcon = (icon: string) => {
 .rank-points {
   font-size: 1.1rem;
   font-weight: 800;
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 
 .pts-lbl {
@@ -385,33 +441,37 @@ const getBadgeIcon = (icon: string) => {
 }
 
 .cabinet-badge-card.gold {
-  background-color: #fffbeb;
-  border-color: #fde68a;
+  background-color: var(--surface-fffbeb);
+  border-color: var(--line-fde68a);
 }
 .cabinet-badge-card.gold .cabinet-badge-icon-box {
-  background: linear-gradient(135deg, #FFE082 0%, #FFB300 100%);
-  color: #FF6F00;
-  border: 2px solid #FF8F00;
+  background: linear-gradient(135deg, var(--surface-ffe082) 0%, #ffb300 100%);
+  color: var(--ink-ff6f00);
+  border: 2px solid #ff8f00;
 }
 
 .cabinet-badge-card.silver {
-  background-color: #f9fafb;
-  border-color: #e5e7eb;
+  background-color: var(--surface-f9fafb);
+  border-color: var(--line-e5e7eb);
 }
 .cabinet-badge-card.silver .cabinet-badge-icon-box {
-  background: linear-gradient(135deg, #E0E0E0 0%, #9E9E9E 100%);
-  color: #424242;
-  border: 2px solid #757575;
+  background: linear-gradient(
+    135deg,
+    var(--surface-e0e0e0) 0%,
+    var(--surface-9e9e9e) 100%
+  );
+  color: var(--ink-424242);
+  border: 2px solid var(--line-757575);
 }
 
 .cabinet-badge-card.bronze {
-  background-color: #fefaf0;
-  border-color: #fef08a;
+  background-color: var(--surface-fefaf0);
+  border-color: var(--line-fef08a);
 }
 .cabinet-badge-card.bronze .cabinet-badge-icon-box {
-  background: linear-gradient(135deg, #FFCC80 0%, #CA8A04 100%);
-  color: #713F12;
-  border: 2px solid #A16207;
+  background: linear-gradient(135deg, var(--surface-ffcc80) 0%, #ca8a04 100%);
+  color: var(--ink-713f12);
+  border: 2px solid #a16207;
 }
 
 .cabinet-badge-icon {
@@ -470,18 +530,18 @@ const getBadgeIcon = (icon: string) => {
 }
 
 .rule-icon-box.gold {
-  background-color: #fef3c7;
-  color: #d97706;
+  background-color: var(--surface-fef3c7);
+  color: var(--ink-d97706);
 }
 
 .rule-icon-box.silver {
-  background-color: #f3f4f6;
-  color: #4b5563;
+  background-color: var(--surface-f3f4f6);
+  color: var(--ink-4b5563);
 }
 
 .rule-icon-box.bronze {
-  background-color: #fef9c3;
-  color: #ca8a04;
+  background-color: var(--surface-fef9c3);
+  color: var(--ink-ca8a04);
 }
 
 .rule-icon {
@@ -508,6 +568,43 @@ const getBadgeIcon = (icon: string) => {
 @media (max-width: 1024px) {
   .leaderboard-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .profile-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1.25rem;
+  }
+  .profile-info h1 {
+    font-size: 1.5rem;
+    overflow-wrap: anywhere;
+  }
+  .profile-stats-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .5rem;
+  }
+  .dot-separator {
+    display: none;
+  }
+  .ranks-col, .badges-col {
+    min-width: 0;
+    padding: 1rem;
+  }
+  .rank-row {
+    flex-wrap: wrap;
+    gap: .5rem;
+    padding: .75rem .5rem;
+  }
+  .rank-num, .rank-avatar, .user-big-avatar {
+    flex-shrink: 0;
+  }
+  .rank-points {
+    margin-left: auto;
+    white-space: nowrap;
   }
 }
 </style>

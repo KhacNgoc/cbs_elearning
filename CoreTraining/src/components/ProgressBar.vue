@@ -5,9 +5,9 @@
       <span class="progress-value">{{ progress }}%</span>
     </div>
     <div class="progress-track" :style="{ height: height }">
-      <div 
-        class="progress-fill" 
-        :class="{ accent: accent }" 
+      <div
+        class="progress-fill"
+        :class="{ accent: accent }"
         :style="{ width: `${progress}%` }"
       ></div>
     </div>
@@ -19,24 +19,24 @@ defineProps({
   progress: {
     type: Number,
     required: true,
-    default: 0
+    default: 0,
   },
   showText: {
     type: Boolean,
-    default: false
+    default: false,
   },
   label: {
     type: String,
-    default: ''
+    default: "",
   },
   accent: {
     type: Boolean,
-    default: false
+    default: false,
   },
   height: {
     type: String,
-    default: '8px'
-  }
+    default: "8px",
+  },
 });
 </script>
 
@@ -59,7 +59,7 @@ defineProps({
 }
 
 .progress-value {
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-weight: 600;
 }
 </style>

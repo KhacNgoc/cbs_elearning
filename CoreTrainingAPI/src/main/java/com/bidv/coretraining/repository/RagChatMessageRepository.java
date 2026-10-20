@@ -8,5 +8,5 @@ import java.util.List;
 
 public interface RagChatMessageRepository extends JpaRepository<RagChatMessage, Long> {
     @EntityGraph(attributePaths = "sources")
-    List<RagChatMessage> findTop50ByUserIdAndTopicIdOrderByCreatedAtDesc(Long userId, String topicId);
+    List<RagChatMessage> findTop50ByUserIdAndCourseIdOrderByCreatedAtDesc(Long userId, String courseId);
 }

@@ -50,21 +50,24 @@
         </div>
       </section>
     </Transition>
-    <Transition name="toast">
-      <div
-        v-if="toast"
-        class="system-toast"
-        :class="`system-toast--${toast.variant}`"
-        :role="toast.variant === 'error' ? 'alert' : 'status'"
-      >
-        <CircleAlert v-if="toast.variant === 'error'" :size="19" />
-        <TriangleAlert v-else-if="toast.variant === 'warning'" :size="19" />
-        <CircleCheck v-else-if="toast.variant === 'success'" :size="19" />
-        <Info v-else :size="19" />
-        <span>{{ toast.message }}</span>
-        <button aria-label="Đóng" @click="toast = null"><X :size="16" /></button>
-      </div>
-    </Transition>
+    <Teleport to="body"
+      ><Transition name="toast">
+        <div
+          v-if="toast"
+          class="system-toast"
+          :class="`system-toast--${toast.variant}`"
+          :role="toast.variant === 'error' ? 'alert' : 'status'"
+        >
+          <CircleAlert v-if="toast.variant === 'error'" :size="19" />
+          <TriangleAlert v-else-if="toast.variant === 'warning'" :size="19" />
+          <CircleCheck v-else-if="toast.variant === 'success'" :size="19" />
+          <Info v-else :size="19" />
+          <span>{{ toast.message }}</span>
+          <button aria-label="Đóng" @click="toast = null">
+            <X :size="16" />
+          </button>
+        </div> </Transition
+    ></Teleport>
   </div>
 </template>
 
@@ -151,20 +154,15 @@ const closeOnOutside = (event: MouseEvent) => {
   if (root.value && !root.value.contains(event.target as Node))
     open.value = false;
 };
-const handleSystemError = (event: Event) =>
-  showToast(
-    (event as CustomEvent<string>).detail || "Hệ thống đang gặp sự cố.",
-    "error",
-  );
-
 const handleAppToast = (event: Event) => {
-  const detail = (event as CustomEvent<{ message?: string; variant?: ToastVariant }>).detail;
+  const detail = (
+    event as CustomEvent<{ message?: string; variant?: ToastVariant }>
+  ).detail;
   if (detail?.message) showToast(detail.message, detail.variant || "info");
 };
 
 onMounted(async () => {
   document.addEventListener("click", closeOnOutside);
-  window.addEventListener("system-error", handleSystemError);
   window.addEventListener("app-toast", handleAppToast);
   try {
     notifications.value = await notificationApi.getNotifications();
@@ -180,7 +178,6 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   socket?.stop();
   document.removeEventListener("click", closeOnOutside);
-  window.removeEventListener("system-error", handleSystemError);
   window.removeEventListener("app-toast", handleAppToast);
   if (toastTimer) window.clearTimeout(toastTimer);
 });
@@ -204,7 +201,7 @@ onBeforeUnmount(() => {
 }
 .notification-trigger:hover {
   background: var(--primary-light);
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 .notification-badge {
   position: absolute;
@@ -215,12 +212,17 @@ onBeforeUnmount(() => {
   padding: 0 4px;
   display: grid;
   place-items: center;
-  border: 2px solid #fff;
+  border: 2px solid var(--line-ffffff);
   border-radius: 99px;
   background: #dc2626;
   color: #fff;
+  font-family: var(--font-family);
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: 1;
+  letter-spacing: normal;
+  text-align: center;
 }
 .notification-panel {
   position: absolute;
@@ -230,7 +232,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   border: 1px solid var(--border-color);
   border-radius: 16px;
-  background: #fff;
+  background: var(--surface-ffffff);
   box-shadow: 0 22px 60px rgba(15, 23, 42, 0.2);
   z-index: 300;
 }
@@ -248,11 +250,11 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 5px;
-  color: #b45309;
+  color: var(--ink-b45309);
   font-size: 0.7rem;
 }
 .notification-panel header span.connected {
-  color: #07845e;
+  color: var(--ink-07845e);
 }
 .notification-panel header span i {
   width: 7px;
@@ -263,7 +265,7 @@ onBeforeUnmount(() => {
 .notification-panel header button {
   border: 0;
   background: transparent;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   cursor: pointer;
   font-size: 0.72rem;
   font-weight: 700;
@@ -280,17 +282,17 @@ onBeforeUnmount(() => {
   grid-template-columns: 38px 1fr 8px;
   gap: 10px;
   border: 0;
-  border-bottom: 1px solid #eef2f6;
-  background: #fff;
+  border-bottom: 1px solid var(--line-eef2f6);
+  background: var(--surface-ffffff);
   color: inherit;
   text-align: left;
   cursor: pointer;
 }
 .notification-item.unread {
-  background: #f2faf7;
+  background: var(--surface-f2faf7);
 }
 .notification-item:hover {
-  background: #f8fafc;
+  background: var(--surface-f8fafc);
 }
 .notification-icon {
   width: 36px;
@@ -298,12 +300,12 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   border-radius: 11px;
-  background: #e5f3ee;
-  color: #006747;
+  background: var(--surface-e5f3ee);
+  color: var(--ink-006747);
 }
 .notification-icon.ENROLLMENT_REJECTED {
-  background: #fef2f2;
-  color: #b42318;
+  background: var(--surface-fef2f2);
+  color: var(--ink-b42318);
 }
 .notification-item strong {
   display: block;
@@ -312,12 +314,12 @@ onBeforeUnmount(() => {
 }
 .notification-item p {
   margin: 0 0 5px;
-  color: #64748b;
+  color: var(--ink-64748b);
   font-size: 0.76rem;
   line-height: 1.4;
 }
 .notification-item small {
-  color: #94a3b8;
+  color: var(--ink-94a3b8);
   font-size: 0.67rem;
 }
 .unread-dot {
@@ -334,7 +336,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  color: #94a3b8;
+  color: var(--ink-94a3b8);
   font-size: 0.82rem;
 }
 .system-toast {
@@ -346,28 +348,36 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 9px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--line-bfdbfe);
   border-radius: 12px;
-  background: #eff6ff;
-  color: #1d4ed8;
+  background: var(--surface-eff6ff);
+  color: var(--ink-1d4ed8);
   box-shadow: var(--shadow-lg);
-  z-index: 500;
+  z-index: 3000;
   font-size: 0.82rem;
 }
 .system-toast--success {
-  border-color: #a7f3d0;
-  background: #ecfdf5;
-  color: #047857;
+  border-color: var(--line-a7f3d0);
+  background: var(--surface-ecfdf5);
+  color: var(--ink-047857);
+}
+.system-toast > svg {
+  flex-shrink: 0;
+}
+.system-toast > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 .system-toast--warning {
-  border-color: #fde68a;
-  background: #fffbeb;
-  color: #a16207;
+  border-color: var(--line-fde68a);
+  background: var(--surface-fffbeb);
+  color: var(--ink-a16207);
 }
 .system-toast--error {
-  border-color: #fecaca;
-  background: #fff7f7;
-  color: #991b1b;
+  border-color: var(--line-fecaca);
+  background: var(--surface-fff7f7);
+  color: var(--ink-991b1b);
 }
 .system-toast button {
   margin-left: auto;

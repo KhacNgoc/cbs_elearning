@@ -15,7 +15,12 @@ import java.util.List;
 public class LessonDto {
     private String id;
     private String title;
-    private String topicId;
+    private String courseId;
+    private String chapterId;
+    private String status;
+    private Long version;
+    private String textBody;
+    private Boolean quizRequired;
     private Integer lessonOrder;
     private String hint;
     private String videoUrl;

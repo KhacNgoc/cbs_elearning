@@ -8,7 +8,7 @@ from app.schemas import ConversationMessage, RewriteResult
 
 
 SUMMARY_LABELS = (
-    "chủ đề chính:",
+    "khóa học chính:",
     "thực thể được tham chiếu:",
     "câu hỏi chính:",
     "đính chính/phủ định mới nhất:",

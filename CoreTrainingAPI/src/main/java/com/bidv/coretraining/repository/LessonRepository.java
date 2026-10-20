@@ -8,5 +8,10 @@ import java.util.List;
 
 @Repository
 public interface LessonRepository extends JpaRepository<Lesson, String> {
-    List<Lesson> findByTopicIdOrderByLessonOrderAscIdAsc(String topicId);
+    @org.springframework.data.jpa.repository.Query("select distinct l from Lesson l left join l.documents d where d.fileUrl=:path or l.content.videoUrl=:path")
+    java.util.List<Lesson> findByAssetPath(@org.springframework.data.repository.query.Param("path") String path);
+
+    List<Lesson> findByChapterIdOrderByLessonOrderAscIdAsc(String chapterId);
+
+    List<Lesson> findByCourseIdOrderByLessonOrderAscIdAsc(String courseId);
 }

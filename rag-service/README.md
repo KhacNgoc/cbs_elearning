@@ -4,6 +4,39 @@ The FastAPI service accepts PDF/DOCX documents, splits extracted text by page, e
 
 Each Qdrant payload stores `excerpt` (the first 500 characters, returned to the frontend) separately from `full_text` (the entire chunk, used only to construct the LLM context).
 
+## Nguồn kiến thức cho bài kiểm tra bài học
+
+Trong phần **Tạo bằng AI**, người soạn chọn tài liệu AI của khóa học và lưu nguồn
+cho bài học trước khi tạo câu hỏi. PDF hỗ trợ toàn bộ tài liệu hoặc nhiều khoảng
+trang (số trang của file). DOCX hỗ trợ toàn bộ tài liệu hoặc nhiều mục theo các
+heading của file; DOCX không có thông tin phân trang nên không chọn theo trang.
+Có thể xem trích đoạn trong phạm vi đã chọn hoặc tải thêm tài liệu ngay tại đây.
+Tài liệu phải xử lý xong trước khi chọn.
+
+Nguồn được lưu trong bảng `lesson_knowledge_sources`, liên kết bài học với
+`course_documents` và phạm vi trang/mục. Bảng được Hibernate tạo bổ sung khi
+backend khởi động với cấu hình `ddl-auto: update` hiện tại. Cần cập nhật đồng thời
+backend, frontend và RAG service. Không cần reset database hoặc embedding lại
+tài liệu đã có: truy vấn sử dụng các payload `course_id`, `document_id`, `page`
+và `section` hiện có. Một tài liệu/phần tài liệu có thể được dùng cho nhiều bài.
+
+Backend đọc nguồn đã lưu để gửi `lesson_id`, `lesson_name` và `sources` vào
+`/quiz/generate`; không nhận phạm vi do client tự khai báo cho lần tạo đề.
+RAG lọc khóa học AND (tài liệu + phạm vi), OR giữa các nguồn. Bài học chưa có
+nguồn bị từ chối; thiếu nội dung sẽ trả cảnh báo, không tự mở rộng sang cả khóa.
+Kiểm định LLM về căn cứ và mức độ phù hợp với bài học luôn chạy cho đề bài học.
+Chatbot và đề tổng hợp khóa học vẫn dùng phạm vi khóa học.
+
+`GET /documents/{document_id}/outline?course_id=...` đọc metadata/trích đoạn
+từ Qdrant để hỗ trợ chọn nguồn, không gọi embedding. Backend kiểm tra tài liệu
+thuộc đúng khóa và đã sẵn sàng trước khi cho phép xem hoặc lưu nguồn.
+
+Kiểm thử RAG không cần kết nối Ollama/Qdrant bên ngoài:
+
+```sh
+python -B -m unittest discover -s tests -v
+```
+
 ## Code structure
 
 - `app/main.py`: creates the FastAPI application and wires the router.
@@ -21,8 +54,26 @@ the utility modules.
 ## Run
 
 1. Copy `.env.example` to `.env` and set a PostgreSQL password.
-2. Run `docker compose up --build` from the repository root. The initial Ollama model download may take several minutes.
+2. Run `docker compose --profile chatbot up -d --build` from the repository root. The initial Ollama model download may take several minutes.
 3. Check `http://localhost:8001/health`.
+
+The `chatbot` profile includes Qdrant, Ollama, model initialization, and the RAG
+service. Plain `docker compose up -d --build` starts the core application without
+these services. Chat, AI question generation, and AI document processing require
+the chatbot services to be running.
+
+To start only the chatbot stack using production environment settings:
+
+```bash
+docker compose --env-file .env.production --profile chatbot up -d --build qdrant ollama ollama-init rag-service
+```
+
+Adding profiles does not stop containers that are already running. To stop only
+the chatbot stack without removing stored models or vector data:
+
+```bash
+docker compose --env-file .env.production --profile chatbot stop rag-service ollama-init ollama qdrant
+```
 
 On Apple Silicon, Ollama inside Docker is CPU-only. For low-latency quiz
 generation, run Ollama natively with Metal and apply the macOS Compose override:
@@ -32,7 +83,7 @@ OLLAMA_HOST=127.0.0.1:11435 OLLAMA_NUM_PARALLEL=5 ollama serve
 OLLAMA_HOST=http://127.0.0.1:11435 ollama pull qwen3:4b
 OLLAMA_HOST=http://127.0.0.1:11435 ollama pull nomic-embed-text
 docker compose --env-file .env.production \
-  -f docker-compose.yml -f docker-compose.macos.yml up -d --build
+  -f docker-compose.yml -f docker-compose.macos.yml --profile chatbot up -d --build
 ```
 
 The native Ollama process must remain running. The RAG service keeps the quiz
@@ -83,9 +134,19 @@ to match the inference server's parallel slots on GPU servers. `QUIZ_NUM_CTX`,
 by structural or grounding checks; the default `2` performs one replacement pass.
 The per-question timeout is controlled by
 `OLLAMA_QUIZ_GENERATION_TIMEOUT_SECONDS` (120s). A second LLM verification pass
-is disabled by default; enable `QUIZ_LLM_VERIFICATION_ENABLED=true` when the
-deployment has spare inference capacity. Its timeout is controlled by
+is always enabled for lesson quizzes and enabled by default for course-wide
+quizzes with `QUIZ_LLM_VERIFICATION_ENABLED=true`. Each question is reviewed
+independently using `OLLAMA_CHAT_MODEL`: the reviewer receives the stem and
+options without the proposed answer key, identifies all correct options from
+the source, and the result must match the generated key. Its timeout is controlled by
 `OLLAMA_QUIZ_VERIFICATION_TIMEOUT_SECONDS` (60s).
+
+Quiz generation defaults to qwen3:4b. Structural checks reject answer phrases
+in the stem, malformed fill-in questions, circular definitions, broken option
+text, and false distractors made by recombining already-correct independent items.
+Repeated objectives are removed. Replacements receive rejection feedback.
+If too few candidates pass, the response returns fewer questions with a warning
+instead of filling the requested count with invalid questions.
 
 For production, `OLLAMA_URL` may point to any reachable Ollama server. Select
 `OLLAMA_QUIZ_MODEL` and `QUIZ_GENERATION_CONCURRENCY` from benchmark results on
@@ -141,15 +202,18 @@ The chat model defaults to `qwen3:4b`; change `OLLAMA_CHAT_MODEL=qwen3:8b` in `.
 - `GET /health`
 - `POST /ingest` multipart: `file`, `document_id`, `course_id`
 - `POST /chat`: `{ "question": "Nó được tạo khi nào?", "course_id": "CIF", "conversation_summary": "...", "recent_messages": [{"role": "user", "content": "CIF là gì?"}] }`
-- `POST /quiz/generate`: creates grounded single/multiple-choice drafts. Retrieval is always filtered by `course_id`; optional `lesson_name` only guides semantic search and is never treated as a knowledge source.
+- `POST /quiz/generate`: creates grounded single/multiple-choice drafts. Retrieval is filtered by `course_id` and saved document/page/section sources for lesson quizzes. Lesson requests require explicit sources; the lesson title guides semantic search but is not a knowledge source.
 - `POST /summarize`: internal endpoint receiving `current_summary` and `new_messages`
 
 Spring Boot provides the authenticated application-facing endpoints:
 
-- `POST /api/admin/topics/{topicId}/documents` (admin, multipart `file`)
-- `GET /api/admin/topics/{topicId}/documents` (admin)
+- `POST /api/admin/courses/{courseId}/documents` (admin, multipart `file`)
+- `GET /api/admin/courses/{courseId}/documents` (admin)
+- `GET /api/admin/courses/{courseId}/documents/{documentId}/outline` (admin)
+- `GET /api/admin/lessons/{lessonId}/knowledge-sources` (admin)
+- `PUT /api/admin/lessons/{lessonId}/knowledge-sources` (admin; save an array of document/page/section selections)
 - `POST /api/rag/chat` (authenticated)
-- `POST /api/admin/quizzes/generate` (admin; topic is required and lesson is optional)
+- `POST /api/admin/quizzes/generate` (admin; course is required; a selected lesson must have saved sources)
 - `GET /api/rag/chat/history?courseId=...&conversationId=...` (authenticated; `conversationId` is optional)
 
 The application-facing chat request accepts an optional `conversationId`. If
@@ -161,3 +225,24 @@ service. Recent-window and summary thresholds are configured with
 `RAG_SUMMARY_MESSAGE_THRESHOLD`, and `RAG_SUMMARY_CHARACTER_THRESHOLD`.
 
 The Vue API helpers are in `CoreTraining/src/api/adminApi.ts` (upload/list) and `CoreTraining/src/api/ragApi.ts` (chat). Upload uses `FormData`; never set the global JSON header for this request.
+# Ollama GPU on macOS
+
+The macOS override connects RAG to native Ollama on localhost port 11435.
+The embedding model must remain the same as the one used to index existing vectors.
+Install the included LaunchAgent after installing Ollama at /usr/local/bin/ollama:
+
+```sh
+mkdir -p "$HOME/Library/LaunchAgents"
+cp scripts/com.cbs-elearning.ollama.plist "$HOME/Library/LaunchAgents/"
+launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.cbs-elearning.ollama.plist"
+OLLAMA_HOST=http://127.0.0.1:11435 ollama pull qwen3:4b
+OLLAMA_HOST=http://127.0.0.1:11435 ollama pull nomic-embed-text
+docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.macos.yml --profile chatbot up -d --build --no-deps backend frontend rag-service
+```
+
+The launch agent starts at login and restarts the native server if it exits.
+Chat output is limited to a short answer with a 384-token budget. Truncated or
+invalid JSON receives at most one compact retry within the same generation
+deadline. Output errors use HTTP 502, generation timeouts use HTTP 504, and
+transport/model availability errors use HTTP 503. Ollama timings and stop
+reasons are logged without logging the answer body.

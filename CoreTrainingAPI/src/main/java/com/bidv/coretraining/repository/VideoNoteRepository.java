@@ -9,9 +9,9 @@ import java.util.Optional;
 
 @Repository
 public interface VideoNoteRepository extends JpaRepository<VideoNote, Long> {
-    List<VideoNote> findAllByLessonIdAndUserUsernameOrderByTimestampSecondsAscCreatedAtAsc(
-            String lessonId, String username);
+        List<VideoNote> findAllByLessonIdAndUserUsernameOrderByTimestampSecondsAscCreatedAtAsc(
+                        String lessonId, String username);
 
-    Optional<VideoNote> findByIdAndLessonIdAndUserUsername(
-            Long id, String lessonId, String username);
+        Optional<VideoNote> findByIdAndLessonIdAndUserUsername(
+                        Long id, String lessonId, String username);
 }

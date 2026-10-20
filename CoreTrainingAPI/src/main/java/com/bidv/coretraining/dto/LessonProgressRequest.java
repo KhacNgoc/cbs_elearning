@@ -13,4 +13,11 @@ public class LessonProgressRequest {
 
     @PositiveOrZero
     private Double durationSeconds;
+    @jakarta.validation.constraints.Pattern(regexp = "VIDEO|DOCUMENT|TEXT")
+    private String contentType;
+    private Long documentId;
+    @jakarta.validation.constraints.Positive
+    private Integer documentPage;
+    @PositiveOrZero
+    private Double scrollOffset;
 }

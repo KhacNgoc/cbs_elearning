@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "rag_conversations", indexes = {
-        @Index(name = "idx_rag_conversation_owner_topic_updated", columnList = "user_id,topic_id,updated_at")
+        @Index(name = "idx_rag_conversation_owner_course_updated", columnList = "user_id,course_id,updated_at")
 })
 @Getter
 @Setter
@@ -24,8 +24,8 @@ public class RagConversation {
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "topic_id", nullable = false)
-    private Topic topic;
+    @JoinColumn(name = "course_id", nullable = false)
+    private Course course;
 
     @Column(length = 255)
     private String title;

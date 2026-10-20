@@ -9,7 +9,7 @@ import java.util.List;
 @Mapper(componentModel = "spring")
 public interface QuizMapper {
 
-    @Mapping(source = "topic.id", target = "topicId")
+    @Mapping(source = "course.id", target = "courseId")
     @Mapping(source = "lesson.id", target = "lessonId")
     QuestionDto toQuestionDto(Question question);
 

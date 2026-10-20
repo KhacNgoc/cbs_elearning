@@ -23,5 +23,5 @@ public class RegisterRequest {
 
     private String avatarColor;
 
-    private String userGroupId;
+
 }

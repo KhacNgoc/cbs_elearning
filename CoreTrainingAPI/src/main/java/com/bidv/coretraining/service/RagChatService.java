@@ -14,6 +14,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -22,33 +25,36 @@ import java.util.*;
 @Slf4j
 public class RagChatService {
     private final UserRepository userRepository;
-    private final TopicRepository topicRepository;
+    private final CourseRepository courseRepository;
     private final RagConversationRepository conversationRepository;
     private final RagConversationMessageRepository messageRepository;
     private final RagChatMessageRepository legacyMessageRepository;
     private final RagConversationSummaryService summaryService;
+    private final TrainingStructureService structure;
     private final RestTemplate restTemplate;
     private final String ragUrl;
     private final int recentMessageLimit;
     private final int recentCharacterLimit;
 
     public RagChatService(UserRepository userRepository,
-                          TopicRepository topicRepository,
-                          RagConversationRepository conversationRepository,
-                          RagConversationMessageRepository messageRepository,
-                          RagChatMessageRepository legacyMessageRepository,
-                          RagConversationSummaryService summaryService,
-                          @Value("${app.rag-url}") String ragUrl,
-                          @Value("${app.rag.recent-message-limit:8}") int recentMessageLimit,
-                          @Value("${app.rag.recent-character-limit:12000}") int recentCharacterLimit,
-                          @Value("${app.rag.connect-timeout-ms:5000}") int connectTimeoutMs,
-                          @Value("${app.rag.read-timeout-ms:300000}") int readTimeoutMs) {
+            CourseRepository courseRepository,
+            RagConversationRepository conversationRepository,
+            RagConversationMessageRepository messageRepository,
+            RagChatMessageRepository legacyMessageRepository,
+            RagConversationSummaryService summaryService,
+            TrainingStructureService structure,
+            @Value("${app.rag-url}") String ragUrl,
+            @Value("${app.rag.recent-message-limit:8}") int recentMessageLimit,
+            @Value("${app.rag.recent-character-limit:12000}") int recentCharacterLimit,
+            @Value("${app.rag.connect-timeout-ms:5000}") int connectTimeoutMs,
+            @Value("${app.rag.read-timeout-ms:300000}") int readTimeoutMs) {
         this.userRepository = userRepository;
-        this.topicRepository = topicRepository;
+        this.courseRepository = courseRepository;
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.legacyMessageRepository = legacyMessageRepository;
         this.summaryService = summaryService;
+        this.structure = structure;
         this.ragUrl = ragUrl;
         int cappedRecentLimit = Math.max(2, Math.min(recentMessageLimit, 30));
         this.recentMessageLimit = cappedRecentLimit % 2 == 0 ? cappedRecentLimit : cappedRecentLimit - 1;
@@ -62,8 +68,8 @@ public class RagChatService {
     public RagChatResponse chat(String username, RagChatRequest request) {
         long startedAt = System.nanoTime();
         User user = requireUser(username);
-        Topic topic = requireAccessibleTopic(user, request.courseId());
-        RagConversation conversation = resolveConversation(user, topic, request.conversationId());
+        Course course = requireAccessibleCourse(user, request.courseId());
+        RagConversation conversation = resolveConversation(user, course, request.conversationId());
 
         String question = request.question().trim();
         if (conversation.getTitle() == null || conversation.getTitle().isBlank()) {
@@ -82,9 +88,10 @@ public class RagChatService {
         List<RagConversationMessage> recent = recentBefore(conversation.getId(), userMessage.getId());
         Map<String, Object> pythonRequest = new LinkedHashMap<>();
         pythonRequest.put("question", question);
-        pythonRequest.put("course_id", topic.getId());
-        pythonRequest.put("topic_name", topic.getName());
-        if (request.page() != null) pythonRequest.put("page", request.page());
+        pythonRequest.put("course_id", course.getId());
+        pythonRequest.put("course_name", course.getName());
+        if (request.page() != null)
+            pythonRequest.put("page", request.page());
         pythonRequest.put("conversation_summary", Objects.toString(conversation.getSummary(), ""));
         pythonRequest.put("recent_messages", recent.stream()
                 .map(message -> Map.of("role", message.getRole(), "content", message.getContent()))
@@ -94,9 +101,19 @@ public class RagChatService {
         try {
             ragResponse = restTemplate.postForObject(
                     ragUrl + "/chat", pythonRequest, RagServiceChatResponse.class);
+        } catch (HttpStatusCodeException exception) {
+            int status = exception.getStatusCode().value();
+            if (status == 502 || status == 504) {
+                throw new ResponseStatusException(
+                        status == 502 ? HttpStatus.BAD_GATEWAY : HttpStatus.GATEWAY_TIMEOUT,
+                        status == 502 ? "Trợ lý chưa tạo được câu trả lời hoàn chỉnh. Vui lòng thử lại."
+                                : "Trợ lý chưa hoàn tất câu trả lời trong thời gian cho phép. Vui lòng thử lại.",
+                        exception);
+            }
+            throw new RagServiceUnavailableException("Trợ lý học tập tạm thời không khả dụng", exception);
         } catch (RestClientException exception) {
             log.error("RAG chat unavailable conversationId={} userId={} courseId={} errorType={}",
-                    conversation.getId(), user.getId(), topic.getId(), exception.getClass().getSimpleName());
+                    conversation.getId(), user.getId(), course.getId(), exception.getClass().getSimpleName());
             throw new RagServiceUnavailableException("Trợ lý học tập tạm thời không khả dụng", exception);
         }
         if (ragResponse == null || ragResponse.answer() == null) {
@@ -125,15 +142,16 @@ public class RagChatService {
         messageRepository.save(assistantMessage);
         touch(conversation);
         try {
-            summaryService.updateAsync(conversation.getId(), user.getId(), topic.getId());
+            summaryService.updateAsync(conversation.getId(), user.getId(), course.getId());
         } catch (RuntimeException exception) {
             log.warn("Conversation summary dispatch failed conversationId={} userId={} courseId={} errorType={}",
-                    conversation.getId(), user.getId(), topic.getId(), exception.getClass().getSimpleName());
+                    conversation.getId(), user.getId(), course.getId(), exception.getClass().getSimpleName());
         }
 
         long elapsedMs = (System.nanoTime() - startedAt) / 1_000_000;
-        log.info("RAG chat completed conversationId={} userId={} courseId={} grounded={} clarification={} sources={} elapsedMs={}",
-                conversation.getId(), user.getId(), topic.getId(), ragResponse.grounded(),
+        log.info(
+                "RAG chat completed conversationId={} userId={} courseId={} grounded={} clarification={} sources={} elapsedMs={}",
+                conversation.getId(), user.getId(), course.getId(), ragResponse.grounded(),
                 ragResponse.needsClarification(), sources.size(), elapsedMs);
         return new RagChatResponse(ragResponse.answer(), ragResponse.grounded(), sources,
                 conversation.getId(), ragResponse.needsClarification());
@@ -142,14 +160,16 @@ public class RagChatService {
     @Transactional(readOnly = true)
     public List<RagChatHistoryDto> history(String username, String courseId, String conversationId) {
         User user = requireUser(username);
-        Topic topic = requireAccessibleTopic(user, courseId);
+        Course course = requireAccessibleCourse(user, courseId);
         Optional<RagConversation> selected = conversationId == null || conversationId.isBlank()
-                ? conversationRepository.findFirstByUserIdAndTopicIdOrderByUpdatedAtDesc(user.getId(), topic.getId())
-                : Optional.of(requireOwnedConversation(user, topic, conversationId));
-        if (selected.isEmpty()) return legacyHistory(user.getId(), topic.getId());
+                ? conversationRepository.findFirstByUserIdAndCourseIdOrderByUpdatedAtDesc(user.getId(), course.getId())
+                : Optional.of(requireOwnedConversation(user, course, conversationId));
+        if (selected.isEmpty())
+            return legacyHistory(user.getId(), course.getId());
 
         RagConversation conversation = selected.get();
-        List<RagConversationMessage> messages = messageRepository.findByConversationIdOrderByIdAsc(conversation.getId());
+        List<RagConversationMessage> messages = messageRepository
+                .findByConversationIdOrderByIdAsc(conversation.getId());
         List<RagChatHistoryDto> result = new ArrayList<>();
         RagConversationMessage pendingUser = null;
         for (RagConversationMessage message : messages) {
@@ -157,11 +177,12 @@ public class RagChatService {
                 pendingUser = message;
             } else if ("assistant".equals(message.getRole()) && pendingUser != null) {
                 result.add(new RagChatHistoryDto(
-                        message.getId(), conversation.getId(), topic.getId(), pendingUser.getContent(),
+                        message.getId(), conversation.getId(), course.getId(), pendingUser.getContent(),
                         message.getContent(), Boolean.TRUE.equals(message.getGrounded()),
                         Boolean.TRUE.equals(message.getNeedsClarification()),
                         message.getSources().stream().map(source -> new RagSourceDto(
-                                source.getDocumentId(), source.getDocumentName(), source.getPage(), source.getSection())).toList(),
+                                source.getDocumentId(), source.getDocumentName(), source.getPage(),
+                                source.getSection())).toList(),
                         message.getCreatedAt()));
                 pendingUser = null;
             }
@@ -169,40 +190,41 @@ public class RagChatService {
         return result.size() <= 50 ? result : result.subList(result.size() - 50, result.size());
     }
 
-    private List<RagChatHistoryDto> legacyHistory(Long userId, String topicId) {
+    private List<RagChatHistoryDto> legacyHistory(Long userId, String courseId) {
         List<RagChatMessage> messages = new ArrayList<>(
-                legacyMessageRepository.findTop50ByUserIdAndTopicIdOrderByCreatedAtDesc(userId, topicId));
+                legacyMessageRepository.findTop50ByUserIdAndCourseIdOrderByCreatedAtDesc(userId, courseId));
         Collections.reverse(messages);
         return messages.stream().map(message -> new RagChatHistoryDto(
-                message.getId(), null, topicId, message.getQuestion(), message.getAnswer(),
+                message.getId(), null, courseId, message.getQuestion(), message.getAnswer(),
                 message.isGrounded(), false,
                 message.getSources().stream().map(source -> new RagSourceDto(
-                        source.getDocumentId(), source.getDocumentName(), source.getPage(), source.getSection())).toList(),
+                        source.getDocumentId(), source.getDocumentName(), source.getPage(), source.getSection()))
+                        .toList(),
                 message.getCreatedAt())).toList();
     }
 
-    private RagConversation resolveConversation(User user, Topic topic, String conversationId) {
+    private RagConversation resolveConversation(User user, Course course, String conversationId) {
         if (conversationId != null && !conversationId.isBlank()) {
-            return requireOwnedConversation(user, topic, conversationId);
+            return requireOwnedConversation(user, course, conversationId);
         }
         LocalDateTime now = LocalDateTime.now();
         return conversationRepository.save(RagConversation.builder()
                 .id(UUID.randomUUID().toString())
                 .user(user)
-                .topic(topic)
+                .course(course)
                 .summary("")
                 .createdAt(now)
                 .updatedAt(now)
                 .build());
     }
 
-    private RagConversation requireOwnedConversation(User user, Topic topic, String conversationId) {
+    private RagConversation requireOwnedConversation(User user, Course course, String conversationId) {
         RagConversation conversation = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Conversation", "id", conversationId));
         if (!conversation.getUser().getId().equals(user.getId())) {
             throw new AccessDeniedException("Cuộc hội thoại không thuộc người dùng hiện tại");
         }
-        if (!conversation.getTopic().getId().equals(topic.getId())) {
+        if (!conversation.getCourse().getId().equals(course.getId())) {
             throw new BadRequestException("Cuộc hội thoại thuộc một khóa học khác");
         }
         return conversation;
@@ -214,13 +236,16 @@ public class RagChatService {
         List<RagConversationMessage> selected = new ArrayList<>();
         int characters = 0;
         for (RagConversationMessage message : descending) {
-            if (selected.size() >= recentMessageLimit || characters + message.getContent().length() > recentCharacterLimit) break;
+            if (selected.size() >= recentMessageLimit
+                    || characters + message.getContent().length() > recentCharacterLimit)
+                break;
             selected.add(message);
             characters += message.getContent().length();
         }
         Collections.reverse(selected);
         // Avoid starting the window with an orphan assistant response.
-        if (!selected.isEmpty() && "assistant".equals(selected.get(0).getRole())) selected.remove(0);
+        if (!selected.isEmpty() && "assistant".equals(selected.get(0).getRole()))
+            selected.remove(0);
         return selected;
     }
 
@@ -234,14 +259,13 @@ public class RagChatService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
     }
 
-    private Topic requireAccessibleTopic(User user, String topicId) {
-        Topic topic = topicRepository.findById(topicId)
-                .orElseThrow(() -> new ResourceNotFoundException("Topic", "id", topicId));
-        boolean accessible = "ROLE_ADMIN".equals(user.getRole())
-                || userRepository.hasRegisteredTopic(user.getUsername(), topicId)
-                || userRepository.hasMandatoryTopic(user.getUsername(), topicId);
-        if (!accessible) throw new AccessDeniedException("Bạn không có quyền truy cập tài liệu của khóa học này");
-        return topic;
+    private Course requireAccessibleCourse(User user, String courseId) {
+        // Chat intentionally has no long transaction around the external AI call.
+        // Reload and check learning relationships in a short service transaction.
+        structure.requireCourse(courseId, user.getUsername());
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course", "id", courseId));
+        return course;
     }
 
 }

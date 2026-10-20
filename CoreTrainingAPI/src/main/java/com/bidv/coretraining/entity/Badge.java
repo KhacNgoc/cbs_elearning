@@ -22,8 +22,8 @@ public class Badge {
     private String type; // "bronze", "silver", "gold"
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "topic_id", nullable = false)
-    private Topic topic;
+    @JoinColumn(name = "course_id", nullable = false)
+    private Course course;
 
     @Column(nullable = false)
     private String icon; // "Award", "Medal", "Shield"

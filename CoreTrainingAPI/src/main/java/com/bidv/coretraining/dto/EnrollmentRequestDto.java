@@ -14,8 +14,8 @@ public class EnrollmentRequestDto {
     private Long userId;
     private String username;
     private String fullName;
-    private String topicId;
-    private String topicName;
+    private String courseId;
+    private String courseName;
     private EnrollmentStatus status;
     private LocalDateTime requestedAt;
     private LocalDateTime reviewedAt;

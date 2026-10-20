@@ -1,124 +1,135 @@
 <template>
-  <div class="chart-wrapper">
-    <Radar :data="chartData" :options="chartOptions" />
+  <div>
+    <div v-if="evaluated.length >= 3" class="chart-wrapper">
+      <Radar
+        :data="chartData"
+        :options="chartOptions"
+        aria-label="Năng lực nghiệp vụ theo kết quả kiểm tra, thang điểm 100"
+      />
+    </div>
+    <p v-else class="chart-note">
+      {{
+        evaluated.length
+          ? "Chưa đủ 3 lĩnh vực có kết quả để vẽ biểu đồ radar."
+          : "Chưa có kết quả kiểm tra để đánh giá năng lực."
+      }}
+    </p>
+    <ul class="competency-list">
+      <li v-for="item in competencies" :key="item.id">
+        <span>{{ item.label }}</span
+        ><strong>{{
+          item.value === null ? "Chưa đánh giá" : `${item.value}/100`
+        }}</strong
+        ><small v-if="item.count">{{ item.count }} bài đánh giá</small>
+      </li>
+    </ul>
   </div>
 </template>
-
 <script setup lang="ts">
-import { computed } from 'vue';
-import { Radar } from 'vue-chartjs';
+import { computed } from "vue";
+import { Radar } from "vue-chartjs";
 import {
   Chart as ChartJS,
-  Title,
   Tooltip,
   Legend,
   PointElement,
   LineElement,
   RadialLinearScale,
-  Filler
-} from 'chart.js';
-import { useUserStore } from '../stores/userStore';
-
+  Filler,
+} from "chart.js";
+import type { ChartOptions } from "chart.js";
+import { useReducedMotion } from "../composables/useReducedMotion";
+import { useTheme } from "../composables/useTheme";
 ChartJS.register(
-  Title,
   Tooltip,
   Legend,
   PointElement,
   LineElement,
   RadialLinearScale,
-  Filler
+  Filler,
 );
-
-const userStore = useUserStore();
-
-// Mapped topics in order corresponding to Image 3 (7 segments of radar)
-const topicsOrder = [
-  { id: 'TIEN_VAY', label: 'TIẾN VAY' },
-  { id: 'CHUYEN_TIEN', label: 'CHUYỂN TIỀN' },
-  { id: 'TIEN_GUI', label: 'TIỀN GỬI' },
-  { id: 'CIF', label: 'CIF' },
-  { id: 'TELLER', label: 'TELLER' },
-  { id: 'GL', label: 'GL' },
-  { id: 'THE', label: 'THẺ' }
-];
-
-const chartData = computed(() => {
-  const dataValues = topicsOrder.map(topic => {
-    const quiz = userStore.getTopicQuizScore(topic.id);
-    // If no quiz, base it slightly on study progress (max 20%) to show some shape, or 0%
-    if (quiz) {
-      return quiz.percent;
-    }
-    const progress = userStore.getTopicProgressPercent(topic.id);
-    return Math.round(progress * 0.2); // Up to 20% just by studying lessons
-  });
-
-  return {
-    labels: topicsOrder.map(t => t.label),
-    datasets: [
-      {
-        label: 'Năng lực nghiệp vụ (%)',
-        backgroundColor: 'rgba(0, 91, 65, 0.2)', // BIDV green with opacity
-        borderColor: '#005B41',
-        pointBackgroundColor: '#D4AF37', // Gold point
-        pointBorderColor: '#fff',
-        pointHoverBackgroundColor: '#fff',
-        pointHoverBorderColor: '#005B41',
-        data: dataValues
-      }
-    ]
-  };
-});
-
-const chartOptions = {
+const props = defineProps<{
+  competencies: {
+    id: string;
+    label: string;
+    value: number | null;
+    count: number;
+  }[];
+}>();
+const evaluated = computed(() =>
+  props.competencies.filter((c) => c.value !== null),
+);
+const { isDark } = useTheme();
+const chartData = computed(() => ({
+  labels: evaluated.value.map((c) => c.label),
+  datasets: [
+    {
+      label: "Năng lực nghiệp vụ /100",
+      data: evaluated.value.map((c) => c.value),
+      backgroundColor: isDark.value
+        ? "rgba(98,220,181,.16)"
+        : "rgba(0,91,65,.12)",
+      borderColor: isDark.value ? "#62dcb5" : "#005B41",
+      pointBackgroundColor: isDark.value ? "#62dcb5" : "#005B41",
+      borderWidth: 2,
+    },
+  ],
+}));
+const reducedMotion = useReducedMotion();
+const chartOptions = computed<ChartOptions<"radar">>(() => ({
   responsive: true,
   maintainAspectRatio: false,
+  animation: {
+    duration: reducedMotion.value ? 0 : 240,
+    easing: "easeOutCubic",
+  },
   scales: {
     r: {
-      angleLines: {
-        color: '#E2E8F0'
-      },
-      grid: {
-        color: '#E2E8F0'
+      min: 0,
+      max: 100,
+      grid: { color: isDark.value ? "#35465a" : "#e2e8f0" },
+      angleLines: { color: isDark.value ? "#35465a" : "#e2e8f0" },
+      ticks: {
+        stepSize: 25,
+        color: isDark.value ? "#a8b8ca" : "#64748b",
+        backdropColor: "transparent",
       },
       pointLabels: {
-        font: {
-          family: 'Outfit',
-          size: 11,
-          weight: 'bold' as const
-        },
-        color: '#1E293B'
+        color: isDark.value ? "#e6edf5" : "#1e293b",
+        font: { size: 12 },
       },
-      ticks: {
-        display: false, // Hide ticks to keep clean, or show with small size
-        maxTicksLimit: 5
-      },
-      min: 0,
-      max: 100
-    }
-  },
-  plugins: {
-    legend: {
-      display: false // Hide legend to match design mockup
     },
-    tooltip: {
-      callbacks: {
-        label: function(context: any) {
-          return ` Mức độ: ${context.raw}%`;
-        }
-      }
-    }
-  }
-};
+  },
+  plugins: { legend: { display: false } },
+}));
 </script>
-
 <style scoped>
 .chart-wrapper {
+  height: 300px;
   position: relative;
   width: 100%;
-  height: 320px;
+}
+.chart-note {
+  color: var(--text-muted);
+  padding: 1rem 0;
+}
+.competency-list {
+  list-style: none;
+  padding: 0;
+}
+.competency-list li {
   display: flex;
-  justify-content: center;
-  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: space-between;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.8rem;
+}
+.competency-list strong {
+  color: var(--primary-ink);
+}
+.competency-list small {
+  color: var(--text-muted);
 }
 </style>

@@ -14,17 +14,17 @@ import java.util.Map;
 @Builder
 public class UserProgressDto {
     private List<String> completedLessons; // List of completed lesson IDs
-    private Map<String, Integer> quizScores; // topicId -> max score achieved
-    private Map<String, Integer> quizTotals; // topicId -> total questions
+    private Map<String, Integer> quizScores; // courseId -> max score achieved
+    private Map<String, Integer> quizTotals; // courseId -> total questions
     private Map<String, Integer> lessonQuizScores; // lessonId -> max score achieved
     private Map<String, Integer> lessonQuizTotals; // lessonId -> total questions
     private Map<String, LessonProgressDto> lessonProgress;
     private Integer points;
     private List<UserBadgeDto> unlockedBadges;
-    private String groupId;
+    private java.util.List<String> groupIds;
     private String groupName;
-    private List<String> mandatoryTopics;
-    private List<String> registeredTopics;
-    private List<String> pendingTopics;
+    private List<String> mandatoryCourses;
+    private List<String> registeredCourses;
+    private List<String> pendingCourses;
     private boolean mustChangePassword;
 }

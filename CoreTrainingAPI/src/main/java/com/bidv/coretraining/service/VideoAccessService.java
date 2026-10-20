@@ -59,7 +59,8 @@ public class VideoAccessService {
 
         Instant expiresAt = Instant.now().plusSeconds(accessDurationSeconds);
         String token = Jwts.builder()
-                .setSubject(username)
+                .setSubject(userRepository.findByUsername(username).orElseThrow().getId().toString())
+                .claim("ver", userRepository.findByUsername(username).orElseThrow().getTokenVersion())
                 .claim("lessonId", lessonId)
                 .claim("fileName", fileName)
                 .setIssuedAt(new Date())
@@ -73,17 +74,7 @@ public class VideoAccessService {
     private void assertCanWatch(Lesson lesson, String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
-        if ("ROLE_ADMIN".equals(user.getRole())) {
-            return;
-        }
-        boolean registered = user.getRegisteredTopics().stream()
-                .anyMatch(topic -> topic.getId().equals(lesson.getTopic().getId()));
-        boolean mandatory = user.getUserGroup() != null
-                && user.getUserGroup().getMandatoryTopics().stream()
-                .anyMatch(topic -> topic.getId().equals(lesson.getTopic().getId()));
-        if (!registered && !mandatory) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Bạn chưa được cấp quyền học chủ đề này");
-        }
+        LearningPolicy.assertLessonAccess(user, lesson);
     }
 
     @Transactional(readOnly = true)
@@ -97,7 +88,11 @@ public class VideoAccessService {
             String lessonId = claims.get("lessonId", String.class);
             String fileName = claims.get("fileName", String.class);
             Lesson lesson = findLocalVideoLesson(lessonId);
-            assertCanWatch(lesson, claims.getSubject());
+            User viewer = userRepository.findById(Long.valueOf(claims.getSubject())).orElseThrow();
+            assertCanWatch(lesson, viewer.getUsername());
+            Number ver = claims.get("ver", Number.class);
+            com.bidv.coretraining.security.AccessPolicy
+                    .require(ver != null && ver.longValue() == viewer.getTokenVersion());
             String currentFileName = extractSafeFileName(lesson.getVideoUrl());
             if (!currentFileName.equals(fileName)) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Quyền xem video không còn hợp lệ");
@@ -110,6 +105,7 @@ public class VideoAccessService {
         }
     }
 
+    @Transactional(readOnly = true)
     public Path authorizeStreamPath(String token) {
         String fileName = authorizeStream(token);
         Path video = videoDirectory.resolve(fileName).normalize();

@@ -2,6 +2,12 @@
   <div class="admin-portal-layout">
     <!-- Right Main Content Area -->
     <div class="admin-main-content">
+      <header v-if="activeTab !== 'overview'" class="admin-page-heading">
+        <div>
+          <h1>{{ sectionHeading.title }}</h1>
+          <p>{{ sectionHeading.description }}</p>
+        </div>
+      </header>
       <!-- Loading State -->
       <div v-if="loading" class="loading-overlay">
         <div class="spinner"></div>
@@ -95,16 +101,16 @@
 
           <!-- Charts Row 2: Bar Chart & Active Sessions List -->
           <div class="charts-row split-grid">
-            <!-- Bar Chart: Avg Score by Topic -->
+            <!-- Bar Chart: Avg Score by Course -->
             <div class="chart-card card bar-chart-card">
-              <h3 class="card-title">ĐIỂM THI THỬ TRUNG BÌNH THEO CHỦ ĐỀ</h3>
+              <h3 class="card-title">ĐIỂM THI THỬ TRUNG BÌNH THEO KHÓA HỌC</h3>
               <p class="card-subtitle">
                 Kết quả kiểm tra trung bình (%) của các học viên
               </p>
               <div class="chart-container">
                 <Bar
-                  :data="topicScoreChartData"
-                  :options="topicScoreChartOptions"
+                  :data="courseScoreChartData"
+                  :options="courseScoreChartOptions"
                 />
               </div>
             </div>
@@ -138,7 +144,7 @@
                     <span class="session-detail">{{ session.detail }}</span>
                   </div>
                   <div class="session-meta">
-                    <span class="session-topic-tag">{{ session.topic }}</span>
+                    <span class="session-course-tag">{{ session.course }}</span>
                     <span class="session-time">{{ session.time }}</span>
                   </div>
                 </div>
@@ -146,25 +152,36 @@
             </div>
           </div>
 
-          <!-- Topics Table Summary -->
-          <div class="topics-summary card">
+          <!-- Courses Table Summary -->
+          <div class="courses-summary card">
             <div class="card-header-row">
               <div class="header-left">
                 <h3 class="card-title">PHÂN BỔ BÀI HỌC VÀ CÂU HỎI</h3>
                 <p class="card-subtitle">
-                  Danh sách các chủ đề đào tạo nghiệp vụ ngân hàng
+                  Danh sách các khóa học đào tạo nghiệp vụ ngân hàng
                 </p>
               </div>
-              <button class="btn btn-primary btn-sm" @click="openTopicModal()">
-                <Plus class="btn-icon-sm" /> THÊM CHỦ ĐỀ
+              <button
+                class="btn btn-primary btn-sm"
+                @click="router.push('/admin/courses')"
+              >
+                <Plus class="btn-icon-sm" /> THÊM KHÓA HỌC
               </button>
             </div>
 
             <table class="admin-table">
+              <colgroup>
+                <col style="width: 14%" />
+                <col style="width: 30%" />
+                <col style="width: 12%" />
+                <col style="width: 10%" />
+                <col style="width: 12%" />
+                <col style="width: 22%" />
+              </colgroup>
               <thead>
                 <tr>
-                  <th>Mã chủ đề</th>
-                  <th>Tên chủ đề</th>
+                  <th>Mã khóa học</th>
+                  <th>Tên khóa học</th>
                   <th>Icon hiển thị</th>
                   <th>Số bài học</th>
                   <th>Số câu hỏi thi</th>
@@ -172,33 +189,35 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="topic in courseStore.topics" :key="topic.id">
+                <tr v-for="course in paginatedSummaryCourses" :key="course.id">
                   <td>
-                    <span class="code-badge">{{ topic.id }}</span>
+                    <span class="code-badge">{{ course.id }}</span>
                   </td>
                   <td>
-                    <strong>{{ topic.name }}</strong>
+                    <strong>{{ course.name }}</strong>
                   </td>
                   <td>
                     <span class="icon-label"
                       ><Settings class="inline-icon" />
-                      {{ topic.iconName }}</span
+                      {{ course.iconName }}</span
                     >
                   </td>
-                  <td>{{ topic.lessons.length }} bài học</td>
-                  <td>{{ getQuestionCountForTopic(topic.id) }} câu hỏi</td>
+                  <td>{{ course.lessons.length }} bài học</td>
+                  <td>{{ getQuestionCountForCourse(course.id) }} câu hỏi</td>
                   <td class="actions-col">
                     <button
                       class="action-btn edit"
-                      title="Sửa chủ đề"
-                      @click="openTopicModal(topic)"
+                      title="Sửa khóa học"
+                      v-if="course.status === 'DRAFT'"
+                      @click="router.push(`/admin/courses/${course.id}`)"
                     >
                       <Edit />
                     </button>
                     <button
                       class="action-btn delete"
-                      title="Xóa chủ đề"
-                      @click="handleDeleteTopic(topic.id)"
+                      title="Xóa khóa học"
+                      v-if="course.status === 'DRAFT'"
+                      @click="handleDeleteCourse(course.id)"
                     >
                       <Trash2 />
                     </button>
@@ -206,6 +225,14 @@
                 </tr>
               </tbody>
             </table>
+            <TablePagination
+              v-model:page="summaryPage"
+              v-model:page-size="summaryPageSize"
+              :total="courseStore.courses.length"
+              :page-count="summaryPageCount"
+              unit="khóa học"
+              unit-label="Khóa học"
+            />
           </div>
         </div>
 
@@ -221,13 +248,25 @@
                 </p>
               </div>
               <div class="header-actions">
-                <button class="btn btn-secondary" @click="handleDownloadTemplate">
+                <button
+                  class="btn btn-secondary"
+                  @click="handleDownloadTemplate"
+                >
                   <Download class="btn-icon" /> TẢI EXCEL MẪU
                 </button>
-                <button class="btn btn-secondary" @click="excelFileInput?.click()">
+                <button
+                  class="btn btn-secondary"
+                  @click="excelFileInput?.click()"
+                >
                   <Upload class="btn-icon" /> NHẬP TỪ EXCEL
                 </button>
-                <input ref="excelFileInput" type="file" hidden accept=".xlsx,.xls" @change="handleExcelUpload" />
+                <input
+                  ref="excelFileInput"
+                  type="file"
+                  hidden
+                  accept=".xlsx,.xls"
+                  @change="handleExcelUpload"
+                />
                 <button class="btn btn-primary" @click="openUserModal()">
                   <Plus class="btn-icon" /> THÊM HỌC VIÊN
                 </button>
@@ -245,6 +284,16 @@
             </div>
 
             <table class="admin-table">
+              <colgroup>
+                <col style="width: 17%" />
+                <col style="width: 13%" />
+                <col style="width: 10%" />
+                <col style="width: 18%" />
+                <col style="width: 13%" />
+                <col style="width: 9%" />
+                <col style="width: 8%" />
+                <col style="width: 12%" />
+              </colgroup>
               <thead>
                 <tr>
                   <th>Học viên</th>
@@ -258,7 +307,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="u in filteredUsers" :key="u.username">
+                <tr v-for="u in paginatedLegacyUsers" :key="u.username">
                   <td>
                     <div class="user-cell">
                       <div
@@ -277,7 +326,7 @@
                   </td>
                   <td>{{ u.employeeId || "-" }}</td>
                   <td>{{ u.email || "-" }}</td>
-                  <td>{{ u.userGroupId || "-" }}</td>
+                  <td>{{ u.groupNames || "-" }}</td>
                   <td>
                     <span
                       class="role-tag"
@@ -316,6 +365,14 @@
                 </tr>
               </tbody>
             </table>
+            <TablePagination
+              v-model:page="legacyUserPage"
+              v-model:page-size="legacyUserPageSize"
+              :total="filteredUsers.length"
+              :page-count="legacyUserPageCount"
+              unit="tài khoản"
+              unit-label="Tài khoản"
+            />
           </div>
         </div>
 
@@ -326,16 +383,42 @@
           <div class="lessons-manager card">
             <div class="card-header-row">
               <div class="header-left">
-                <h3 class="card-title">DUYỆT ĐĂNG KÝ KHÓA HỌC</h3>
+                <h3 class="card-title">Danh sách yêu cầu đăng ký</h3>
                 <p class="card-subtitle">
-                  Phê duyệt hoặc từ chối yêu cầu đăng ký chủ đề tự chọn.
+                  Phê duyệt hoặc từ chối yêu cầu đăng ký khóa học tự chọn.
                 </p>
               </div>
               <span class="pending-count"
                 >{{ pendingEnrollmentCount }} yêu cầu chờ duyệt</span
               >
             </div>
+            <div class="admin-table-toolbar">
+              <div class="admin-search-box">
+                <Search :size="18" /><input
+                  v-model="enrollmentQuery"
+                  type="search"
+                  placeholder="Tìm học viên hoặc khóa học…"
+                  aria-label="Tìm yêu cầu đăng ký"
+                />
+              </div>
+              <select
+                v-model="enrollmentStatus"
+                aria-label="Lọc trạng thái đăng ký"
+              >
+                <option value="">Tất cả trạng thái</option>
+                <option value="PENDING">Chờ duyệt</option>
+                <option value="APPROVED">Đã duyệt</option>
+                <option value="REJECTED">Từ chối</option>
+              </select>
+            </div>
             <table class="admin-table enrollment-table">
+              <colgroup>
+                <col style="width: 23%" />
+                <col style="width: 32%" />
+                <col style="width: 16%" />
+                <col style="width: 12%" />
+                <col style="width: 17%" />
+              </colgroup>
               <thead>
                 <tr>
                   <th>Học viên</th>
@@ -346,14 +429,14 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="request in enrollmentRequests" :key="request.id">
+                <tr v-for="request in paginatedEnrollments" :key="request.id">
                   <td>
                     <strong>{{ request.fullName }}</strong
                     ><br /><small>{{ request.username }}</small>
                   </td>
                   <td>
-                    <strong>{{ request.topicName }}</strong
-                    ><br /><small>{{ request.topicId }}</small>
+                    <strong>{{ request.courseName }}</strong
+                    ><br /><small>{{ request.courseId }}</small>
                   </td>
                   <td>{{ formatEnrollmentDate(request.requestedAt) }}</td>
                   <td>
@@ -373,7 +456,10 @@
                   </td>
                   <td>
                     <div
-                      v-if="request.status === 'PENDING'"
+                      v-if="
+                        request.status === 'PENDING' &&
+                        accessUser.can('enrollments', 'update')
+                      "
                       class="enrollment-actions"
                     >
                       <button
@@ -398,13 +484,21 @@
                     </template>
                   </td>
                 </tr>
-                <tr v-if="!enrollmentRequests.length">
+                <tr v-if="!filteredEnrollments.length">
                   <td colspan="5" class="empty-row">
-                    Chưa có yêu cầu đăng ký khóa học.
+                    Không có yêu cầu đăng ký phù hợp.
                   </td>
                 </tr>
               </tbody>
             </table>
+            <TablePagination
+              v-model:page="enrollmentPage"
+              v-model:page-size="enrollmentPageSize"
+              :total="filteredEnrollments.length"
+              :page-count="enrollmentPageCount"
+              unit="yêu cầu"
+              unit-label="Yêu cầu"
+            />
           </div>
         </div>
 
@@ -414,29 +508,29 @@
             <div class="card-header-row">
               <div class="header-left">
                 <button
-                  v-if="lessonTopic"
+                  v-if="lessonCourse"
                   class="lesson-back-button"
-                  @click="backToLessonTopics"
+                  @click="backToLessonCourses"
                 >
-                  <ArrowLeft :size="18" /> Danh sách chủ đề
+                  <ArrowLeft :size="18" /> Danh sách khóa học
                 </button>
                 <h3 class="card-title">
                   {{
-                    lessonTopic
-                      ? `BÀI HỌC — ${lessonTopic.name}`
-                      : "QUẢN LÝ BÀI HỌC THEO CHỦ ĐỀ"
+                    lessonCourse
+                      ? `BÀI HỌC — ${lessonCourse.name}`
+                      : "QUẢN LÝ BÀI HỌC THEO KHÓA HỌC"
                   }}
                 </h3>
                 <p class="card-subtitle">
                   {{
-                    lessonTopic
-                      ? "Kéo thả bài học để thay đổi thứ tự hiển thị trong chủ đề."
-                      : "Chọn một chủ đề để thêm, cập nhật và sắp xếp bài học."
+                    lessonCourse
+                      ? "Kéo thả bài học để thay đổi thứ tự hiển thị trong khóa học."
+                      : "Chọn một khóa học để thêm, cập nhật và sắp xếp bài học."
                   }}
                 </p>
               </div>
               <button
-                v-if="lessonTopic"
+                v-if="lessonCourse?.status === 'DRAFT'"
                 class="btn btn-primary"
                 @click="openLessonModal()"
               >
@@ -444,28 +538,37 @@
               </button>
             </div>
 
-            <div v-if="!lessonTopic" class="lesson-topic-grid">
+            <div v-if="!lessonCourse" class="lesson-course-grid">
               <button
-                v-for="topic in courseStore.topics"
-                :key="topic.id"
-                class="lesson-topic-card"
-                @click="openTopicLessons(topic.id)"
+                v-for="course in courseStore.courses"
+                :key="course.id"
+                class="lesson-course-card"
+                @click="openCourseLessons(course.id)"
               >
-                <div class="lesson-topic-icon">
+                <div class="lesson-course-icon">
                   <BookOpen :size="22" />
                 </div>
-                <div class="lesson-topic-copy">
-                  <strong>{{ topic.name }}</strong>
-                  <small>{{ topic.lessons.length }} bài học</small>
+                <div class="lesson-course-copy">
+                  <strong>{{ course.name }}</strong>
+                  <small>{{ course.lessons.length }} bài học</small>
                 </div>
                 <ArrowRight :size="20" />
               </button>
             </div>
 
             <table
-              v-else-if="currentTopicLessons.length > 0"
+              v-else-if="currentCourseLessons.length > 0"
               class="admin-table lesson-order-table"
             >
+              <colgroup>
+                <col style="width: 8%" />
+                <col style="width: 12%" />
+                <col style="width: 24%" />
+                <col style="width: 20%" />
+                <col style="width: 10%" />
+                <col style="width: 12%" />
+                <col style="width: 14%" />
+              </colgroup>
               <thead>
                 <tr>
                   <th class="drag-column">Thứ tự</th>
@@ -479,7 +582,7 @@
               </thead>
               <tbody>
                 <tr
-                  v-for="(lesson, index) in currentTopicLessons"
+                  v-for="(lesson, index) in paginatedLegacyLessons"
                   :key="lesson.id"
                   draggable="true"
                   :class="{
@@ -495,7 +598,9 @@
                   <td class="drag-column">
                     <span class="drag-handle" title="Kéo để sắp xếp">
                       <GripVertical :size="18" />
-                      <strong>{{ index + 1 }}</strong>
+                      <strong>{{
+                        (lessonPage - 1) * lessonPageSize + index + 1
+                      }}</strong>
                     </span>
                   </td>
                   <td>
@@ -518,6 +623,7 @@
                     <button
                       class="action-btn edit"
                       title="Sửa bài học"
+                      v-if="lessonCourse?.status === 'DRAFT'"
                       @click="openLessonModal(lesson)"
                     >
                       <Edit />
@@ -525,6 +631,7 @@
                     <button
                       class="action-btn delete"
                       title="Xóa bài học"
+                      v-if="lessonCourse?.status === 'DRAFT'"
                       @click="handleDeleteLesson(lesson.id)"
                     >
                       <Trash2 />
@@ -533,12 +640,21 @@
                 </tr>
               </tbody>
             </table>
-            <div class="empty-state-box" v-else-if="lessonTopic">
+            <div class="empty-state-box" v-else-if="lessonCourse">
               <p>
-                Chủ đề này chưa có bài học nào. Bấm nút "Thêm bài học" ở góc
+                Khóa học này chưa có bài học nào. Bấm nút "Thêm bài học" ở góc
                 trên để bắt đầu cấu hình.
               </p>
             </div>
+
+            <TablePagination
+              v-model:page="lessonPage"
+              v-model:page-size="lessonPageSize"
+              :total="currentCourseLessons.length"
+              :page-count="lessonPageCount"
+              unit="bài học"
+              unit-label="Bài học"
+            />
           </div>
         </div>
 
@@ -547,29 +663,33 @@
           <div class="exams-manager card">
             <div class="card-header-row">
               <div class="header-left">
-                <h3 class="card-title">QUẢN LÝ BÀI KIỂM TRA</h3>
+                <h3 class="card-title">Danh sách bài kiểm tra</h3>
                 <p class="card-subtitle">
                   Chọn một bài kiểm tra để xem và quản lý câu hỏi bên trong.
                 </p>
               </div>
               <div class="exam-header-actions">
-                <button class="btn btn-primary" @click="createQuiz">
-                  <Plus class="btn-icon" /> THÊM BÀI KIỂM TRA
+                <button
+                  v-if="accessUser.can('exams', 'create')"
+                  class="btn btn-primary"
+                  @click="createQuiz"
+                >
+                  <Plus class="btn-icon" /> Thêm bài kiểm tra
                 </button>
               </div>
             </div>
 
-            <!-- Select Topic Filter -->
-            <div class="topic-selector-row">
-              <label for="exam-topic-select">Chọn chủ đề cấu hình: </label>
+            <!-- Select Course Filter -->
+            <div class="course-selector-row">
+              <label for="exam-course-select">Chọn khóa học cấu hình: </label>
               <select
-                id="exam-topic-select"
-                v-model="selectedTopicId"
+                id="exam-course-select"
+                v-model="selectedCourseId"
                 class="form-control select-control"
               >
-                <option :value="ALL_TOPICS">Tất cả chủ đề</option>
+                <option :value="ALL_COURSES">Tất cả khóa học</option>
                 <option
-                  v-for="t in courseStore.topics"
+                  v-for="t in courseStore.courses"
                   :key="t.id"
                   :value="t.id"
                 >
@@ -582,78 +702,103 @@
               <Search :size="18" />
               <input
                 v-model="quizSearchQuery"
+                aria-label="Tìm bài kiểm tra"
                 type="search"
                 placeholder="Tìm theo tên bài kiểm tra hoặc bài học..."
               />
             </div>
 
-            <div
-              class="quiz-definition-grid"
-              v-if="filteredQuizDefinitions.length"
-            >
-              <button
-                v-for="quiz in filteredQuizDefinitions"
-                :key="quiz.key"
-                class="quiz-definition-card"
-                @click="openQuizDefinition(quiz)"
-              >
-                <div class="quiz-definition-icon">
-                  <HelpCircle :size="22" />
-                </div>
-                <div class="quiz-definition-copy">
-                  <span class="q-scope-tag">{{
-                    quiz.lessonId ? "Bài học" : "Toàn chủ đề"
-                  }}</span>
-                  <h4>{{ quiz.title }}</h4>
-                  <p>
-                    {{ quiz.questionCount }} câu hỏi · Đạt tối thiểu
-                    {{ quiz.passingScore }}%
-                  </p>
-                </div>
-                <ArrowRight :size="20" />
-              </button>
+            <div class="admin-table-scroll">
+              <table class="admin-table">
+                <colgroup>
+                  <col style="width: 55%" />
+                  <col style="width: 15%" />
+                  <col style="width: 15%" />
+                  <col style="width: 15%" />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>Bài kiểm tra</th>
+                    <th>Số câu hỏi</th>
+                    <th>Ngưỡng đạt</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="quiz in paginatedQuizDefinitions" :key="quiz.key">
+                    <td>
+                      <strong>{{ quiz.title }}</strong
+                      ><small>{{
+                        quiz.lessonId ? "Kiểm tra bài học" : "Kiểm tra khóa học"
+                      }}</small>
+                    </td>
+                    <td>{{ quiz.questionCount }} câu hỏi</td>
+                    <td>{{ quiz.passingScore }}%</td>
+                    <td>
+                      <button
+                        class="admin-row-edit"
+                        @click="openQuizDefinition(quiz)"
+                      >
+                        Chi tiết
+                      </button>
+                    </td>
+                  </tr>
+                  <tr v-if="!filteredQuizDefinitions.length">
+                    <td colspan="4" class="admin-empty">
+                      Không có bài kiểm tra phù hợp.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-            <div class="empty-state-box" v-else>
-              <p>
-                {{
-                  quizSearchQuery
-                    ? "Không tìm thấy bài kiểm tra phù hợp."
-                    : "Chủ đề này chưa có bài kiểm tra."
-                }}
-              </p>
-              <button
-                v-if="!quizSearchQuery"
-                class="btn btn-primary"
-                @click="createQuiz"
-              >
-                <Plus :size="16" /> Tạo bài kiểm tra đầu tiên
-              </button>
-            </div>
+            <TablePagination
+              v-model:page="quizPage"
+              v-model:page-size="quizPageSize"
+              :total="filteredQuizDefinitions.length"
+              :page-count="quizPageCount"
+              unit="bài kiểm tra"
+              unit-label="Bài kiểm tra"
+            />
           </div>
         </div>
 
         <div v-if="activeTab === 'documents'" class="tab-pane animate-fade-in">
-          <div class="topics-summary card rag-documents-manager">
+          <div class="courses-summary card rag-documents-manager">
             <div class="card-header-row">
               <div class="header-left">
                 <h3 class="card-title">TÀI LIỆU TRI THỨC AI</h3>
                 <p class="card-subtitle">
-                  Tải PDF hoặc DOCX theo từng chủ đề. Tài liệu sẽ được gửi tới
+                  Tải PDF hoặc DOCX theo từng khóa học. Tài liệu sẽ được gửi tới
                   dịch vụ embedding và lưu vector trong Qdrant.
                 </p>
               </div>
-              <button class="btn btn-secondary" :disabled="documentListLoading" @click="loadDocuments()">
-                <RefreshCw :size="16" :class="{ 'spin-icon': documentListLoading }" />
+              <button
+                class="btn btn-secondary"
+                :disabled="documentListLoading"
+                @click="loadDocuments()"
+              >
+                <RefreshCw
+                  :size="16"
+                  :class="{ 'spin-icon': documentListLoading }"
+                />
                 LÀM MỚI
               </button>
             </div>
 
             <div class="rag-document-controls">
               <div class="form-group">
-                <label class="form-label">Chủ đề nhận tài liệu</label>
-                <select v-model="selectedTopicId" class="form-input" @change="loadDocuments()">
-                  <option v-for="topic in courseStore.topics" :key="topic.id" :value="topic.id">
-                    {{ topic.id }} — {{ topic.name }}
+                <label class="form-label">Khóa học nhận tài liệu</label>
+                <select
+                  v-model="selectedCourseId"
+                  class="form-input"
+                  @change="loadDocuments()"
+                >
+                  <option
+                    v-for="course in courseStore.courses"
+                    :key="course.id"
+                    :value="course.id"
+                  >
+                    {{ course.id }} — {{ course.name }}
                   </option>
                 </select>
               </div>
@@ -661,650 +806,633 @@
                 <Database :size="28" />
                 <div>
                   <strong>Upload và embedding tài liệu</strong>
-                  <small>Định dạng PDF/DOCX, tối đa theo cấu hình máy chủ.</small>
-                </div>
-                <button class="btn btn-primary" :disabled="documentUploading || !selectedTopicId || selectedTopicId === ALL_TOPICS"
-                  @click="ragFileInput?.click()">
-                  <LoaderCircle v-if="documentUploading" :size="16" class="spin-icon" />
-                  <Upload v-else :size="16" />
-                  {{ documentUploading ? 'ĐANG TẢI LÊN' : 'CHỌN TỆP' }}
-                </button>
-                <input ref="ragFileInput" type="file" hidden
-                  accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                  @change="uploadDocument" />
-              </div>
-            </div>
-            <p v-if="documentUploadMessage" class="rag-upload-message">{{ documentUploadMessage }}</p>
-
-            <table class="admin-table rag-document-table">
-              <thead>
-                <tr>
-                  <th>Tệp</th>
-                  <th>Dung lượng</th>
-                  <th>Trạng thái</th>
-                  <th>Chunks</th>
-                  <th>Thời gian</th>
-                  <th>Lỗi</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-if="documentListLoading && courseDocuments.length === 0">
-                  <td colspan="6" class="rag-empty-cell">Đang tải danh sách tài liệu...</td>
-                </tr>
-                <tr v-for="document in courseDocuments" :key="document.id">
-                  <td><strong>{{ document.fileName }}</strong></td>
-                  <td>{{ formatFileSize(document.sizeBytes) }}</td>
-                  <td><span class="rag-status" :class="`status-${document.status.toLowerCase()}`">
-                    {{ documentStatusLabel(document.status) }}
-                  </span></td>
-                  <td>{{ document.indexedChunks ?? "-" }}</td>
-                  <td>{{ formatDocumentDate(document.indexedAt || document.createdAt) }}</td>
-                  <td class="rag-error-cell">
-                    <span :title="document.errorMessage || ''">{{ document.errorMessage || "-" }}</span>
-                  </td>
-                </tr>
-                <tr v-if="!documentListLoading && courseDocuments.length === 0">
-                  <td colspan="6" class="rag-empty-cell">Chủ đề này chưa có tài liệu được embedding.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ENROLLMENT REJECTION MODAL -->
-    <div
-      v-if="rejectEnrollmentModal.show"
-      class="modal-overlay"
-      @click.self="closeRejectEnrollmentModal"
-    >
-      <section
-        class="modal-content card reject-enrollment-modal animate-scale-in"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="reject-enrollment-title"
-      >
-        <div class="reject-modal-icon"><XCircle :size="26" /></div>
-        <div class="reject-modal-heading">
-          <span>Từ chối đăng ký</span>
-          <h3 id="reject-enrollment-title">Nêu lý do từ chối yêu cầu</h3>
-          <p>
-            Lý do sẽ được gửi trực tiếp tới học viên trong thông báo kết quả.
-          </p>
-        </div>
-        <div v-if="rejectEnrollmentModal.request" class="reject-request-summary">
-          <div>
-            <small>Học viên</small>
-            <strong>{{ rejectEnrollmentModal.request.fullName }}</strong>
-            <span>@{{ rejectEnrollmentModal.request.username }}</span>
-          </div>
-          <div>
-            <small>Khóa học</small>
-            <strong>{{ rejectEnrollmentModal.request.topicName }}</strong>
-            <span>{{ rejectEnrollmentModal.request.topicId }}</span>
-          </div>
-        </div>
-        <form @submit.prevent="confirmRejectEnrollment">
-          <div class="form-group">
-            <label for="enrollment-rejection-reason">
-              Lý do từ chối <span class="required-mark">*</span>
-            </label>
-            <textarea
-              id="enrollment-rejection-reason"
-              v-model="rejectEnrollmentModal.reason"
-              rows="4"
-              maxlength="500"
-              placeholder="Ví dụ: Khóa học chưa phù hợp với vị trí công tác hiện tại..."
-              required
-              autofocus
-            ></textarea>
-            <div class="reason-counter">
-              {{ rejectEnrollmentModal.reason.length }}/500
-            </div>
-          </div>
-          <div class="modal-buttons">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              :disabled="rejectEnrollmentModal.submitting"
-              @click="closeRejectEnrollmentModal"
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              class="btn reject-confirm-button"
-              :disabled="
-                !rejectEnrollmentModal.reason.trim() ||
-                rejectEnrollmentModal.submitting
-              "
-            >
-              <XCircle :size="16" />
-              {{
-                rejectEnrollmentModal.submitting
-                  ? "Đang xử lý..."
-                  : "Xác nhận từ chối"
-              }}
-            </button>
-          </div>
-        </form>
-      </section>
-    </div>
-
-    <!-- MODAL 1: TOPIC FORM -->
-    <div
-      class="modal-overlay"
-      v-if="topicModal.show"
-      @click.self="topicModal.show = false"
-    >
-      <div class="modal-content card animate-scale-in">
-        <h3>{{ topicModal.isEdit ? "CẬP NHẬT CHỦ ĐỀ" : "TẠO CHỦ ĐỀ MỚI" }}</h3>
-        <form @submit.prevent="saveTopic">
-          <div class="form-group">
-            <label
-              >Mã chủ đề (In hoa, không dấu, ví dụ: 'CIF', 'TIEN_GUI')</label
-            >
-            <input
-              v-model="topicForm.id"
-              type="text"
-              class="form-control"
-              required
-              :disabled="topicModal.isEdit"
-            />
-          </div>
-          <div class="form-group">
-            <label>Tên chủ đề hiển thị</label>
-            <input
-              v-model="topicForm.name"
-              type="text"
-              class="form-control"
-              required
-            />
-          </div>
-          <div class="form-group">
-            <label
-              >Tên biểu tượng Icon (Ví dụ: 'Coins', 'Users', 'Wallet',
-              'PiggyBank')</label
-            >
-            <input
-              v-model="topicForm.iconName"
-              type="text"
-              class="form-control"
-              required
-            />
-          </div>
-          <div class="modal-buttons">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              @click="topicModal.show = false"
-            >
-              Hủy
-            </button>
-            <button type="submit" class="btn btn-primary">Lưu</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- MODAL 2: USER FORM -->
-    <div
-      class="modal-overlay"
-      v-if="userModal.show"
-      @click.self="userModal.show = false"
-    >
-      <div class="modal-content card animate-scale-in">
-        <h3>
-          {{ userModal.isEdit ? "CẬP NHẬT THÀNH VIÊN" : "TẠO THÀNH VIÊN MỚI" }}
-        </h3>
-        <form @submit.prevent="saveUser">
-          <div class="form-group">
-            <label>Tên đăng nhập (Username)</label>
-            <input
-              v-model="userForm.username"
-              type="text"
-              class="form-control"
-              required
-              :disabled="userModal.isEdit"
-            />
-          </div>
-          <div class="form-group">
-            <label
-              >Mật khẩu
-              {{
-                userModal.isEdit
-                  ? "(Để trống nếu không đổi)"
-                  : "(Mặc định nếu để trống: 123456)"
-              }}</label
-            >
-            <input
-              v-model="userForm.password"
-              type="password"
-              class="form-control"
-            />
-          </div>
-          <div class="form-group">
-            <label>Họ và tên</label>
-            <input
-              v-model="userForm.fullName"
-              type="text"
-              class="form-control"
-              required
-            />
-          </div>
-          <div class="form-group">
-            <label>Mã nhân viên</label>
-            <input v-model="userForm.employeeId" type="text" class="form-control" required />
-          </div>
-          <div class="form-group">
-            <label>Email công vụ</label>
-            <input v-model="userForm.email" type="email" class="form-control" required />
-          </div>
-          <div class="form-group">
-            <label>Nhóm nghiệp vụ</label>
-            <select v-model="userForm.userGroupId" class="form-control">
-              <option value="">Không phân nhóm</option>
-              <option value="GDV">Giao dịch viên</option>
-              <option value="QHKH">Quan hệ khách hàng</option>
-              <option value="KSV">Kiểm soát viên</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Vai trò hệ thống</label>
-            <select v-model="userForm.role" class="form-control">
-              <option value="ROLE_USER">Học viên (ROLE_USER)</option>
-              <option value="ROLE_ADMIN">Quản trị viên (ROLE_ADMIN)</option>
-            </select>
-          </div>
-          <div class="modal-buttons">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              @click="userModal.show = false"
-            >
-              Hủy
-            </button>
-            <button type="submit" class="btn btn-primary">Lưu</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- MODAL 3: LESSON FORM -->
-    <div
-      class="modal-overlay"
-      v-if="lessonModal.show"
-      @click.self="lessonModal.show = false"
-    >
-      <div
-        class="modal-content card modal-large lesson-modal-content animate-scale-in"
-      >
-        <header class="lesson-modal-header">
-          <h3>
-            {{ lessonModal.isEdit ? "CẬP NHẬT BÀI HỌC" : "TẠO BÀI HỌC MỚI" }}
-          </h3>
-        </header>
-        <form class="lesson-modal-form" @submit.prevent="saveLesson">
-          <div ref="lessonModalBodyRef" class="lesson-modal-body">
-            <div class="form-row">
-              <div class="form-group col">
-                <label>Chủ đề trực thuộc</label>
-                <select
-                  v-model="lessonForm.topicId"
-                  class="form-control"
-                  disabled
-                  required
-                >
-                  <option
-                    v-for="t in courseStore.topics"
-                    :key="t.id"
-                    :value="t.id"
+                  <small
+                    >Định dạng PDF/DOCX, tối đa theo cấu hình máy chủ.</small
                   >
-                    {{ t.name }}
-                  </option>
-                </select>
-              </div>
-              <div class="form-group col">
-                <label>Mã bài học (Ví dụ: 'LN03', 'CIF05')</label>
+                </div>
+                <button
+                  v-if="allowedCourseAction('documents', 'create')"
+                  class="btn btn-primary"
+                  :disabled="
+                    documentUploading ||
+                    !selectedCourseId ||
+                    selectedCourseId === ALL_COURSES
+                  "
+                  @click="ragFileInput?.click()"
+                >
+                  <LoaderCircle
+                    v-if="documentUploading"
+                    :size="16"
+                    class="spin-icon"
+                  />
+                  <Upload v-else :size="16" />
+                  {{ documentUploading ? "ĐANG TẢI LÊN" : "CHỌN TỆP" }}
+                </button>
                 <input
-                  v-model="lessonForm.id"
-                  type="text"
-                  class="form-control"
-                  required
-                  :disabled="lessonModal.isEdit"
+                  ref="ragFileInput"
+                  type="file"
+                  hidden
+                  accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  @change="uploadDocument"
                 />
               </div>
             </div>
 
-            <div class="form-group">
-              <label>Tiêu đề bài học</label>
-              <input
-                v-model="lessonForm.title"
-                type="text"
-                class="form-control"
-                required
-              />
-            </div>
-
-            <div class="form-group">
-              <label>Gợi ý nghiệp vụ nhanh (Hint)</label>
-              <input
-                v-model="lessonForm.hint"
-                type="text"
-                class="form-control"
-                required
-              />
-            </div>
-
-            <div class="form-group video-source-group">
-              <label id="video-source-label">Nguồn video bài học</label>
-              <div
-                class="video-source-options"
-                role="radiogroup"
-                aria-labelledby="video-source-label"
-              >
-                <label
-                  class="video-source-option"
-                  :class="{ active: lessonForm.videoSource === 'UPLOAD' }"
-                >
-                  <input
-                    v-model="lessonForm.videoSource"
-                    type="radio"
-                    value="UPLOAD"
-                    name="video-source"
-                  />
-                  <Upload :size="19" />
-                  <span>
-                    <strong>Tải video lên</strong>
-                    <small>Chọn file có sẵn trên máy</small>
-                  </span>
-                </label>
-                <label
-                  class="video-source-option"
-                  :class="{ active: lessonForm.videoSource === 'URL' }"
-                >
-                  <input
-                    v-model="lessonForm.videoSource"
-                    type="radio"
-                    value="URL"
-                    name="video-source"
-                  />
-                  <Link2 :size="19" />
-                  <span>
-                    <strong>Dán đường link</strong>
-                    <small>Dùng link YouTube hoặc video trực tiếp</small>
-                  </span>
-                </label>
+            <div class="admin-table-toolbar">
+              <div class="admin-search-box">
+                <Search :size="18" /><input
+                  v-model="documentQuery"
+                  type="search"
+                  placeholder="Tìm tên tài liệu…"
+                  aria-label="Tìm tài liệu AI"
+                />
               </div>
+            </div>
+            <div class="rag-document-table-scroll">
+              <table class="admin-table rag-document-table">
+                <colgroup>
+                  <col style="width: 24%" />
+                  <col style="width: 10%" />
+                  <col style="width: 12%" />
+                  <col style="width: 7%" />
+                  <col style="width: 16%" />
+                  <col style="width: 21%" />
+                  <col style="width: 10%" />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>Tệp</th>
+                    <th>Dung lượng</th>
+                    <th>Trạng thái</th>
+                    <th>Chunks</th>
+                    <th>Thời gian</th>
+                    <th>Lỗi</th>
+                    <th class="rag-document-actions">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-if="documentListLoading && courseDocuments.length === 0"
+                  >
+                    <td colspan="7" class="rag-empty-cell">
+                      Đang tải danh sách tài liệu...
+                    </td>
+                  </tr>
+                  <tr v-for="document in paginatedDocuments" :key="document.id">
+                    <td>
+                      <strong>{{ document.fileName }}</strong>
+                    </td>
+                    <td>{{ formatFileSize(document.sizeBytes) }}</td>
+                    <td>
+                      <span
+                        class="rag-status"
+                        :class="`status-${document.status.toLowerCase()}`"
+                      >
+                        {{ documentStatusLabel(document.status) }}
+                      </span>
+                    </td>
+                    <td>{{ document.indexedChunks ?? "-" }}</td>
+                    <td>
+                      {{
+                        formatDocumentDate(
+                          document.indexedAt || document.createdAt,
+                        )
+                      }}
+                    </td>
+                    <td class="rag-error-cell">
+                      <span :title="document.errorMessage || ''">{{
+                        document.errorMessage || "-"
+                      }}</span>
+                    </td>
+                    <td class="rag-document-actions">
+                      <button
+                        v-if="allowedCourseAction('documents', 'delete')"
+                        type="button"
+                        class="btn btn-secondary btn-sm"
+                        :disabled="
+                          document.status === 'PENDING' ||
+                          document.status === 'INDEXING' ||
+                          confirmationModal.submitting
+                        "
+                        :title="
+                          document.status === 'PENDING' ||
+                          document.status === 'INDEXING'
+                            ? 'Chờ embedding hoàn tất trước khi xóa'
+                            : 'Xóa tài liệu và dữ liệu embedding'
+                        "
+                        @click="deleteCourseDocument(document)"
+                      >
+                        <Trash2 :size="16" /> Xóa
+                      </button>
+                    </td>
+                  </tr>
+                  <tr
+                    v-if="
+                      !documentListLoading && filteredDocuments.length === 0
+                    "
+                  >
+                    <td colspan="7" class="rag-empty-cell">
+                      Khóa học này chưa có tài liệu được embedding.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <TablePagination
+                v-model:page="documentPage"
+                v-model:page-size="documentPageSize"
+                :total="filteredDocuments.length"
+                :page-count="documentPageCount"
+                unit="tài liệu"
+                unit-label="Tài liệu"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
-              <div
-                v-if="lessonForm.videoSource === 'UPLOAD'"
-                class="video-source-panel"
+    <AdminModal
+      :open="rejectEnrollmentModal.show"
+      title="Từ chối đăng ký khóa học"
+      :busy="rejectEnrollmentModal.submitting"
+      :width="640"
+      submit-label="Gửi lý do từ chối"
+      @close="closeRejectEnrollmentModal"
+      @submit="confirmRejectEnrollment"
+    >
+      <p class="admin-modal-help">
+        Lý do sẽ được gửi tới học viên trong thông báo kết quả.
+      </p>
+      <div v-if="rejectEnrollmentModal.request" class="reject-request-summary">
+        <div>
+          <small>Học viên</small>
+          <strong>{{ rejectEnrollmentModal.request.fullName }}</strong>
+          <span>@{{ rejectEnrollmentModal.request.username }}</span>
+        </div>
+        <div>
+          <small>Khóa học</small>
+          <strong>{{ rejectEnrollmentModal.request.courseName }}</strong>
+          <span>{{ rejectEnrollmentModal.request.courseId }}</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="enrollment-rejection-reason">
+          Lý do từ chối <span class="required-mark">*</span>
+        </label>
+        <textarea
+          id="enrollment-rejection-reason"
+          v-model="rejectEnrollmentModal.reason"
+          rows="4"
+          maxlength="500"
+          placeholder="Ví dụ: Khóa học chưa phù hợp với vị trí công tác hiện tại..."
+          required
+          autofocus
+        ></textarea>
+        <div class="reason-counter">
+          {{ rejectEnrollmentModal.reason.length }}/500
+        </div>
+      </div>
+    </AdminModal>
+
+    <AdminModal
+      :open="courseModal.show"
+      :title="courseModal.isEdit ? 'Cập nhật khóa học' : 'Thêm khóa học'"
+      :width="640"
+      :busy="modalSaving"
+      submit-label="Lưu"
+      @close="courseModal.show = false"
+      @submit="runModalSave(saveCourse)"
+    >
+      <div class="form-group">
+        <label>Mã khóa học (In hoa, không dấu, ví dụ: 'CIF', 'TIEN_GUI')</label>
+        <input
+          v-model="courseForm.id"
+          type="text"
+          class="form-control"
+          required
+          :disabled="courseModal.isEdit"
+        />
+      </div>
+      <div class="form-group">
+        <label>Tên khóa học hiển thị</label>
+        <input
+          v-model="courseForm.name"
+          type="text"
+          class="form-control"
+          required
+        />
+      </div>
+      <div class="form-group">
+        <label
+          >Tên biểu tượng Icon (Ví dụ: 'Coins', 'Users', 'Wallet',
+          'PiggyBank')</label
+        >
+        <input
+          v-model="courseForm.iconName"
+          type="text"
+          class="form-control"
+          required
+        />
+      </div>
+    </AdminModal>
+
+    <AdminModal
+      :open="userModal.show"
+      :title="userModal.isEdit ? 'Cập nhật tài khoản' : 'Thêm tài khoản'"
+      :width="720"
+      :busy="modalSaving"
+      submit-label="Lưu"
+      @close="userModal.show = false"
+      @submit="runModalSave(saveUser)"
+    >
+      <div class="form-group">
+        <label>Tên đăng nhập (Username)</label>
+        <input
+          v-model="userForm.username"
+          type="text"
+          class="form-control"
+          required
+          :disabled="userModal.isEdit"
+        />
+      </div>
+      <div class="form-group">
+        <label
+          >Mật khẩu
+          {{
+            userModal.isEdit
+              ? "(Để trống nếu không đổi)"
+              : "(Để trống: tạo mật khẩu ngẫu nhiên; dùng quên mật khẩu qua email)"
+          }}</label
+        >
+        <input
+          v-model="userForm.password"
+          type="password"
+          class="form-control"
+        />
+      </div>
+      <div class="form-group">
+        <label>Họ và tên</label>
+        <input
+          v-model="userForm.fullName"
+          type="text"
+          class="form-control"
+          required
+        />
+      </div>
+      <div class="form-group">
+        <label>Mã nhân viên</label>
+        <input
+          v-model="userForm.employeeId"
+          type="text"
+          class="form-control"
+          required
+        />
+      </div>
+      <div class="form-group">
+        <label>Email công vụ</label>
+        <input
+          v-model="userForm.email"
+          type="email"
+          class="form-control"
+          required
+        />
+      </div>
+      <p class="admin-modal-help">Quản lý nhóm của tài khoản tại menu Nhóm học viên → Thành viên.</p>
+      <div class="form-group">
+        <label>Vai trò hệ thống</label>
+        <select v-model="userForm.role" class="form-control">
+          <option value="ROLE_USER">Học viên (ROLE_USER)</option>
+          <option value="ROLE_ADMIN">Quản trị viên (ROLE_ADMIN)</option>
+        </select>
+      </div>
+    </AdminModal>
+
+    <AdminModal
+      :open="lessonModal.show"
+      :title="lessonModal.isEdit ? 'Cập nhật bài học' : 'Thêm bài học'"
+      :width="960"
+      :busy="modalSaving"
+      submit-label="Lưu"
+      @close="lessonModal.show = false"
+      @submit="runModalSave(saveLesson)"
+    >
+      <div ref="lessonModalBodyRef" class="legacy-lesson-fields">
+        <div class="form-row">
+          <div class="form-group col">
+            <label>Khóa học trực thuộc</label>
+            <select
+              v-model="lessonForm.courseId"
+              class="form-control"
+              disabled
+              required
+            >
+              <option
+                v-for="t in courseStore.courses"
+                :key="t.id"
+                :value="t.id"
               >
+                {{ t.name }}
+              </option>
+            </select>
+          </div>
+          <div class="form-group col">
+            <label>Mã bài học (Ví dụ: 'LN03', 'CIF05')</label>
+            <input
+              v-model="lessonForm.id"
+              type="text"
+              class="form-control"
+              required
+              :disabled="lessonModal.isEdit"
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Tiêu đề bài học</label>
+          <input
+            v-model="lessonForm.title"
+            type="text"
+            class="form-control"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label>Gợi ý nghiệp vụ nhanh (Hint)</label>
+          <input
+            v-model="lessonForm.hint"
+            type="text"
+            class="form-control"
+            required
+          />
+        </div>
+
+        <div class="form-group video-source-group">
+          <label id="video-source-label">Nguồn video bài học</label>
+          <div
+            class="video-source-options"
+            role="radiogroup"
+            aria-labelledby="video-source-label"
+          >
+            <label
+              class="video-source-option"
+              :class="{ active: lessonForm.videoSource === 'UPLOAD' }"
+            >
+              <input
+                v-model="lessonForm.videoSource"
+                type="radio"
+                value="UPLOAD"
+                name="video-source"
+              />
+              <Upload :size="19" />
+              <span>
+                <strong>Tải video lên</strong>
+                <small>Chọn file có sẵn trên máy</small>
+              </span>
+            </label>
+            <label
+              class="video-source-option"
+              :class="{ active: lessonForm.videoSource === 'URL' }"
+            >
+              <input
+                v-model="lessonForm.videoSource"
+                type="radio"
+                value="URL"
+                name="video-source"
+              />
+              <Link2 :size="19" />
+              <span>
+                <strong>Dán đường link</strong>
+                <small>Dùng link YouTube hoặc video trực tiếp</small>
+              </span>
+            </label>
+          </div>
+
+          <div
+            v-if="lessonForm.videoSource === 'UPLOAD'"
+            class="video-source-panel"
+          >
+            <div class="file-upload-control">
+              <label class="file-picker">
+                <Upload :size="18" />
+                <span>{{
+                  selectedVideoFileName || "Chọn file video từ máy"
+                }}</span>
+                <input
+                  type="file"
+                  accept="video/mp4,video/webm,.m4v"
+                  :disabled="loading"
+                  @change="handleVideoFileChange"
+                />
+              </label>
+              <button
+                v-if="selectedVideoFileName"
+                type="button"
+                class="file-clear-btn"
+                title="Gỡ video"
+                aria-label="Gỡ video đã chọn"
+                @click="clearVideoFile"
+              >
+                <X :size="16" />
+              </button>
+            </div>
+            <small class="video-source-help">
+              Tối đa {{ Math.floor(VIDEO_UPLOAD_MAX_BYTES / 1024 / 1024) }} MiB.
+              MP4/M4V: H.264/AAC; WebM: VP8/VP9, Opus/Vorbis.
+            </small>
+            <div v-if="videoUploadProgress !== null" role="status">
+              <progress
+                :value="videoUploadProgress"
+                max="100"
+                style="width: 100%"
+              ></progress>
+              <small>{{
+                videoUploadProgress < 100
+                  ? `Đang tải video: ${videoUploadProgress}%`
+                  : "Đã gửi video, đang kiểm tra định dạng…"
+              }}</small>
+            </div>
+            <small v-if="lessonForm.videoFile" class="selected-video-note">
+              Đã chọn: {{ lessonForm.videoFile.name }}
+            </small>
+          </div>
+
+          <div v-else class="video-source-panel">
+            <input
+              v-model="lessonForm.videoUrl"
+              type="url"
+              class="form-control"
+              style="width: 100%"
+              placeholder="Ví dụ: https://www.youtube.com/watch?v=..."
+            />
+            <small class="video-source-help">
+              Dán link YouTube hoặc đường dẫn trực tiếp đến video.
+            </small>
+          </div>
+        </div>
+
+        <!-- Lesson documents -->
+        <div class="form-group">
+          <div
+            class="card-header-row"
+            style="display: flex; align-items: center; gap: 10px"
+          >
+            <label class="section-sub-label"
+              >Tài liệu PDF/Word/PowerPoint đính kèm</label
+            >
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              @click="addLessonDocument"
+              style="padding: 0.5rem 1rem !important"
+            >
+              <Plus :size="15" /> Thêm tài liệu
+            </button>
+          </div>
+          <div v-if="lessonForm.documents.length === 0" class="empty-state-box">
+            Bài học chưa có tài liệu đính kèm.
+          </div>
+          <div
+            v-for="(document, index) in lessonForm.documents"
+            :key="index"
+            class="document-form-card"
+          >
+            <div class="document-form-index">
+              <FileText :size="19" /><span>Tài liệu {{ index + 1 }}</span>
+            </div>
+            <div class="document-form-fields">
+              <div class="form-group">
+                <label>Tên hiển thị</label>
+                <input
+                  v-model="document.name"
+                  class="form-control"
+                  placeholder="Ví dụ: Quy trình nghiệp vụ"
+                  required
+                />
+              </div>
+              <div class="form-group document-file-field">
+                <label>Chọn file PDF, Word hoặc PowerPoint</label>
                 <div class="file-upload-control">
                   <label class="file-picker">
                     <Upload :size="18" />
                     <span>{{
-                      selectedVideoFileName || "Chọn file video từ máy"
+                      document.file?.name ||
+                      document.originalFileName ||
+                      "Chọn file từ máy"
                     }}</span>
                     <input
                       type="file"
-                      accept="video/mp4,video/webm,.m4v"
-                      :disabled="loading"
-                      @change="handleVideoFileChange"
+                      accept=".pdf,.doc,.docx,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                      :required="!document.fileUrl"
+                      @change="handleDocumentFileChange($event, index)"
                     />
                   </label>
                   <button
-                    v-if="selectedVideoFileName"
+                    v-if="document.file || document.fileUrl"
                     type="button"
                     class="file-clear-btn"
-                    title="Gỡ video"
-                    aria-label="Gỡ video đã chọn"
-                    @click="clearVideoFile"
+                    title="Gỡ file"
+                    :aria-label="`Gỡ file của tài liệu ${index + 1}`"
+                    @click="clearDocumentFile(index, $event)"
                   >
                     <X :size="16" />
                   </button>
                 </div>
-                <small class="video-source-help">
-                  Tối đa {{ Math.floor(VIDEO_UPLOAD_MAX_BYTES / 1024 / 1024) }} MiB. MP4/M4V: H.264/AAC; WebM: VP8/VP9, Opus/Vorbis.
-                </small>
-                <div v-if="videoUploadProgress !== null" role="status">
-                  <progress :value="videoUploadProgress" max="100" style="width: 100%"></progress>
-                  <small>{{ videoUploadProgress < 100 ? `Đang tải video: ${videoUploadProgress}%` : 'Đã gửi video, đang kiểm tra định dạng…' }}</small>
-                </div>
-                <small v-if="lessonForm.videoFile" class="selected-video-note">
-                  Đã chọn: {{ lessonForm.videoFile.name }}
-                </small>
-              </div>
-
-              <div v-else class="video-source-panel">
-                <input
-                  v-model="lessonForm.videoUrl"
-                  type="url"
-                  class="form-control"
-                  style="width: 100%"
-                  placeholder="Ví dụ: https://www.youtube.com/watch?v=..."
-                />
-                <small class="video-source-help">
-                  Dán link YouTube hoặc đường dẫn trực tiếp đến video.
+                <small
+                  v-if="document.file || document.fileSize"
+                  class="selected-file-meta"
+                >
+                  {{ document.documentType }} ·
+                  {{ formatFileSize(document.file?.size || document.fileSize) }}
                 </small>
               </div>
             </div>
-
-            <!-- Lesson documents -->
-            <div class="form-group">
-              <div
-                class="card-header-row"
-                style="display: flex; align-items: center; gap: 10px"
-              >
-                <label class="section-sub-label"
-                  >Tài liệu PDF/Word/PowerPoint đính kèm</label
-                >
-                <button
-                  type="button"
-                  class="btn btn-secondary btn-sm"
-                  @click="addLessonDocument"
-                  style="padding: 0.5rem 1rem !important"
-                >
-                  <Plus :size="15" /> Thêm tài liệu
-                </button>
-              </div>
-              <div
-                v-if="lessonForm.documents.length === 0"
-                class="empty-state-box"
-              >
-                Bài học chưa có tài liệu đính kèm.
-              </div>
-              <div
-                v-for="(document, index) in lessonForm.documents"
-                :key="index"
-                class="document-form-card"
-              >
-                <div class="document-form-index">
-                  <FileText :size="19" /><span>Tài liệu {{ index + 1 }}</span>
-                </div>
-                <div class="document-form-fields">
-                  <div class="form-group">
-                    <label>Tên hiển thị</label>
-                    <input
-                      v-model="document.name"
-                      class="form-control"
-                      placeholder="Ví dụ: Quy trình nghiệp vụ"
-                      required
-                    />
-                  </div>
-                  <div class="form-group document-file-field">
-                    <label>Chọn file PDF, Word hoặc PowerPoint</label>
-                    <div class="file-upload-control">
-                      <label class="file-picker">
-                        <Upload :size="18" />
-                        <span>{{
-                          document.file?.name ||
-                          document.originalFileName ||
-                          "Chọn file từ máy"
-                        }}</span>
-                        <input
-                          type="file"
-                          accept=".pdf,.doc,.docx,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                          :required="!document.fileUrl"
-                          @change="handleDocumentFileChange($event, index)"
-                        />
-                      </label>
-                      <button
-                        v-if="document.file || document.fileUrl"
-                        type="button"
-                        class="file-clear-btn"
-                        title="Gỡ file"
-                        :aria-label="`Gỡ file của tài liệu ${index + 1}`"
-                        @click="clearDocumentFile(index, $event)"
-                      >
-                        <X :size="16" />
-                      </button>
-                    </div>
-                    <small
-                      v-if="document.file || document.fileSize"
-                      class="selected-file-meta"
-                    >
-                      {{ document.documentType }} ·
-                      {{
-                        formatFileSize(document.file?.size || document.fileSize)
-                      }}
-                    </small>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  class="action-btn delete document-remove"
-                  title="Xóa tài liệu"
-                  @click="removeLessonDocument(index)"
-                >
-                  <Trash2 />
-                </button>
-              </div>
-            </div>
-          </div>
-          <footer class="modal-buttons lesson-modal-footer">
             <button
               type="button"
-              class="btn btn-secondary"
-              @click="lessonModal.show = false"
+              class="action-btn delete document-remove"
+              title="Xóa tài liệu"
+              @click="removeLessonDocument(index)"
             >
-              Hủy
+              <Trash2 />
             </button>
-            <button type="submit" class="btn btn-primary">Lưu</button>
-          </footer>
-        </form>
+          </div>
+        </div>
       </div>
-    </div>
+    </AdminModal>
 
-    <!-- MODAL 4: QUESTION FORM -->
-    <div
-      class="modal-overlay"
-      v-if="questionModal.show"
-      @click.self="questionModal.show = false"
+    <AdminModal
+      :open="questionModal.show"
+      :title="questionModal.isEdit ? 'Cập nhật câu hỏi' : 'Thêm câu hỏi'"
+      :width="860"
+      :busy="modalSaving"
+      submit-label="Lưu"
+      @close="questionModal.show = false"
+      @submit="runModalSave(saveQuestion)"
     >
-      <div class="modal-content card modal-large animate-scale-in">
-        <h3>
-          {{
-            questionModal.isEdit
-              ? "CẬP NHẬT CÂU HỎI THI"
-              : "TẠO CÂU HỎI THI MỚI"
-          }}
-        </h3>
-        <form @submit.prevent="saveQuestion">
-          <div class="form-row">
-            <div class="form-group col">
-              <label>1. Chọn chủ đề</label>
-              <select
-                v-model="questionForm.topicId"
-                class="form-control"
-                required
-              >
-                <option
-                  v-for="t in courseStore.topics"
-                  :key="t.id"
-                  :value="t.id"
-                >
-                  {{ t.name }}
-                </option>
-              </select>
-            </div>
-            <div class="form-group col">
-              <label>2. Phạm vi bài kiểm tra</label>
-              <select v-model="questionForm.lessonId" class="form-control">
-                <option value="">Bài kiểm tra chung của chủ đề</option>
-                <option
-                  v-for="lesson in questionTopicLessons"
-                  :key="lesson.id"
-                  :value="lesson.id"
-                >
-                  Bài học: {{ lesson.title }}
-                </option>
-              </select>
-              <small class="field-help">
-                Không bắt buộc chọn bài học. Nếu chọn, học viên phải đạt 80% để
-                hoàn thành bài đó.
-              </small>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>3. Nhập nội dung câu hỏi</label>
-            <textarea
-              v-model="questionForm.text"
-              rows="3"
-              class="form-control"
-              required
-            ></textarea>
-          </div>
-
-          <div class="form-group-options">
-            <label class="options-label"
-              >4. Nhập đáp án và chọn đáp án đúng</label
+      <div class="form-row">
+        <div class="form-group col">
+          <label>1. Chọn khóa học</label>
+          <select v-model="questionForm.courseId" class="form-control" required>
+            <option v-for="t in courseStore.courses" :key="t.id" :value="t.id">
+              {{ t.name }}
+            </option>
+          </select>
+        </div>
+        <div class="form-group col">
+          <label>2. Phạm vi bài kiểm tra</label>
+          <select v-model="questionForm.lessonId" class="form-control">
+            <option value="">Bài kiểm tra chung của khóa học</option>
+            <option
+              v-for="lesson in questionCourseLessons"
+              :key="lesson.id"
+              :value="lesson.id"
             >
-            <div
-              v-for="idx in [0, 1, 2, 3]"
-              :key="idx"
-              class="option-input-row"
-            >
-              <input
-                type="radio"
-                :value="idx"
-                v-model="questionForm.correctAnswer"
-                name="correct-answer-radio"
-                required
-              />
-              <span class="opt-label"
-                >{{ String.fromCharCode(65 + idx) }}:</span
-              >
-              <input
-                v-model="optionsInputs[idx]"
-                type="text"
-                class="form-control"
-                placeholder="Nhập nội dung đáp án..."
-                required
-              />
-            </div>
-            <span class="helper-text-opt"
-              >Chọn nút tròn bên trái đáp án chính xác. Cần nhập đủ 4 đáp
-              án.</span
-            >
-          </div>
-
-          <div class="modal-buttons">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              @click="questionModal.show = false"
-            >
-              Hủy
-            </button>
-            <button type="submit" class="btn btn-primary">Lưu</button>
-          </div>
-        </form>
+              Bài học: {{ lesson.title }}
+            </option>
+          </select>
+          <small class="field-help">
+            Không bắt buộc chọn bài học. Nếu chọn, học viên phải đạt 80% để hoàn
+            thành bài đó.
+          </small>
+        </div>
       </div>
-    </div>
+
+      <div class="form-group">
+        <label>3. Nhập nội dung câu hỏi</label>
+        <textarea
+          v-model="questionForm.text"
+          rows="3"
+          class="form-control"
+          required
+        ></textarea>
+      </div>
+
+      <div class="form-group-options">
+        <label class="options-label">4. Nhập đáp án và chọn đáp án đúng</label>
+        <div v-for="idx in [0, 1, 2, 3]" :key="idx" class="option-input-row">
+          <input
+            type="radio"
+            :value="idx"
+            v-model="questionForm.correctAnswer"
+            name="correct-answer-radio"
+            required
+          />
+          <span class="opt-label">{{ String.fromCharCode(65 + idx) }}:</span>
+          <input
+            v-model="optionsInputs[idx]"
+            type="text"
+            class="form-control"
+            placeholder="Nhập nội dung đáp án..."
+            required
+          />
+        </div>
+        <span class="helper-text-opt"
+          >Chọn nút tròn bên trái đáp án chính xác. Cần nhập đủ 4 đáp án.</span
+        >
+      </div>
+    </AdminModal>
+
     <ConfirmModal
       :open="confirmationModal.show"
       :title="confirmationModal.title"
@@ -1318,8 +1446,24 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from "vue";
+import { scrollWithin } from "../utils/scrollWithin";
+import { showToast } from "../utils/toast";
+import AdminModal from "../components/AdminModal.vue";
+import TablePagination from "../components/TablePagination.vue";
+import { useTablePagination } from "../composables/useTablePagination";
+import { axiosClient } from "../api/axiosClient";
+import {
+  ref,
+  computed,
+  nextTick,
+  onMounted,
+  onBeforeUnmount,
+  watch,
+} from "vue";
+import { useTheme } from "../composables/useTheme";
+const { isDark } = useTheme();
 import { useRoute, useRouter } from "vue-router";
+import { useUserStore } from "../stores/userStore";
 import { useCourseStore } from "../stores/courseStore";
 import { useNavigationStore } from "../stores/navigationStore";
 import { validateVideoUpload } from "../utils/videoAccess";
@@ -1329,7 +1473,7 @@ import type {
   CourseDocument,
   EnrollmentRequest,
 } from "../api/adminApi";
-import type { Topic, Lesson, LessonDocument, Question } from "../types";
+import type { Course, Lesson, LessonDocument, Question } from "../types";
 import ConfirmModal from "../components/ConfirmModal.vue";
 import {
   Settings,
@@ -1386,6 +1530,11 @@ ChartJS.register(
 
 // Stores
 const courseStore = useCourseStore();
+const accessUser = useUserStore();
+const allowedCourseAction = (page: string, action: string) =>
+  courseStore.courses
+    .find((c) => c.id === selectedCourseId.value)
+    ?.adminActions?.[page]?.includes(action) === true;
 const navigationStore = useNavigationStore();
 const router = useRouter();
 const route = useRoute();
@@ -1396,7 +1545,7 @@ const allowedAdminTabs = computed(() =>
     .filter((id) => !id.includes(".")),
 );
 const requestedAdminTab =
-  route.name === "AdminTopicLessons"
+  route.name === "AdminCourseLessons"
     ? "lessons"
     : typeof route.query.tab === "string"
       ? route.query.tab
@@ -1410,7 +1559,7 @@ const activeSessions = ref([
     fullName: "Nguyễn Văn An",
     action: "Đang học bài",
     detail: "LN02. Quy trình giải ngân thông thường",
-    topic: "TIỀN VAY",
+    course: "TIỀN VAY",
     time: "Vừa xong",
   },
   {
@@ -1418,7 +1567,7 @@ const activeSessions = ref([
     fullName: "Trần Thị Bình",
     action: "Đang thi thử",
     detail: "Đề đánh giá năng lực CIF",
-    topic: "CIF",
+    course: "CIF",
     time: "2 phút trước",
   },
   {
@@ -1426,7 +1575,7 @@ const activeSessions = ref([
     fullName: "Lê Hoàng Phúc",
     action: "Đang xem",
     detail: "Bảng xếp hạng vinh danh",
-    topic: "HỆ THỐNG",
+    course: "HỆ THỐNG",
     time: "5 phút trước",
   },
   {
@@ -1434,7 +1583,7 @@ const activeSessions = ref([
     fullName: "Phạm Minh Đức",
     action: "Đang học bài",
     detail: "CT01. Quy trình chuyển tiền trong nước",
-    topic: "CHUYỂN TIỀN",
+    course: "CHUYỂN TIỀN",
     time: "12 phút trước",
   },
 ]);
@@ -1450,18 +1599,17 @@ const pendingEnrollmentCount = computed(
       .length,
 );
 const questions = ref<Question[]>([]);
-type ToastVariant = "success" | "error" | "info" | "warning";
-const showToast = (message: string, variant: ToastVariant = "success") =>
-  window.dispatchEvent(new CustomEvent("app-toast", { detail: { message, variant } }));
+
 const courseDocuments = ref<CourseDocument[]>([]);
-const documentUploadMessage = ref("");
 const documentUploading = ref(false);
 const documentListLoading = ref(false);
 const ragFileInput = ref<HTMLInputElement | null>(null);
 let documentPollingTimer: ReturnType<typeof setTimeout> | null = null;
-const ALL_TOPICS = "__ALL__";
-const selectedTopicId = ref(
-  typeof route.params.topicId === "string" ? route.params.topicId : ALL_TOPICS,
+const ALL_COURSES = "__ALL__";
+const selectedCourseId = ref(
+  typeof route.params.courseId === "string"
+    ? route.params.courseId
+    : ALL_COURSES,
 );
 const draggedLessonId = ref<string | null>(null);
 const dragOverLessonId = ref<string | null>(null);
@@ -1490,8 +1638,8 @@ const confirmationModal = ref<{
   submitting: false,
   action: null,
 });
-const topicModal = ref({ show: false, isEdit: false });
-const topicForm = ref({ id: "", name: "", iconName: "" });
+const courseModal = ref({ show: false, isEdit: false });
+const courseForm = ref({ id: "", name: "", iconName: "" });
 
 const userModal = ref({
   show: false,
@@ -1505,7 +1653,6 @@ const userForm = ref({
   avatarColor: "#005B41",
   role: "ROLE_USER",
   points: 0,
-  userGroupId: "",
   employeeId: "",
   email: "",
 });
@@ -1515,7 +1662,7 @@ type LessonDocumentForm = LessonDocument & { file?: File };
 const lessonForm = ref({
   id: "",
   title: "",
-  topicId: "",
+  courseId: "",
   hint: "",
   videoSource: "UPLOAD" as "UPLOAD" | "URL",
   videoUrl: "",
@@ -1530,7 +1677,7 @@ const questionModal = ref({
 });
 const questionForm = ref({
   text: "",
-  topicId: "",
+  courseId: "",
   lessonId: "",
   correctAnswer: 0,
   options: [] as string[],
@@ -1539,7 +1686,7 @@ const optionsInputs = ref(["", "", "", ""]);
 
 // Statistics Computeds
 const totalLessonsCount = computed(() => {
-  return courseStore.topics.reduce((acc, t) => acc + t.lessons.length, 0);
+  return courseStore.courses.reduce((acc, t) => acc + t.lessons.length, 0);
 });
 
 const totalQuestionsCount = computed(() => {
@@ -1556,22 +1703,24 @@ const filteredUsers = computed(() => {
   );
 });
 
-const currentTopicLessons = computed(() => {
-  if (selectedTopicId.value === ALL_TOPICS) {
-    return courseStore.topics.flatMap((topic) => topic.lessons);
+const currentCourseLessons = computed(() => {
+  if (selectedCourseId.value === ALL_COURSES) {
+    return courseStore.courses.flatMap((course) => course.lessons);
   }
-  const topic = courseStore.topics.find((t) => t.id === selectedTopicId.value);
-  return topic ? topic.lessons : [];
+  const course = courseStore.courses.find(
+    (t) => t.id === selectedCourseId.value,
+  );
+  return course ? course.lessons : [];
 });
-const lessonTopic = computed(() =>
-  typeof route.params.topicId === "string"
-    ? courseStore.topics.find((topic) => topic.id === route.params.topicId)
+const lessonCourse = computed(() =>
+  typeof route.params.courseId === "string"
+    ? courseStore.courses.find((course) => course.id === route.params.courseId)
     : undefined,
 );
 
 type QuizDefinition = {
   key: string;
-  topicId: string;
+  courseId: string;
   lessonId?: string;
   title: string;
   questionCount: number;
@@ -1580,37 +1729,37 @@ type QuizDefinition = {
 
 const quizDefinitions = computed<QuizDefinition[]>(() => {
   const definitions: QuizDefinition[] = [];
-  const topics =
-    selectedTopicId.value === ALL_TOPICS
-      ? courseStore.topics
-      : courseStore.topics.filter(
-          (topic) => topic.id === selectedTopicId.value,
+  const courses =
+    selectedCourseId.value === ALL_COURSES
+      ? courseStore.courses
+      : courseStore.courses.filter(
+          (course) => course.id === selectedCourseId.value,
         );
-  for (const topic of topics) {
-    const topicQuestions = questions.value.filter(
-      (question) => question.topicId === topic.id && !question.lessonId,
+  for (const course of courses) {
+    const courseQuestions = questions.value.filter(
+      (question) => question.courseId === course.id && !question.lessonId,
     );
-    if (topicQuestions.length) {
+    if (courseQuestions.length) {
       definitions.push({
-        key: `topic:${topic.id}`,
-        topicId: topic.id,
-        title: `Bài kiểm tra tổng hợp — ${topic.name}`,
-        questionCount: topicQuestions.length,
-        passingScore: topic.quizPassingScore ?? 80,
+        key: `course:${course.id}`,
+        courseId: course.id,
+        title: `Bài kiểm tra tổng hợp — ${course.name}`,
+        questionCount: courseQuestions.length,
+        passingScore: course.quizPassingScore ?? 80,
       });
     }
-    for (const lesson of topic.lessons) {
+    for (const lesson of course.lessons) {
       const count = questions.value.filter(
         (question) => question.lessonId === lesson.id,
       ).length;
       if (count) {
         definitions.push({
           key: `lesson:${lesson.id}`,
-          topicId: topic.id,
+          courseId: course.id,
           lessonId: lesson.id,
           title:
-            selectedTopicId.value === ALL_TOPICS
-              ? `${lesson.title} — ${topic.name}`
+            selectedCourseId.value === ALL_COURSES
+              ? `${lesson.title} — ${course.name}`
               : lesson.title,
           questionCount: count,
           passingScore: lesson.quizPassingScore ?? 80,
@@ -1631,6 +1780,111 @@ const filteredQuizDefinitions = computed(() => {
   );
 });
 
+const sectionHeading = computed(
+  () =>
+    ({
+      exams: {
+        title: "Bài kiểm tra",
+        description:
+          "Quản lý bài kiểm tra và ngân hàng câu hỏi theo khóa, bài học.",
+      },
+      enrollments: {
+        title: "Duyệt đăng ký",
+        description: "Theo dõi và xử lý yêu cầu đăng ký khóa học của học viên.",
+      },
+      documents: {
+        title: "Tài liệu AI",
+        description: "Quản lý tài liệu và nguồn kiến thức của khóa học.",
+      },
+      lessons: {
+        title: "Bài học",
+        description: "Quản lý nội dung bài học theo khóa đào tạo.",
+      },
+      users: {
+        title: "Tài khoản",
+        description: "Quản lý người dùng trong phạm vi được cấp.",
+      },
+    })[activeTab.value] || { title: "Quản trị", description: "" },
+);
+const modalSaving = ref(false);
+async function runModalSave(action: () => Promise<void>) {
+  if (modalSaving.value) return;
+  modalSaving.value = true;
+  try {
+    await action();
+  } finally {
+    modalSaving.value = false;
+  }
+}
+const enrollmentQuery = ref(""),
+  enrollmentStatus = ref(""),
+  documentQuery = ref("");
+const filteredEnrollments = computed(() =>
+  enrollmentRequests.value.filter(
+    (r) =>
+      `${r.fullName} ${r.username} ${r.courseName}`
+        .toLocaleLowerCase("vi")
+        .includes(enrollmentQuery.value.trim().toLocaleLowerCase("vi")) &&
+      (!enrollmentStatus.value || r.status === enrollmentStatus.value),
+  ),
+);
+const filteredDocuments = computed(() =>
+  courseDocuments.value.filter((d) =>
+    d.fileName
+      .toLocaleLowerCase("vi")
+      .includes(documentQuery.value.trim().toLocaleLowerCase("vi")),
+  ),
+);
+const {
+  page: summaryPage,
+  pageSize: summaryPageSize,
+  pageCount: summaryPageCount,
+  paginated: paginatedSummaryCourses,
+} = useTablePagination(computed(() => courseStore.courses));
+const {
+  page: legacyUserPage,
+  pageSize: legacyUserPageSize,
+  pageCount: legacyUserPageCount,
+  paginated: paginatedLegacyUsers,
+  reset: resetLegacyUsers,
+} = useTablePagination(filteredUsers);
+const {
+  page: enrollmentPage,
+  pageSize: enrollmentPageSize,
+  pageCount: enrollmentPageCount,
+  paginated: paginatedEnrollments,
+  reset: resetEnrollments,
+} = useTablePagination(filteredEnrollments);
+const {
+  page: lessonPage,
+  pageSize: lessonPageSize,
+  pageCount: lessonPageCount,
+  paginated: paginatedLegacyLessons,
+  reset: resetLegacyLessons,
+} = useTablePagination(currentCourseLessons);
+const {
+  page: documentPage,
+  pageSize: documentPageSize,
+  pageCount: documentPageCount,
+  paginated: paginatedDocuments,
+  reset: resetDocuments,
+} = useTablePagination(filteredDocuments);
+const {
+  page: quizPage,
+  pageSize: quizPageSize,
+  pageCount: quizPageCount,
+  paginated: paginatedQuizDefinitions,
+  reset: resetQuizzes,
+} = useTablePagination(filteredQuizDefinitions);
+watch(userSearchQuery, resetLegacyUsers);
+watch([enrollmentQuery, enrollmentStatus], resetEnrollments);
+watch(documentQuery, resetDocuments);
+watch([quizSearchQuery, selectedCourseId], resetQuizzes);
+watch(selectedCourseId, () => {
+  resetLegacyLessons();
+  resetDocuments();
+});
+
 const navigationRoute = (id: string, params: Record<string, string> = {}) => {
   const item = navigationStore.items.find((entry) => entry.id === id);
   if (!item) throw new Error(`Navigation configuration not found: ${id}`);
@@ -1641,10 +1895,10 @@ const navigationRoute = (id: string, params: Record<string, string> = {}) => {
   );
 };
 
-const openTopicLessons = (topicId: string) =>
-  router.push(navigationRoute("admin.lesson.topic", { topicId }));
+const openCourseLessons = (courseId: string) =>
+  router.push(navigationRoute("admin.lesson.course", { courseId }));
 
-const backToLessonTopics = () => router.push(navigationRoute("admin.lessons"));
+const backToLessonCourses = () => router.push(navigationRoute("admin.lessons"));
 
 const startLessonDrag = (lessonId: string, event: DragEvent) => {
   draggedLessonId.value = lessonId;
@@ -1665,68 +1919,69 @@ const endLessonDrag = () => {
 
 const dropLessonAt = async (targetLessonId: string) => {
   const sourceLessonId = draggedLessonId.value;
-  const topic = lessonTopic.value;
+  const course = lessonCourse.value;
   endLessonDrag();
-  if (!sourceLessonId || !topic || sourceLessonId === targetLessonId) return;
+  if (!sourceLessonId || !course || sourceLessonId === targetLessonId) return;
 
-  const sourceIndex = topic.lessons.findIndex(
+  const sourceIndex = course.lessons.findIndex(
     (lesson) => lesson.id === sourceLessonId,
   );
-  const targetIndex = topic.lessons.findIndex(
+  const targetIndex = course.lessons.findIndex(
     (lesson) => lesson.id === targetLessonId,
   );
   if (sourceIndex < 0 || targetIndex < 0) return;
 
-  const previousLessons = [...topic.lessons];
-  const reorderedLessons = [...topic.lessons];
+  const previousLessons = [...course.lessons];
+  const reorderedLessons = [...course.lessons];
   const [movedLesson] = reorderedLessons.splice(sourceIndex, 1);
   reorderedLessons.splice(targetIndex, 0, movedLesson);
-  topic.lessons = reorderedLessons.map((lesson, index) => ({
+  course.lessons = reorderedLessons.map((lesson, index) => ({
     ...lesson,
     lessonOrder: index,
   }));
 
   try {
-    topic.lessons = await adminApi.reorderLessons(
-      topic.id,
-      topic.lessons.map((lesson) => lesson.id),
+    course.lessons = await adminApi.reorderLessons(
+      course.id,
+      course.lessons.map((lesson) => lesson.id),
     );
     showToast("Đã lưu thứ tự bài học.");
   } catch (error) {
-    topic.lessons = previousLessons;
+    course.lessons = previousLessons;
     console.error("Failed to reorder lessons:", error);
-    alert("Không thể lưu thứ tự bài học. Vui lòng thử lại.");
+    showToast("Không thể lưu thứ tự bài học. Vui lòng thử lại.", "error");
   }
 };
 
 const createQuiz = () => {
-  const topicId =
-    selectedTopicId.value === ALL_TOPICS ? undefined : selectedTopicId.value;
+  const courseId =
+    selectedCourseId.value === ALL_COURSES ? undefined : selectedCourseId.value;
   router.push({
     path: navigationRoute("admin.quiz.create"),
-    query: topicId ? { topicId } : {},
+    query: courseId ? { courseId } : {},
   });
 };
 
 const openQuizDefinition = (quiz: QuizDefinition) =>
   router.push(
-    navigationRoute(quiz.lessonId ? "admin.quiz.lesson" : "admin.quiz.topic", {
-      scopeId: quiz.lessonId || quiz.topicId,
+    navigationRoute(quiz.lessonId ? "admin.quiz.lesson" : "admin.quiz.course", {
+      scopeId: quiz.lessonId || quiz.courseId,
     }),
   );
 
-const questionTopicLessons = computed(
+const questionCourseLessons = computed(
   () =>
-    courseStore.topics.find((topic) => topic.id === questionForm.value.topicId)
-      ?.lessons || [],
+    courseStore.courses.find(
+      (course) => course.id === questionForm.value.courseId,
+    )?.lessons || [],
 );
 
 watch(
-  () => questionForm.value.topicId,
+  () => questionForm.value.courseId,
   () => {
     if (
       questionForm.value.lessonId &&
-      !questionTopicLessons.value.some(
+      !questionCourseLessons.value.some(
         (lesson) => lesson.id === questionForm.value.lessonId,
       )
     ) {
@@ -1735,12 +1990,12 @@ watch(
   },
 );
 
-// Watch topic changes to adjust selectedTopicId if it gets empty
+// Watch course changes to adjust selectedCourseId if it gets empty
 watch(
-  () => courseStore.topics,
-  (newTopics) => {
-    if (newTopics.length > 0 && !selectedTopicId.value) {
-      selectedTopicId.value = newTopics[0].id;
+  () => courseStore.courses,
+  (newCourses) => {
+    if (newCourses.length > 0 && !selectedCourseId.value) {
+      selectedCourseId.value = newCourses[0].id;
     }
   },
   { immediate: true },
@@ -1753,23 +2008,27 @@ const clearDocumentPolling = () => {
 
 const loadDocuments = async (silent = false) => {
   clearDocumentPolling();
-  if (!selectedTopicId.value || selectedTopicId.value === ALL_TOPICS) {
+  if (!selectedCourseId.value || selectedCourseId.value === ALL_COURSES) {
     courseDocuments.value = [];
     return;
   }
   if (!silent) documentListLoading.value = true;
   try {
     courseDocuments.value = await adminApi.getCourseDocuments(
-      selectedTopicId.value,
+      selectedCourseId.value,
     );
-    if (courseDocuments.value.some(document => ["PENDING", "INDEXING"].includes(document.status))) {
+    if (
+      courseDocuments.value.some((document) =>
+        ["PENDING", "INDEXING"].includes(document.status),
+      )
+    ) {
       documentPollingTimer = setTimeout(() => {
         if (activeTab.value === "documents") void loadDocuments(true);
       }, 2500);
     }
   } catch (error) {
     console.error("Failed to load course documents:", error);
-    documentUploadMessage.value = "Không thể tải trạng thái tài liệu.";
+    showToast("Không thể tải trạng thái tài liệu.", "error");
   } finally {
     documentListLoading.value = false;
   }
@@ -1778,23 +2037,25 @@ const loadDocuments = async (silent = false) => {
 const uploadDocument = async (event: Event) => {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
-  if (!file || !selectedTopicId.value || selectedTopicId.value === ALL_TOPICS)
+  if (
+    !file ||
+    !selectedCourseId.value ||
+    selectedCourseId.value === ALL_COURSES
+  )
     return;
   const extension = file.name.split(".").pop()?.toLowerCase();
   if (!extension || !["pdf", "docx"].includes(extension)) {
-    documentUploadMessage.value = "Chỉ hỗ trợ tệp PDF hoặc DOCX.";
+    showToast("Chỉ hỗ trợ tệp PDF hoặc DOCX.", "warning");
     input.value = "";
     return;
   }
   documentUploading.value = true;
-  documentUploadMessage.value = "Đang tải tài liệu lên máy chủ...";
   try {
-    await adminApi.uploadCourseDocument(selectedTopicId.value, file);
-    documentUploadMessage.value =
-      "Đã nhận tài liệu. Hệ thống đang embedding và đồng bộ vào Qdrant.";
+    await adminApi.uploadCourseDocument(selectedCourseId.value, file);
+    showToast("Đã nhận tài liệu. Hệ thống đang xử lý nội dung.", "success");
     await loadDocuments();
   } catch (error) {
-    documentUploadMessage.value = "Tải hoặc xử lý tài liệu thất bại. Vui lòng kiểm tra trạng thái dịch vụ embedding.";
+    showToast("Tải hoặc xử lý tài liệu thất bại. Vui lòng thử lại.", "error");
     console.error("Failed to upload course document:", error);
   } finally {
     documentUploading.value = false;
@@ -1802,30 +2063,35 @@ const uploadDocument = async (event: Event) => {
   }
 };
 
-const documentStatusLabel = (status: CourseDocument["status"]) => ({
-  PENDING: "Đang chờ",
-  INDEXING: "Đang embedding",
-  INDEXED: "Đã index",
-  FAILED: "Thất bại",
-}[status]);
+const documentStatusLabel = (status: CourseDocument["status"]) =>
+  ({
+    PENDING: "Đang chờ",
+    INDEXING: "Đang embedding",
+    INDEXED: "Đã index",
+    FAILED: "Thất bại",
+  })[status];
 
-const formatDocumentDate = (value?: string) => value
-  ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short" }).format(new Date(value))
-  : "-";
+const formatDocumentDate = (value?: string) =>
+  value
+    ? new Intl.DateTimeFormat("vi-VN", {
+        dateStyle: "short",
+        timeStyle: "short",
+      }).format(new Date(value))
+    : "-";
 
 watch(
-  () => [route.name, route.query.tab, route.params.topicId],
-  async ([routeName, tab, topicId]) => {
-    if (routeName === "AdminTopicLessons" && typeof topicId === "string") {
+  () => [route.name, route.query.tab, route.params.courseId],
+  async ([routeName, tab, courseId]) => {
+    if (routeName === "AdminCourseLessons" && typeof courseId === "string") {
       activeTab.value = "lessons";
-      selectedTopicId.value = topicId;
+      selectedCourseId.value = courseId;
       return;
     }
     activeTab.value =
       typeof tab === "string" && allowedAdminTabs.value.includes(tab)
         ? tab
         : "overview";
-    if (activeTab.value === "lessons") selectedTopicId.value = ALL_TOPICS;
+    if (activeTab.value === "lessons") selectedCourseId.value = ALL_COURSES;
     if (activeTab.value === "enrollments") {
       try {
         enrollmentRequests.value = await adminApi.getEnrollmentRequests();
@@ -1841,10 +2107,10 @@ watch(
     }
     if (activeTab.value === "documents") {
       if (
-        selectedTopicId.value === ALL_TOPICS &&
-        courseStore.topics.length > 0
+        selectedCourseId.value === ALL_COURSES &&
+        courseStore.courses.length > 0
       ) {
-        selectedTopicId.value = courseStore.topics[0].id;
+        selectedCourseId.value = courseStore.courses[0].id;
       }
       void loadDocuments();
     } else {
@@ -1860,9 +2126,9 @@ const getAvatarColor = (username: string) => {
   return user ? user.avatarColor : "#64748b";
 };
 
-// Get questions count per topic
-const getQuestionCountForTopic = (topicId: string) => {
-  return questions.value.filter((q) => q.topicId === topicId).length;
+// Get questions count per course
+const getQuestionCountForCourse = (courseId: string) => {
+  return questions.value.filter((q) => q.courseId === courseId).length;
 };
 
 // ==========================================
@@ -1885,7 +2151,7 @@ const activityChartData = computed(() => {
       {
         label: "Bài học hoàn thành",
         data: [18, 24, 15, 29, 32, 12, 28],
-        borderColor: "#005B41", // BIDV Emerald Green
+        borderColor: isDark.value ? "#62dcb5" : "#005B41", // BIDV Emerald Green
         backgroundColor: "rgba(0, 91, 65, 0.1)",
         fill: true,
         tension: 0.3,
@@ -1898,7 +2164,7 @@ const activityChartData = computed(() => {
   };
 });
 
-const activityChartOptions = {
+const activityChartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
@@ -1907,15 +2173,21 @@ const activityChartOptions = {
   },
   scales: {
     y: {
-      grid: { color: "#F1F5F9" },
-      ticks: { color: "#64748B", font: { family: "Inter", size: 11 } },
+      grid: { color: isDark.value ? "#35465a" : "#F1F5F9" },
+      ticks: {
+        color: isDark.value ? "#a8b8ca" : "#64748B",
+        font: { family: "Arial, sans-serif", size: 11 },
+      },
     },
     x: {
       grid: { display: false },
-      ticks: { color: "#64748B", font: { family: "Inter", size: 11 } },
+      ticks: {
+        color: isDark.value ? "#a8b8ca" : "#64748B",
+        font: { family: "Arial, sans-serif", size: 11 },
+      },
     },
   },
-};
+}));
 
 // 2. Doughnut Chart: Competency Level
 const competencyChartData = computed(() => {
@@ -1956,23 +2228,27 @@ const competencyChartData = computed(() => {
   };
 });
 
-const competencyChartOptions = {
+const competencyChartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
     legend: {
       position: "right" as const,
       labels: {
-        color: "#1E293B",
-        font: { family: "Outfit", size: 11, weight: "bold" as const },
+        color: isDark.value ? "#e6edf5" : "#1E293B",
+        font: {
+          family: "Arial, sans-serif",
+          size: 11,
+          weight: "bold" as const,
+        },
         boxWidth: 12,
       },
     },
   },
-};
+}));
 
-// 3. Bar Chart: Average Score by Topic
-const topicScoreChartData = computed(() => {
+// 3. Bar Chart: Average Score by Course
+const courseScoreChartData = computed(() => {
   // Let's calculate actual averages based on simulated points or actual answers
   // We can calculate dynamic averages. If no scores exist, provide mock representative data.
   const scores: Record<string, { sum: number; count: number }> = {};
@@ -1980,7 +2256,7 @@ const topicScoreChartData = computed(() => {
   users.value.forEach((u) => {
     // If the mock system has quiz scores in localstorage or user record
     // We can simulate averages based on user points to keep it dynamic!
-    courseStore.topics.forEach((t) => {
+    courseStore.courses.forEach((t) => {
       if (!scores[t.id]) scores[t.id] = { sum: 0, count: 0 };
 
       // Let's create a dynamic mock score calculation based on the user's points
@@ -1988,7 +2264,7 @@ const topicScoreChartData = computed(() => {
         60 + Math.round((u.points / 3000) * 40),
         100,
       );
-      // Add minor random variance per topic
+      // Add minor random variance per course
       const randomVariance = (u.username.charCodeAt(0) % 15) - 7;
       const finalScore = Math.max(
         50,
@@ -2000,8 +2276,8 @@ const topicScoreChartData = computed(() => {
     });
   });
 
-  const labels = courseStore.topics.map((t) => t.name);
-  const dataValues = courseStore.topics.map((t) => {
+  const labels = courseStore.courses.map((t) => t.name);
+  const dataValues = courseStore.courses.map((t) => {
     const entry = scores[t.id];
     return entry && entry.count > 0 ? Math.round(entry.sum / entry.count) : 75;
   });
@@ -2020,7 +2296,7 @@ const topicScoreChartData = computed(() => {
   };
 });
 
-const topicScoreChartOptions = {
+const courseScoreChartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
@@ -2030,18 +2306,25 @@ const topicScoreChartOptions = {
     y: {
       min: 0,
       max: 100,
-      grid: { color: "#F1F5F9" },
-      ticks: { color: "#64748B", font: { family: "Inter", size: 11 } },
+      grid: { color: isDark.value ? "#35465a" : "#F1F5F9" },
+      ticks: {
+        color: isDark.value ? "#a8b8ca" : "#64748B",
+        font: { family: "Arial, sans-serif", size: 11 },
+      },
     },
     x: {
       grid: { display: false },
       ticks: {
-        color: "#64748B",
-        font: { family: "Inter", size: 10, weight: "bold" as const },
+        color: isDark.value ? "#a8b8ca" : "#64748B",
+        font: {
+          family: "Arial, sans-serif",
+          size: 10,
+          weight: "bold" as const,
+        },
       },
     },
   },
-};
+}));
 
 const enrollmentStatusLabel = (status: EnrollmentRequest["status"]) =>
   ({
@@ -2072,7 +2355,7 @@ const reviewEnrollment = async (
     return true;
   } catch (error) {
     console.error("Failed to review enrollment:", error);
-    alert("Không thể xử lý yêu cầu đăng ký. Vui lòng thử lại.");
+    showToast("Không thể xử lý yêu cầu đăng ký. Vui lòng thử lại.", "error");
     return false;
   }
 };
@@ -2119,6 +2402,35 @@ const openConfirmationModal = (
   };
 };
 
+const deleteCourseDocument = (document: CourseDocument) => {
+  const courseId = selectedCourseId.value;
+  const courseName =
+    courseStore.courses.find((course) => course.id === courseId)?.name ||
+    courseId;
+  openConfirmationModal(
+    "Xóa tài liệu tri thức AI",
+    `Bạn có thực sự muốn xóa tài liệu “${document.fileName}” khỏi khóa “${courseName}”? Tệp, dữ liệu embedding và liên kết nguồn của bài học sẽ bị xóa. Hành động này không thể hoàn tác.`,
+    async () => {
+      try {
+        await adminApi.deleteCourseDocument(courseId, document.id);
+        if (selectedCourseId.value === courseId) {
+          courseDocuments.value = courseDocuments.value.filter(
+            (item) => item.id !== document.id,
+          );
+        }
+        showToast("Đã xóa tài liệu và dữ liệu embedding.");
+      } catch (error: any) {
+        showToast(
+          error?.response?.data?.message ||
+            "Không thể xóa tài liệu. Vui lòng thử lại.",
+          "error",
+        );
+        throw error;
+      }
+    },
+  );
+};
+
 const closeConfirmationModal = () => {
   if (confirmationModal.value.submitting) return;
   confirmationModal.value.show = false;
@@ -2142,41 +2454,68 @@ const confirmModalAction = async () => {
 // LOAD ALL DATA
 // ==========================================
 const loadQuestions = async () => {
-  const requests = courseStore.topics.flatMap((topic) => [
-    adminApi.getQuizQuestions(topic.id),
-    ...topic.lessons.map((lesson) => adminApi.getQuizQuestions(topic.id, lesson.id)),
+  const requests = courseStore.courses.flatMap((course) => [
+    adminApi.getQuizQuestions(course.id),
+    ...course.lessons.map((lesson) =>
+      adminApi.getQuizQuestions(course.id, lesson.id),
+    ),
   ]);
   const results = await Promise.allSettled(requests);
   questions.value = results.flatMap((result) =>
-    result.status === "fulfilled" ? (result.value as unknown as Question[]) : [],
+    result.status === "fulfilled"
+      ? (result.value as unknown as Question[])
+      : [],
   );
 };
 
 const loadAllData = async () => {
   loading.value = true;
   try {
-    await courseStore.fetchTopics();
+    courseStore.courses = ["exams", "documents"].includes(activeTab.value)
+      ? (
+          await axiosClient.get("/api/admin/courses", {
+            params: { page: activeTab.value },
+          })
+        ).data
+      : accessUser.can("courses")
+        ? (await axiosClient.get("/api/admin/courses")).data
+        : [];
     const tasks: Promise<unknown>[] = [];
-    if (["overview", "users"].includes(activeTab.value)) {
+    if (
+      ["overview", "users"].includes(activeTab.value) &&
+      accessUser.can("users")
+    ) {
       tasks.push(adminApi.getAllUsers().then((value) => (users.value = value)));
     }
-    if (["overview", "enrollments"].includes(activeTab.value)) {
-      tasks.push(adminApi.getEnrollmentRequests().then((value) => (enrollmentRequests.value = value)));
+    if (
+      ["overview", "enrollments"].includes(activeTab.value) &&
+      accessUser.can("enrollments")
+    ) {
+      tasks.push(
+        adminApi
+          .getEnrollmentRequests()
+          .then((value) => (enrollmentRequests.value = value)),
+      );
     }
-    if (["overview", "exams"].includes(activeTab.value)) tasks.push(loadQuestions());
+    if (
+      ["overview", "exams"].includes(activeTab.value) &&
+      accessUser.can("exams")
+    )
+      tasks.push(loadQuestions());
     await Promise.all(tasks);
 
-    if (courseStore.topics.length > 0 && !selectedTopicId.value) {
-      selectedTopicId.value = courseStore.topics[0].id;
+    if (courseStore.courses.length > 0 && !selectedCourseId.value) {
+      selectedCourseId.value = courseStore.courses[0].id;
     }
-    if (activeTab.value === "documents" && courseStore.topics.length > 0) {
-      if (selectedTopicId.value === ALL_TOPICS) {
-        selectedTopicId.value = courseStore.topics[0].id;
+    if (activeTab.value === "documents" && courseStore.courses.length > 0) {
+      if (selectedCourseId.value === ALL_COURSES) {
+        selectedCourseId.value = courseStore.courses[0].id;
       }
       await loadDocuments();
     }
   } catch (error) {
     console.error("Failed to load admin panel data:", error);
+    showToast("Không thể tải dữ liệu quản trị. Vui lòng thử lại.", "error");
   } finally {
     loading.value = false;
   }
@@ -2189,55 +2528,45 @@ onMounted(() => {
 onBeforeUnmount(clearDocumentPolling);
 
 // ==========================================
-// TOPIC ACTIONS
+// COURSE ACTIONS
 // ==========================================
-const openTopicModal = (topic?: Topic) => {
-  if (topic) {
-    topicModal.value = { show: true, isEdit: true };
-    topicForm.value = {
-      id: topic.id,
-      name: topic.name,
-      iconName: topic.iconName,
-    };
-  } else {
-    topicModal.value = { show: true, isEdit: false };
-    topicForm.value = { id: "", name: "", iconName: "Settings" };
-  }
-};
-
-const saveTopic = async () => {
+const saveCourse = async () => {
   loading.value = true;
   try {
-    if (topicModal.value.isEdit) {
-      await adminApi.updateTopic(
-        topicForm.value.id,
-        topicForm.value as unknown as Topic,
+    if (courseModal.value.isEdit) {
+      await adminApi.updateCourse(
+        courseForm.value.id,
+        courseForm.value as unknown as Course,
       );
     } else {
-      await adminApi.createTopic(topicForm.value as unknown as Topic);
+      await adminApi.createCourse(courseForm.value as unknown as Course);
     }
-    topicModal.value.show = false;
-    await courseStore.fetchTopics(true);
-    showToast(topicModal.value.isEdit ? "Cập nhật chủ đề thành công." : "Tạo chủ đề thành công.");
+    courseModal.value.show = false;
+    await courseStore.fetchCourses(true);
+    showToast(
+      courseModal.value.isEdit
+        ? "Cập nhật khóa học thành công."
+        : "Tạo khóa học thành công.",
+    );
   } catch (err) {
-    showToast("Không thể lưu chủ đề. Vui lòng thử lại.", "error");
+    showToast("Không thể lưu khóa học. Vui lòng thử lại.", "error");
     console.error(err);
   } finally {
     loading.value = false;
   }
 };
 
-const handleDeleteTopic = (id: string) => {
+const handleDeleteCourse = (id: string) => {
   openConfirmationModal(
-    "Xóa chủ đề?",
-    "Tất cả bài học và câu hỏi trực thuộc chủ đề này cũng sẽ bị xóa. Thao tác không thể hoàn tác.",
+    "Xóa khóa học?",
+    "Tất cả bài học và câu hỏi trực thuộc khóa học này cũng sẽ bị xóa. Thao tác không thể hoàn tác.",
     async () => {
       loading.value = true;
       try {
-        await adminApi.deleteTopic(id);
+        await adminApi.deleteCourse(id);
         await loadAllData();
       } catch (err) {
-        alert("Xóa chủ đề thất bại!");
+        showToast("Xóa khóa học thất bại!", "error");
         console.error(err);
         throw err;
       } finally {
@@ -2260,7 +2589,6 @@ const openUserModal = (user?: AdminUser) => {
       avatarColor: user.avatarColor || "#005B41",
       role: user.role,
       points: user.points,
-      userGroupId: user.userGroupId || "",
       employeeId: user.employeeId || "",
       email: user.email || "",
     };
@@ -2273,7 +2601,6 @@ const openUserModal = (user?: AdminUser) => {
       avatarColor: "#005B41",
       role: "ROLE_USER",
       points: 0,
-      userGroupId: "",
       employeeId: "",
       email: "",
     };
@@ -2293,7 +2620,7 @@ const handleDownloadTemplate = async () => {
     URL.revokeObjectURL(url);
   } catch (error) {
     console.error(error);
-    alert("Không thể tải file Excel mẫu.");
+    showToast("Không thể tải file Excel mẫu.", "error");
   }
 };
 
@@ -2305,10 +2632,10 @@ const handleExcelUpload = async (event: Event) => {
   try {
     await adminApi.importUsersExcel(file);
     await loadAllData();
-    alert("Nhập danh sách học viên thành công.");
+    showToast("Nhập danh sách học viên thành công.", "success");
   } catch (error) {
     console.error(error);
-    alert("Không thể nhập danh sách học viên.");
+    showToast("Không thể nhập danh sách học viên.", "error");
   } finally {
     loading.value = false;
     input.value = "";
@@ -2328,7 +2655,11 @@ const saveUser = async () => {
     }
     userModal.value.show = false;
     users.value = await adminApi.getAllUsers();
-    showToast(userModal.value.isEdit ? "Cập nhật học viên thành công." : "Tạo học viên thành công.");
+    showToast(
+      userModal.value.isEdit
+        ? "Cập nhật học viên thành công."
+        : "Tạo học viên thành công.",
+    );
   } catch (err) {
     showToast("Không thể lưu học viên. Vui lòng thử lại.", "error");
     console.error(err);
@@ -2348,7 +2679,7 @@ const handleDeleteUser = (user: AdminUser) => {
         await adminApi.deleteUser(user.id!);
         await loadAllData();
       } catch (err) {
-        alert("Xóa học viên thất bại!");
+        showToast("Xóa học viên thất bại!", "error");
         console.error(err);
         throw err;
       } finally {
@@ -2367,7 +2698,7 @@ const openLessonModal = (lesson?: Lesson) => {
     lessonForm.value = {
       id: lesson.id,
       title: lesson.title,
-      topicId: lesson.topicId,
+      courseId: lesson.courseId,
       hint: lesson.hint,
       videoSource:
         lesson.videoSource ||
@@ -2381,10 +2712,10 @@ const openLessonModal = (lesson?: Lesson) => {
     lessonForm.value = {
       id: "",
       title: "",
-      topicId:
-        selectedTopicId.value === ALL_TOPICS
-          ? courseStore.topics[0]?.id || ""
-          : selectedTopicId.value,
+      courseId:
+        selectedCourseId.value === ALL_COURSES
+          ? courseStore.courses[0]?.id || ""
+          : selectedCourseId.value,
       hint: "",
       videoSource: "UPLOAD",
       videoUrl: "",
@@ -2445,7 +2776,7 @@ const addLessonDocument = async () => {
   const newCard = cards?.[cards.length - 1];
   if (!newCard) return;
 
-  newCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  scrollWithin(newCard, "nearest");
   window.setTimeout(() => {
     newCard.querySelector<HTMLInputElement>("input.form-control")?.focus({
       preventScroll: true,
@@ -2460,7 +2791,7 @@ const handleDocumentFileChange = (event: Event, index: number) => {
 
   const extension = file.name.split(".").pop()?.toLowerCase();
   if (!["pdf", "doc", "docx", "ppt", "pptx"].includes(extension || "")) {
-    alert("Chỉ hỗ trợ file PDF, DOC, DOCX, PPT hoặc PPTX.");
+    showToast("Chỉ hỗ trợ file PDF, DOC, DOCX, PPT hoặc PPTX.", "warning");
     input.value = "";
     return;
   }
@@ -2509,7 +2840,9 @@ const saveLesson = async () => {
   try {
     const videoUrl =
       lessonForm.value.videoSource === "UPLOAD" && lessonForm.value.videoFile
-        ? await adminApi.uploadVideo(lessonForm.value.videoFile, percent => { videoUploadProgress.value = percent; })
+        ? await adminApi.uploadVideo(lessonForm.value.videoFile, (percent) => {
+            videoUploadProgress.value = percent;
+          })
         : lessonForm.value.videoUrl.trim();
     videoUploadProgress.value = null;
     const documents = await Promise.all(
@@ -2544,11 +2877,23 @@ const saveLesson = async () => {
     }
 
     lessonModal.value.show = false;
-    await courseStore.fetchTopics(true);
-    showToast(lessonModal.value.isEdit ? "Cập nhật bài học thành công." : "Tạo bài học thành công.");
+    await courseStore.fetchCourses(true);
+    showToast(
+      lessonModal.value.isEdit
+        ? "Cập nhật bài học thành công."
+        : "Tạo bài học thành công.",
+    );
   } catch (err) {
-    const serverMessage = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-    showToast(serverMessage || (err instanceof Error ? err.message : "Không thể lưu bài học. Vui lòng kiểm tra dữ liệu và thử lại."), "error");
+    const serverMessage = (
+      err as { response?: { data?: { message?: string } } }
+    ).response?.data?.message;
+    showToast(
+      serverMessage ||
+        (err instanceof Error
+          ? err.message
+          : "Không thể lưu bài học. Vui lòng kiểm tra dữ liệu và thử lại."),
+      "error",
+    );
     console.error(err);
   } finally {
     videoUploadProgress.value = null;
@@ -2566,7 +2911,7 @@ const handleDeleteLesson = (id: string) => {
         await adminApi.deleteLesson(id);
         await loadAllData();
       } catch (err) {
-        alert("Xóa bài học thất bại!");
+        showToast("Xóa bài học thất bại!", "error");
         console.error(err);
         throw err;
       } finally {
@@ -2584,7 +2929,7 @@ const openQuestionModal = (question?: Question) => {
     questionModal.value = { show: true, isEdit: true, editId: question.id };
     questionForm.value = {
       text: question.text,
-      topicId: question.topicId,
+      courseId: question.courseId,
       lessonId: question.lessonId || "",
       correctAnswer: question.correctAnswer,
       options: [],
@@ -2599,10 +2944,10 @@ const openQuestionModal = (question?: Question) => {
     questionModal.value = { show: true, isEdit: false, editId: null };
     questionForm.value = {
       text: "",
-      topicId:
-        selectedTopicId.value === ALL_TOPICS
-          ? courseStore.topics[0]?.id || ""
-          : selectedTopicId.value,
+      courseId:
+        selectedCourseId.value === ALL_COURSES
+          ? courseStore.courses[0]?.id || ""
+          : selectedCourseId.value,
       lessonId: "",
       correctAnswer: 0,
       options: [],
@@ -2618,7 +2963,7 @@ const saveQuestion = async () => {
       .map((o) => o.trim())
       .filter((o) => o.length > 0);
     if (opts.length !== 4) {
-      alert("Vui lòng nhập đầy đủ 4 đáp án trước khi lưu.");
+      showToast("Vui lòng nhập đầy đủ 4 đáp án trước khi lưu.", "warning");
       loading.value = false;
       return;
     }
@@ -2640,7 +2985,11 @@ const saveQuestion = async () => {
 
     questionModal.value.show = false;
     await loadQuestions();
-    showToast(questionModal.value.isEdit ? "Cập nhật câu hỏi thành công." : "Tạo câu hỏi thành công.");
+    showToast(
+      questionModal.value.isEdit
+        ? "Cập nhật câu hỏi thành công."
+        : "Tạo câu hỏi thành công.",
+    );
   } catch (err) {
     showToast("Không thể lưu câu hỏi trắc nghiệm.", "error");
     console.error(err);
@@ -2652,16 +3001,16 @@ const saveQuestion = async () => {
 const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
 
 const downloadQuestionTemplate = () => {
-  const topicId =
-    selectedTopicId.value === ALL_TOPICS
-      ? courseStore.topics[0]?.id || "CIF"
-      : selectedTopicId.value || courseStore.topics[0]?.id || "CIF";
+  const courseId =
+    selectedCourseId.value === ALL_COURSES
+      ? courseStore.courses[0]?.id || "CIF"
+      : selectedCourseId.value || courseStore.courses[0]?.id || "CIF";
   const lessonId =
-    courseStore.topics.find((topic) => topic.id === topicId)?.lessons[0]?.id ||
-    "";
+    courseStore.courses.find((course) => course.id === courseId)?.lessons[0]
+      ?.id || "";
   const rows = [
     [
-      "topicId",
+      "courseId",
       "lessonId",
       "question",
       "optionA",
@@ -2671,9 +3020,9 @@ const downloadQuestionTemplate = () => {
       "correctAnswer",
     ],
     [
-      topicId,
+      courseId,
       "",
-      "Câu hỏi mẫu cho chủ đề?",
+      "Câu hỏi mẫu cho khóa học?",
       "Đáp án A",
       "Đáp án B",
       "Đáp án C",
@@ -2681,7 +3030,7 @@ const downloadQuestionTemplate = () => {
       "A",
     ],
     [
-      topicId,
+      courseId,
       lessonId,
       "Câu hỏi mẫu cho bài học?",
       "Đáp án A",
@@ -2738,7 +3087,7 @@ const importQuestionsFromCsv = async (event: Event) => {
   try {
     const rows = parseCsv((await file.text()).replace(/^\uFEFF/, ""));
     const expected = [
-      "topicId",
+      "courseId",
       "lessonId",
       "question",
       "optionA",
@@ -2756,18 +3105,20 @@ const importQuestionsFromCsv = async (event: Event) => {
     const errors: string[] = [];
     const payloads = rows.slice(1).map((row, index) => {
       const line = index + 2;
-      const [topicId, lessonId, text, ...rest] = row;
+      const [courseId, lessonId, text, ...rest] = row;
       const options = rest.slice(0, 4);
       const answerText = (rest[4] || "").toUpperCase();
       const correctAnswer = ["A", "B", "C", "D"].indexOf(answerText);
-      const topic = courseStore.topics.find((item) => item.id === topicId);
-      if (!topic)
-        errors.push(`Dòng ${line}: topicId "${topicId}" không tồn tại.`);
+      const course = courseStore.courses.find((item) => item.id === courseId);
+      if (!course)
+        errors.push(`Dòng ${line}: courseId "${courseId}" không tồn tại.`);
       if (
         lessonId &&
-        !topic?.lessons.some((lesson) => lesson.id === lessonId)
+        !course?.lessons.some((lesson) => lesson.id === lessonId)
       ) {
-        errors.push(`Dòng ${line}: lessonId "${lessonId}" không thuộc chủ đề.`);
+        errors.push(
+          `Dòng ${line}: lessonId "${lessonId}" không thuộc khóa học.`,
+        );
       }
       if (!text?.trim()) errors.push(`Dòng ${line}: thiếu nội dung câu hỏi.`);
       if (options.length !== 4 || options.some((option) => !option?.trim())) {
@@ -2776,7 +3127,7 @@ const importQuestionsFromCsv = async (event: Event) => {
       if (correctAnswer < 0)
         errors.push(`Dòng ${line}: correctAnswer phải là A, B, C hoặc D.`);
       return {
-        topicId,
+        courseId,
         lessonId: lessonId || undefined,
         text,
         options,
@@ -2785,8 +3136,9 @@ const importQuestionsFromCsv = async (event: Event) => {
     });
     if (!payloads.length) errors.push("File không có dòng dữ liệu.");
     if (errors.length) {
-      alert(
+      showToast(
         `Không thể import vì file chưa đúng định dạng:\n\n${errors.slice(0, 12).join("\n")}`,
+        "warning",
       );
       return;
     }
@@ -2795,9 +3147,12 @@ const importQuestionsFromCsv = async (event: Event) => {
       payloads.map((payload) => adminApi.createQuestion(payload)),
     );
     await loadAllData();
-    alert(`Đã import thành công ${payloads.length} câu hỏi.`);
+    showToast(`Đã import thành công ${payloads.length} câu hỏi.`, "success");
   } catch (error) {
-    alert(error instanceof Error ? error.message : "Không thể đọc file CSV.");
+    showToast(
+      error instanceof Error ? error.message : "Không thể đọc file CSV.",
+      "error",
+    );
   } finally {
     loading.value = false;
     input.value = "";
@@ -2814,7 +3169,7 @@ const handleDeleteQuestion = (id: number) => {
         await adminApi.deleteQuestion(id);
         await loadAllData();
       } catch (err) {
-        alert("Xóa câu hỏi thất bại!");
+        showToast("Xóa câu hỏi thất bại!", "error");
         console.error(err);
         throw err;
       } finally {
@@ -2833,11 +3188,41 @@ void handleDeleteQuestion;
 </script>
 
 <style scoped>
+.admin-table {
+  font-size: 0.875rem;
+}
+.admin-table th {
+  text-transform: none !important;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.card-title {
+  text-transform: none !important;
+}
+.admin-page-heading {
+  margin-bottom: 1.6rem;
+}
+
+.legacy-lesson-fields {
+  overflow: visible;
+  min-height: 0;
+}
+.admin-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+.admin-table small {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
 /* Redesigned Sidebar Layout */
 .admin-portal-layout {
   display: flex;
   min-height: 100%;
-  background-color: white;
+  background-color: var(--surface-ffffff);
   font-family: var(--font-family);
 }
 
@@ -2883,8 +3268,8 @@ void handleDeleteQuestion;
 }
 
 .sidebar-item.active {
-  color: var(--primary-color);
-  background-color: white; /* White tab bg for clean contrast */
+  color: var(--primary-ink);
+  background-color: var(--surface-ffffff); /* White tab bg for clean contrast */
   box-shadow: var(--shadow-sm);
 }
 
@@ -2928,6 +3313,7 @@ void handleDeleteQuestion;
 /* Main Content area */
 .admin-main-content {
   flex: 1;
+  min-width: 0;
   padding: 2.2rem;
   overflow-y: auto;
   display: flex;
@@ -2938,7 +3324,7 @@ void handleDeleteQuestion;
 .admin-top-header {
   padding: 1.5rem 2rem;
   border-left: 5px solid var(--primary-color);
-  background: white;
+  background: var(--surface-ffffff);
   box-shadow: var(--shadow-sm);
 }
 
@@ -2951,7 +3337,7 @@ void handleDeleteQuestion;
 
 .admin-top-header h1 {
   font-size: 1.6rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-weight: 700;
   margin-top: 0.1rem;
 }
@@ -2974,7 +3360,7 @@ void handleDeleteQuestion;
   align-items: center;
   gap: 1.25rem;
   padding: 1.5rem;
-  background: white;
+  background: var(--surface-ffffff);
 }
 
 .stat-icon-box {
@@ -3003,7 +3389,7 @@ void handleDeleteQuestion;
   background-color: var(--primary-color);
 }
 .questions-bg {
-  background-color: #8b5cf6;
+  background-color: var(--surface-8b5cf6);
 }
 
 .online-indicator-ping {
@@ -3012,8 +3398,8 @@ void handleDeleteQuestion;
   right: -3px;
   width: 10px;
   height: 10px;
-  background-color: #ef4444;
-  border: 2px solid white;
+  background-color: var(--surface-ef4444);
+  border: 2px solid var(--line-ffffff);
   border-radius: 50%;
   animation: pulse 1.5s infinite;
 }
@@ -3045,8 +3431,8 @@ void handleDeleteQuestion;
 .active-badge-lbl {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #10b981;
-  background-color: #dcfce7;
+  color: var(--ink-10b981);
+  background-color: var(--surface-dcfce7);
   padding: 0.1rem 0.4rem;
   border-radius: var(--radius-sm);
 }
@@ -3079,7 +3465,7 @@ void handleDeleteQuestion;
 
 .chart-card {
   padding: 1.5rem;
-  background: white;
+  background: var(--surface-ffffff);
 }
 
 .chart-container {
@@ -3092,7 +3478,7 @@ void handleDeleteQuestion;
 /* Real-time Sessions list Card */
 .sessions-card {
   padding: 1.5rem;
-  background: white;
+  background: var(--surface-ffffff);
   display: flex;
   flex-direction: column;
 }
@@ -3156,7 +3542,7 @@ void handleDeleteQuestion;
 
 .session-detail {
   font-size: 0.8rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -3171,9 +3557,9 @@ void handleDeleteQuestion;
   font-size: 0.75rem;
 }
 
-.session-topic-tag {
+.session-course-tag {
   background-color: var(--primary-light);
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-weight: 700;
   padding: 0.1rem 0.4rem;
   border-radius: var(--radius-sm);
@@ -3215,27 +3601,27 @@ void handleDeleteQuestion;
   margin-left: auto;
 }
 
-.topic-selector-row {
+.course-selector-row {
   display: flex;
   align-items: center;
   gap: 0.65rem;
   margin-bottom: 1rem;
 }
 
-.topic-selector-row label {
+.course-selector-row label {
   flex: 0 0 auto;
   font-weight: 500;
 }
 
-.topic-selector-row .select-control {
+.course-selector-row .select-control {
   width: 170px;
 }
 
-.topics-summary,
+.courses-summary,
 .users-manager,
 .lessons-manager,
 .exams-manager {
-  background: white;
+  background: var(--surface-ffffff);
   padding: 1.8rem;
   box-shadow: var(--shadow-sm);
 }
@@ -3267,9 +3653,9 @@ void handleDeleteQuestion;
 }
 
 .code-badge {
-  font-family: monospace;
+  font-family: var(--font-family);
   background-color: var(--bg-main);
-  color: var(--primary-color);
+  color: var(--primary-ink);
   padding: 0.25rem 0.5rem;
   border-radius: var(--radius-sm);
   font-weight: 700;
@@ -3297,12 +3683,12 @@ void handleDeleteQuestion;
 
 .action-btn:hover {
   background-color: var(--bg-main);
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 
 .action-btn.delete:hover {
-  background-color: #fee2e2;
-  color: #ef4444;
+  background-color: var(--surface-fee2e2);
+  color: var(--ink-ef4444);
 }
 
 .action-btn svg {
@@ -3336,13 +3722,13 @@ void handleDeleteQuestion;
 }
 
 .role-tag.admin {
-  background-color: #fee2e2;
-  color: #ef4444;
+  background-color: var(--surface-fee2e2);
+  color: var(--ink-ef4444);
 }
 
 .role-tag.user {
-  background-color: #e0f2fe;
-  color: #0369a1;
+  background-color: var(--surface-e0f2fe);
+  color: var(--ink-0369a1);
 }
 
 /* Modal details */
@@ -3368,7 +3754,7 @@ void handleDeleteQuestion;
   max-height: calc(100vh - 2.5rem);
   overflow-y: auto;
   padding: 2rem;
-  background: white;
+  background: var(--surface-ffffff);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
 }
@@ -3390,7 +3776,7 @@ void handleDeleteQuestion;
 .lesson-modal-header {
   flex: 0 0 auto;
   padding: 1.35rem 1.75rem 0;
-  background: white;
+  background: var(--surface-ffffff);
 }
 
 .lesson-modal-header h3 {
@@ -3419,13 +3805,13 @@ void handleDeleteQuestion;
   margin-top: 0;
   padding: 1rem 1.75rem;
   border-top: 1px solid var(--border-color);
-  background: white;
+  background: var(--surface-ffffff);
   box-shadow: 0 -8px 20px rgba(15, 35, 29, 0.05);
 }
 
 .modal-content h3 {
   font-size: 1.15rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   margin-bottom: 1.25rem;
   border-bottom: 2px solid var(--primary-light);
   padding-bottom: 0.5rem;
@@ -3452,7 +3838,7 @@ void handleDeleteQuestion;
   padding: 0.6rem 0.8rem;
   font-size: 0.85rem;
   color: var(--text-main);
-  background-color: white;
+  background-color: var(--surface-ffffff);
   transition: var(--transition);
 }
 
@@ -3483,7 +3869,7 @@ void handleDeleteQuestion;
   align-items: center;
   gap: 0.45rem;
   margin-bottom: 0.7rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-size: 0.8rem;
   font-weight: 700;
 }
@@ -3513,10 +3899,10 @@ void handleDeleteQuestion;
   align-items: center;
   gap: 0.55rem;
   margin: 0 !important;
-  border: 1px dashed #9ab9ae;
+  border: 1px dashed var(--line-9ab9ae);
   border-radius: var(--radius-sm);
-  background: white;
-  color: var(--primary-color);
+  background: var(--surface-ffffff);
+  color: var(--primary-ink);
   cursor: pointer;
 }
 
@@ -3546,7 +3932,7 @@ void handleDeleteQuestion;
   padding: 0.2rem 0.45rem;
   border-radius: 999px;
   background: var(--primary-light);
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-size: 0.66rem;
   font-weight: 700;
 }
@@ -3568,7 +3954,7 @@ void handleDeleteQuestion;
   padding: 0 0.8rem;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  background: white;
+  background: var(--surface-ffffff);
   color: var(--text-muted);
 }
 
@@ -3594,7 +3980,7 @@ void handleDeleteQuestion;
   padding: 1rem;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  background: white;
+  background: var(--surface-ffffff);
   color: var(--text-color);
   text-align: left;
   cursor: pointer;
@@ -3618,7 +4004,7 @@ void handleDeleteQuestion;
   flex: 0 0 44px;
   border-radius: 12px;
   background: var(--primary-light);
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 
 .quiz-definition-copy {
@@ -3640,9 +4026,9 @@ void handleDeleteQuestion;
 .pending-count {
   padding: 0.45rem 0.7rem;
   border-radius: var(--radius-full);
-  background: #fff7d6;
-  color: #806710;
-  font-weight: 800;
+  background: var(--surface-fff7d6);
+  color: var(--ink-806710);
+  font-weight: 700;
   font-size: 0.78rem;
 }
 .lesson-back-button {
@@ -3653,19 +4039,19 @@ void handleDeleteQuestion;
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-weight: 700;
   cursor: pointer;
 }
 .lesson-back-button:hover {
   text-decoration: underline;
 }
-.lesson-topic-grid {
+.lesson-course-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 1rem;
 }
-.lesson-topic-card {
+.lesson-course-card {
   display: flex;
   align-items: center;
   gap: 0.85rem;
@@ -3673,7 +4059,7 @@ void handleDeleteQuestion;
   padding: 1rem;
   border: 1px solid var(--border-color);
   border-radius: 10px;
-  background: white;
+  background: var(--surface-ffffff);
   color: var(--text-color);
   text-align: left;
   cursor: pointer;
@@ -3682,28 +4068,28 @@ void handleDeleteQuestion;
     box-shadow 0.2s ease,
     transform 0.2s ease;
 }
-.lesson-topic-card:hover {
+.lesson-course-card:hover {
   border-color: var(--primary-color);
   box-shadow: 0 6px 16px rgb(0 103 79 / 12%);
   transform: translateY(-2px);
 }
-.lesson-topic-icon {
+.lesson-course-icon {
   display: grid;
   place-items: center;
   flex: 0 0 44px;
   height: 44px;
   border-radius: 10px;
   background: var(--primary-light);
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
-.lesson-topic-copy {
+.lesson-course-copy {
   display: flex;
   flex: 1;
   flex-direction: column;
   align-items: flex-start;
   gap: 0.25rem;
 }
-.lesson-topic-copy small {
+.lesson-course-copy small {
   color: var(--text-muted);
 }
 .lesson-order-table tbody tr {
@@ -3738,19 +4124,19 @@ void handleDeleteQuestion;
   padding: 0.3rem 0.55rem;
   border-radius: var(--radius-full);
   font-size: 0.72rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 .enrollment-status.pending {
-  background: #fff7d6;
-  color: #806710;
+  background: var(--surface-fff7d6);
+  color: var(--ink-806710);
 }
 .enrollment-status.approved {
-  background: #e8f5ef;
-  color: var(--primary-color);
+  background: var(--surface-e8f5ef);
+  color: var(--primary-ink);
 }
 .enrollment-status.rejected {
-  background: #feecec;
-  color: #b42318;
+  background: var(--surface-feecec);
+  color: var(--ink-b42318);
 }
 .enrollment-status-detail {
   display: flex;
@@ -3798,8 +4184,8 @@ void handleDeleteQuestion;
 }
 .reject-request {
   border: 1px solid #ef4444;
-  background: white;
-  color: #b42318;
+  background: var(--surface-ffffff);
+  color: var(--ink-b42318);
 }
 .reject-request:hover {
   background: #dc2626;
@@ -3817,7 +4203,7 @@ void handleDeleteQuestion;
   display: inline-flex;
   max-width: 280px;
   gap: 0.25rem;
-  color: #b42318;
+  color: var(--ink-b42318);
   line-height: 1.35;
   text-align: left;
 }
@@ -3834,12 +4220,12 @@ void handleDeleteQuestion;
   display: grid;
   place-items: center;
   border-radius: 14px;
-  background: #feecec;
-  color: #b42318;
+  background: var(--surface-feecec);
+  color: var(--ink-b42318);
 }
 
 .reject-modal-heading > span {
-  color: #b42318;
+  color: var(--ink-b42318);
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -3866,7 +4252,7 @@ void handleDeleteQuestion;
   gap: 1rem;
   border: 1px solid var(--border-color);
   border-radius: 10px;
-  background: #f8fafc;
+  background: var(--surface-f8fafc);
 }
 
 .reject-request-summary > div {
@@ -3890,7 +4276,7 @@ void handleDeleteQuestion;
   width: 100%;
   padding: 0.75rem 0.85rem;
   resize: vertical;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--line-cbd5e1);
   border-radius: 9px;
   outline: none;
   color: var(--text-main);
@@ -3903,7 +4289,7 @@ void handleDeleteQuestion;
 }
 
 .required-mark {
-  color: #dc2626;
+  color: var(--ink-dc2626);
 }
 
 .reason-counter {
@@ -3939,10 +4325,10 @@ void handleDeleteQuestion;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #f0c5c5;
+  border: 1px solid var(--line-f0c5c5);
   border-radius: var(--radius-sm);
-  background: #fff7f7;
-  color: #b42318;
+  background: var(--surface-fff7f7);
+  color: var(--ink-b42318);
   cursor: pointer;
   transition:
     border-color 0.2s,
@@ -3951,7 +4337,7 @@ void handleDeleteQuestion;
 
 .file-clear-btn:hover {
   border-color: #d92d20;
-  background: #fee4e2;
+  background: var(--surface-fee4e2);
 }
 
 .file-clear-btn:focus-visible {
@@ -3996,7 +4382,7 @@ void handleDeleteQuestion;
   padding: 0.7rem 0.8rem;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  background: white;
+  background: var(--surface-ffffff);
   color: var(--text-muted);
   cursor: pointer;
   transition:
@@ -4006,13 +4392,13 @@ void handleDeleteQuestion;
 }
 
 .video-source-option:hover {
-  border-color: #9ab9ae;
+  border-color: var(--line-9ab9ae);
 }
 
 .video-source-option.active {
   border-color: var(--primary-color);
   background: var(--primary-light);
-  color: var(--primary-color);
+  color: var(--primary-ink);
   box-shadow: 0 0 0 1px var(--primary-color);
 }
 
@@ -4053,7 +4439,7 @@ void handleDeleteQuestion;
 .selected-video-note {
   display: block;
   margin-top: 0.5rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 
 .selected-file-meta {
@@ -4091,12 +4477,12 @@ void handleDeleteQuestion;
     margin-left: 0;
   }
 
-  .topic-selector-row {
+  .course-selector-row {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .topic-selector-row .select-control {
+  .course-selector-row .select-control {
     width: 100%;
   }
 
@@ -4154,9 +4540,9 @@ void handleDeleteQuestion;
 }
 
 select:disabled {
-  background-color: #f3f4f6;
-  color: #6b7280;
-  border: 1px solid #d1d5db;
+  background-color: var(--surface-f3f4f6);
+  color: var(--ink-6b7280);
+  border: 1px solid var(--line-d1d5db);
   cursor: not-allowed;
   opacity: 1;
 }
@@ -4180,10 +4566,10 @@ select:disabled {
   align-items: center;
   gap: 0.85rem;
   padding: 1rem;
-  border: 1px dashed #9db9ae;
+  border: 1px dashed var(--line-9db9ae);
   border-radius: var(--radius-md);
-  background: #f4f8f6;
-  color: var(--primary-color);
+  background: var(--surface-f4f8f6);
+  color: var(--primary-ink);
 }
 
 .rag-upload-box > div {
@@ -4199,7 +4585,7 @@ select:disabled {
 
 .rag-upload-message {
   margin: -0.45rem 0 0;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-weight: 600;
 }
 
@@ -4208,8 +4594,8 @@ select:disabled {
   align-items: center;
   padding: 0.25rem 0.55rem;
   border-radius: 999px;
-  background: #eef2f7;
-  color: #475569;
+  background: var(--surface-eef2f7);
+  color: var(--ink-475569);
   font-size: 0.75rem;
   font-weight: 700;
   white-space: nowrap;
@@ -4217,23 +4603,23 @@ select:disabled {
 
 .rag-status.status-indexing,
 .rag-status.status-pending {
-  background: #fff7d6;
-  color: #806710;
+  background: var(--surface-fff7d6);
+  color: var(--ink-806710);
 }
 
 .rag-status.status-indexed {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--surface-dcfce7);
+  color: var(--ink-166534);
 }
 
 .rag-status.status-failed {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: var(--surface-fee2e2);
+  color: var(--ink-b91c1c);
 }
 
 .rag-error-cell {
   min-width: 0;
-  color: #b91c1c;
+  color: var(--ink-b91c1c);
   white-space: normal;
   word-break: break-word;
   overflow-wrap: anywhere;
@@ -4247,13 +4633,57 @@ select:disabled {
   line-clamp: 3;
 }
 
-.rag-document-table { table-layout: fixed; }
-.rag-document-table th:nth-child(1) { width: 24%; }
-.rag-document-table th:nth-child(2) { width: 11%; }
-.rag-document-table th:nth-child(3) { width: 12%; }
-.rag-document-table th:nth-child(4) { width: 9%; }
-.rag-document-table th:nth-child(5) { width: 15%; }
-.rag-document-table th:nth-child(6) { width: 29%; }
+.rag-document-table-scroll {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.rag-document-table {
+  table-layout: fixed;
+  min-width: 760px;
+}
+
+.rag-document-table th,
+.rag-document-table td {
+  box-sizing: border-box;
+  padding: 0.9rem 0.55rem;
+  overflow-wrap: anywhere;
+}
+
+.rag-document-table th:nth-child(1) {
+  width: 24%;
+}
+.rag-document-table th:nth-child(2) {
+  width: 10%;
+}
+.rag-document-table th:nth-child(3) {
+  width: 12%;
+}
+.rag-document-table th:nth-child(4) {
+  width: 7%;
+}
+.rag-document-table th:nth-child(5) {
+  width: 16%;
+}
+.rag-document-table th:nth-child(6) {
+  width: 21%;
+}
+.rag-document-table th:nth-child(7) {
+  width: 10%;
+}
+
+.rag-document-table .rag-document-actions {
+  position: sticky;
+  right: 0;
+  background: var(--surface-ffffff);
+  text-align: right;
+}
+
+.rag-document-table .rag-document-actions .btn {
+  padding: 0.5rem;
+  white-space: nowrap;
+}
 
 .rag-empty-cell {
   padding: 2rem !important;

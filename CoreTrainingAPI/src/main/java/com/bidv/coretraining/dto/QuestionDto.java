@@ -14,9 +14,12 @@ import java.util.List;
 @Builder
 public class QuestionDto {
     private Long id;
-    private String topicId;
+    private String courseId;
     private String lessonId;
     private String text;
+    private String explanation;
+    private Long bankQuestionId;
+    private String bankQuestionCode;
     private List<String> options;
     private Integer correctAnswer;
     private QuestionType type;

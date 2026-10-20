@@ -1,22 +1,33 @@
-import { createApp } from 'vue';
-import { createPinia } from 'pinia';
-import router from './router';
-import './assets/styles/main.css';
-import App from './App.vue';
+import { createApp } from "vue";
+import { createPinia } from "pinia";
+import router from "./router";
+import "./assets/styles/main.css";
+import "./assets/styles/admin.css";
+import "./assets/styles/tables.css";
+import "./assets/styles/theme-palette.css";
+import "./assets/styles/theme.css";
+import "./assets/styles/forms.css";
+import App from "./App.vue";
+import { initializeTheme } from "./composables/useTheme";
+import { Chart } from "chart.js";
+
+// Canvas text does not inherit the page's CSS font.
+Chart.defaults.font.family = "Arial, sans-serif";
 
 const app = createApp(App);
+initializeTheme();
 const pinia = createPinia();
 
 app.config.errorHandler = (error, instance, info) => {
-  console.error('Unhandled Vue error', {
+  console.error("Unhandled Vue error", {
     error,
-    component: instance?.$options?.name || 'anonymous',
+    component: instance?.$options?.name || "anonymous",
     info,
   });
 };
 
-window.addEventListener('error', (event) => {
-  console.error('Unhandled browser error', {
+window.addEventListener("error", (event) => {
+  console.error("Unhandled browser error", {
     message: event.message,
     source: event.filename,
     line: event.lineno,
@@ -25,10 +36,10 @@ window.addEventListener('error', (event) => {
   });
 });
 
-window.addEventListener('unhandledrejection', (event) => {
-  console.error('Unhandled promise rejection', event.reason);
+window.addEventListener("unhandledrejection", (event) => {
+  console.error("Unhandled promise rejection", event.reason);
 });
 
 app.use(pinia);
 app.use(router);
-app.mount('#app');
+app.mount("#app");

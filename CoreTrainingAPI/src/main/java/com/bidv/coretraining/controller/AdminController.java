@@ -17,47 +17,55 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin")
 public class AdminController {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bidv.coretraining.service.AuthorizationService authorization;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bidv.coretraining.service.AssetAccessService assets;
     private final AdminService adminService;
     private final DocumentStorageService documentStorageService;
     private final VideoStorageService videoStorageService;
     private final QuizGenerationService quizGenerationService;
 
     public AdminController(AdminService adminService, DocumentStorageService documentStorageService,
-                           VideoStorageService videoStorageService,
-                           QuizGenerationService quizGenerationService) {
+            VideoStorageService videoStorageService,
+            QuizGenerationService quizGenerationService) {
         this.adminService = adminService;
         this.documentStorageService = documentStorageService;
         this.videoStorageService = videoStorageService;
         this.quizGenerationService = quizGenerationService;
     }
 
-    // Topics CRUD
-    @PostMapping("/topics")
-    public ResponseEntity<TopicDto> createTopic(@RequestBody TopicDto topicDto) {
-        return ResponseEntity.ok(adminService.createTopic(topicDto));
+    // Courses CRUD
+    @PostMapping("/courses")
+    public ResponseEntity<CourseDto> createCourse(@RequestBody CourseDto courseDto) {
+        return ResponseEntity.ok(adminService.createCourse(courseDto));
     }
 
-    @PutMapping("/topics/{id}")
-    public ResponseEntity<TopicDto> updateTopic(@PathVariable String id, @RequestBody TopicDto topicDto) {
-        return ResponseEntity.ok(adminService.updateTopic(id, topicDto));
+    @PutMapping("/courses/{id}")
+    public ResponseEntity<CourseDto> updateCourse(@PathVariable String id, @RequestBody CourseDto courseDto) {
+        return ResponseEntity.ok(adminService.updateCourse(id, courseDto));
     }
 
-    @DeleteMapping("/topics/{id}")
-    public ResponseEntity<Void> deleteTopic(@PathVariable String id) {
-        adminService.deleteTopic(id);
+    @DeleteMapping("/courses/{id}")
+    public ResponseEntity<Void> deleteCourse(@PathVariable String id) {
+        adminService.deleteCourse(id);
         return ResponseEntity.noContent().build();
     }
 
     // Lessons CRUD
     @PostMapping(value = "/documents/upload", consumes = "multipart/form-data")
     public ResponseEntity<LessonDocumentDto> uploadDocument(@RequestPart("file") MultipartFile file) {
-        return ResponseEntity.ok(documentStorageService.store(file));
+        LessonDocumentDto document = documentStorageService.store(file);
+        assets.record(document.getFileUrl());
+        return ResponseEntity.ok(document);
     }
 
     @PostMapping(value = "/videos/upload", consumes = "multipart/form-data")
     public ResponseEntity<Map<String, String>> uploadVideo(@RequestPart("file") MultipartFile file) {
-        return ResponseEntity.ok(Map.of("videoUrl", videoStorageService.store(file)));
+        String path = videoStorageService.store(file);
+        assets.record(path);
+        return ResponseEntity.ok(Map.of("videoUrl", path));
     }
 
     @PostMapping("/lessons")
@@ -76,24 +84,25 @@ public class AdminController {
         return ResponseEntity.noContent().build();
     }
 
-    @PutMapping("/topics/{topicId}/lessons/order")
+    @PutMapping("/courses/{courseId}/lessons/order")
     public ResponseEntity<List<LessonDto>> reorderLessons(
-            @PathVariable String topicId,
+            @PathVariable String courseId,
             @RequestBody List<String> lessonIds) {
-        return ResponseEntity.ok(adminService.reorderLessons(topicId, lessonIds));
+        return ResponseEntity.ok(adminService.reorderLessons(courseId, lessonIds));
     }
 
     // Questions CRUD
     @GetMapping("/quizzes/questions")
     public ResponseEntity<List<QuestionDto>> getQuizQuestions(
-            @RequestParam String topicId,
+            @RequestParam String courseId,
             @RequestParam(required = false) String lessonId) {
-        return ResponseEntity.ok(adminService.getQuizQuestions(topicId, lessonId));
+        return ResponseEntity.ok(adminService.getQuizQuestions(courseId, lessonId));
     }
 
     @PostMapping("/quizzes/generate")
     public ResponseEntity<QuizGenerationResponseDto> generateQuiz(
             @Valid @RequestBody QuizGenerationRequestDto request) {
+        authorization.edit(request.getCourseId());
         return ResponseEntity.ok(quizGenerationService.generate(request));
     }
 
@@ -119,9 +128,9 @@ public class AdminController {
     }
 
     @DeleteMapping("/quizzes")
-    public ResponseEntity<Void> deleteQuiz(@RequestParam String topicId,
-                                           @RequestParam(required = false) String lessonId) {
-        adminService.deleteQuiz(topicId, lessonId);
+    public ResponseEntity<Void> deleteQuiz(@RequestParam String courseId,
+            @RequestParam(required = false) String lessonId) {
+        adminService.deleteQuiz(courseId, lessonId);
         return ResponseEntity.noContent().build();
     }
 
@@ -160,8 +169,7 @@ public class AdminController {
         return ResponseEntity.ok(
                 adminService.reviewEnrollmentRequest(
                         id, request.isApprove(), request.getRejectionReason(),
-                        userDetails.getUsername())
-        );
+                        userDetails.getUsername()));
     }
 
     @PostMapping("/users/upload")

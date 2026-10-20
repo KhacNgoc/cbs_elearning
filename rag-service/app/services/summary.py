@@ -20,7 +20,7 @@ async def summarize_conversation(request: SummaryRequest) -> SummaryResponse:
     system_prompt = """Bạn là hệ thống tóm tắt ngữ cảnh hội thoại cho chatbot RAG.
 Cập nhật bản tóm tắt dựa trên bản hiện tại và các tin nhắn mới.
 
-Giữ chủ đề chính, thực thể được tham chiếu, câu hỏi chính, đính chính/phủ định mới nhất, thay đổi chủ đề và điểm chưa giải quyết.
+Giữ khóa học chính, thực thể được tham chiếu, câu hỏi chính, đính chính/phủ định mới nhất, thay đổi khóa học và điểm chưa giải quyết.
 Không thêm kiến thức ngoài hội thoại. Không coi câu trả lời của trợ lý là nguồn nghiệp vụ chính thức.
 Viết ngắn gọn, giữ ngôn ngữ chính của hội thoại và tối đa 4000 ký tự.
 Không trả suy luận, phân tích, thẻ think, Markdown hoặc giải thích cách tạo tóm tắt.

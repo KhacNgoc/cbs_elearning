@@ -1,15 +1,18 @@
 <template>
   <div
-    v-if="lesson"
+    v-if="lesson && chapter"
+    ref="learningPage"
     class="learning-page"
     :class="{ 'sidebar-visible': sidebarOpen }"
   >
     <LessonLearningHeader
-      :topic-name="topic?.name"
+      :course-name="`${fullCourse?.name} / ${chapter?.title}`"
+      :back-to="`/courses/${fullCourse?.id}`"
       :lesson-title="lesson.title"
       :completed-count="completedCount"
-      :total-lessons="topic?.lessons.length || 0"
+      :total-lessons="course?.lessons.length || 0"
       :completed="isCompleted"
+      :can-complete="userStore.canLearn"
       @complete="markAsCompleted"
       @open-content="sidebarOpen = true"
     />
@@ -18,12 +21,26 @@
         ref="mediaStage"
         :lesson="lesson"
         :selected-document="selectedDocument"
+        :primary-content="primaryContent"
         :current-index="currentLessonIndex"
-        :total-lessons="topic?.lessons.length || 0"
-        :initial-position-seconds="currentLessonProgress?.lastPositionSeconds || 0"
+        :total-lessons="course?.lessons.length || 0"
+        :initial-position-seconds="
+          currentLessonProgress?.lastPositionSeconds || 0
+        "
         :initial-watched-seconds="currentLessonProgress?.watchedSeconds || 0"
+        :initial-document-page="
+          currentLessonProgress?.documentId === selectedDocument?.id
+            ? currentLessonProgress?.documentPage || 1
+            : 1
+        "
+        :initial-scroll-offset="
+          currentLessonProgress?.documentId === selectedDocument?.id
+            ? currentLessonProgress?.scrollOffset || 0
+            : 0
+        "
+        @document-position="handleDocumentPosition"
         @adjacent="goToAdjacentLesson"
-        @close-document="selectedDocument = null"
+        @select-content="showPrimaryContent"
         @download-document="downloadDocument"
         @time-update="currentVideoTime = $event"
         @progress-update="handleVideoProgress"
@@ -31,7 +48,7 @@
         @add-note="openNoteComposer"
       />
       <LessonCourseSidebar
-        :topic="topic"
+        :course="course"
         :active-lesson-id="lesson.id"
         :completed-lessons="userStore.completedLessons"
         :completed-count="completedCount"
@@ -40,14 +57,14 @@
         :selected-document-id="selectedDocument?.id"
         :lesson-quiz-scores="userStore.lessonQuizScores"
         :lesson-quiz-totals="userStore.lessonQuizTotals"
-        :topic-quiz-scores="userStore.quizScores"
-        :topic-quiz-totals="userStore.quizTotals"
+        :course-quiz-scores="userStore.quizScores"
+        :course-quiz-totals="userStore.quizTotals"
         @close="sidebarOpen = false"
         @select="switchLesson"
         @toggle-completion="toggleLessonCompletion"
         @select-document="showDocument"
         @quiz="startQuiz"
-        @topic-quiz="startTopicQuiz"
+        @course-quiz="startCourseQuiz"
       />
       <button
         v-if="!sidebarOpen"
@@ -59,7 +76,7 @@
       </button>
       <div
         v-if="sidebarOpen"
-        class="mobile-overlay"
+        class="mobile-overlay cursor-pointer"
         @click="sidebarOpen = false"
       ></div>
     </div>
@@ -67,9 +84,17 @@
     <section class="lesson-information">
       <LessonOverview
         :lesson="lesson"
-        :topic-name="topic?.name"
+        :course-name="fullCourse?.name"
         :completed="isCompleted"
       >
+        <template #actions>
+          <LessonReportForm
+            v-if="userStore.canLearn"
+            :key="lesson.id"
+            :lesson-id="lesson.id"
+            :lesson-title="lesson.title"
+          />
+        </template>
         <LessonVideoNotes
           ref="videoNotesPanel"
           :notes="videoNotes"
@@ -84,8 +109,7 @@
         <LessonDiscussion
           :comments="lesson.comments"
           :current-username="userStore.username"
-          :is-admin="userStore.role === 'ROLE_ADMIN'"
-          v-model:rating="userRating"
+          :is-admin="Boolean(fullCourse?.canEdit)"
           v-model:comment="commentText"
           @submit="submitFeedback"
           @reply="submitReply"
@@ -94,10 +118,21 @@
       </LessonOverview>
     </section>
 
+    <footer v-if="chapterComplete" class="chapter-completion-footer">
+      <span
+        ><strong>{{
+          nextChapter ? "Đã hoàn thành chương" : "Đã hoàn thành khóa học"
+        }}</strong>
+        · Tất cả bài học và kiểm tra bắt buộc đã hoàn thành</span
+      ><button class="btn btn-primary" @click="advanceChapter">
+        {{ nextChapter ? "Sang chương tiếp theo" : "Xem kết quả khóa học" }}
+        <ChevronRight :size="17" />
+      </button>
+    </footer>
     <Transition name="quiz-gate">
       <div
         v-if="quizGateOpen"
-        class="quiz-gate-backdrop"
+        class="quiz-gate-backdrop cursor-pointer"
         role="presentation"
         @click.self="closeQuizPrompt"
       >
@@ -116,28 +151,39 @@
           </button>
           <div class="quiz-gate-icon"><AlertTriangle :size="28" /></div>
           <span class="quiz-gate-eyebrow">
-            {{ quizPromptKind === "topic" ? "Bài kiểm tra tổng kết" : "Bài học có bài kiểm tra" }}
+            {{
+              quizPromptKind === "course"
+                ? "Bài kiểm tra tổng kết"
+                : "Bài học có bài kiểm tra"
+            }}
           </span>
           <h2 id="quiz-gate-title">
-            {{ quizPromptKind === "topic"
-              ? "Bạn cần làm bài kiểm tra để hoàn thành khóa học"
-              : "Bạn có muốn làm bài kiểm tra ngay không?" }}
+            {{
+              quizPromptKind === "course"
+                ? "Bạn cần làm bài kiểm tra để hoàn thành khóa học"
+                : "Bạn có muốn làm bài kiểm tra ngay không?"
+            }}
           </h2>
-          <p v-if="quizPromptKind === 'topic'">
+          <p v-if="quizPromptKind === 'course'">
             Đây là bài học cuối cùng chưa hoàn thành của khóa
-            <strong>{{ topic?.name }}</strong>. Bạn cần đạt tối thiểu
-            {{ topic?.quizPassingScore ?? 80 }}% bài kiểm tra tổng kết để hoàn thành khóa học.
+            <strong>{{ course?.name }}</strong
+            >. Bạn cần đạt tối thiểu {{ course?.quizPassingScore ?? 80 }}% bài
+            kiểm tra tổng kết để hoàn thành khóa học.
           </p>
           <p v-else>
-            Bài <strong>{{ quizPromptLesson?.title }}</strong> có bài kiểm tra. Kết quả bài
-            kiểm tra sẽ được dùng để ghi nhận hoàn thành bài học.
+            Bài <strong>{{ quizPromptLesson?.title }}</strong> có bài kiểm tra.
+            Kết quả bài kiểm tra sẽ được dùng để ghi nhận hoàn thành bài học.
           </p>
           <div class="quiz-gate-actions">
             <button class="quiz-gate-secondary" @click="closeQuizPrompt">
               Để sau
             </button>
             <button class="quiz-gate-primary" @click="continueToQuiz">
-              {{ quizPromptKind === "topic" ? "Làm bài kiểm tra tổng" : "Làm bài kiểm tra" }}
+              {{
+                quizPromptKind === "course"
+                  ? "Làm bài kiểm tra tổng"
+                  : "Làm bài kiểm tra"
+              }}
               <ChevronRight :size="17" />
             </button>
           </div>
@@ -149,33 +195,55 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from "vue";
-import { useRouter } from "vue-router";
+import { scrollWithin } from "../utils/scrollWithin";
+import {
+  ref,
+  computed,
+  nextTick,
+  onMounted,
+  onBeforeUnmount,
+  watch,
+} from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { AlertTriangle, ChevronLeft, ChevronRight, X } from "lucide-vue-next";
 import { useCourseStore } from "../stores/courseStore";
 import { useUserStore } from "../stores/userStore";
 import { axiosClient } from "../api/axiosClient";
+import { trainingApi } from "../api/trainingApi";
 import { courseApi } from "../api/courseApi";
-import type { LessonDocument, LessonProgressRequest, VideoNote } from "../types";
+import type {
+  CourseOutline,
+  LessonDocument,
+  LessonProgressRequest,
+  VideoNote,
+} from "../types";
 import LessonLearningHeader from "../components/lesson/LessonLearningHeader.vue";
 import LessonCourseSidebar from "../components/lesson/LessonCourseSidebar.vue";
 import LessonMediaStage from "../components/lesson/LessonMediaStage.vue";
 import LessonOverview from "../components/lesson/LessonOverview.vue";
+import LessonReportForm from "../components/lesson/LessonReportForm.vue";
+import { initialLessonContent } from "../utils/lessonContent";
 import LessonDiscussion from "../components/lesson/LessonDiscussion.vue";
 import LessonVideoNotes from "../components/lesson/LessonVideoNotes.vue";
 
 const props = defineProps<{ id: string }>();
 const router = useRouter();
+const route = useRoute();
+const bookmarkReady = ref(false);
 const courseStore = useCourseStore();
 const userStore = useUserStore();
 const mediaStage = ref<InstanceType<typeof LessonMediaStage> | null>(null);
+const learningPage = ref<HTMLElement | null>(null);
 const videoNotesPanel = ref<InstanceType<typeof LessonVideoNotes> | null>(null);
 const selectedDocument = ref<LessonDocument | null>(null);
+const primaryContent = ref<"VIDEO" | "TEXT">("TEXT");
+const activeContentType = computed(() =>
+  selectedDocument.value ? "DOCUMENT" : primaryContent.value,
+);
 const pendingDocument = ref<{
   lessonId: string;
   document: LessonDocument;
 } | null>(null);
-const userRating = ref(5);
 const commentText = ref("");
 const sidebarOpen = ref(true);
 const currentVideoTime = ref(0);
@@ -184,7 +252,7 @@ const notesLoading = ref(false);
 const noteSaving = ref(false);
 const quizGateOpen = ref(false);
 const quizPromptLessonId = ref<string | null>(null);
-const quizPromptKind = ref<"lesson" | "topic">("lesson");
+const quizPromptKind = ref<"lesson" | "course">("lesson");
 const currentProgressSnapshot = ref<LessonProgressRequest>({
   lastPositionSeconds: 0,
   watchedSeconds: 0,
@@ -193,9 +261,38 @@ const currentProgressSnapshot = ref<LessonProgressRequest>({
 let progressSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 const lesson = computed(() => courseStore.currentLesson);
-const topic = computed(() => courseStore.currentTopic);
-const quizPromptLesson = computed(() =>
-  topic.value?.lessons.find(item => item.id === quizPromptLessonId.value) || lesson.value,
+const outline = ref<CourseOutline | null>(null);
+const fullCourse = computed(() => courseStore.currentCourse);
+const chapter = computed(() =>
+  outline.value?.chapters.find((c) => c.id === lesson.value?.chapterId),
+);
+const course = computed(() =>
+  fullCourse.value && chapter.value
+    ? {
+        ...fullCourse.value,
+        name: chapter.value.title,
+        lessons: chapter.value.lessons,
+        hasQuiz: false,
+      }
+    : fullCourse.value,
+);
+const chapterComplete = computed(
+  () =>
+    !!chapter.value?.lessons.length &&
+    chapter.value.lessons.every((l) =>
+      userStore.completedLessons.includes(l.id),
+    ),
+);
+const nextChapter = computed(() => {
+  const list = outline.value?.chapters || [];
+  return list[list.findIndex((c) => c.id === chapter.value?.id) + 1];
+});
+
+const quizPromptLesson = computed(
+  () =>
+    course.value?.lessons.find(
+      (item) => item.id === quizPromptLessonId.value,
+    ) || lesson.value,
 );
 const currentLessonProgress = computed(() =>
   lesson.value ? userStore.lessonProgress?.[lesson.value.id] : undefined,
@@ -205,22 +302,23 @@ const isCompleted = computed(() =>
 );
 const completedCount = computed(
   () =>
-    topic.value?.lessons.filter((item) =>
+    course.value?.lessons.filter((item) =>
       userStore.completedLessons.includes(item.id),
     ).length || 0,
 );
 const courseProgress = computed(() =>
-  topic.value?.lessons.length
-    ? Math.round((completedCount.value / topic.value.lessons.length) * 100)
+  course.value?.lessons.length
+    ? Math.round((completedCount.value / course.value.lessons.length) * 100)
     : 0,
 );
 const currentLessonIndex = computed(
   () =>
-    topic.value?.lessons.findIndex((item) => item.id === lesson.value?.id) ??
+    course.value?.lessons.findIndex((item) => item.id === lesson.value?.id) ??
     -1,
 );
 
 const loadLessonData = async (lessonId: string) => {
+  bookmarkReady.value = false;
   currentVideoTime.value = 0;
   videoNotes.value = [];
   await Promise.all([
@@ -228,14 +326,30 @@ const loadLessonData = async (lessonId: string) => {
     loadVideoNotes(lessonId),
   ]);
 
-  // Guard check: topic accessibility
-  if (topic.value && !userStore.isTopicAccessible(topic.value.id)) {
-    alert("Bạn cần đăng ký học chủ đề nghiệp vụ này trước!");
+  if (lesson.value) {
+    outline.value = await trainingApi.outline(lesson.value.courseId);
+    const activeChapter = outline.value.chapters.find(
+      (c) => c.id === lesson.value?.chapterId,
+    );
+    const activeIndex =
+      activeChapter?.lessons.findIndex((l) => l.id === lesson.value?.id) ?? -1;
+    if (activeChapter && activeIndex >= 0)
+      activeChapter.lessons[activeIndex] = lesson.value;
+  }
+
+  // Guard check: course accessibility
+  if (
+    course.value &&
+    !outline.value?.course.canEdit &&
+    !userStore.isCourseAccessible(course.value.id)
+  ) {
+    alert("Bạn cần đăng ký học khóa học nghiệp vụ này trước!");
     router.push("/");
     return;
   }
   const progress = userStore.lessonProgress?.[lessonId];
   currentProgressSnapshot.value = {
+    ...progress,
     lastPositionSeconds: progress?.lastPositionSeconds || 0,
     watchedSeconds: progress?.watchedSeconds || 0,
     durationSeconds: progress?.durationSeconds || 0,
@@ -245,18 +359,15 @@ const loadLessonData = async (lessonId: string) => {
 const selectInitialContent = (requestedDocument?: LessonDocument) => {
   if (!lesson.value) return;
   const documents = lesson.value.documents || [];
-  if (requestedDocument) {
-    selectedDocument.value =
-      documents.find(
-        (document) =>
-          (requestedDocument.id != null && document.id === requestedDocument.id) ||
-          document.fileUrl === requestedDocument.fileUrl,
-      ) || requestedDocument;
-    return;
-  }
-  selectedDocument.value = lesson.value.videoUrl?.trim()
-    ? null
-    : documents[0] || null;
+  const saved = userStore.lessonProgress?.[lesson.value.id];
+  const requestedId =
+    typeof route.query.documentId === "string"
+      ? Number(route.query.documentId)
+      : undefined;
+  requestedDocument ||= documents.find((d) => d.id === requestedId);
+  const initial = initialLessonContent(lesson.value, saved, requestedDocument);
+  primaryContent.value = initial.type === "VIDEO" ? "VIDEO" : "TEXT";
+  selectedDocument.value = initial.document;
 };
 
 const loadVideoNotes = async (lessonId: string) => {
@@ -274,11 +385,15 @@ const loadVideoNotes = async (lessonId: string) => {
 
 onMounted(async () => {
   await Promise.all([
-    userStore.mandatoryTopics.length === 0 ? userStore.fetchProgress() : Promise.resolve(),
-    courseStore.fetchTopics(),
+    userStore.mandatoryCourses.length === 0
+      ? userStore.fetchProgress()
+      : Promise.resolve(),
+    courseStore.fetchCourses(),
   ]);
   await loadLessonData(props.id);
   selectInitialContent();
+  bookmarkReady.value = true;
+  await persistCurrentProgress();
   sidebarOpen.value = window.innerWidth > 900;
 });
 
@@ -299,36 +414,77 @@ watch(
         : undefined;
     pendingDocument.value = null;
     selectInitialContent(requestedDocument);
+    bookmarkReady.value = true;
+    await persistCurrentProgress();
     if (window.innerWidth <= 900) sidebarOpen.value = false;
   },
 );
 
 const handleVideoProgress = (progress: LessonProgressRequest) => {
-  currentProgressSnapshot.value = progress;
+  if (activeContentType.value !== "VIDEO") return;
+  currentProgressSnapshot.value = { ...progress, contentType: "VIDEO" };
   if (progressSaveTimer) clearTimeout(progressSaveTimer);
   progressSaveTimer = setTimeout(() => void persistCurrentProgress(), 5000);
 };
 
 const persistCurrentProgress = async () => {
-  if (!lesson.value) return null;
+  if (!lesson.value || !bookmarkReady.value) return null;
   if (progressSaveTimer) {
     clearTimeout(progressSaveTimer);
     progressSaveTimer = null;
   }
   return userStore.saveLessonProgress(lesson.value.id, {
     ...currentProgressSnapshot.value,
+    contentType: activeContentType.value,
+    documentId: selectedDocument.value?.id,
+    documentPage: selectedDocument.value
+      ? currentProgressSnapshot.value.documentPage || 1
+      : undefined,
+    scrollOffset: selectedDocument.value
+      ? currentProgressSnapshot.value.scrollOffset
+      : undefined,
   });
 };
+const handleDocumentPosition = (position: {
+  page: number;
+  scrollOffset: number;
+}) => {
+  if (!selectedDocument.value || !bookmarkReady.value) return;
+  currentProgressSnapshot.value = {
+    ...currentProgressSnapshot.value,
+    contentType: "DOCUMENT",
+    documentId: selectedDocument.value.id,
+    documentPage: position.page,
+    scrollOffset: position.scrollOffset,
+  };
+  if (progressSaveTimer) clearTimeout(progressSaveTimer);
+  progressSaveTimer = setTimeout(() => void persistCurrentProgress(), 1000);
+};
+watch([selectedDocument, primaryContent], async ([document]) => {
+  if (!bookmarkReady.value || !lesson.value) return;
+  if (document) {
+    const saved = userStore.lessonProgress?.[lesson.value.id];
+    currentProgressSnapshot.value = {
+      ...currentProgressSnapshot.value,
+      documentId: document.id,
+      documentPage:
+        saved && saved.documentId === document.id ? saved.documentPage : 1,
+      scrollOffset:
+        saved && saved.documentId === document.id ? saved.scrollOffset : 0,
+    };
+  }
+  await persistCurrentProgress();
+});
 
 const handleVideoEnded = async (progress: LessonProgressRequest) => {
-  if (!lesson.value) return;
+  if (!userStore.canLearn || !lesson.value) return;
   if (progressSaveTimer) {
     clearTimeout(progressSaveTimer);
     progressSaveTimer = null;
   }
   const finishedLessonId = lesson.value.id;
-  const hasQuiz = Boolean(lesson.value.hasQuiz);
-  const nextLesson = topic.value?.lessons[currentLessonIndex.value + 1];
+  const hasQuiz = Boolean(lesson.value.hasQuiz && lesson.value.quizRequired);
+  const nextLesson = course.value?.lessons[currentLessonIndex.value + 1];
   const wasCompleted = userStore.completedLessons.includes(finishedLessonId);
   currentProgressSnapshot.value = progress;
   await userStore.saveLessonProgress(finishedLessonId, progress);
@@ -342,7 +498,7 @@ const handleVideoEnded = async (progress: LessonProgressRequest) => {
     return;
   }
 
-  if (promptForRequiredTopicQuiz(finishedLessonId)) return;
+  if (promptForRequiredCourseQuiz(finishedLessonId)) return;
   const completed = await completeLessonWithFeedback(finishedLessonId);
   if (completed && nextLesson) {
     await router.push(`/lesson/${nextLesson.id}`);
@@ -352,6 +508,17 @@ const handleVideoEnded = async (progress: LessonProgressRequest) => {
 const switchLesson = async (lessonId: string): Promise<boolean> => {
   if (!lesson.value) return false;
   if (lessonId === lesson.value.id) return true;
+  const index = course.value?.lessons.findIndex((l) => l.id === lessonId) ?? -1;
+  if (
+    !fullCourse.value?.canEdit &&
+    !userStore.systemAdmin &&
+    course.value?.lessons
+      .slice(0, index)
+      .some((l) => !userStore.completedLessons.includes(l.id))
+  ) {
+    alert("Hoàn thành các bài trước và kiểm tra bắt buộc để tiếp tục");
+    return false;
+  }
   await persistCurrentProgress();
   await router.push(`/lesson/${lessonId}`);
   return true;
@@ -364,6 +531,17 @@ const showDocument = async (lessonId: string, document: LessonDocument) => {
     return;
   }
   selectedDocument.value = document;
+};
+const showPrimaryContent = (type: "VIDEO" | "TEXT") => {
+  if (
+    !lesson.value ||
+    (type === "VIDEO"
+      ? !lesson.value.videoUrl?.trim()
+      : !lesson.value.textBody?.trim())
+  )
+    return;
+  primaryContent.value = type;
+  selectedDocument.value = null;
 };
 const downloadDocument = async (
   document: import("../types").LessonDocument,
@@ -390,7 +568,7 @@ const downloadDocument = async (
   }
 };
 const goToAdjacentLesson = (offset: number) => {
-  const nextLesson = topic.value?.lessons[currentLessonIndex.value + offset];
+  const nextLesson = course.value?.lessons[currentLessonIndex.value + offset];
   if (nextLesson) switchLesson(nextLesson.id);
 };
 const markAsCompleted = async () => {
@@ -398,27 +576,36 @@ const markAsCompleted = async () => {
   await toggleLessonCompletion(lesson.value.id);
 };
 const hasPassedLessonQuiz = (lessonId: string) => {
-  const targetLesson = topic.value?.lessons.find(item => item.id === lessonId);
+  const targetLesson = course.value?.lessons.find(
+    (item) => item.id === lessonId,
+  );
   if (!targetLesson) return false;
   const score = userStore.lessonQuizScores[lessonId];
   const total = userStore.lessonQuizTotals[lessonId];
-  return score !== undefined && total > 0
-    && Math.round(score / total * 100) >= (targetLesson.quizPassingScore ?? 80);
+  return (
+    score !== undefined &&
+    total > 0 &&
+    Math.round((score / total) * 100) >= (targetLesson.quizPassingScore ?? 80)
+  );
 };
-const hasPassedTopicQuiz = () => {
-  if (!topic.value) return false;
-  const score = userStore.quizScores[topic.value.id];
-  const total = userStore.quizTotals[topic.value.id];
-  return score !== undefined && total > 0
-    && Math.round(score / total * 100) >= (topic.value.quizPassingScore ?? 80);
+const hasPassedCourseQuiz = () => {
+  if (!course.value) return false;
+  const score = userStore.quizScores[course.value.id];
+  const total = userStore.quizTotals[course.value.id];
+  return (
+    score !== undefined &&
+    total > 0 &&
+    Math.round((score / total) * 100) >= (course.value.quizPassingScore ?? 80)
+  );
 };
-const promptForRequiredTopicQuiz = (lessonId: string) => {
-  if (!topic.value?.hasQuiz || hasPassedTopicQuiz()) return false;
-  const wouldCompleteCourse = topic.value.lessons.every(item =>
-    item.id === lessonId || userStore.completedLessons.includes(item.id),
+const promptForRequiredCourseQuiz = (lessonId: string) => {
+  if (!course.value?.hasQuiz || hasPassedCourseQuiz()) return false;
+  const wouldCompleteCourse = course.value.lessons.every(
+    (item) =>
+      item.id === lessonId || userStore.completedLessons.includes(item.id),
   );
   if (!wouldCompleteCourse) return false;
-  quizPromptKind.value = "topic";
+  quizPromptKind.value = "course";
   quizPromptLessonId.value = null;
   quizGateOpen.value = true;
   return true;
@@ -428,64 +615,80 @@ const completeLessonWithFeedback = async (lessonId: string) => {
     await userStore.completeLesson(lessonId);
     return userStore.completedLessons.includes(lessonId);
   } catch (error) {
-    const apiMessage = (error as { response?: { data?: { message?: unknown } } })
-      .response?.data?.message;
-    alert(typeof apiMessage === "string"
-      ? apiMessage
-      : "Không thể đánh dấu hoàn thành bài học. Vui lòng thử lại.");
+    const apiMessage = (
+      error as { response?: { data?: { message?: unknown } } }
+    ).response?.data?.message;
+    alert(
+      typeof apiMessage === "string"
+        ? apiMessage
+        : "Không thể đánh dấu hoàn thành bài học. Vui lòng thử lại.",
+    );
     return false;
   }
 };
 const toggleLessonCompletion = async (lessonId: string) => {
-  const targetLesson = topic.value?.lessons.find(item => item.id === lessonId);
+  const targetLesson = course.value?.lessons.find(
+    (item) => item.id === lessonId,
+  );
   if (!targetLesson) return;
 
-  if (userStore.completedLessons.includes(lessonId)) {
-    if (progressSaveTimer && lesson.value?.id === lessonId) {
-      clearTimeout(progressSaveTimer);
-      progressSaveTimer = null;
-    }
-    await userStore.resetLesson(lessonId);
-    if (lesson.value?.id === lessonId) {
-      currentProgressSnapshot.value = {
-        lastPositionSeconds: 0,
-        watchedSeconds: 0,
-        durationSeconds: 0,
-      };
-      currentVideoTime.value = 0;
-      mediaStage.value?.resetProgress();
-    }
+  if (userStore.completedLessons.includes(lessonId)) return;
+
+  try {
+    await persistCurrentProgress();
+    await axiosClient.post(
+      `/api/users/me/lessons/${lessonId}/content-complete`,
+    );
+  } catch (error) {
+    const message = (error as { response?: { data?: { message?: string } } })
+      .response?.data?.message;
+    alert(message || "Hãy học xong nội dung trước khi hoàn thành bài.");
     return;
   }
-
-  if (targetLesson.hasQuiz && !hasPassedLessonQuiz(lessonId)) {
+  if (
+    targetLesson.hasQuiz &&
+    targetLesson.quizRequired &&
+    !hasPassedLessonQuiz(lessonId)
+  ) {
     quizPromptKind.value = "lesson";
     quizPromptLessonId.value = lessonId;
     quizGateOpen.value = true;
     return;
   }
-  if (promptForRequiredTopicQuiz(lessonId)) return;
+  if (promptForRequiredCourseQuiz(lessonId)) return;
   await completeLessonWithFeedback(lessonId);
 };
 const startQuiz = (lessonId = lesson.value?.id) => {
-  const targetLesson = topic.value?.lessons.find(item => item.id === lessonId);
-  if (topic.value && targetLesson?.hasQuiz) {
+  const targetLesson = course.value?.lessons.find(
+    (item) => item.id === lessonId,
+  );
+  if (course.value && targetLesson?.hasQuiz) {
     router.push({
-      path: `/quiz/${topic.value.id}`,
+      path: `/quiz/${course.value.id}`,
       query: { lessonId: targetLesson.id },
     });
-  } else if (topic.value) {
-    router.push(`/quiz/${topic.value.id}`);
+  } else if (course.value) {
+    router.push(`/quiz/${course.value.id}`);
   }
 };
-const startTopicQuiz = () => {
-  if (topic.value) router.push(`/quiz/${topic.value.id}`);
+const advanceChapter = async () => {
+  await persistCurrentProgress();
+  if (nextChapter.value) {
+    const target =
+      nextChapter.value.lessons.find(
+        (l) => !userStore.completedLessons.includes(l.id),
+      ) || nextChapter.value.lessons[0];
+    if (target) router.push(`/lesson/${target.id}`);
+  } else router.push(`/courses/${fullCourse.value?.id}`);
+};
+const startCourseQuiz = () => {
+  if (course.value) router.push(`/quiz/${course.value.id}`);
 };
 const continueToQuiz = () => {
-  if (quizPromptKind.value === "topic") {
+  if (quizPromptKind.value === "course") {
     quizGateOpen.value = false;
     quizPromptLessonId.value = null;
-    startTopicQuiz();
+    startCourseQuiz();
     return;
   }
   const targetLessonId = quizPromptLessonId.value || lesson.value?.id;
@@ -558,12 +761,12 @@ const deleteVideoNote = async (note: VideoNote) => {
   }
 };
 const seekToNote = async (seconds: number) => {
-  if (selectedDocument.value) {
-    selectedDocument.value = null;
+  if (activeContentType.value !== "VIDEO") {
+    showPrimaryContent("VIDEO");
     await nextTick();
   }
   mediaStage.value?.seekTo(seconds);
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  scrollWithin(learningPage.value);
 };
 const openNoteComposer = (seconds: number) => {
   videoNotesPanel.value?.openAt(seconds);
@@ -572,11 +775,10 @@ const submitFeedback = async () => {
   if (!commentText.value.trim() || !lesson.value) return;
   await courseStore.addComment(
     lesson.value.id,
-    userRating.value,
+    null,
     commentText.value,
   );
   commentText.value = "";
-  userRating.value = 5;
 };
 const submitReply = async (
   rootCommentId: number,
@@ -633,7 +835,7 @@ const deleteComment = async (commentId: number) => {
   width: min(480px, 100%);
   padding: 1.6rem;
   border-radius: 14px;
-  background: white;
+  background: var(--surface-ffffff);
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
   text-align: center;
 }
@@ -647,8 +849,8 @@ const deleteComment = async (commentId: number) => {
   place-items: center;
   border: 0;
   border-radius: 50%;
-  background: #f1f5f3;
-  color: #64748b;
+  background: var(--surface-f1f5f3);
+  color: var(--ink-64748b);
   cursor: pointer;
 }
 .quiz-gate-icon {
@@ -658,11 +860,11 @@ const deleteComment = async (commentId: number) => {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: #fff4cc;
-  color: #8a6b00;
+  background: var(--surface-fff4cc);
+  color: var(--ink-8a6b00);
 }
 .quiz-gate-eyebrow {
-  color: #8a6b00;
+  color: var(--ink-8a6b00);
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -672,11 +874,11 @@ const deleteComment = async (commentId: number) => {
   margin: 0.4rem 1.5rem 0.65rem;
   font-size: 1.25rem;
   line-height: 1.35;
-  color: #173c31;
+  color: var(--ink-173c31);
 }
 .quiz-gate-dialog p {
   margin: 0;
-  color: #52645d;
+  color: var(--ink-52645d);
   line-height: 1.6;
 }
 .quiz-gate-actions {
@@ -693,9 +895,9 @@ const deleteComment = async (commentId: number) => {
   font-weight: 700;
 }
 .quiz-gate-secondary {
-  border: 1px solid #cbd5d1;
-  background: white;
-  color: #42534c;
+  border: 1px solid var(--line-cbd5d1);
+  background: var(--surface-ffffff);
+  color: var(--ink-42534c);
 }
 .quiz-gate-primary {
   display: inline-flex;
@@ -755,7 +957,7 @@ const deleteComment = async (commentId: number) => {
   gap: 0.9rem;
 }
 .course-name {
-  color: #e4c760;
+  color: var(--ink-e4c760);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -780,7 +982,7 @@ const deleteComment = async (commentId: number) => {
   gap: 0.5rem;
 }
 .progress-summary {
-  color: #dbe7e3;
+  color: var(--ink-dbe7e3);
   font-size: 0.82rem;
 }
 .outline-action,
@@ -795,7 +997,7 @@ const deleteComment = async (commentId: number) => {
   font-weight: 600;
 }
 .outline-action:disabled {
-  color: #8ae2c2;
+  color: var(--ink-8ae2c2);
   border-color: rgba(138, 226, 194, 0.35);
   cursor: default;
 }
@@ -877,11 +1079,11 @@ const deleteComment = async (commentId: number) => {
   gap: 0.4rem;
   background: transparent;
   border: 0;
-  color: #d5ddda;
+  color: var(--ink-d5ddda);
   cursor: pointer;
 }
 .viewer-navigation button:hover:not(:disabled) {
-  color: #e4c760;
+  color: var(--ink-e4c760);
 }
 .viewer-navigation button:disabled {
   opacity: 0.3;
@@ -894,7 +1096,7 @@ const deleteComment = async (commentId: number) => {
   flex-direction: column;
 }
 .viewer-lesson-title span {
-  color: #8ba29a;
+  color: var(--ink-8ba29a);
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -912,8 +1114,8 @@ const deleteComment = async (commentId: number) => {
   bottom: 0;
   width: 370px;
   min-width: 370px;
-  background: #fff;
-  border-left: 1px solid #dce5e1;
+  background: var(--surface-ffffff);
+  border-left: 1px solid var(--line-dce5e1);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -947,7 +1149,7 @@ const deleteComment = async (commentId: number) => {
 }
 .sidebar-progress {
   height: 3px;
-  background: #e4eae8;
+  background: var(--surface-e4eae8);
 }
 .sidebar-progress span {
   display: block;
@@ -965,15 +1167,15 @@ const deleteComment = async (commentId: number) => {
   display: flex;
   align-items: flex-start;
   gap: 0.7rem;
-  background: #fff;
+  background: var(--surface-ffffff);
   color: var(--text-main);
   border: 0;
-  border-bottom: 1px solid #edf1ef;
+  border-bottom: 1px solid var(--line-edf1ef);
   text-align: left;
   cursor: pointer;
 }
 .lesson-row:hover {
-  background: #f4f8f6;
+  background: var(--surface-f4f8f6);
 }
 .lesson-row.active {
   background: var(--primary-light);
@@ -986,7 +1188,7 @@ const deleteComment = async (commentId: number) => {
   margin-top: 1px;
   display: grid;
   place-items: center;
-  border: 1.5px solid #94a3b8;
+  border: 1.5px solid var(--line-94a3b8);
   border-radius: 3px;
   padding: 0;
   background: transparent;
@@ -1023,47 +1225,47 @@ const deleteComment = async (commentId: number) => {
   color: var(--text-muted);
 }
 .lesson-row-copy .lesson-quiz-note {
-  color: #806710;
+  color: var(--ink-806710);
   font-weight: 700;
 }
 .quiz-box {
   margin: 0.8rem;
   padding: 0.9rem;
   border-radius: 9px;
-  background: #f5f0dc;
-  border: 1px solid #e7d692;
+  background: var(--surface-f5f0dc);
+  border: 1px solid var(--line-e7d692);
 }
 .quiz-box > div {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #6a5610;
+  color: var(--ink-6a5610);
 }
 .quiz-box p {
   margin: 0.4rem 0 0.7rem;
   font-size: 0.75rem;
-  color: #71683f;
+  color: var(--ink-71683f);
 }
 .quiz-box button {
   border: 0;
   background: transparent;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-weight: 700;
   display: flex;
   gap: 0.35rem;
   align-items: center;
   cursor: pointer;
 }
-.topic-quiz-box {
+.course-quiz-box {
   margin-top: 0;
-  background: #eaf5f1;
-  border-color: #b8d8cc;
+  background: var(--surface-eaf5f1);
+  border-color: var(--line-b8d8cc);
 }
-.topic-quiz-box > div {
-  color: var(--primary-color);
+.course-quiz-box > div {
+  color: var(--primary-ink);
 }
-.topic-quiz-box p {
-  color: #476158;
+.course-quiz-box p {
+  color: var(--ink-476158);
 }
 .sidebar-reopen {
   position: fixed;
@@ -1084,13 +1286,13 @@ const deleteComment = async (commentId: number) => {
 .procedure-viewer {
   overflow-y: auto;
   padding: 2rem;
-  background: #e9efed;
+  background: var(--surface-e9efed);
 }
 .procedure-document {
   max-width: 900px;
   margin: auto;
   padding: 2.5rem;
-  background: white;
+  background: var(--surface-ffffff);
   min-height: 100%;
 }
 .procedure-heading {
@@ -1100,7 +1302,7 @@ const deleteComment = async (commentId: number) => {
 }
 .procedure-heading span,
 .eyebrow {
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -1117,7 +1319,7 @@ const deleteComment = async (commentId: number) => {
 }
 .section-number {
   font-weight: 800;
-  color: #c5a539;
+  color: var(--ink-c5a539);
   font-size: 1.15rem;
 }
 .procedure-section h3 {
@@ -1126,7 +1328,7 @@ const deleteComment = async (commentId: number) => {
 }
 .procedure-section ul {
   padding-left: 1rem;
-  color: #46564f;
+  color: var(--ink-46564f);
 }
 .procedure-section li {
   margin: 0.4rem 0;
@@ -1138,15 +1340,15 @@ const deleteComment = async (commentId: number) => {
   justify-items: center;
   padding: 2rem;
   text-align: center;
-  color: #c5d5cf;
+  color: var(--ink-c5d5cf);
   background: radial-gradient(circle at center, #173c31 0%, #07110e 72%);
 }
 .discussion-viewer svg {
-  color: #e4c760;
+  color: var(--ink-e4c760);
   margin-bottom: 1rem;
 }
 .discussion-viewer span {
-  color: #79bfa6;
+  color: var(--ink-79bfa6);
   text-transform: uppercase;
   font-size: 0.75rem;
   font-weight: 700;
@@ -1158,7 +1360,7 @@ const deleteComment = async (commentId: number) => {
 }
 .discussion-viewer p {
   max-width: 520px;
-  color: #9db3ab;
+  color: var(--ink-9db3ab);
 }
 
 /* Multi-file document workspace */
@@ -1168,7 +1370,7 @@ const deleteComment = async (commentId: number) => {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
   position: relative;
-  background: #dfe8e5;
+  background: var(--surface-dfe8e5);
   overflow: hidden;
 }
 .document-library {
@@ -1176,8 +1378,8 @@ const deleteComment = async (commentId: number) => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #f8faf9;
-  border-right: 1px solid #d3ddd9;
+  background: var(--surface-f8faf9);
+  border-right: 1px solid var(--line-d3ddd9);
   z-index: 3;
 }
 .document-library-header {
@@ -1186,7 +1388,7 @@ const deleteComment = async (commentId: number) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #dbe4e0;
+  border-bottom: 1px solid var(--line-dbe4e0);
 }
 .document-library-header > div {
   display: flex;
@@ -1227,12 +1429,12 @@ const deleteComment = async (commentId: number) => {
   cursor: pointer;
 }
 .document-list button:hover {
-  background: #eef4f1;
+  background: var(--surface-eef4f1);
 }
 .document-list button.active {
   background: var(--primary-light);
   border-color: rgba(0, 91, 65, 0.18);
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 .document-type-icon {
   width: 36px;
@@ -1240,9 +1442,9 @@ const deleteComment = async (commentId: number) => {
   display: grid;
   place-items: center;
   border-radius: 6px;
-  background: white;
-  border: 1px solid #d7e0dc;
-  color: var(--primary-color);
+  background: var(--surface-ffffff);
+  border: 1px solid var(--line-d7e0dc);
+  color: var(--primary-ink);
 }
 .document-list button > span:nth-child(2) {
   min-width: 0;
@@ -1271,18 +1473,18 @@ const deleteComment = async (commentId: number) => {
   display: flex;
   align-items: center;
   gap: 0.8rem;
-  background: white;
-  border-bottom: 1px solid #d3ddd9;
+  background: var(--surface-ffffff);
+  border-bottom: 1px solid var(--line-d3ddd9);
 }
 .document-library-toggle {
   display: none;
   align-items: center;
   gap: 0.4rem;
-  border: 1px solid #ced9d5;
-  background: white;
+  border: 1px solid var(--line-ced9d5);
+  background: var(--surface-ffffff);
   border-radius: 6px;
   padding: 0.45rem 0.6rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   cursor: pointer;
 }
 .selected-file {
@@ -1290,7 +1492,7 @@ const deleteComment = async (commentId: number) => {
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 .selected-file > span {
   min-width: 0;
@@ -1313,7 +1515,7 @@ const deleteComment = async (commentId: number) => {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   font-size: 0.8rem;
   font-weight: 700;
   white-space: nowrap;
@@ -1332,7 +1534,7 @@ const deleteComment = async (commentId: number) => {
   height: 100%;
   min-height: 450px;
   border: 0;
-  background: white;
+  background: var(--surface-ffffff);
 }
 .external-document {
   min-height: 100%;
@@ -1340,7 +1542,7 @@ const deleteComment = async (commentId: number) => {
   place-content: center;
   justify-items: center;
   text-align: center;
-  background: white;
+  background: var(--surface-ffffff);
   color: var(--text-muted);
 }
 .external-document h3 {
@@ -1361,7 +1563,7 @@ const deleteComment = async (commentId: number) => {
   display: none;
 }
 .lesson-information {
-  background: white;
+  background: var(--surface-ffffff);
 }
 .content-tabs {
   z-index: 80;
@@ -1387,7 +1589,7 @@ const deleteComment = async (commentId: number) => {
   background: transparent;
   border: 1px solid transparent;
   border-radius: 7px;
-  color: #aebdb8;
+  color: var(--ink-aebdb8);
   white-space: nowrap;
   font-size: 0.86rem;
   font-weight: 600;
@@ -1414,10 +1616,10 @@ const deleteComment = async (commentId: number) => {
   border-color: rgba(126, 205, 177, 0.22);
 }
 .content-tabs button.active svg {
-  color: #e4c760;
+  color: var(--ink-e4c760);
 }
 .content-tabs button.active::after {
-  background: #e4c760;
+  background: var(--surface-e4c760);
 }
 .info-layout {
   max-width: 1280px;
@@ -1441,13 +1643,13 @@ const deleteComment = async (commentId: number) => {
   gap: 0.8rem;
   background: var(--primary-light);
   border-left: 4px solid var(--primary-color);
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 .hint-box svg {
   flex: 0 0 auto;
 }
 .hint-box p {
-  color: #3f5f54;
+  color: var(--ink-3f5f54);
   margin-top: 0.2rem;
 }
 .lesson-facts {
@@ -1461,7 +1663,7 @@ const deleteComment = async (commentId: number) => {
 .lesson-facts > div {
   display: flex;
   gap: 0.7rem;
-  color: var(--primary-color);
+  color: var(--primary-ink);
   margin: 1rem 0;
 }
 .lesson-facts span {
@@ -1486,11 +1688,11 @@ const deleteComment = async (commentId: number) => {
   justify-content: space-between;
 }
 .section-title > svg {
-  color: var(--primary-color);
+  color: var(--primary-ink);
 }
 .feedback-form {
   padding: 1.1rem;
-  background: #f8faf9;
+  background: var(--surface-f8faf9);
   border: 1px solid var(--border-color);
   border-radius: 10px;
 }
@@ -1504,7 +1706,7 @@ const deleteComment = async (commentId: number) => {
 .feedback-form textarea {
   width: 100%;
   resize: vertical;
-  border: 1px solid #cfd9d5;
+  border: 1px solid var(--line-cfd9d5);
   border-radius: 7px;
   padding: 0.8rem;
   outline: none;
@@ -1565,7 +1767,7 @@ const deleteComment = async (commentId: number) => {
 }
 .comment p {
   margin-top: 0.35rem;
-  color: #43534d;
+  color: var(--ink-43534d);
 }
 .loading-state {
   min-height: 60vh;
@@ -1793,8 +1995,8 @@ const deleteComment = async (commentId: number) => {
 }
 .lesson-entry {
   position: relative;
-  background: #fff;
-  border-bottom: 1px solid #edf1ef;
+  background: var(--surface-ffffff);
+  border-bottom: 1px solid var(--line-edf1ef);
   transition: background 0.2s ease;
 }
 .lesson-entry.active {
@@ -1822,15 +2024,15 @@ const deleteComment = async (commentId: number) => {
   gap: 0.35rem;
   border: 1px solid rgba(0, 91, 65, 0.22);
   border-radius: 6px;
-  background: #fff;
-  color: var(--primary-color);
+  background: var(--surface-ffffff);
+  color: var(--primary-ink);
   font-size: 0.72rem;
   font-weight: 700;
   cursor: pointer;
 }
 .lesson-resources-toggle:hover,
 .lesson-resources-toggle.expanded {
-  background: #e7f2ee;
+  background: var(--surface-e7f2ee);
   border-color: rgba(0, 91, 65, 0.4);
 }
 .lesson-resources-toggle > svg:last-child {
@@ -1855,7 +2057,7 @@ const deleteComment = async (commentId: number) => {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
-  border-left: 2px solid #b8d4ca;
+  border-left: 2px solid var(--line-b8d4ca);
 }
 .lesson-documents button {
   width: 100%;
@@ -1867,14 +2069,14 @@ const deleteComment = async (commentId: number) => {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #42534c;
+  color: var(--ink-42534c);
   text-align: left;
   cursor: pointer;
 }
 .lesson-documents button:hover,
 .lesson-documents button.selected {
-  background: #fff;
-  color: var(--primary-color);
+  background: var(--surface-ffffff);
+  color: var(--primary-ink);
   box-shadow: 0 1px 4px rgba(11, 42, 32, 0.09);
 }
 .lesson-documents button > span {
@@ -1902,73 +2104,6 @@ const deleteComment = async (commentId: number) => {
   overflow: hidden;
   background: #0f172a;
 }
-.selected-document-toolbar {
-  min-height: 54px;
-  padding: 0.55rem 0.9rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  background: #1d211f;
-  color: #fff;
-  border-bottom: 1px solid #343b38;
-}
-.selected-document-toolbar > div {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-}
-.selected-document-toolbar > div > svg {
-  color: #e4c760;
-  flex: 0 0 auto;
-}
-.selected-document-toolbar span {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.selected-document-toolbar strong {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 0.85rem;
-}
-.selected-document-toolbar small {
-  color: #92a39d;
-  font-size: 0.68rem;
-}
-.selected-document-toolbar button {
-  padding: 0.45rem 0.7rem;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  border: 1px solid #52605b;
-  border-radius: 6px;
-  background: transparent;
-  color: #dce7e3;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.selected-document-toolbar button:hover {
-  color: #fff;
-  border-color: #e4c760;
-}
-.selected-document-actions {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.selected-document-toolbar .download-document-button {
-  background: var(--primary-color);
-  border-color: var(--primary-color);
-  color: #fff;
-}
-.selected-document-toolbar .download-document-button:hover {
-  background: #087657;
-  border-color: #e4c760;
-}
 .selected-document-preview > .slide-viewer {
   flex: 1;
   min-height: 0;
@@ -1979,7 +2114,7 @@ const deleteComment = async (commentId: number) => {
   width: 100%;
   min-height: 0;
   border: 0;
-  background: #fff;
+  background: var(--surface-ffffff);
 }
 .selected-document-preview > .word-preview,
 .selected-document-preview > .powerpoint-preview {
@@ -1999,12 +2134,75 @@ const deleteComment = async (commentId: number) => {
     height: min(500px, calc(100vh - 122px));
     min-height: 360px;
   }
-  .selected-document-toolbar button {
-    font-size: 0;
+}
+.learning-page .outline-action:hover:not(:disabled),
+.learning-page .mobile-content-button:hover,
+.learning-page .sidebar-reopen:hover {
+  background: #294c40;
+  border-color: var(--line-8ae2c2);
+}
+.learning-page .sidebar-close:hover,
+.learning-page .lesson-check:hover,
+.learning-page .document-library-close:hover {
+  background: var(--primary-light);
+  color: var(--primary-ink);
+}
+.learning-page .lesson-row-copy:hover strong {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.learning-page .quiz-box button:hover {
+  background: var(--surface-eadca8);
+  border-radius: 6px;
+}
+.learning-page .submit-button:hover:not(:disabled),
+.learning-page .quiz-gate-primary:hover {
+  background: var(--primary-hover);
+  box-shadow: 0 3px 10px #005b4133;
+}
+.learning-page .quiz-gate-secondary:hover {
+  background: var(--primary-light);
+}
+.header-copy {
+  overflow: hidden;
+}
+.course-name {
+  min-width: 0;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chapter-completion-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1.25rem;
+}
+@media (min-width: 769px) and (max-width: 900px) {
+  .learning-page {
+    margin: -2rem;
   }
-  .selected-document-toolbar button svg {
-    width: 18px;
-    height: 18px;
+}
+@media (max-width: 900px) {
+  .learning-stage {
+    height: clamp(420px, calc(100dvh - 185px), 620px);
+  }
+}
+@media (max-width: 600px) {
+  .learning-stage {
+    height: min(440px, calc(100dvh - 170px));
+    min-height: 340px;
+  }
+  .quiz-gate-actions {
+    flex-wrap: wrap;
+  }
+  .quiz-gate-actions button {
+    flex: 1;
+  }
+  .chapter-completion-footer .btn {
+    width: 100%;
   }
 }
 </style>

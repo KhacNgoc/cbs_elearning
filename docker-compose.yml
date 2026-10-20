@@ -33,6 +33,7 @@ services:
     restart: always
 
   qdrant:
+    profiles: ["chatbot"]
     image: qdrant/qdrant:v1.12.5
     ports:
       - "6333:6333"
@@ -40,6 +41,7 @@ services:
       - qdrant_data:/qdrant/storage
 
   ollama:
+    profiles: ["chatbot"]
     image: ollama/ollama:latest
     ports:
       - "11434:11434"
@@ -53,6 +55,7 @@ services:
     restart: unless-stopped
 
   ollama-init:
+    profiles: ["chatbot"]
     image: ollama/ollama:latest
     depends_on:
       ollama:
@@ -77,6 +80,7 @@ services:
     restart: "no"
 
   rag-service:
+    profiles: ["chatbot"]
     build: ./rag-service
     environment:
       QDRANT_URL: ${QDRANT_URL:?QDRANT_URL is required}
@@ -97,7 +101,7 @@ services:
       OLLAMA_CHAT_TIMEOUT_SECONDS: ${OLLAMA_CHAT_TIMEOUT_SECONDS:?OLLAMA_CHAT_TIMEOUT_SECONDS is required}
       OLLAMA_QUIZ_GENERATION_TIMEOUT_SECONDS: ${OLLAMA_QUIZ_GENERATION_TIMEOUT_SECONDS:-120}
       OLLAMA_QUIZ_VERIFICATION_TIMEOUT_SECONDS: ${OLLAMA_QUIZ_VERIFICATION_TIMEOUT_SECONDS:-60}
-      QUIZ_LLM_VERIFICATION_ENABLED: ${QUIZ_LLM_VERIFICATION_ENABLED:-false}
+      QUIZ_LLM_VERIFICATION_ENABLED: ${QUIZ_LLM_VERIFICATION_ENABLED:-true}
       QUIZ_RETRIEVAL_LIMIT: ${QUIZ_RETRIEVAL_LIMIT:-5}
       QUIZ_RETRIEVAL_CANDIDATE_LIMIT: ${QUIZ_RETRIEVAL_CANDIDATE_LIMIT:-12}
       QUIZ_CONTEXT_MAX_CHARS: ${QUIZ_CONTEXT_MAX_CHARS:-5000}
@@ -130,7 +134,7 @@ services:
       dockerfile: Dockerfile
     container_name: cbs-elearning-backend
     ports:
-      - "127.0.0.1:8000:8080"
+      - "8000:8080"
     environment:
       SERVER_PORT: ${SERVER_PORT:?SERVER_PORT is required}
       SERVER_SERVLET_CONTEXT_PATH: ${SERVER_SERVLET_CONTEXT_PATH:?SERVER_SERVLET_CONTEXT_PATH is required}
@@ -151,6 +155,13 @@ services:
       JWT_COOKIE_SECURE: ${JWT_COOKIE_SECURE:?JWT_COOKIE_SECURE is required}
       JWT_COOKIE_SAME_SITE: ${JWT_COOKIE_SAME_SITE:?JWT_COOKIE_SAME_SITE is required}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS is required}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@localhost}
+      SMTP_AUTH: ${SMTP_AUTH:-true}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
       DATA_INITIALIZER_ENABLED: ${DATA_INITIALIZER_ENABLED:?DATA_INITIALIZER_ENABLED is required}
       APP_RAG_URL: ${APP_RAG_URL:?APP_RAG_URL is required}
       RAG_RECENT_MESSAGE_LIMIT: ${RAG_RECENT_MESSAGE_LIMIT:?RAG_RECENT_MESSAGE_LIMIT is required}
@@ -169,8 +180,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      rag-service:
-        condition: service_started
     restart: always
 
   frontend:

@@ -30,15 +30,22 @@ public class JwtTokenProvider {
         Date expiryDate = new Date(now.getTime() + jwtExpirationMs);
 
         return Jwts.builder()
-                .setSubject(userPrincipal.getUsername())
-                .claim("role", userPrincipal.getUser().getRole())
-                .claim("fullName", userPrincipal.getUser().getFullName())
+                .setSubject(userPrincipal.getUser().getId().toString())
+                .claim("ver", userPrincipal.getUser().getTokenVersion())
                 .setIssuedAt(new Date())
                 .setExpiration(expiryDate)
                 .signWith(jwtSecretKey, SignatureAlgorithm.HS256)
                 .compact();
     }
 
+    public Long getUserIdFromJWT(String token) {
+        return Long.valueOf(getUsernameFromJWT(token));
+    }
+
+    /**
+     * JWT subject is the immutable user id; retained method name for signed-token
+     * compatibility.
+     */
     public String getUsernameFromJWT(String token) {
         Claims claims = Jwts.parserBuilder()
                 .setSigningKey(jwtSecretKey)
@@ -47,6 +54,14 @@ public class JwtTokenProvider {
                 .getBody();
 
         return claims.getSubject();
+    }
+
+    public boolean matchesUser(String token, com.bidv.coretraining.entity.User user) {
+        Claims claims = Jwts.parserBuilder().setSigningKey(jwtSecretKey).build().parseClaimsJws(token).getBody();
+        Number version = claims.get("ver", Number.class);
+        return java.util.Objects.equals(claims.getSubject(), String.valueOf(user.getId())) && user.activeAccount()
+                && (AccessPolicy.system(user) || AccessPolicy.activeUnit(user.getOrganizationUnit())) && version != null
+                && version.longValue() == user.getTokenVersion();
     }
 
     public boolean validateToken(String authToken) {

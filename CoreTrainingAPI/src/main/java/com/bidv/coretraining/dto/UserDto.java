@@ -11,13 +11,22 @@ import lombok.NoArgsConstructor;
 @Builder
 public class UserDto {
     private Long id;
+    private java.util.Set<String> allowedActions;
     private String username;
     private String password; // Only used when setting/updating password
     private String fullName;
     private String avatarColor;
-    private String role; // e.g., "ROLE_USER", "ROLE_ADMIN"
+    private String role;
+    private java.util.Map<String, String> roleNames;
+    private java.util.Set<String> roles;
+    private java.util.Set<String> permissions;
+    private String unitId;
+    private java.util.Set<String> scopeUnitIds;
+    private String status;
+    private String learnerType; // e.g., "ROLE_USER", "ROLE_ADMIN"
     private Integer points;
-    private String userGroupId;
+    private java.util.List<String> userGroupIds;
+    private String groupNames;
     private String employeeId;
     private String email;
 }

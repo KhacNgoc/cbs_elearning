@@ -8,5 +8,6 @@ import java.util.Optional;
 
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
     List<Notification> findTop50ByRecipientUsernameOrderByCreatedAtDesc(String username);
+
     Optional<Notification> findByIdAndRecipientUsername(Long id, String username);
 }

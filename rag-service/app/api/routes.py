@@ -3,7 +3,7 @@
 from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Response
 
 from app import config, infrastructure
 from app.schemas import (
@@ -15,7 +15,7 @@ from app.schemas import (
     SummaryResponse,
 )
 from app.services.chat import answer_chat
-from app.services.documents import ingest_document
+from app.services.documents import ingest_document, document_outline, delete_document
 from app.services.quiz import generate_quiz as generate_quiz_service
 from app.services.summary import summarize_conversation
 
@@ -50,6 +50,17 @@ async def ingest(
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     return await answer_chat(request)
+
+
+@router.get("/documents/{document_id}/outline")
+async def outline(document_id: str, course_id: str):
+    return await document_outline(document_id, course_id)
+
+
+@router.delete("/documents/{document_id}", status_code=204)
+async def delete(document_id: str, course_id: str):
+    await delete_document(document_id, course_id)
+    return Response(status_code=204)
 
 
 @router.post("/quiz/generate", response_model=QuizGenerationResponse)

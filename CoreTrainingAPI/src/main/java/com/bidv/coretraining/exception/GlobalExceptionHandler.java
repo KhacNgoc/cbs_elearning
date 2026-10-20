@@ -23,8 +23,19 @@ import java.util.Map;
 @Slf4j
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler({ org.springframework.dao.DataIntegrityViolationException.class,
+            org.springframework.orm.ObjectOptimisticLockingFailureException.class })
+    public ResponseEntity<ErrorResponse> handleConflict(Exception ex, WebRequest request) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErrorResponse.builder()
+                .timestamp(LocalDateTime.now()).status(409).error("Conflict")
+                .message(
+                        "Mã hoặc thứ tự đã tồn tại, dữ liệu có liên kết hoặc đã được chỉnh sửa. Vui lòng tải lại và kiểm tra.")
+                .path(request.getDescription(false).replace("uri=", "")).traceId(currentTraceId()).build());
+    }
+
     @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleResourceNotFoundException(ResourceNotFoundException ex, WebRequest request) {
+    public ResponseEntity<ErrorResponse> handleResourceNotFoundException(ResourceNotFoundException ex,
+            WebRequest request) {
         log.warn("Resource not found: {}", ex.getMessage());
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
@@ -66,7 +77,8 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex, WebRequest request) {
+    public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex,
+            WebRequest request) {
         Map<String, String> errors = new HashMap<>();
         ex.getBindingResult().getAllErrors().forEach((error) -> {
             String fieldName = ((FieldError) error).getField();
@@ -89,11 +101,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDeniedException(AccessDeniedException ex, WebRequest request) {
         log.warn("Access denied: {}", ex.getMessage());
+        String message = ex.getMessage();
+        if (message == null || message.isBlank() || "Access Denied".equalsIgnoreCase(message)
+                || "Forbidden".equalsIgnoreCase(message))
+            message = "Bạn chưa có quyền thực hiện thao tác này. Vui lòng liên hệ quản trị viên.";
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.FORBIDDEN.value())
                 .error(HttpStatus.FORBIDDEN.getReasonPhrase())
-                .message("You do not have permission to access this resource: " + ex.getMessage())
+                .message(message)
                 .path(request.getDescription(false).replace("uri=", ""))
                 .traceId(currentTraceId())
                 .build();
@@ -130,7 +146,8 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
-    public ResponseEntity<ErrorResponse> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException ex, WebRequest request) {
+    public ResponseEntity<ErrorResponse> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException ex,
+            WebRequest request) {
         return handleResponseStatusException(new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,
                 "File hoặc tổng dung lượng tải lên vượt quá giới hạn cho phép"), request);
     }

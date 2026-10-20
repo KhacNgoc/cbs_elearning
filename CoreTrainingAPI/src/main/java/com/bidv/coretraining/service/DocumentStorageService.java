@@ -25,7 +25,8 @@ public class DocumentStorageService {
 
     private final Path storageDirectory;
 
-    public DocumentStorageService(@Value("${app.storage.documents-directory:uploads/documents}") String storageDirectory) {
+    public DocumentStorageService(
+            @Value("${app.storage.documents-directory:uploads/documents}") String storageDirectory) {
         this.storageDirectory = Path.of(storageDirectory).toAbsolutePath().normalize();
     }
 
@@ -39,7 +40,8 @@ public class DocumentStorageService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File tài liệu không được để trống");
         }
 
-        String originalName = StringUtils.cleanPath(file.getOriginalFilename() == null ? "document" : file.getOriginalFilename());
+        String originalName = StringUtils
+                .cleanPath(file.getOriginalFilename() == null ? "document" : file.getOriginalFilename());
         String extension = getExtension(originalName);
         if (!ALLOWED_EXTENSIONS.contains(extension)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chỉ hỗ trợ file PDF, DOC, DOCX, PPT hoặc PPTX");
@@ -54,7 +56,8 @@ public class DocumentStorageService {
         try {
             Files.copy(file.getInputStream(), destination, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException exception) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Không thể lưu file tài liệu", exception);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Không thể lưu file tài liệu",
+                    exception);
         }
 
         return LessonDocumentDto.builder()

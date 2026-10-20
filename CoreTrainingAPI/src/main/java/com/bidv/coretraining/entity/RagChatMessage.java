@@ -24,8 +24,8 @@ public class RagChatMessage {
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "topic_id", nullable = false)
-    private Topic topic;
+    @JoinColumn(name = "course_id", nullable = false)
+    private Course course;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String question;

@@ -27,7 +27,7 @@ export interface ProcedureSection {
 export interface LessonDocument {
   id?: number;
   name: string;
-  documentType: 'PDF' | 'WORD' | 'POWERPOINT';
+  documentType: "PDF" | "WORD" | "POWERPOINT";
   fileUrl: string;
   originalFileName?: string;
   fileSize?: number;
@@ -37,65 +37,124 @@ export interface LessonDocument {
 export interface Lesson {
   id: string;
   title: string;
-  topicId: string;
+  courseId: string;
+  chapterId?: string;
+  status?: string;
+  version?: number;
+  textBody?: string;
+  quizRequired?: boolean;
   lessonOrder?: number;
   hint: string;
   documents: LessonDocument[];
   videoUrl: string;
-  videoSource?: 'UPLOAD' | 'URL';
+  videoSource?: "UPLOAD" | "URL";
   hasQuiz?: boolean;
   quizPassingScore?: number;
   procedureSteps: ProcedureSection[];
   comments: Comment[];
 }
 
-export interface Topic {
+export interface Course {
+  allowedActions?: string[];
+  adminActions?: Record<string, string[]>;
+  canEdit?: boolean;
   id: string;
   name: string;
+  code?: string;
+  programId?: string;
+  programName?: string;
+  domainName?: string;
+  domainId?: string;
+  thumbnail?: string | null;
+  businessModule?: string;
+  level?: string;
+  keywords?: string;
+  completionDeadline?: string | null;
+  description?: string;
+  status?: string;
+  version?: number;
+  chapterCount?: number;
   iconName: string;
   hasQuiz?: boolean;
   quizPassingScore?: number;
   lessons: Lesson[];
 }
 
+export interface TrainingDomain {
+  allowedActions?: string[];
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  status: string;
+}
+export interface TrainingProgram extends TrainingDomain {
+  domainId: string;
+  unitIds?: string[];
+  allowedActions?: string[];
+}
+export interface Chapter {
+  id: string;
+  courseId: string;
+  code: string;
+  title: string;
+  description?: string;
+  chapterOrder: number;
+  status: string;
+  version?: number;
+  lessons: Lesson[];
+  locked: boolean;
+  completed: boolean;
+}
+export interface CourseOutline {
+  course: Course;
+  chapters: Chapter[];
+  completed: boolean;
+  resumeLessonId?: string;
+  resume?: ResumeTarget;
+}
+
 export interface Question {
   id: number;
-  topicId: string;
+  courseId: string;
   lessonId?: string;
   text: string;
+  explanation?: string;
+  bankQuestionId?: number;
+  bankQuestionCode?: string;
   options: string[];
   correctAnswer: number; // 0-indexed index of options
   correctAnswers?: number[];
-  type?: 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE';
+  type?: "SINGLE_CHOICE" | "MULTIPLE_CHOICE";
 }
 
-export type QuizQuestion = Omit<Question, 'correctAnswer' | 'correctAnswers'>;
+export type QuizQuestion = Omit<Question, "correctAnswer" | "correctAnswers">;
 
 export interface Badge {
   id: string;
   title: string;
-  type: 'bronze' | 'silver' | 'gold';
-  topicId: string;
-  topicName: string;
+  type: "bronze" | "silver" | "gold";
+  courseId: string;
+  courseName: string;
   unlockedAt: string;
   icon: string;
 }
 
 export interface UserProgress {
   completedLessons: string[]; // List of completed lesson IDs
-  quizScores: Record<string, number>; // topicId -> max score achieved (e.g. 3)
-  quizTotals: Record<string, number>; // topicId -> total questions (e.g. 5)
+  quizScores: Record<string, number>; // courseId -> max score achieved (e.g. 3)
+  quizTotals: Record<string, number>; // courseId -> total questions (e.g. 5)
   lessonQuizScores: Record<string, number>; // lessonId -> max score achieved
   lessonQuizTotals: Record<string, number>; // lessonId -> total questions
   lessonProgress?: Record<string, LessonProgress>;
   points: number; // Experience points
   unlockedBadges: Badge[];
-  groupId?: string;
+  groupIds?: string[];
   groupName?: string;
-  mandatoryTopics: string[];
-  registeredTopics: string[];
+  mandatoryCourses: string[];
+  registeredCourses: string[];
   mustChangePassword?: boolean;
-  pendingTopics: string[];
+  pendingCourses: string[];
 }
 
 export interface LessonProgress {
@@ -103,11 +162,80 @@ export interface LessonProgress {
   lastPositionSeconds: number;
   watchedSeconds: number;
   durationSeconds: number;
+  updatedAt?: string;
+  contentType?: "VIDEO" | "DOCUMENT" | "TEXT";
+  documentId?: number;
+  documentPage?: number;
+  scrollOffset?: number;
+  contentCompleted?: boolean;
 }
 
-export type LessonProgressRequest = Omit<LessonProgress, 'lessonId'>;
+export type LessonProgressRequest = Partial<
+  Omit<LessonProgress, "lessonId" | "updatedAt" | "contentCompleted">
+>;
+
+export interface ResumeTarget {
+  courseId: string;
+  lessonId: string;
+  lessonTitle: string;
+  courseName: string;
+  contentType: "VIDEO" | "DOCUMENT" | "TEXT" | "QUIZ";
+  documentId?: number;
+  documentPage?: number;
+  scrollOffset?: number;
+  positionSeconds?: number;
+  lastAccessedAt?: string;
+}
+export interface LearnerCourse {
+  course: Course;
+  source: "ASSIGNED" | "REGISTERED" | "AVAILABLE" | "PENDING";
+  mandatory: boolean;
+  learningStatus:
+    | "NOT_STARTED"
+    | "IN_PROGRESS"
+    | "COMPLETED"
+    | "AVAILABLE"
+    | "PENDING";
+  completedCount: number;
+  totalCount: number;
+  percent: number;
+  dueDate?: string;
+  lastAccessedAt?: string;
+  resume?: ResumeTarget;
+}
+export interface LearnerAttempt {
+  id: string;
+  quizId: string;
+  courseId: string;
+  lessonId: string;
+  title: string;
+  domainId: string;
+  domainName: string;
+  revision: number;
+  score: number;
+  total: number;
+  passingScore: number;
+  passed: boolean;
+  takenAt: string;
+}
+export interface LearnerWorkspace {
+  courses: LearnerCourse[];
+  resume?: ResumeTarget;
+  attempts: LearnerAttempt[];
+  legacyScores?: {
+    courseId: string;
+    lessonId?: string;
+    title: string;
+    score: number;
+    total: number;
+    takenAt: string;
+  }[];
+}
 
 export interface UserProfile {
+  roleNames?: Record<string, string>;
+  systemAdmin?: boolean;
+  permissionRevision?: number;
   id?: number;
   username: string;
   fullName: string;
@@ -115,8 +243,15 @@ export interface UserProfile {
   employeeId?: string;
   avatarColor?: string;
   role: string;
+  roles?: string[];
+  permissions?: string[];
+  unitId?: string;
+  unitName?: string;
+  scopeUnitIds?: string[];
+  status?: string;
+  learnerType?: string;
   points: number;
-  groupId?: string;
+  groupIds?: string[];
   groupName?: string;
 }
 

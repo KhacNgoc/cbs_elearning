@@ -120,3 +120,53 @@ async def ingest_document(
         "chunks_indexed": len(chunks),
         "pages": len(pages),
     }
+
+
+async def delete_document(document_id: str, course_id: str) -> None:
+    """Delete only this document's vectors, and wait until deletion is applied."""
+    if not await infrastructure.qdrant.collection_exists(config.COLLECTION):
+        return
+    await infrastructure.qdrant.delete(
+        collection_name=config.COLLECTION,
+        points_selector=models.FilterSelector(filter=models.Filter(must=[
+            models.FieldCondition(key="course_id", match=models.MatchValue(value=course_id)),
+            models.FieldCondition(key="document_id", match=models.MatchValue(value=document_id)),
+        ])),
+        wait=True,
+    )
+
+
+async def document_outline(document_id: str, course_id: str) -> dict:
+    """Read existing chunks for source selection, without generating embeddings."""
+    if not await infrastructure.qdrant.collection_exists(config.COLLECTION):
+        raise HTTPException(404, "Document has no indexed content")
+    source_filter = models.Filter(must=[
+        models.FieldCondition(key="course_id", match=models.MatchValue(value=course_id)),
+        models.FieldCondition(key="document_id", match=models.MatchValue(value=document_id)),
+    ])
+    pages, sections, excerpts = set(), set(), {}
+    offset = None
+    while True:
+        points, offset = await infrastructure.qdrant.scroll(
+            collection_name=config.COLLECTION, scroll_filter=source_filter,
+            offset=offset, limit=256, with_vectors=False,
+            with_payload=["page", "section", "excerpt"],
+        )
+        for point in points:
+            payload = point.payload or {}
+            page = int(payload.get("page", 1))
+            section = str(payload.get("section", ""))
+            pages.add(page)
+            if section:
+                sections.add(section)
+            key = (page, section)
+            if key not in excerpts:
+                excerpts[key] = {"page": page, "section": section,
+                                 "excerpt": str(payload.get("excerpt", ""))[:500]}
+        if offset is None:
+            break
+    if not pages:
+        raise HTTPException(404, "Document has no indexed content")
+    return {"documentId": document_id, "pages": sorted(pages),
+            "sections": sorted(sections),
+            "excerpts": [excerpts[key] for key in sorted(excerpts)]}

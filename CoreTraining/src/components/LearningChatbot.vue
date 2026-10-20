@@ -5,12 +5,14 @@
     :class="{ 'is-locked': locked, 'is-dragging': dragging }"
     :style="{ left: `${position.x}px`, top: `${position.y}px` }"
   >
-    <Transition name="chat-panel" @after-leave="finishClosing">
+    <Transition name="chat-panel">
       <section
         v-if="open"
+        id="learning-chatbot-panel"
         class="chat-panel"
         role="dialog"
         aria-labelledby="learning-chatbot-title"
+        @keydown.esc.stop="closeChat"
       >
         <header class="chat-header" @pointerdown="startDrag">
           <div class="chat-assistant">
@@ -26,6 +28,7 @@
             </div>
           </div>
           <button
+            ref="closeButton"
             class="chat-close"
             type="button"
             aria-label="Đóng trợ lý học tập"
@@ -49,16 +52,27 @@
         <template v-else>
           <div class="chat-course-filter">
             <label for="chat-course">Khóa học</label>
-            <select id="chat-course" v-model="selectedCourseId" :disabled="sending" @change="loadHistory">
-              <option v-for="topic in accessibleTopics" :key="topic.id" :value="topic.id">
-                {{ topic.name }}
+            <select
+              id="chat-course"
+              v-model="selectedCourseId"
+              :disabled="sending"
+              @change="loadHistory"
+            >
+              <option
+                v-for="course in accessibleCourses"
+                :key="course.id"
+                :value="course.id"
+              >
+                {{ course.name }}
               </option>
             </select>
           </div>
 
           <div ref="chatBody" class="chat-body">
             <div class="chat-date">Hôm nay</div>
-            <div v-if="loadingHistory" class="chat-loading">Đang tải lịch sử trao đổi...</div>
+            <div v-if="loadingHistory" class="chat-loading">
+              Đang tải lịch sử trao đổi...
+            </div>
             <div v-else-if="messages.length === 0" class="assistant-message">
               <span class="message-avatar"><Bot :size="17" /></span>
               <div>
@@ -70,21 +84,40 @@
               </div>
             </div>
 
-            <article v-for="message in messages" :key="message.id" class="chat-exchange">
-              <div class="user-message"><p>{{ message.question }}</p></div>
+            <article
+              v-for="message in messages"
+              :key="message.id"
+              class="chat-exchange"
+            >
+              <div class="user-message">
+                <p>{{ message.question }}</p>
+              </div>
               <div class="assistant-message">
                 <span class="message-avatar"><Bot :size="17" /></span>
                 <div class="assistant-answer">
                   <p>{{ message.answer }}</p>
-                  <span class="grounding-state" :class="{ grounded: message.grounded }">
-                    {{ message.needsClarification
-                      ? 'Cần làm rõ câu hỏi'
-                      : message.grounded ? 'Có nguồn tài liệu' : 'Không tìm thấy trong tài liệu' }}
+                  <span
+                    class="grounding-state"
+                    :class="{ grounded: message.grounded }"
+                  >
+                    {{
+                      message.needsClarification
+                        ? "Cần làm rõ câu hỏi"
+                        : message.grounded
+                          ? "Có nguồn tài liệu"
+                          : "Không tìm thấy trong tài liệu"
+                    }}
                   </span>
                   <ul v-if="message.sources.length" class="chat-sources">
-                    <li v-for="source in message.sources" :key="`${message.id}-${source.documentId}-${source.page}-${source.section}`">
+                    <li
+                      v-for="source in message.sources"
+                      :key="`${message.id}-${source.documentId}-${source.page}-${source.section}`"
+                    >
                       <FileText :size="13" />
-                      <span><strong>{{ source.documentName }}</strong> · Trang {{ source.page }} · {{ source.section }}</span>
+                      <span
+                        ><strong>{{ source.documentName }}</strong> · Trang
+                        {{ source.page }} · {{ source.section }}</span
+                      >
                     </li>
                   </ul>
                   <small>{{ formatTime(message.createdAt) }}</small>
@@ -93,22 +126,35 @@
             </article>
 
             <template v-if="pendingQuestion">
-              <div class="user-message"><p>{{ pendingQuestion }}</p></div>
+              <div class="user-message">
+                <p>{{ pendingQuestion }}</p>
+              </div>
               <div class="assistant-message chat-thinking">
                 <span class="message-avatar"><Bot :size="17" /></span>
                 <p>
                   <LoaderCircle :size="15" />
-                  {{ longWait
-                    ? 'Mô hình đang tổng hợp câu trả lời, quá trình này có thể mất thêm một chút thời gian...'
-                    : 'Đang tìm trong tài liệu khóa học...' }}
+                  {{
+                    longWait
+                      ? "Mô hình đang tổng hợp câu trả lời, quá trình này có thể mất thêm một chút thời gian..."
+                      : "Đang tìm trong tài liệu khóa học..."
+                  }}
                 </p>
               </div>
             </template>
 
             <p v-if="chatError" class="chat-error">{{ chatError }}</p>
 
-            <div v-if="messages.length === 0 && !loadingHistory" class="quick-prompts" aria-label="Câu hỏi gợi ý">
-              <button v-for="prompt in quickPrompts" :key="prompt" type="button" @click="askPrompt(prompt)">
+            <div
+              v-if="messages.length === 0 && !loadingHistory"
+              class="quick-prompts"
+              aria-label="Câu hỏi gợi ý"
+            >
+              <button
+                v-for="prompt in quickPrompts"
+                :key="prompt"
+                type="button"
+                @click="askPrompt(prompt)"
+              >
                 {{ prompt }}
               </button>
             </div>
@@ -126,36 +172,56 @@
               :disabled="sending || !selectedCourseId"
               @keydown.enter.exact="handleQuestionEnter"
             ></textarea>
-            <button type="submit" aria-label="Gửi câu hỏi" :disabled="sending || !question.trim() || !selectedCourseId">
+            <button
+              type="submit"
+              aria-label="Gửi câu hỏi"
+              :disabled="sending || !question.trim() || !selectedCourseId"
+            >
               <SendHorizontal :size="19" />
             </button>
             <p>
-              <Sparkles :size="13" /> Chỉ trả lời từ tài liệu của khóa học đã chọn
+              <Sparkles :size="13" /> Chỉ trả lời từ tài liệu của khóa học đã
+              chọn
             </p>
           </form>
         </template>
       </section>
     </Transition>
-
+  </aside>
+  <Teleport defer to="#learning-chatbot-launcher">
     <button
-      v-if="showLauncher"
+      ref="launcherButton"
       class="chat-launcher"
+      :class="{ 'is-locked': locked, 'is-active': open }"
       type="button"
-      :aria-label="locked ? 'Trợ lý học tập đang bị khóa' : 'Mở trợ lý học tập'"
+      :aria-label="
+        open
+          ? 'Đóng trợ lý học tập'
+          : locked
+            ? 'Trợ lý học tập đang bị khóa'
+            : 'Mở trợ lý học tập'
+      "
       :aria-expanded="open"
-      @pointerdown="startDrag"
+      aria-controls="learning-chatbot-panel"
+      :title="locked ? 'Trợ lý tạm khóa trong bài thi' : 'Trợ lý học tập'"
       @click="toggleChat"
     >
-      <LockKeyhole v-if="locked" :size="23" />
-      <MessageCircleMore v-else :size="25" />
-      <span>{{ locked ? "Trợ lý đang khóa" : "Hỏi trợ lý" }}</span>
-      <i v-if="!locked" aria-hidden="true"></i>
+      <LockKeyhole v-if="locked" :size="20" aria-hidden="true" />
+      <MessageCircleMore v-else :size="20" aria-hidden="true" />
+      <span>Trợ lý</span>
     </button>
-  </aside>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import { useRoute } from "vue-router";
 import { useCourseStore } from "../stores/courseStore";
 import { useUserStore } from "../stores/userStore";
@@ -179,11 +245,11 @@ const route = useRoute();
 const courseStore = useCourseStore();
 const userStore = useUserStore();
 const open = ref(false);
-const showLauncher = ref(true);
+const launcherButton = ref<HTMLButtonElement | null>(null);
+const closeButton = ref<HTMLButtonElement | null>(null);
 const chatbotElement = ref<HTMLElement | null>(null);
 const dragging = ref(false);
 const position = ref({ x: 0, y: 0 });
-const launcherPosition = ref({ x: 0, y: 0 });
 const chatBody = ref<HTMLElement | null>(null);
 const selectedCourseId = ref("");
 const messages = ref<RagChatHistory[]>([]);
@@ -200,7 +266,6 @@ const quickPrompts = [
   "Những điều kiện nào cần lưu ý?",
 ];
 const dragOffset = { x: 0, y: 0 };
-let movedDuringDrag = false;
 let longWaitTimer: number | undefined;
 
 const clearLongWaitTimer = () => {
@@ -209,8 +274,10 @@ const clearLongWaitTimer = () => {
   longWait.value = false;
 };
 
-const accessibleTopics = computed(() =>
-  courseStore.topics.filter(topic => userStore.isTopicAccessible(topic.id)),
+const accessibleCourses = computed(() =>
+  courseStore.courses.filter((course) =>
+    userStore.isCourseAccessible(course.id),
+  ),
 );
 
 const scrollToLatest = async () => {
@@ -219,14 +286,17 @@ const scrollToLatest = async () => {
 };
 
 const selectCourseFromContext = () => {
-  const contextualCourseId = route.name === "LessonDetail"
-    ? courseStore.currentTopic?.id
-    : undefined;
-  const nextCourseId = contextualCourseId && accessibleTopics.value.some(topic => topic.id === contextualCourseId)
-    ? contextualCourseId
-    : accessibleTopics.value.some(topic => topic.id === selectedCourseId.value)
-      ? selectedCourseId.value
-      : accessibleTopics.value[0]?.id || "";
+  const contextualCourseId =
+    route.name === "LessonDetail" ? courseStore.currentCourse?.id : undefined;
+  const nextCourseId =
+    contextualCourseId &&
+    accessibleCourses.value.some((course) => course.id === contextualCourseId)
+      ? contextualCourseId
+      : accessibleCourses.value.some(
+            (course) => course.id === selectedCourseId.value,
+          )
+        ? selectedCourseId.value
+        : accessibleCourses.value[0]?.id || "";
   const changed = nextCourseId !== selectedCourseId.value;
   selectedCourseId.value = nextCourseId;
   if (changed) messages.value = [];
@@ -246,7 +316,8 @@ const loadHistory = async () => {
       conversationIds.value[selectedCourseId.value],
     );
     const loadedConversationId = messages.value[0]?.conversationId;
-    if (loadedConversationId) conversationIds.value[selectedCourseId.value] = loadedConversationId;
+    if (loadedConversationId)
+      conversationIds.value[selectedCourseId.value] = loadedConversationId;
     await scrollToLatest();
   } catch (error) {
     console.error("Failed to load chat history:", error);
@@ -287,12 +358,16 @@ const sendQuestion = async () => {
       sources: response.sources,
       createdAt: new Date().toISOString(),
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Failed to ask learning assistant:", error);
     question.value = content;
-    chatError.value = isTimeoutError(error)
-      ? "Trợ lý chưa hoàn tất câu trả lời trong thời gian cho phép. Câu hỏi đã được giữ lại để bạn có thể thử lại."
-      : "Không thể kết nối tới trợ lý học tập. Vui lòng thử lại.";
+    const status = error?.response?.status;
+    chatError.value =
+      isTimeoutError(error) || status === 504
+        ? "Trợ lý chưa hoàn tất câu trả lời trong thời gian cho phép. Câu hỏi đã được giữ lại để bạn có thể thử lại."
+        : status === 502
+          ? "Trợ lý chưa tạo được câu trả lời hoàn chỉnh. Vui lòng thử lại."
+          : "Không thể kết nối tới trợ lý học tập. Vui lòng thử lại.";
   } finally {
     clearLongWaitTimer();
     pendingQuestion.value = "";
@@ -305,7 +380,8 @@ const handleQuestionEnter = (event: KeyboardEvent) => {
   // With Vietnamese and other IMEs, the text visible in the textarea can still
   // be composing and therefore not yet be reflected in Vue's v-model. Let the
   // first Enter commit that text instead of sending a stale question value.
-  if (event.isComposing || event.key === "Process" || event.keyCode === 229) return;
+  if (event.isComposing || event.key === "Process" || event.keyCode === 229)
+    return;
   event.preventDefault();
   void sendQuestion();
 };
@@ -315,10 +391,11 @@ const askPrompt = (prompt: string) => {
   void sendQuestion();
 };
 
-const formatTime = (value: string) => new Intl.DateTimeFormat("vi-VN", {
-  hour: "2-digit",
-  minute: "2-digit",
-}).format(new Date(value));
+const formatTime = (value: string) =>
+  new Intl.DateTimeFormat("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 
 const clampPosition = () => {
   const element = chatbotElement.value;
@@ -341,12 +418,6 @@ const moveChatbot = (event: PointerEvent) => {
   if (!dragging.value) return;
   const nextX = event.clientX - dragOffset.x;
   const nextY = event.clientY - dragOffset.y;
-  if (
-    Math.abs(nextX - position.value.x) > 2 ||
-    Math.abs(nextY - position.value.y) > 2
-  ) {
-    movedDuringDrag = true;
-  }
   position.value = { x: nextX, y: nextY };
   clampPosition();
 };
@@ -363,7 +434,6 @@ const startDrag = (event: PointerEvent) => {
   const rect = chatbotElement.value.getBoundingClientRect();
   dragOffset.x = event.clientX - rect.left;
   dragOffset.y = event.clientY - rect.top;
-  movedDuringDrag = false;
   dragging.value = true;
   window.addEventListener("pointermove", moveChatbot);
   window.addEventListener("pointerup", stopDrag);
@@ -371,28 +441,23 @@ const startDrag = (event: PointerEvent) => {
 };
 
 const toggleChat = async () => {
-  if (movedDuringDrag) {
-    movedDuringDrag = false;
+  if (open.value) {
+    void closeChat();
     return;
   }
-  launcherPosition.value = { ...position.value };
-  showLauncher.value = false;
   open.value = true;
   await nextTick();
   await placeAtBottomRight();
+  closeButton.value?.focus({ preventScroll: true });
   selectCourseFromContext();
   await loadHistory();
 };
 
-const closeChat = () => {
+const closeChat = async () => {
+  stopDrag();
   open.value = false;
-};
-
-const finishClosing = async () => {
-  position.value = { ...launcherPosition.value };
-  showLauncher.value = true;
   await nextTick();
-  clampPosition();
+  launcherButton.value?.focus({ preventScroll: true });
 };
 
 const placeAtBottomRight = async () => {
@@ -405,19 +470,22 @@ const placeAtBottomRight = async () => {
     y: window.innerHeight - rect.height - 20,
   };
   clampPosition();
-  if (!open.value) launcherPosition.value = { ...position.value };
 };
 
 watch(
   () => props.locked,
   () => {
+    stopDrag();
     open.value = false;
-    showLauncher.value = true;
   },
 );
 
 watch(
-  () => [route.name, courseStore.currentTopic?.id, accessibleTopics.value.map(topic => topic.id).join(",")],
+  () => [
+    route.name,
+    courseStore.currentCourse?.id,
+    accessibleCourses.value.map((course) => course.id).join(","),
+  ],
   () => {
     const changed = selectCourseFromContext();
     if (open.value && changed) void loadHistory();
@@ -426,7 +494,6 @@ watch(
 );
 
 onMounted(() => {
-  void placeAtBottomRight();
   window.addEventListener("resize", clampPosition);
 });
 
@@ -454,46 +521,41 @@ onBeforeUnmount(() => {
 }
 
 .chat-launcher {
-  position: relative;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
-  min-height: 54px;
-  padding: 0 20px;
-  border: 0;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #006747, #004c36);
-  color: #fff;
-  box-shadow: 0 14px 34px rgba(0, 76, 54, 0.28);
-  font-size: 0.94rem;
-  font-weight: 700;
+  justify-content: center;
+  gap: 6px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line-c7dfd5);
+  border-radius: 12px;
+  background: var(--surface-edf6f1);
+  color: var(--ink-005b41);
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
-  touch-action: none;
   transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
-  animation: launcher-appear 0.18s ease-out both;
+    background-color 0.2s ease,
+    border-color 0.2s ease;
 }
 
-.chat-launcher:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 18px 38px rgba(0, 76, 54, 0.34);
+.chat-launcher:hover,
+.chat-launcher.is-active {
+  background: var(--surface-d7e9e3);
+  border-color: #005b41;
 }
 
-.chat-launcher i {
-  position: absolute;
-  top: 1px;
-  right: 5px;
-  width: 10px;
-  height: 10px;
-  border: 2px solid #fff;
-  border-radius: 50%;
-  background: #35c786;
+.chat-launcher:focus-visible {
+  outline: 2px solid #005b41;
+  outline-offset: 3px;
 }
 
-.is-locked .chat-launcher {
-  background: #475569;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.2);
+.chat-launcher.is-locked {
+  background: var(--surface-f1f5f9);
+  border-color: var(--line-cbd5e1);
+  color: var(--ink-475569);
 }
 
 .chat-panel {
@@ -504,7 +566,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   border: 1px solid rgba(0, 91, 65, 0.14);
   border-radius: 22px;
-  background: #fff;
+  background: var(--surface-ffffff);
   box-shadow: 0 24px 64px rgba(15, 23, 42, 0.2);
 }
 
@@ -519,8 +581,7 @@ onBeforeUnmount(() => {
   touch-action: none;
 }
 
-.is-dragging .chat-header,
-.is-dragging .chat-launcher {
+.is-dragging .chat-header {
   cursor: grabbing;
 }
 
@@ -563,7 +624,7 @@ onBeforeUnmount(() => {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #63e6a7;
+  background: var(--surface-63e6a7);
 }
 
 .is-locked .assistant-status i {
@@ -592,12 +653,12 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  border-bottom: 1px solid #e2e8f0;
-  background: #fff;
+  border-bottom: 1px solid var(--line-e2e8f0);
+  background: var(--surface-ffffff);
 }
 
 .chat-course-filter label {
-  color: #64748b;
+  color: var(--ink-64748b);
   font-size: 0.72rem;
   font-weight: 700;
 }
@@ -605,10 +666,10 @@ onBeforeUnmount(() => {
 .chat-course-filter select {
   min-width: 0;
   padding: 7px 9px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--line-cbd5e1);
   border-radius: 9px;
-  background: #f8fafc;
-  color: #334155;
+  background: var(--surface-f8fafc);
+  color: var(--ink-334155);
   font-size: 0.78rem;
 }
 
@@ -624,12 +685,12 @@ onBeforeUnmount(() => {
       rgba(0, 91, 65, 0.06),
       transparent 35%
     ),
-    #f8fafc;
+    var(--surface-f8fafc);
 }
 
 .chat-date {
   margin-bottom: 18px;
-  color: #94a3b8;
+  color: var(--ink-94a3b8);
   font-size: 0.7rem;
   font-weight: 600;
   text-align: center;
@@ -687,8 +748,8 @@ onBeforeUnmount(() => {
 .message-avatar {
   width: 32px;
   height: 32px;
-  background: #e5f3ee;
-  color: #005b41;
+  background: var(--surface-e5f3ee);
+  color: var(--ink-005b41);
 }
 
 .assistant-message p {
@@ -696,10 +757,10 @@ onBeforeUnmount(() => {
   max-width: 270px;
   margin: 0 0 5px;
   padding: 12px 14px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--line-e2e8f0);
   border-radius: 5px 16px 16px;
-  background: #fff;
-  color: #334155;
+  background: var(--surface-ffffff);
+  color: var(--ink-334155);
   font-size: 0.88rem;
   line-height: 1.55;
   white-space: pre-wrap;
@@ -708,14 +769,14 @@ onBeforeUnmount(() => {
 }
 
 .assistant-message span {
-  color: #94a3b8;
+  color: var(--ink-94a3b8);
   font-size: 0.68rem;
 }
 
 .assistant-answer > small {
   display: block;
   margin-top: 5px;
-  color: #94a3b8;
+  color: var(--ink-94a3b8);
   font-size: 0.68rem;
 }
 
@@ -724,15 +785,15 @@ onBeforeUnmount(() => {
   margin: 1px 0 7px;
   padding: 3px 7px;
   border-radius: 999px;
-  background: #f1f5f9;
-  color: #64748b;
+  background: var(--surface-f1f5f9);
+  color: var(--ink-64748b);
   font-size: 0.66rem;
   font-weight: 700;
 }
 
 .assistant-answer .grounding-state.grounded {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--surface-dcfce7);
+  color: var(--ink-166534);
 }
 
 .chat-sources {
@@ -753,22 +814,22 @@ onBeforeUnmount(() => {
   min-width: 0;
   max-width: 100%;
   padding: 7px 8px;
-  border: 1px solid #dbe7e2;
+  border: 1px solid var(--line-dbe7e2);
   border-radius: 8px;
-  background: #f7faf9;
-  color: #475569;
+  background: var(--surface-f7faf9);
+  color: var(--ink-475569);
 }
 
 .chat-sources li > svg {
   flex: 0 0 auto;
   margin-top: 1px;
-  color: #006747;
+  color: var(--ink-006747);
 }
 
 .chat-sources li span {
   flex: 1 1 auto;
   min-width: 0;
-  color: #475569;
+  color: var(--ink-475569);
   font-size: 0.68rem;
   line-height: 1.4;
   white-space: normal;
@@ -789,7 +850,7 @@ onBeforeUnmount(() => {
 .chat-loading,
 .chat-error {
   margin: 12px 0;
-  color: #64748b;
+  color: var(--ink-64748b);
   font-size: 0.78rem;
   text-align: center;
 }
@@ -797,8 +858,8 @@ onBeforeUnmount(() => {
 .chat-error {
   padding: 8px;
   border-radius: 8px;
-  background: #fee2e2;
-  color: #b91c1c;
+  background: var(--surface-fee2e2);
+  color: var(--ink-b91c1c);
 }
 
 .quick-prompts {
@@ -811,10 +872,10 @@ onBeforeUnmount(() => {
 
 .quick-prompts button {
   padding: 8px 12px;
-  border: 1px solid #b8d8cd;
+  border: 1px solid var(--line-b8d8cd);
   border-radius: 999px;
-  background: #fff;
-  color: #006747;
+  background: var(--surface-ffffff);
+  color: var(--ink-006747);
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
@@ -826,8 +887,8 @@ onBeforeUnmount(() => {
   grid-template-columns: 1fr 42px;
   gap: 8px;
   padding: 14px 14px 10px;
-  border-top: 1px solid #e2e8f0;
-  background: #fff;
+  border-top: 1px solid var(--line-e2e8f0);
+  background: var(--surface-ffffff);
 }
 
 .chat-composer textarea {
@@ -835,10 +896,10 @@ onBeforeUnmount(() => {
   max-height: 90px;
   resize: none;
   padding: 10px 12px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--line-cbd5e1);
   border-radius: 12px;
   outline: none;
-  color: #1e293b;
+  color: var(--ink-1e293b);
   font-size: 0.86rem;
 }
 
@@ -870,7 +931,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   gap: 5px;
   margin: 0;
-  color: #94a3b8;
+  color: var(--ink-94a3b8);
   font-size: 0.68rem;
 }
 
@@ -881,7 +942,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   padding: 36px;
-  background: #f8fafc;
+  background: var(--surface-f8fafc);
   text-align: center;
 }
 
@@ -892,13 +953,13 @@ onBeforeUnmount(() => {
   height: 66px;
   margin-bottom: 18px;
   border-radius: 20px;
-  background: #fff7df;
-  color: #b7791f;
+  background: var(--surface-fff7df);
+  color: var(--ink-b7791f);
   box-shadow: inset 0 0 0 1px #fde7a8;
 }
 
 .locked-eyebrow {
-  color: #b7791f;
+  color: var(--ink-b7791f);
   font-size: 0.72rem;
   font-weight: 800;
   text-transform: uppercase;
@@ -907,13 +968,13 @@ onBeforeUnmount(() => {
 
 .locked-content h3 {
   margin: 7px 0 10px;
-  color: #1e293b;
+  color: var(--ink-1e293b);
   font-size: 1.25rem;
 }
 
 .locked-content p {
   margin: 0;
-  color: #64748b;
+  color: var(--ink-64748b);
   font-size: 0.88rem;
   line-height: 1.65;
 }
@@ -932,19 +993,10 @@ onBeforeUnmount(() => {
   transform: translateY(40px);
 }
 
-@keyframes launcher-appear {
-  from {
-    opacity: 0;
-    transform: scale(0.88);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
 @keyframes chat-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .sr-only {
@@ -958,16 +1010,18 @@ onBeforeUnmount(() => {
   border: 0;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 1024px) {
   .chat-launcher {
-    min-width: 54px;
-    padding: 0 15px;
+    width: 44px;
+    padding: 0;
   }
 
   .chat-launcher span {
     display: none;
   }
+}
 
+@media (max-width: 640px) {
   .chat-panel {
     width: calc(100vw - 28px);
     height: min(560px, calc(100vh - 88px));
@@ -979,10 +1033,6 @@ onBeforeUnmount(() => {
   .chat-panel-enter-active,
   .chat-panel-leave-active {
     transition: none;
-  }
-
-  .chat-launcher {
-    animation: none;
   }
 }
 </style>
