@@ -95,6 +95,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useNavigationStore } from "../stores/navigationStore";
 import {
+  Layers,
   BookOpen,
   ClipboardCheck,
   FileText,
@@ -133,6 +134,7 @@ const learningNavigation = computed(() =>
     : [],
 );
 const iconRegistry = {
+  Layers,
   ChartNoAxesCombined,
   BookOpen,
   ClipboardCheck,
@@ -155,7 +157,7 @@ const groupDefinitions = [
     id: "training",
     label: "Đào tạo & tài liệu",
     icon: BookOpen,
-    ids: ["admin.catalog", "admin.courses", "admin.lessons", "admin.documents"],
+    ids: ["admin.curriculum", "admin.catalog", "admin.courses", "admin.lessons", "admin.documents"],
   },
   {
     id: "assessment",
@@ -237,7 +239,7 @@ const activeSection = computed(() =>
               ? "admin.roles"
               : route.path.startsWith("/admin/permissions")
                 ? "admin.permissions"
-                : route.path.startsWith("/admin/catalog")
+                : route.path.startsWith("/admin/curriculum") ? "admin.curriculum" : route.path.startsWith("/admin/catalog")
                   ? "admin.catalog"
                   : route.path.startsWith("/admin/courses") ||
                       route.path.endsWith("/edit")

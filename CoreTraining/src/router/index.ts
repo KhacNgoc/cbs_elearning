@@ -75,6 +75,7 @@ const routes: Array<RouteRecordRaw> = [
       {path:'permissions',name:'AdminPermissions',component:()=>import('../views/PermissionAdmin.vue'),meta:{pageKey:'admin.permissions'}},
       {path:'roles',name:'AdminRoles',component:()=>import('../views/RoleAdmin.vue'),meta:{pageKey:'admin.roles'}},
       {path:'access',redirect:to=>to.query.tab==='users'?'/admin/users':to.query.tab==='units'?'/admin/units':to.query.tab==='groups'?'/admin/groups':'/admin/permissions'},
+      {path:'curriculum',name:'TrainingCurriculum',component:TrainingAdmin,meta:{pageKey:'admin.curriculum'}},
       {path:'catalog',name:'TrainingCatalog',component:TrainingAdmin,meta:{pageKey:'admin.catalog'}},
       {path:'courses',name:'TrainingCourses',component:TrainingAdmin,meta:{pageKey:'admin.courses'}},
       {path:'courses/:courseId',name:'TrainingCourseDetail',component:TrainingAdmin,meta:{pageKey:'admin.courses'}},
