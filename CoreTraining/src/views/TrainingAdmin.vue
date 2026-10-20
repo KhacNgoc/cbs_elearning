@@ -4,6 +4,24 @@
       <div class="heading-with-back">
         <AdminBackButton v-if="backTo" :to="backTo" :label="backLabel" />
         <div class="heading-copy">
+          <div class="view-mode-tabs" v-if="!course && !chapter">
+            <button
+              type="button"
+              class="view-tab-btn"
+              :class="{ active: viewType === 'tree' }"
+              @click="viewType = 'tree'"
+            >
+              <Layers :size="15" /> Cây cấu trúc (Interactive Tree)
+            </button>
+            <button
+              type="button"
+              class="view-tab-btn"
+              :class="{ active: viewType === 'table' }"
+              @click="viewType = 'table'"
+            >
+              <Table :size="15" /> Bảng quản lý truyền thống
+            </button>
+          </div>
           <nav class="breadcrumb" aria-label="Đường dẫn">
             <RouterLink to="/admin/courses">Khóa học</RouterLink
             ><template v-if="course">
@@ -64,7 +82,10 @@
       </button>
     </header>
 
-    <div v-if="mode === 'catalog'" class="catalog-layout">
+    <div v-if="!course && !chapter && viewType === 'tree'" class="tree-studio-wrapper">
+      <CurriculumTreeStudio @refresh="load" />
+    </div>
+    <div v-else-if="mode === 'catalog'" class="catalog-layout">
       <section class="card catalog-domains">
         <div class="section-heading">
           <h2>Lĩnh vực đào tạo</h2>
@@ -624,6 +645,7 @@ import type {
 import ConfirmModal from "../components/ConfirmModal.vue";
 import AdminBackButton from "../components/AdminBackButton.vue";
 import ChapterTreeTable from "../components/ChapterTreeTable.vue";
+import CurriculumTreeStudio from "../components/CurriculumTreeStudio.vue";
 import OrganizationMultiTreeSelect from "../components/OrganizationMultiTreeSelect.vue";
 import type { OrganizationUnit } from "../types/organization";
 import { axiosClient } from "../api/axiosClient";
@@ -635,6 +657,7 @@ type Row = Course | Chapter | Lesson;
 type FormKind = "domain" | "program" | "course" | "chapter" | "lesson";
 const route = useRoute(),
   router = useRouter();
+const viewType = ref<"tree" | "table">("tree");
 const loading = ref(false),
   busy = ref(false);
 const domains = ref<TrainingDomain[]>([]),
@@ -1676,5 +1699,45 @@ button:disabled {
   .heading-with-back {
     gap: 0.75rem;
   }
+}
+</style>
+
+<style scoped>
+.view-mode-tabs {
+  display: inline-flex;
+  background: var(--bg-surface, #1e293b);
+  border: 1px solid var(--border-color, #334155);
+  border-radius: 8px;
+  padding: 0.25rem;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+.view-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.83rem;
+  font-weight: 500;
+  color: var(--text-secondary, #94a3b8);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.view-tab-btn:hover {
+  color: var(--text-primary, #f8fafc);
+  background: rgba(255, 255, 255, 0.05);
+}
+.view-tab-btn.active {
+  color: #fff;
+  background: var(--brand-color, #10b981);
+}
+.tree-studio-wrapper {
+  flex: 1;
+  min-height: 650px;
+  display: flex;
+  flex-direction: column;
 }
 </style>
