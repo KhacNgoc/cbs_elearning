@@ -474,7 +474,7 @@
     </div>
 
     <!-- ENRICHED INLINE ADD MODAL -->
-    <div v-if="addModal.show" class="tree-modal-backdrop" @click.self="closeAddModal">
+    <div v-if="addModal.show" class="tree-modal-backdrop">
       <div class="tree-quick-modal enriched-modal">
         <div class="modal-header">
           <div class="modal-title-box">
@@ -838,7 +838,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
+import { ref, computed, watch, onMounted, nextTick } from "vue";
 import { useRouter } from "vue-router";
 import {
   Layers,
@@ -1044,12 +1044,6 @@ function resetCurrentDraft() {
   hasRestoredDraft.value = false;
   openAddModal(type, parentObj);
   showToast("Đã xóa bản nháp và làm mới biểu mẫu.", "info");
-}
-
-function handleGlobalKeyDown(e: KeyboardEvent) {
-  if (e.key === "Escape" && addModal.value.show) {
-    closeAddModal();
-  }
 }
 
 // Tự động lưu nháp khi có thay đổi trong modal tạo mới
@@ -2037,11 +2031,6 @@ const filteredDomains = computed(() => {
 
 onMounted(() => {
   loadTreeData();
-  window.addEventListener("keydown", handleGlobalKeyDown);
-});
-
-onUnmounted(() => {
-  window.removeEventListener("keydown", handleGlobalKeyDown);
 });
 </script>
 
