@@ -18,8 +18,26 @@ public class TrainingStructureService {
         }
     }
 
-    public record ProgramDto(String id, String domainId, String code, String name, String description, String status,
-            Set<String> unitIds, Set<String> allowedActions) {
+    public record ProgramDto(
+            String id,
+            String domainId,
+            String code,
+            String name,
+            String description,
+            String status,
+            Set<String> unitIds,
+            Set<String> allowedActions,
+            String businessModule,
+            String level,
+            Set<String> mandatoryUnitIds,
+            Set<String> optionalUnitIds,
+            Boolean autoEnrollStaff) {
+
+        public ProgramDto(String id, String domainId, String code, String name, String description, String status,
+                Set<String> unitIds, Set<String> allowedActions) {
+            this(id, domainId, code, name, description, status, unitIds, allowedActions, null, null,
+                    java.util.Collections.emptySet(), java.util.Collections.emptySet(), false);
+        }
     }
 
     public record ChapterDto(String id, String courseId, String code, String title, String description,
@@ -108,12 +126,37 @@ public class TrainingStructureService {
 
     public ProgramDto programDto(TrainingProgram p) {
         var u = authorization.current();
-        return new ProgramDto(p.getId(), p.getDomain().getId(), p.getCode(), p.getName(), p.getDescription(),
+        Set<String> mandatoryUnits = new HashSet<>();
+        Set<String> optionalUnits = new HashSet<>();
+        if (p.getUnitGrants() != null) {
+            for (var entry : p.getUnitGrants().entrySet()) {
+                if ("MANDATORY".equalsIgnoreCase(entry.getValue())) {
+                    mandatoryUnits.add(entry.getKey());
+                } else {
+                    optionalUnits.add(entry.getKey());
+                }
+            }
+        }
+        Set<String> allUnits = new HashSet<>(p.getUnits().stream().map(OrganizationUnit::getId).toList());
+        allUnits.addAll(mandatoryUnits);
+        allUnits.addAll(optionalUnits);
+
+        return new ProgramDto(
+                p.getId(),
+                p.getDomain() == null ? null : p.getDomain().getId(),
+                p.getCode(),
+                p.getName(),
+                p.getDescription(),
                 p.getStatus(),
-                p.getUnits().stream().map(OrganizationUnit::getId).collect(java.util.stream.Collectors.toSet()),
+                allUnits,
                 java.util.stream.Stream.of("read", "create", "update", "delete")
                         .filter(a -> com.bidv.coretraining.security.AccessPolicy.allowsProgram(u, "catalog:" + a, p))
-                        .collect(java.util.stream.Collectors.toSet()));
+                        .collect(java.util.stream.Collectors.toSet()),
+                p.getBusinessModule(),
+                p.getLevel(),
+                mandatoryUnits,
+                optionalUnits,
+                false);
     }
 
     private boolean canUpdateDomain(TrainingDomain d) {
@@ -161,30 +204,111 @@ public class TrainingStructureService {
                 : programs.findById(id).orElseThrow(() -> new ResourceNotFoundException("Program", "id", id));
         if (id != null)
             authorization.program(p, "catalog", "update");
+
+        Set<String> mandatoryIds = request.mandatoryUnitIds() != null ? new HashSet<>(request.mandatoryUnitIds())
+                : new HashSet<>();
+        Set<String> optionalIds = request.optionalUnitIds() != null ? new HashSet<>(request.optionalUnitIds())
+                : new HashSet<>();
+
+        if (request.unitIds() != null) {
+            for (String uId : request.unitIds()) {
+                if (!mandatoryIds.contains(uId) && !optionalIds.contains(uId)) {
+                    optionalIds.add(uId);
+                }
+            }
+        }
+
+        // Fallback if no units specified but organization units exist
+        if (mandatoryIds.isEmpty() && optionalIds.isEmpty() && organizationUnits != null && organizationUnits.count() > 0) {
+            if (authorization.current().getOrganizationUnit() != null) {
+                optionalIds.add(authorization.current().getOrganizationUnit().getId());
+            } else {
+                organizationUnits.findAll().stream().findFirst().ifPresent(u -> optionalIds.add(u.getId()));
+            }
+        }
+
         Set<OrganizationUnit> assigned = new HashSet<>();
-        if (request.unitIds() == null || request.unitIds().isEmpty())
-            throw new BadRequestException("Chương trình cần ít nhất một đơn vị");
-        for (String unitId : request.unitIds()) {
-            OrganizationUnit n = authorization.unit(unitId);
+        Map<String, String> grants = new HashMap<>();
+
+        for (String mId : mandatoryIds) {
+            OrganizationUnit n = authorization.unit(mId);
             authorization.scope(n);
             if (!com.bidv.coretraining.security.AccessPolicy.activeUnit(n))
-                throw new BadRequestException("Đơn vị đã ngừng hoạt động");
+                throw new BadRequestException("Đơn vị " + n.getName() + " đã ngừng hoạt động");
             assigned.add(n);
+            grants.put(mId, "MANDATORY");
         }
-        // Shared programmes may only be reassigned by an actor authorized for every
-        // existing unit.
-        if (id != null)
-            for (OrganizationUnit old : p.getUnits())
+        for (String optId : optionalIds) {
+            OrganizationUnit n = authorization.unit(optId);
+            authorization.scope(n);
+            if (!com.bidv.coretraining.security.AccessPolicy.activeUnit(n))
+                throw new BadRequestException("Đơn vị " + n.getName() + " đã ngừng hoạt động");
+            assigned.add(n);
+            grants.put(optId, "OPTIONAL");
+        }
+
+        if (id != null) {
+            for (OrganizationUnit old : p.getUnits()) {
                 authorization.scope(old);
+            }
+        }
+
         p.setUnits(assigned);
+        p.setUnitGrants(grants);
         p.setDomain(domains.findById(required(request.domainId(), "Lĩnh vực"))
                 .orElseThrow(() -> new BadRequestException("Lĩnh vực không tồn tại")));
         p.setCode(required(request.code(), "Mã chương trình"));
         p.setName(required(request.name(), "Tên chương trình"));
         p.setDescription(request.description());
+        p.setBusinessModule(clean(request.businessModule()));
+        p.setLevel(clean(request.level()));
         p.setStatus("ARCHIVED".equals(request.status()) ? "ARCHIVED" : "ACTIVE");
         programs.save(p);
+
+        // Auto-enroll all staff from mandatory units into courses of this program
+        if (!mandatoryIds.isEmpty() && !Boolean.FALSE.equals(request.autoEnrollStaff())) {
+            enrollStaffForMandatoryUnits(p, mandatoryIds);
+        }
+
         return programDto(p);
+    }
+
+    private void enrollStaffForMandatoryUnits(TrainingProgram p, Set<String> mandatoryUnitIds) {
+        List<Course> programCourses = courses.findAll().stream()
+                .filter(c -> c.getProgram() != null && c.getProgram().getId().equals(p.getId()))
+                .toList();
+
+        for (Course c : programCourses) {
+            for (String uId : mandatoryUnitIds) {
+                c.getUnitGrants().put(uId, "MANDATORY");
+            }
+            courses.save(c);
+            enrollStaffForCourse(c, mandatoryUnitIds);
+        }
+    }
+
+    private void enrollStaffForCourse(Course course, Set<String> mandatoryUnitIds) {
+        Set<String> targetUnitIds = new HashSet<>(mandatoryUnitIds);
+        if (organizationUnits != null) {
+            for (String uId : mandatoryUnitIds) {
+                organizationUnits.findAll().stream()
+                        .filter(child -> child.getParent() != null && targetUnitIds.contains(child.getParent().getId()))
+                        .map(OrganizationUnit::getId)
+                        .forEach(targetUnitIds::add);
+            }
+        }
+
+        List<User> staff = users.findAll().stream()
+                .filter(u -> u.getOrganizationUnit() != null && targetUnitIds.contains(u.getOrganizationUnit().getId()))
+                .filter(User::activeAccount)
+                .toList();
+
+        for (User u : staff) {
+            if (!u.getRegisteredCourses().contains(course)) {
+                u.getRegisteredCourses().add(course);
+                users.save(u);
+            }
+        }
     }
 
     public CourseDto saveCourse(String id, CourseRequest r) {
@@ -209,11 +333,32 @@ public class TrainingStructureService {
         c.setIconName(r.iconName() == null ? "BookOpen" : r.iconName());
         courseImages.assertAttach(r.thumbnail(), c.getThumbnail());
         c.setThumbnail(r.thumbnail() == null || r.thumbnail().isBlank() ? null : r.thumbnail());
-        c.setBusinessModule(clean(r.businessModule()));
-        c.setLevel(clean(r.level()));
+        c.setBusinessModule(clean(r.businessModule() != null ? r.businessModule() : p.getBusinessModule()));
+        c.setLevel(clean(r.level() != null ? r.level() : p.getLevel()));
         c.setKeywords(clean(r.keywords()));
         c.setCompletionDeadline(r.completionDeadline());
-        return mapper.toCourseDto(courses.saveAndFlush(c));
+
+        // Auto-inherit unit grants from parent program
+        if (p.getUnitGrants() != null && !p.getUnitGrants().isEmpty()) {
+            for (var entry : p.getUnitGrants().entrySet()) {
+                if (!c.getUnitGrants().containsKey(entry.getKey())) {
+                    c.getUnitGrants().put(entry.getKey(), entry.getValue());
+                }
+            }
+        }
+
+        Course saved = courses.saveAndFlush(c);
+
+        // Auto-enroll staff from mandatory units
+        Set<String> mandatoryUnitIds = saved.getUnitGrants().entrySet().stream()
+                .filter(e -> "MANDATORY".equalsIgnoreCase(e.getValue()))
+                .map(Map.Entry::getKey)
+                .collect(java.util.stream.Collectors.toSet());
+        if (!mandatoryUnitIds.isEmpty()) {
+            enrollStaffForCourse(saved, mandatoryUnitIds);
+        }
+
+        return mapper.toCourseDto(saved);
     }
 
     private String clean(String value) {
@@ -229,7 +374,7 @@ public class TrainingStructureService {
             dto.setAdminActions(java.util.stream.Stream.of("courses", "exams", "documents")
                     .collect(java.util.stream.Collectors.toMap(p -> p,
                             p -> java.util.stream.Stream.of("read", "create", "update", "delete")
-                                    .filter(a -> com.bidv.coretraining.security.AccessPolicy
+                                     .filter(a -> com.bidv.coretraining.security.AccessPolicy
                                             .allowsCourse(authorization.current(), p + ":" + a, c))
                                     .collect(java.util.stream.Collectors.toSet()))));
             if (!com.bidv.coretraining.security.AccessPolicy.canReadCourse(authorization.current(), c))
@@ -352,8 +497,9 @@ public class TrainingStructureService {
         for (int i = 0; i < current.size(); i++)
             current.get(i).setLessonOrder(-i - 1);
         lessons.flush();
-        for (int i = 0; i < ids.size(); i++)
+        for (int i = 0; i < ids.size(); i++) {
             lesson(ids.get(i)).setLessonOrder(i);
+        }
         lessons.flush();
     }
 

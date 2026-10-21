@@ -92,6 +92,11 @@ export interface TrainingProgram extends TrainingDomain {
   domainId: string;
   unitIds?: string[];
   allowedActions?: string[];
+  businessModule?: string;
+  level?: string;
+  mandatoryUnitIds?: string[];
+  optionalUnitIds?: string[];
+  autoEnrollStaff?: boolean;
 }
 export interface Chapter {
   id: string;

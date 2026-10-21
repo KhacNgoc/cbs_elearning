@@ -99,7 +99,7 @@
               <span class="count-tag">{{ getProgramsForDomain(domain.id).length }} CT</span>
             </div>
 
-            <!-- Hover Action Buttons (như hình mẫu) -->
+            <!-- Hover Action Buttons -->
             <div class="node-hover-actions" @click.stop>
               <button
                 type="button"
@@ -154,6 +154,13 @@
                 </div>
 
                 <div class="node-badge-group">
+                  <span v-if="program.businessModule" class="meta-tag module-tag">
+                    {{ program.businessModule }}
+                  </span>
+                  <span v-if="program.mandatoryUnitIds?.length" class="meta-tag mandatory-tag" title="Đơn vị bắt buộc hoàn thành">
+                    <ShieldCheck :size="11" />
+                    {{ program.mandatoryUnitIds.length }} ĐV Bắt buộc
+                  </span>
                   <span class="count-tag">{{ getCoursesForProgram(program.id).length }} Khóa</span>
                 </div>
 
@@ -212,6 +219,7 @@
                     </div>
 
                     <div class="node-badge-group">
+                      <span v-if="course.businessModule" class="meta-tag module-tag">{{ course.businessModule }}</span>
                       <span class="status-pill" :class="course.status?.toLowerCase()">
                         {{ course.status === 'PUBLISHED' ? 'Đã xuất bản' : 'Bản nháp' }}
                       </span>
@@ -257,7 +265,7 @@
                           @click.stop="toggleNode(chapter.id)"
                         >
                           <ChevronRight
-                            :size="13"
+                            :size="12"
                             :class="{ rotated: isExpanded(chapter.id) }"
                           />
                         </button>
@@ -271,6 +279,10 @@
                           <span class="node-title">{{ chapter.title }}</span>
                         </div>
 
+                        <div class="node-badge-group">
+                          <span class="count-tag">{{ chapter.lessons?.length || 0 }} bài</span>
+                        </div>
+
                         <!-- Hover Actions -->
                         <div class="node-hover-actions" @click.stop>
                           <button
@@ -279,7 +291,7 @@
                             title="Thêm Bài học vào Chương này"
                             @click="openAddModal('lesson', chapter, course)"
                           >
-                            <Plus :size="14" />
+                            <Plus :size="13" />
                             <span class="btn-tooltip">Thêm Bài</span>
                           </button>
                           <button
@@ -288,7 +300,7 @@
                             title="Tùy chọn"
                             @click="openMenu('chapter', chapter, course)"
                           >
-                            <MoreHorizontal :size="14" />
+                            <MoreHorizontal :size="13" />
                           </button>
                         </div>
                       </div>
@@ -303,7 +315,7 @@
                           <div
                             class="tree-node lesson-node"
                             :class="{ active: selectedId === lesson.id, expanded: isExpanded(lesson.id) }"
-                            @click="selectNode('lesson', lesson, course, chapter)"
+                            @click="selectNode('lesson', lesson, chapter, course)"
                           >
                             <button
                               type="button"
@@ -311,7 +323,7 @@
                               @click.stop="toggleNode(lesson.id)"
                             >
                               <ChevronRight
-                                :size="12"
+                                :size="11"
                                 :class="{ rotated: isExpanded(lesson.id) }"
                               />
                             </button>
@@ -321,34 +333,58 @@
                             </span>
 
                             <div class="node-info">
-                              <span class="node-index">{{ cIdx + 1 }}.{{ lIdx + 1 }}</span>
+                              <span class="node-index">Bài {{ lIdx + 1 }}:</span>
                               <span class="node-title">{{ lesson.title }}</span>
                             </div>
 
-                            <!-- Hover Actions -->
+                            <!-- Level 6 & 7 Indicators -->
+                            <div class="node-badge-group mini-blocks">
+                              <span
+                                v-if="lesson.videoUrl"
+                                class="mini-block-badge video"
+                                title="Đã có Video bài giảng"
+                              >
+                                <Video :size="10" />
+                              </span>
+                              <span
+                                v-if="lesson.documents && lesson.documents.length"
+                                class="mini-block-badge docs"
+                                :title="`${lesson.documents.length} tài liệu đính kèm`"
+                              >
+                                <FileUp :size="10" />
+                              </span>
+                              <span
+                                v-if="lesson.procedureSteps && lesson.procedureSteps.length"
+                                class="mini-block-badge proc"
+                                :title="`${lesson.procedureSteps.length} bước quy trình CBS`"
+                              >
+                                <ListOrdered :size="10" />
+                              </span>
+                              <span
+                                v-if="lesson.hasQuiz"
+                                class="mini-block-badge quiz"
+                                title="Đã gắn bài kiểm tra đánh giá"
+                              >
+                                <HelpCircle :size="10" />
+                              </span>
+                            </div>
+
+                            <!-- Action -->
                             <div class="node-hover-actions" @click.stop>
                               <button
                                 type="button"
-                                class="hover-action-btn add-btn"
-                                title="Mở trang soạn thảo bài học"
-                                @click="openLessonEditor(lesson.id)"
-                              >
-                                <Plus :size="14" />
-                                <span class="btn-tooltip">+ Khối</span>
-                              </button>
-                              <button
-                                type="button"
-                                class="hover-action-btn open-editor-btn"
-                                title="Mở trang soạn thảo bài học"
+                                class="hover-action-btn edit-btn"
+                                title="Mở trang soạn bài học toàn diện"
                                 @click="openLessonEditor(lesson.id)"
                               >
                                 <ExternalLink :size="13" />
+                                <span class="btn-tooltip">Soạn bài</span>
                               </button>
                             </div>
                           </div>
 
                           <!-- LEVEL 6 & 7: CONTENT BLOCKS & QUIZ -->
-                          <div v-if="isExpanded(lesson.id)" class="tree-sub-tree leaf-sub-tree">
+                          <div v-if="isExpanded(lesson.id)" class="tree-sub-tree content-blocks-tree">
                             <!-- Block 1: Video -->
                             <div
                               class="tree-node block-node video-block"
@@ -357,20 +393,20 @@
                             >
                               <Video :size="12" class="block-icon video-icon" />
                               <span class="block-title">
-                                {{ lesson.videoUrl ? 'Video bài giảng' : '(Chưa có video - Click để thêm)' }}
+                                {{ lesson.videoUrl ? 'Video bài giảng (Đã thiết lập)' : '(Chưa có Video - Click để thêm)' }}
                               </span>
                               <span v-if="lesson.videoUrl" class="block-check">✓</span>
                             </div>
 
                             <!-- Block 2: Documents -->
                             <div
-                              class="tree-node block-node doc-block"
+                              class="tree-node block-node docs-block"
                               :class="{ active: !!(lesson.documents && lesson.documents.length) }"
-                              @click="editLessonBlock(lesson, 'document')"
+                              @click="editLessonBlock(lesson, 'documents')"
                             >
                               <FileUp :size="12" class="block-icon doc-icon" />
                               <span class="block-title">
-                                {{ (lesson.documents && lesson.documents.length) ? `${lesson.documents.length} tài liệu đính kèm` : '(Chưa có tài liệu - Click để thêm)' }}
+                                {{ (lesson.documents && lesson.documents.length) ? `${lesson.documents.length} tài liệu học tập` : '(Chưa có tài liệu - Click để tải lên)' }}
                               </span>
                               <span v-if="lesson.documents && lesson.documents.length" class="block-check">✓</span>
                             </div>
@@ -413,44 +449,284 @@
       </div>
     </div>
 
-    <!-- INLINE ADD MODAL -->
+    <!-- ENRICHED INLINE ADD MODAL -->
     <div v-if="addModal.show" class="tree-modal-backdrop" @click.self="addModal.show = false">
-      <div class="tree-quick-modal">
+      <div class="tree-quick-modal enriched-modal">
         <div class="modal-header">
-          <h4>{{ modalTitle }}</h4>
+          <div class="modal-title-box">
+            <span class="modal-level-badge">{{ levelSubtitle }}</span>
+            <h4>{{ modalTitle }}</h4>
+          </div>
           <button type="button" class="close-btn" @click="addModal.show = false">
             <X :size="16" />
           </button>
         </div>
+
         <form @submit.prevent="submitAddModal" class="modal-form">
-          <div class="form-group">
-            <label>Mã định danh (*):</label>
-            <input
-              v-model="addModal.code"
-              type="text"
-              placeholder="Ví dụ: GDV_01, CH_01..."
-              required
-              class="form-control"
-              ref="codeInputRef"
-            />
+          <!-- SECTION 1: BASIC INFO -->
+          <div class="form-section">
+            <div class="form-group">
+              <label>Tên hiển thị (*):</label>
+              <input
+                v-model="addModal.name"
+                type="text"
+                :placeholder="namePlaceholder"
+                required
+                class="form-control name-input"
+                @input="handleNameInput"
+                ref="nameInputRef"
+              />
+            </div>
+
+            <!-- MÃ ĐỊNH DANH (CODE) VỚI OPTION TỰ ĐỘNG SINH / DISABLE / ẨN -->
+            <div class="form-group code-group">
+              <div class="code-label-row">
+                <label>Mã định danh (*):</label>
+                <div class="auto-code-toggle">
+                  <input
+                    type="checkbox"
+                    id="auto-code-checkbox"
+                    v-model="addModal.autoCode"
+                    @change="handleAutoCodeToggle"
+                  />
+                  <label for="auto-code-checkbox" class="toggle-text">
+                    <Sparkles :size="12" class="sparkle-icon" />
+                    <span>Hệ thống tự sinh mã</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="code-input-wrapper">
+                <input
+                  v-model="addModal.code"
+                  type="text"
+                  :placeholder="addModal.autoCode ? '(Hệ thống đang tự sinh mã...)' : 'Ví dụ: RM_QLRR_01, CRS_01...'"
+                  :disabled="addModal.autoCode"
+                  :readonly="addModal.autoCode"
+                  required
+                  class="form-control code-input"
+                  :class="{ 'is-auto': addModal.autoCode }"
+                />
+                <button
+                  v-if="addModal.autoCode"
+                  type="button"
+                  class="re-generate-btn"
+                  @click="reGenerateCode"
+                  title="Tạo lại mã tự động"
+                >
+                  <Sparkles :size="13" />
+                  <span>Sinh lại</span>
+                </button>
+                <button
+                  type="button"
+                  class="manual-edit-btn"
+                  @click="addModal.autoCode = !addModal.autoCode"
+                  :title="addModal.autoCode ? 'Chuyển sang tự nhập mã' : 'Chuyển sang tự động sinh mã'"
+                >
+                  <component :is="addModal.autoCode ? Lock : Unlock" :size="13" />
+                  <span>{{ addModal.autoCode ? "Tự nhập" : "Khóa tự sinh" }}</span>
+                </button>
+              </div>
+              <small class="form-hint" v-if="addModal.autoCode">
+                Mã định danh chuẩn nghiệp vụ, tự sinh theo tiền tố của cấp cha và tên hiển thị.
+              </small>
+            </div>
           </div>
-          <div class="form-group">
-            <label>Tên hiển thị (*):</label>
-            <input
-              v-model="addModal.name"
-              type="text"
-              placeholder="Nhập tên tiêu đề..."
-              required
-              class="form-control"
-            />
+
+          <!-- SECTION 2: BUSINESS EXPLOITATION & SUB-MENU EXPANSION (FOR PROGRAM & COURSE) -->
+          <div v-if="addModal.type === 'program' || addModal.type === 'course'" class="form-section meta-section">
+            <div class="form-row-grid">
+              <!-- Phân hệ nghiệp vụ -->
+              <div class="form-group">
+                <label>Phân hệ nghiệp vụ:</label>
+                <select v-model="addModal.businessModule" class="form-control select-control">
+                  <option value="">-- Chọn phân hệ --</option>
+                  <option
+                    v-for="mod in BUSINESS_MODULES"
+                    :key="mod.value"
+                    :value="mod.value"
+                  >
+                    {{ mod.label }}
+                  </option>
+                </select>
+              </div>
+
+              <!-- Mức độ / Cấp độ -->
+              <div class="form-group">
+                <label>Mức độ / Cấp độ:</label>
+                <select v-model="addModal.level" class="form-control select-control">
+                  <option
+                    v-for="lvl in TRAINING_LEVELS"
+                    :key="lvl.value"
+                    :value="lvl.value"
+                  >
+                    {{ lvl.label }}
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Mục tiêu / Mô tả -->
+            <div class="form-group">
+              <label>Mục tiêu / Mô tả tóm tắt:</label>
+              <textarea
+                v-model="addModal.description"
+                rows="2"
+                placeholder="Nhập mục tiêu đào tạo, chuẩn đầu ra hoặc nội dung chính..."
+                class="form-control textarea-control"
+              ></textarea>
+            </div>
+
+            <!-- Trạng thái -->
+            <div class="form-row-grid">
+              <div class="form-group">
+                <label>Trạng thái:</label>
+                <select v-model="addModal.status" class="form-control select-control">
+                  <option value="ACTIVE">Đang áp dụng (Active)</option>
+                  <option value="DRAFT">Bản nháp (Draft)</option>
+                </select>
+              </div>
+
+              <div class="form-group" v-if="addModal.type === 'course'">
+                <label>Hạn hoàn thành khuyến nghị:</label>
+                <input
+                  v-model="addModal.completionDeadline"
+                  type="date"
+                  class="form-control date-control"
+                />
+              </div>
+            </div>
           </div>
+
+          <!-- SECTION 3: APPLIED UNITS & AUTO-ENROLLMENT (FOR PROGRAM) -->
+          <div v-if="addModal.type === 'program'" class="form-section units-section">
+            <h5 class="section-sub-title">
+              <Building2 :size="14" />
+              <span>Phân bổ Đơn vị & Tự động ghi danh</span>
+            </h5>
+
+            <!-- 1. ĐƠN VỊ BẮT BUỘC -->
+            <div class="form-group unit-picker-box mandatory-box">
+              <div class="unit-box-header">
+                <label class="mandatory-label">
+                  <ShieldCheck :size="14" />
+                  <span>Đơn vị áp dụng BẮT BUỘC:</span>
+                </label>
+                <span class="badge-mandatory">Bắt buộc hoàn thành</span>
+              </div>
+
+              <select
+                class="form-control unit-select"
+                @change="handleSelectUnit($event, 'mandatory')"
+              >
+                <option value="">+ Chọn đơn vị bắt buộc...</option>
+                <option
+                  v-for="u in availableUnitsForMandatory"
+                  :key="u.id"
+                  :value="u.id"
+                >
+                  {{ u.name }} ({{ u.type === 'DEPARTMENT' ? 'Phòng ban' : 'Chi nhánh/Hội sở' }})
+                </option>
+              </select>
+
+              <!-- Tags đơn vị bắt buộc đã chọn -->
+              <div v-if="addModal.mandatoryUnitIds.length" class="unit-tags-container">
+                <span
+                  v-for="uId in addModal.mandatoryUnitIds"
+                  :key="uId"
+                  class="unit-chip mandatory-chip"
+                >
+                  <span>{{ getUnitName(uId) }}</span>
+                  <button
+                    type="button"
+                    class="remove-chip-btn"
+                    @click="removeUnit(uId, 'mandatory')"
+                  >
+                    ×
+                  </button>
+                </span>
+              </div>
+
+              <!-- AUTO-ENROLL CHECKBOX & PREVIEW -->
+              <div v-if="addModal.mandatoryUnitIds.length" class="auto-enroll-wrapper">
+                <label class="auto-enroll-check-label">
+                  <input
+                    type="checkbox"
+                    v-model="addModal.autoEnrollStaff"
+                  />
+                  <span>Tự động ghi danh toàn bộ nhân sự hiện có của các đơn vị bắt buộc này</span>
+                </label>
+
+                <div v-if="affectedStaff.length > 0" class="auto-enroll-alert">
+                  <Users :size="14" class="alert-icon" />
+                  <div class="alert-content">
+                    <span class="alert-summary">
+                      Sẽ tự động đăng ký học cho <strong>{{ affectedStaff.length }} nhân sự</strong> hiện hữu:
+                    </span>
+                    <span class="staff-list">
+                      {{ affectedStaff.map(s => s.fullName).join(', ') }}
+                    </span>
+                  </div>
+                </div>
+                <div v-else class="auto-enroll-alert empty-staff">
+                  <AlertCircle :size="13" />
+                  <span>Chưa có tài khoản nhân sự được gán vào đơn vị này trong hệ thống.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. ĐƠN VỊ TÙY CHỌN / KHÔNG BẮT BUỘC -->
+            <div class="form-group unit-picker-box optional-box">
+              <div class="unit-box-header">
+                <label class="optional-label">
+                  <Globe :size="14" />
+                  <span>Đơn vị áp dụng TÙY CHỌN (Không bắt buộc):</span>
+                </label>
+                <span class="badge-optional">Tự nguyện học tập</span>
+              </div>
+
+              <select
+                class="form-control unit-select"
+                @change="handleSelectUnit($event, 'optional')"
+              >
+                <option value="">+ Chọn đơn vị tùy chọn...</option>
+                <option
+                  v-for="u in availableUnitsForOptional"
+                  :key="u.id"
+                  :value="u.id"
+                >
+                  {{ u.name }} ({{ u.type === 'DEPARTMENT' ? 'Phòng ban' : 'Chi nhánh/Hội sở' }})
+                </option>
+              </select>
+
+              <!-- Tags đơn vị tùy chọn đã chọn -->
+              <div v-if="addModal.optionalUnitIds.length" class="unit-tags-container">
+                <span
+                  v-for="uId in addModal.optionalUnitIds"
+                  :key="uId"
+                  class="unit-chip optional-chip"
+                >
+                  <span>{{ getUnitName(uId) }}</span>
+                  <button
+                    type="button"
+                    class="remove-chip-btn"
+                    @click="removeUnit(uId, 'optional')"
+                  >
+                    ×
+                  </button>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- MODAL ACTIONS -->
           <div class="modal-actions">
             <button type="button" class="btn btn-secondary" @click="addModal.show = false">
               Hủy
             </button>
             <button type="submit" class="btn btn-primary" :disabled="submitting">
               <Loader2 v-if="submitting" :size="14" class="spin-icon" />
-              <span>Tạo mới</span>
+              <span>{{ submitting ? "Đang xử lý..." : "Tạo mới & Đồng bộ" }}</span>
             </button>
           </div>
         </form>
@@ -483,17 +759,46 @@ import {
   ExternalLink,
   FolderTree,
   Loader2,
+  Sparkles,
+  Lock,
+  Unlock,
+  Building2,
+  ShieldCheck,
+  Users,
+  AlertCircle,
 } from "lucide-vue-next";
 import { trainingApi } from "../api/trainingApi";
-import { adminApi } from "../api/adminApi";
+import { adminApi, type AdminUser } from "../api/adminApi";
+import { axiosClient } from "../api/axiosClient";
 import { showToast } from "../utils/toast";
 import type { TrainingDomain, TrainingProgram, Course, Chapter, Lesson } from "../types";
+import type { OrganizationUnit } from "../types/organization";
 
 const router = useRouter();
 const emit = defineEmits<{
   (e: "select", item: { type: string; data: any; parent?: any }): void;
   (e: "refresh"): void;
 }>();
+
+// Business Modules & Training Levels
+const BUSINESS_MODULES = [
+  { value: "RM", label: "Quản trị rủi ro & Tuân thủ (RM)" },
+  { value: "TD", label: "Tiền gửi & Huy động vốn (TD)" },
+  { value: "LN", label: "Cho vay & Quản trị tín dụng (LN)" },
+  { value: "CIF", label: "Thông tin khách hàng & Tài khoản (CIF)" },
+  { value: "GL", label: "Kế toán tổng hợp & Giao dịch (GL)" },
+  { value: "TF", label: "Thanh toán quốc tế & TT Thương mại (TF)" },
+  { value: "DIGI", label: "Ngân hàng số & E-Banking (DIGI)" },
+  { value: "CARD", label: "Dịch vụ thẻ ngân hàng (CARD)" },
+  { value: "OPS", label: "Vận hành chi nhánh & DVKH (OPS)" },
+];
+
+const TRAINING_LEVELS = [
+  { value: "BASIC", label: "Cơ bản (Nền tảng nghiệp vụ)" },
+  { value: "ADVANCED", label: "Nâng cao (Xử lý tình huống & Tác nghiệp sâu)" },
+  { value: "EXPERT", label: "Chuyên gia (Thẩm định & Phê duyệt)" },
+  { value: "COMPLIANCE", label: "Định kỳ bắt buộc (Tuân thủ & Quy định mới)" },
+];
 
 // State
 const loading = ref(false);
@@ -508,34 +813,74 @@ const domains = ref<TrainingDomain[]>([]);
 const programs = ref<TrainingProgram[]>([]);
 const courses = ref<Course[]>([]);
 const chaptersMap = ref<Record<string, Chapter[]>>({});
+const unitsList = ref<OrganizationUnit[]>([]);
+const systemUsers = ref<AdminUser[]>([]);
 
 // Inline Add Modal State
-const addModal = ref<{
+interface AddModalData {
   show: boolean;
   type: "domain" | "program" | "course" | "chapter" | "lesson";
   parentId?: string;
   parentObj?: any;
   code: string;
   name: string;
-}>({
+  autoCode: boolean;
+  businessModule: string;
+  level: string;
+  description: string;
+  status: string;
+  mandatoryUnitIds: string[];
+  optionalUnitIds: string[];
+  autoEnrollStaff: boolean;
+  completionDeadline?: string;
+}
+
+const addModal = ref<AddModalData>({
   show: false,
   type: "domain",
   code: "",
   name: "",
+  autoCode: true,
+  businessModule: "",
+  level: "BASIC",
+  description: "",
+  status: "ACTIVE",
+  mandatoryUnitIds: [],
+  optionalUnitIds: [],
+  autoEnrollStaff: true,
+  completionDeadline: "",
 });
-const codeInputRef = ref<HTMLInputElement | null>(null);
 
-// Modal title helper
+const nameInputRef = ref<HTMLInputElement | null>(null);
+
+// Modal title & subtitle helpers
+const levelSubtitle = computed(() => {
+  switch (addModal.value.type) {
+    case "domain":
+      return "Cấp 1: Lĩnh vực đào tạo";
+    case "program":
+      return "Cấp 2: Chương trình đào tạo";
+    case "course":
+      return "Cấp 3: Khóa học nghiệp vụ";
+    case "chapter":
+      return "Cấp 4: Chương học";
+    case "lesson":
+      return "Cấp 5: Bài học";
+    default:
+      return "Cấu trúc đào tạo";
+  }
+});
+
 const modalTitle = computed(() => {
   switch (addModal.value.type) {
     case "domain":
       return "Thêm Lĩnh vực đào tạo mới";
     case "program":
-      return `Thêm Chương trình vào [${addModal.value.parentObj?.name}]`;
+      return `Thêm Chương trình vào [${addModal.value.parentObj?.name || addModal.value.parentObj?.code}]`;
     case "course":
-      return `Thêm Khóa học vào [${addModal.value.parentObj?.name}]`;
+      return `Thêm Khóa học vào [${addModal.value.parentObj?.name || addModal.value.parentObj?.code}]`;
     case "chapter":
-      return `Thêm Chương vào [${addModal.value.parentObj?.name}]`;
+      return `Thêm Chương vào [${addModal.value.parentObj?.name || addModal.value.parentObj?.code}]`;
     case "lesson":
       return `Thêm Bài học vào [${addModal.value.parentObj?.title || addModal.value.parentObj?.name}]`;
     default:
@@ -543,7 +888,162 @@ const modalTitle = computed(() => {
   }
 });
 
-// Load full tree catalog
+const namePlaceholder = computed(() => {
+  switch (addModal.value.type) {
+    case "domain":
+      return "Ví dụ: Quản trị rủi ro & Tuân thủ, Khách hàng cá nhân...";
+    case "program":
+      return "Ví dụ: Nghiệp vụ Quản lý rủi ro thanh khoản, Giám sát tín dụng...";
+    case "course":
+      return "Ví dụ: Khóa học Quy trình đánh giá rủi ro CBS...";
+    case "chapter":
+      return "Ví dụ: Tổng quan quy chuẩn rủi ro CBS...";
+    case "lesson":
+      return "Ví dụ: Các thao tác thẩm định trên phân hệ WebCSR...";
+    default:
+      return "Nhập tên tiêu đề...";
+  }
+});
+
+// Helper: generate standard code based on parent and name
+function generateStandardCode(type: string, name: string, parentCode = ""): string {
+  const cleanParent = (parentCode || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!name.trim()) {
+    const seq = Math.floor(10 + Math.random() * 89);
+    const prefix = cleanParent ? `${cleanParent}_` : "";
+    switch (type) {
+      case "domain":
+        return `LV_${seq}`;
+      case "program":
+        return `${prefix}PRG_${seq}`;
+      case "course":
+        return `${prefix}CRS_${seq}`;
+      case "chapter":
+        return `CH_${seq}`;
+      case "lesson":
+        return `LS_${seq}`;
+      default:
+        return `CODE_${seq}`;
+    }
+  }
+
+  // Convert Vietnamese accented letters to Latin
+  const normalized = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .replace(/[^a-zA-Z0-9\s]/g, "")
+    .trim();
+
+  const words = normalized.split(/\s+/).filter(Boolean);
+  let acronym = "";
+  if (words.length <= 2) {
+    acronym = words.map((w) => w.toUpperCase()).join("_");
+  } else {
+    acronym = words.map((w) => w[0]?.toUpperCase() || "").join("");
+  }
+
+  const prefix = cleanParent ? `${cleanParent}_` : "";
+  const code = `${prefix}${acronym}`;
+  return code.slice(0, 30);
+}
+
+function handleNameInput() {
+  if (addModal.value.autoCode) {
+    const parentCode = addModal.value.parentObj?.code || "";
+    addModal.value.code = generateStandardCode(
+      addModal.value.type,
+      addModal.value.name,
+      parentCode
+    );
+  }
+}
+
+function handleAutoCodeToggle() {
+  if (addModal.value.autoCode) {
+    reGenerateCode();
+  }
+}
+
+function reGenerateCode() {
+  const parentCode = addModal.value.parentObj?.code || "";
+  addModal.value.code = generateStandardCode(
+    addModal.value.type,
+    addModal.value.name,
+    parentCode
+  );
+}
+
+// Units selection helpers
+const availableUnitsForMandatory = computed(() => {
+  const selectedOptional = new Set(addModal.value.optionalUnitIds);
+  const selectedMandatory = new Set(addModal.value.mandatoryUnitIds);
+  return unitsList.value.filter(
+    (u) => !selectedOptional.has(u.id) && !selectedMandatory.has(u.id)
+  );
+});
+
+const availableUnitsForOptional = computed(() => {
+  const selectedOptional = new Set(addModal.value.optionalUnitIds);
+  const selectedMandatory = new Set(addModal.value.mandatoryUnitIds);
+  return unitsList.value.filter(
+    (u) => !selectedOptional.has(u.id) && !selectedMandatory.has(u.id)
+  );
+});
+
+function getUnitName(unitId: string): string {
+  const found = unitsList.value.find((u) => u.id === unitId);
+  return found?.name || unitId;
+}
+
+function handleSelectUnit(event: Event, type: "mandatory" | "optional") {
+  const select = event.target as HTMLSelectElement;
+  const unitId = select.value;
+  if (!unitId) return;
+
+  if (type === "mandatory") {
+    if (!addModal.value.mandatoryUnitIds.includes(unitId)) {
+      addModal.value.mandatoryUnitIds.push(unitId);
+    }
+  } else {
+    if (!addModal.value.optionalUnitIds.includes(unitId)) {
+      addModal.value.optionalUnitIds.push(unitId);
+    }
+  }
+  select.value = "";
+}
+
+function removeUnit(unitId: string, type: "mandatory" | "optional") {
+  if (type === "mandatory") {
+    addModal.value.mandatoryUnitIds = addModal.value.mandatoryUnitIds.filter(
+      (id) => id !== unitId
+    );
+  } else {
+    addModal.value.optionalUnitIds = addModal.value.optionalUnitIds.filter(
+      (id) => id !== unitId
+    );
+  }
+}
+
+// Compute staff affected by mandatory units
+const affectedStaff = computed(() => {
+  if (!addModal.value.mandatoryUnitIds.length) return [];
+  const targetUnitIds = new Set(addModal.value.mandatoryUnitIds);
+
+  // Add child units if any
+  unitsList.value.forEach((u) => {
+    if (u.parentId && targetUnitIds.has(u.parentId)) {
+      targetUnitIds.add(u.id);
+    }
+  });
+
+  return systemUsers.value.filter(
+    (u) => u.unitId && targetUnitIds.has(u.unitId)
+  );
+});
+
+// Load full tree catalog & auxiliary options
 async function loadTreeData() {
   loading.value = true;
   try {
@@ -555,11 +1055,28 @@ async function loadTreeData() {
     const allCourses = await trainingApi.courses();
     courses.value = allCourses || [];
 
-    // Tự động mở rộng các domain & program
+    // Load units from options
+    try {
+      const optionsRes = await axiosClient.get("/api/admin/options/catalog");
+      if (optionsRes.data?.units) {
+        unitsList.value = optionsRes.data.units;
+      }
+    } catch (e) {
+      console.warn("Could not load units from options:", e);
+    }
+
+    // Load users for staff calculation
+    try {
+      systemUsers.value = await adminApi.getAllUsers();
+    } catch (e) {
+      console.warn("Could not load users for enroll preview:", e);
+    }
+
+    // Expand domains & programs
     domains.value.forEach((d) => expandedIds.value.add(d.id));
     programs.value.forEach((p) => expandedIds.value.add(p.id));
 
-    // Load chapters cho từng khóa học
+    // Load chapters for courses
     for (const c of courses.value) {
       expandedIds.value.add(c.id);
       loadChaptersForCourse(c.id);
@@ -633,16 +1150,37 @@ function openAddModal(
   parentObj?: any,
   grandParentObj?: any
 ) {
+  const parent = parentObj || grandParentObj;
+  const parentCode = parent?.code || "";
+
+  // If parent domain matches business module, default to it
+  let defaultModule = "";
+  if (parentCode && BUSINESS_MODULES.some((m) => m.value === parentCode)) {
+    defaultModule = parentCode;
+  } else if (parent?.businessModule) {
+    defaultModule = parent.businessModule;
+  }
+
   addModal.value = {
     show: true,
     type,
-    parentId: parentObj?.id,
-    parentObj: parentObj || grandParentObj,
-    code: "",
+    parentId: parent?.id,
+    parentObj: parent,
+    code: generateStandardCode(type, "", parentCode),
     name: "",
+    autoCode: true,
+    businessModule: defaultModule,
+    level: "BASIC",
+    description: "",
+    status: "ACTIVE",
+    mandatoryUnitIds: [],
+    optionalUnitIds: [],
+    autoEnrollStaff: true,
+    completionDeadline: "",
   };
+
   nextTick(() => {
-    codeInputRef.value?.focus();
+    nameInputRef.value?.focus();
   });
 }
 
@@ -654,20 +1192,44 @@ async function submitAddModal() {
   submitting.value = true;
   try {
     if (type === "domain") {
-      await trainingApi.saveDomain({ code: code.trim(), name: name.trim() });
-      showToast("Tạo lĩnh vực thành công!", "success");
+      await trainingApi.saveDomain({
+        code: code.trim().toUpperCase(),
+        name: name.trim(),
+        description: addModal.value.description.trim() || undefined,
+        status: addModal.value.status,
+      });
+      showToast("Tạo lĩnh vực đào tạo thành công!", "success");
     } else if (type === "program") {
       await trainingApi.saveProgram({
         domainId: parentId,
-        code: code.trim(),
+        code: code.trim().toUpperCase(),
         name: name.trim(),
+        description: addModal.value.description.trim() || undefined,
+        businessModule: addModal.value.businessModule || undefined,
+        level: addModal.value.level || undefined,
+        status: addModal.value.status,
+        mandatoryUnitIds: addModal.value.mandatoryUnitIds,
+        optionalUnitIds: addModal.value.optionalUnitIds,
+        unitIds: [
+          ...addModal.value.mandatoryUnitIds,
+          ...addModal.value.optionalUnitIds,
+        ],
+        autoEnrollStaff: addModal.value.autoEnrollStaff,
       });
-      showToast("Tạo chương trình thành công!", "success");
+      const staffMsg =
+        addModal.value.mandatoryUnitIds.length && affectedStaff.value.length
+          ? ` Đã tự động ghi danh ${affectedStaff.value.length} học viên!`
+          : "";
+      showToast(`Tạo chương trình đào tạo thành công!${staffMsg}`, "success");
     } else if (type === "course") {
       await trainingApi.saveCourse({
         programId: parentId,
         code: code.trim().toUpperCase(),
         name: name.trim(),
+        description: addModal.value.description.trim() || undefined,
+        businessModule: addModal.value.businessModule || undefined,
+        level: addModal.value.level || undefined,
+        completionDeadline: addModal.value.completionDeadline || null,
         iconName: "BookOpen",
       });
       showToast("Tạo khóa học thành công!", "success");
@@ -675,10 +1237,14 @@ async function submitAddModal() {
       await trainingApi.saveChapter(parentId!, {
         code: code.trim().toUpperCase(),
         title: name.trim(),
+        description: addModal.value.description.trim() || undefined,
       });
       showToast("Tạo chương thành công!", "success");
     } else if (type === "lesson") {
-      const courseId = addModal.value.parentObj?.courseId || addModal.value.parentObj?.course?.id || "";
+      const courseId =
+        addModal.value.parentObj?.courseId ||
+        addModal.value.parentObj?.course?.id ||
+        "";
       await adminApi.createLesson({
         id: code.trim().toUpperCase(),
         title: name.trim(),
@@ -801,81 +1367,91 @@ onMounted(() => {
 .btn-studio {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.35rem 0.65rem;
-  font-size: 0.8rem;
-  font-weight: 500;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
   border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
   border: none;
+  transition: all 0.15s ease;
 }
 
-.btn-primary {
-  background: var(--brand-color, #10b981);
-  color: white;
+.btn-studio.btn-primary {
+  background: #10b981;
+  color: #ffffff;
 }
 
-.btn-primary:hover {
+.btn-studio.btn-primary:hover {
   background: #059669;
 }
 
-.btn-ghost {
-  background: transparent;
-  color: var(--text-secondary, #94a3b8);
-  border: 1px solid var(--border-color, #334155);
+.btn-studio.btn-ghost {
+  background: rgba(51, 65, 85, 0.5);
+  color: #cbd5e1;
+  border: 1px solid #334155;
 }
 
-.btn-ghost:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-primary, #f8fafc);
+.btn-studio.btn-ghost:hover {
+  background: #334155;
+  color: #ffffff;
 }
 
 /* Search */
 .tree-search-wrapper {
   position: relative;
-  padding: 0.5rem 0.85rem;
-  border-bottom: 1px solid var(--border-color, #334155);
   display: flex;
   align-items: center;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--border-color, #334155);
+  background: rgba(15, 23, 42, 0.25);
 }
 
 .search-icon {
   position: absolute;
-  left: 1.25rem;
+  left: 1.6rem;
   color: #64748b;
   pointer-events: none;
 }
 
 .tree-search-input {
   width: 100%;
-  padding: 0.4rem 1.8rem 0.4rem 2rem;
-  font-size: 0.82rem;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid var(--border-color, #334155);
+  padding: 0.45rem 2rem 0.45rem 2.2rem;
+  background: #0f172a;
+  border: 1px solid #334155;
   border-radius: 6px;
-  color: var(--text-primary, #f8fafc);
+  color: #f8fafc;
+  font-size: 0.82rem;
   outline: none;
+  transition: border-color 0.15s;
 }
 
 .tree-search-input:focus {
-  border-color: var(--brand-color, #10b981);
+  border-color: #10b981;
 }
 
 .clear-search-btn {
   position: absolute;
-  right: 1.25rem;
-  background: transparent;
+  right: 1.5rem;
+  background: none;
   border: none;
   color: #64748b;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem;
+}
+
+.clear-search-btn:hover {
+  color: #f8fafc;
 }
 
 /* Tree Scroll Container */
 .tree-scroll-container {
   flex: 1;
   overflow-y: auto;
-  padding: 0.5rem 0.4rem;
+  padding: 0.75rem 0.5rem;
 }
 
 .tree-empty-state {
@@ -883,123 +1459,161 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 3rem 1.5rem;
+  padding: 3rem 1rem;
   color: #64748b;
   text-align: center;
   gap: 0.75rem;
-  font-size: 0.85rem;
 }
 
 .spin-icon {
   animation: spin 1s linear infinite;
-  color: var(--brand-color, #10b981);
+  color: #10b981;
 }
 
 @keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
+  100% {
     transform: rotate(360deg);
   }
 }
 
-/* Tree Node Styling */
+.empty-icon {
+  color: #475569;
+}
+
+/* Tree Structure */
 .tree-root {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.25rem;
+}
+
+.tree-branch {
+  position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .tree-sub-tree {
-  margin-left: 1.15rem;
-  padding-left: 0.4rem;
-  border-left: 1px dashed rgba(100, 116, 139, 0.25);
+  margin-left: 1.25rem;
+  padding-left: 0.5rem;
+  border-left: 1px dashed rgba(100, 116, 139, 0.35);
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.2rem;
+  margin-top: 0.15rem;
+  margin-bottom: 0.25rem;
 }
 
+/* Node Styling */
 .tree-node {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.35rem 0.55rem;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
   border-radius: 6px;
+  background: transparent;
   cursor: pointer;
+  transition: all 0.12s ease;
   user-select: none;
-  font-size: 0.83rem;
-  transition: background 0.15s ease;
-  color: var(--text-primary, #e2e8f0);
+  min-height: 36px;
 }
 
 .tree-node:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(51, 65, 85, 0.45);
 }
 
 .tree-node.active {
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
-.toggle-chevron {
-  background: transparent;
-  border: none;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #64748b;
-  cursor: pointer;
-  width: 16px;
-  height: 16px;
-}
-
-.toggle-chevron .rotated {
-  transform: rotate(90deg);
-}
-
-.node-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+/* Level specifics */
+.domain-node {
+  font-weight: 600;
+  color: #f1f5f9;
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  margin-bottom: 0.15rem;
 }
 
 .domain-icon {
   color: #38bdf8;
 }
 
+.program-node {
+  font-weight: 500;
+  color: #e2e8f0;
+}
+
 .program-icon {
   color: #fbbf24;
+}
+
+.course-node {
+  color: #cbd5e1;
 }
 
 .course-icon {
   color: #34d399;
 }
 
+.chapter-node {
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
 .chapter-icon {
   color: #a78bfa;
+}
+
+.lesson-node {
+  color: #cbd5e1;
+  font-size: 0.83rem;
 }
 
 .lesson-icon {
   color: #f472b6;
 }
 
+/* Toggle Chevron */
+.toggle-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0.1rem;
+  border-radius: 3px;
+}
+
+.toggle-chevron:hover {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.toggle-chevron svg {
+  transition: transform 0.15s ease;
+}
+
+.toggle-chevron svg.rotated {
+  transform: rotate(90deg);
+}
+
+/* Node info */
 .node-info {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.45rem;
   flex: 1;
-  min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .node-title {
-  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1007,25 +1621,60 @@ onMounted(() => {
 .node-code {
   font-size: 0.72rem;
   color: #64748b;
-  background: rgba(100, 116, 139, 0.15);
+  background: rgba(15, 23, 42, 0.6);
   padding: 0.1rem 0.35rem;
   border-radius: 4px;
+  font-family: monospace;
 }
 
 .node-index {
   font-size: 0.78rem;
-  font-weight: 600;
   color: #94a3b8;
+  font-weight: 600;
+}
+
+/* Badges */
+.node-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
 }
 
 .count-tag {
   font-size: 0.7rem;
-  color: #64748b;
+  padding: 0.1rem 0.4rem;
+  background: rgba(15, 23, 42, 0.6);
+  color: #94a3b8;
+  border-radius: 4px;
+  border: 1px solid rgba(51, 65, 85, 0.4);
+}
+
+.meta-tag {
+  font-size: 0.68rem;
+  padding: 0.1rem 0.38rem;
+  border-radius: 4px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.module-tag {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.mandatory-tag {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .status-pill {
   font-size: 0.68rem;
-  padding: 0.1rem 0.35rem;
+  padding: 0.1rem 0.4rem;
   border-radius: 4px;
 }
 
@@ -1035,8 +1684,76 @@ onMounted(() => {
 }
 
 .status-pill.draft {
-  background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+}
+
+/* Mini block indicators */
+.mini-blocks {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.mini-block-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.mini-block-badge.video {
+  color: #38bdf8;
+}
+.mini-block-badge.docs {
+  color: #fbbf24;
+}
+.mini-block-badge.proc {
+  color: #a78bfa;
+}
+.mini-block-badge.quiz {
+  color: #10b981;
+}
+
+/* Level 6 & 7: Blocks */
+.content-blocks-tree {
+  margin-left: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.block-node {
+  font-size: 0.78rem;
+  padding: 0.35rem 0.55rem;
+  color: #94a3b8;
+  border: 1px solid transparent;
+  min-height: 28px;
+}
+
+.block-node:hover {
+  background: rgba(30, 41, 59, 0.6);
+  color: #f1f5f9;
+}
+
+.block-node.active {
+  color: #cbd5e1;
+}
+
+.block-icon {
+  margin-right: 0.2rem;
+}
+
+.block-title {
+  flex: 1;
+}
+
+.block-check {
+  font-size: 0.72rem;
+  color: #10b981;
+  font-weight: bold;
 }
 
 /* Hover Action Buttons */
@@ -1044,7 +1761,7 @@ onMounted(() => {
   display: none;
   align-items: center;
   gap: 0.25rem;
-  margin-left: auto;
+  margin-left: 0.4rem;
 }
 
 .tree-node:hover .node-hover-actions {
@@ -1052,113 +1769,129 @@ onMounted(() => {
 }
 
 .hover-action-btn {
-  background: rgba(15, 23, 42, 0.7);
-  border: 1px solid var(--border-color, #475569);
-  color: #cbd5e1;
-  padding: 0.2rem 0.35rem;
-  border-radius: 4px;
-  cursor: pointer;
-  display: flex;
+  position: relative;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.72rem;
-  gap: 0.2rem;
-  transition: all 0.15s ease;
+  width: 24px;
+  height: 24px;
+  background: #334155;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.12s ease;
 }
 
 .hover-action-btn:hover {
-  background: var(--brand-color, #10b981);
-  color: white;
+  background: #10b981;
+  border-color: #10b981;
+  color: #ffffff;
+}
+
+.hover-action-btn.add-btn:hover {
+  background: #10b981;
   border-color: #10b981;
 }
 
-/* Leaf Content Blocks (Level 6 & 7) */
-.leaf-sub-tree {
-  margin-top: 0.2rem;
-  gap: 0.15rem;
+.btn-tooltip {
+  position: absolute;
+  top: -24px;
+  right: 0;
+  background: #09101d;
+  color: #f8fafc;
+  font-size: 0.68rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  border: 1px solid #334155;
+  z-index: 10;
 }
 
-.block-node {
-  font-size: 0.78rem;
-  padding: 0.25rem 0.5rem;
-  color: #94a3b8;
+.hover-action-btn:hover .btn-tooltip {
+  opacity: 1;
 }
 
-.block-node:hover {
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.block-node.active {
-  color: #e2e8f0;
-}
-
-.block-icon {
-  flex-shrink: 0;
-}
-
-.video-icon {
-  color: #ef4444;
-}
-
-.doc-icon {
-  color: #3b82f6;
-}
-
-.proc-icon {
-  color: #10b981;
-}
-
-.quiz-icon {
-  color: #f59e0b;
-}
-
-.block-check {
-  margin-left: auto;
-  color: #10b981;
-  font-weight: 700;
-  font-size: 0.75rem;
-}
-
-/* Quick Modal */
+/* QUICK MODAL ENHANCED */
 .tree-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.65);
+  background: rgba(0, 0, 0, 0.75);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 9999;
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(3px);
+  padding: 1rem;
 }
 
-.tree-quick-modal {
-  width: 90%;
-  max-width: 420px;
+.tree-quick-modal.enriched-modal {
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
   background: #1e293b;
   border: 1px solid #334155;
-  border-radius: 8px;
-  padding: 1.25rem;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  border-radius: 10px;
+  padding: 1.25rem 1.4rem;
+  box-shadow: 0 20px 35px -10px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 1rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.6);
 }
 
-.modal-header h4 {
-  margin: 0;
-  font-size: 0.95rem;
+.modal-title-box h4 {
+  margin: 0.2rem 0 0;
+  font-size: 1.05rem;
   font-weight: 600;
   color: #f8fafc;
+}
+
+.modal-level-badge {
+  font-size: 0.7rem;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.15);
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  font-weight: 500;
+  display: inline-block;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+}
+
+.close-btn:hover {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .modal-form {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 1rem;
+}
+
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 .form-group {
@@ -1169,38 +1902,323 @@ onMounted(() => {
 
 .form-group label {
   font-size: 0.8rem;
-  color: #94a3b8;
+  color: #cbd5e1;
   font-weight: 500;
 }
 
 .form-control {
-  padding: 0.5rem 0.75rem;
+  padding: 0.55rem 0.75rem;
   font-size: 0.85rem;
   background: #0f172a;
   border: 1px solid #334155;
   border-radius: 6px;
   color: #f8fafc;
   outline: none;
+  transition: border-color 0.15s;
 }
 
 .form-control:focus {
   border-color: #10b981;
 }
 
+.form-control:disabled,
+.form-control:read-only {
+  background: #09101d;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.form-row-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.textarea-control {
+  resize: vertical;
+  min-height: 55px;
+}
+
+.select-control {
+  cursor: pointer;
+}
+
+/* Code Group with Auto-Generator */
+.code-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.auto-code-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.auto-code-toggle input[type="checkbox"] {
+  accent-color: #10b981;
+  cursor: pointer;
+}
+
+.toggle-text {
+  font-size: 0.74rem !important;
+  color: #10b981 !important;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 500;
+}
+
+.code-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.code-input {
+  flex: 1;
+  font-family: monospace;
+  letter-spacing: 0.5px;
+}
+
+.code-input.is-auto {
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.re-generate-btn,
+.manual-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.76rem;
+  background: #334155;
+  border: 1px solid #475569;
+  color: #cbd5e1;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.re-generate-btn:hover,
+.manual-edit-btn:hover {
+  background: #475569;
+  color: #ffffff;
+}
+
+.form-hint {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+/* Section Sub Title */
+.section-sub-title {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px dashed rgba(51, 65, 85, 0.5);
+}
+
+/* Units Selection Section */
+.units-section {
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  border-radius: 8px;
+  padding: 0.85rem;
+  gap: 0.85rem;
+}
+
+.unit-picker-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.unit-box-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mandatory-label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: #f87171 !important;
+}
+
+.badge-mandatory {
+  font-size: 0.68rem;
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
+
+.optional-label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: #38bdf8 !important;
+}
+
+.badge-optional {
+  font-size: 0.68rem;
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
+
+.unit-tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.2rem;
+}
+
+.unit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.74rem;
+  font-weight: 500;
+}
+
+.unit-chip.mandatory-chip {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+}
+
+.unit-chip.optional-chip {
+  background: rgba(56, 189, 248, 0.2);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #bae6fd;
+}
+
+.remove-chip-btn {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.remove-chip-btn:hover {
+  opacity: 0.8;
+}
+
+/* Auto-Enroll Box */
+.auto-enroll-wrapper {
+  margin-top: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 6px;
+  padding: 0.55rem 0.75rem;
+}
+
+.auto-enroll-check-label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  color: #fca5a5;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.auto-enroll-check-label input[type="checkbox"] {
+  accent-color: #ef4444;
+}
+
+.auto-enroll-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  font-size: 0.74rem;
+  color: #fed7aa;
+  background: rgba(249, 115, 22, 0.12);
+  border-radius: 4px;
+  padding: 0.4rem 0.55rem;
+}
+
+.auto-enroll-alert.empty-staff {
+  color: #94a3b8;
+  background: rgba(51, 65, 85, 0.3);
+}
+
+.alert-icon {
+  color: #f97316;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.alert-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.staff-list {
+  font-style: italic;
+  color: #fdba74;
+}
+
+/* Modal Actions */
 .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
+  gap: 0.6rem;
   margin-top: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(51, 65, 85, 0.6);
 }
 
 .btn {
-  padding: 0.45rem 0.85rem;
-  font-size: 0.82rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.84rem;
   border-radius: 6px;
   border: none;
   cursor: pointer;
   font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all 0.15s ease;
+}
+
+.btn-primary {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #059669;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .btn-secondary {
@@ -1210,5 +2228,6 @@ onMounted(() => {
 
 .btn-secondary:hover {
   background: #475569;
+  color: #ffffff;
 }
 </style>

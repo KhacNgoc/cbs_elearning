@@ -26,6 +26,20 @@ public class TrainingProgram {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "domain_id", nullable = false)
     private TrainingDomain domain;
+
+    @Column(name = "business_module")
+    private String businessModule;
+
+    @Column(name = "level")
+    private String level;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "program_unit_grants", joinColumns = @JoinColumn(name = "program_id"))
+    @MapKeyColumn(name = "unit_id")
+    @Column(name = "grant_type", nullable = false)
+    @Builder.Default
+    private java.util.Map<String, String> unitGrants = new java.util.HashMap<>();
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "training_program_units", joinColumns = @JoinColumn(name = "program_id"), inverseJoinColumns = @JoinColumn(name = "unit_id"))
     @Builder.Default
