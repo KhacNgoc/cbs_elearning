@@ -473,7 +473,8 @@
         <form @submit.prevent="submitAddModal" class="modal-form">
           <!-- SECTION 1: BASIC INFO -->
           <div class="form-section">
-            <!-- Chọn Lĩnh vực khi thêm chương trình (Khóa cố định) -->
+            <!-- CẤP CHA TRỰC THUỘC (HIỂN THỊ CỐ ĐỊNH CHO TẤT CẢ CÁC CẤP CON) -->
+            <!-- 1. Khi thêm / sửa chương trình: hiển thị Lĩnh vực đào tạo -->
             <div class="form-group" v-if="addModal.type === 'program'">
               <label>Lĩnh vực đào tạo (*):</label>
               <select
@@ -487,6 +488,30 @@
                   {{ d.name }} ({{ d.code }})
                 </option>
               </select>
+            </div>
+
+            <!-- 2. Khi thêm / sửa khóa học: hiển thị Chương trình đào tạo -->
+            <div class="form-group" v-else-if="addModal.type === 'course'">
+              <label>Chương trình đào tạo (*):</label>
+              <div class="inherited-parent-display">
+                <span class="parent-chip-badge">{{ addModal.parentObj?.name || addModal.parentObj?.code || "Chương trình hiện tại" }}</span>
+              </div>
+            </div>
+
+            <!-- 3. Khi thêm / sửa chương học: hiển thị Khóa học nghiệp vụ -->
+            <div class="form-group" v-else-if="addModal.type === 'chapter'">
+              <label>Khóa học nghiệp vụ (*):</label>
+              <div class="inherited-parent-display">
+                <span class="parent-chip-badge">{{ addModal.parentObj?.name || addModal.parentObj?.code || "Khóa học hiện tại" }}</span>
+              </div>
+            </div>
+
+            <!-- 4. Khi thêm / sửa bài học: hiển thị Chương học trực thuộc -->
+            <div class="form-group" v-else-if="addModal.type === 'lesson'">
+              <label>Chương học trực thuộc (*):</label>
+              <div class="inherited-parent-display">
+                <span class="parent-chip-badge">{{ addModal.parentObj?.title || addModal.parentObj?.name || addModal.parentObj?.code || "Chương học hiện tại" }}</span>
+              </div>
             </div>
 
             <!-- PHÂN HỆ CHO CẤP 1 (LĨNH VỰC) - CHO PHÉP CHỌN GỐC -->
@@ -514,10 +539,10 @@
               </select>
             </div>
 
-            <!-- PHÂN HỆ CHO CẤP 2 (CHƯƠNG TRÌNH) & CẤP 3 (KHÓA HỌC) - TỰ ĐỘNG CỐ ĐỊNH TỪ CHA -->
+            <!-- PHÂN HỆ CHO CÁC CẤP CON (CHƯƠNG TRÌNH, KHÓA HỌC, CHƯƠNG, BÀI) - TỰ ĐỘNG CỐ ĐỊNH TỪ CHA -->
             <div
               class="form-group inherited-module-info"
-              v-else-if="addModal.type === 'program' || addModal.type === 'course'"
+              v-else
             >
               <div class="code-label-row">
                 <label>Phân hệ nghiệp vụ:</label>
@@ -581,7 +606,7 @@
                 </button>
               </div>
               <small class="form-hint" v-if="addModal.autoCode">
-                Mã định danh tuần tự chuẩn nghiệp vụ (Ví dụ: RMLV1, RMCT1, RMKH1...).
+                Mã định danh tuần tự chuẩn nghiệp vụ (Ví dụ: RMLV1, RMCT1, RMKH1, RMCH1, RMBH1...).
               </small>
             </div>
 
@@ -599,8 +624,8 @@
             </div>
           </div>
 
-          <!-- SECTION 2: BỔ SUNG & MÔ TẢ (CHỈ CÒN MỨC ĐỘ NẾU LÀ KHÓA HỌC, VÀ MÔ TẢ) -->
-          <div v-if="addModal.type === 'domain' || addModal.type === 'program' || addModal.type === 'course'" class="form-section meta-section">
+          <!-- SECTION 2: BỔ SUNG & MÔ TẢ (HIỂN THỊ ĐẦY ĐỦ CHO TẤT CẢ CÁC CẤP) -->
+          <div class="form-section meta-section">
             <!-- Mức độ / Cấp độ: CHỈ HIỂN THỊ Ở CẤP KHÓA HỌC (COURSE) -->
             <div class="form-row-grid" v-if="addModal.type === 'course'">
               <div class="form-group">
@@ -626,19 +651,20 @@
               </div>
             </div>
 
-            <!-- Mục tiêu / Mô tả -->
+            <!-- Mục tiêu / Mô tả tóm tắt -->
             <div class="form-group">
-              <label>Mục tiêu / Mô tả tóm tắt:</label>
+              <label>{{ descriptionLabel }}:</label>
               <textarea
                 v-model="addModal.description"
                 rows="2"
-                placeholder="Nhập mục tiêu đào tạo, chuẩn đầu ra hoặc nội dung chính..."
+                :placeholder="descriptionPlaceholder"
                 class="form-control textarea-control"
               ></textarea>
             </div>
           </div>
 
-          <!-- SECTION 3: APPLIED UNITS & AUTO-ENROLLMENT (FOR DOMAIN & PROGRAM) -->
+          <!-- SECTION 3: APPLIED UNITS & AUTO-ENROLLMENT -->
+          <!-- 1. Cấp Lĩnh vực & Chương trình: Phân bổ Đơn vị áp dụng chọn trực tiếp -->
           <div v-if="addModal.type === 'domain' || addModal.type === 'program'" class="form-section units-section">
             <h5 class="section-sub-title">
               <Building2 :size="14" />
@@ -731,6 +757,23 @@
                   </button>
                 </span>
               </div>
+            </div>
+          </div>
+
+          <!-- 2. Cấp Khóa học, Chương học, Bài học: Hiển thị phạm vi Đơn vị kế thừa từ cấp cha -->
+          <div v-else-if="addModal.mandatoryUnitIds?.length || addModal.optionalUnitIds?.length" class="form-section units-section inherited-units-box">
+            <h5 class="section-sub-title">
+              <Building2 :size="14" />
+              <span>Phân bổ Đơn vị áp dụng (Kế thừa từ Chương trình / Lĩnh vực)</span>
+            </h5>
+            <div class="inherited-units-chips">
+              <span v-for="uId in addModal.mandatoryUnitIds" :key="`m-${uId}`" class="unit-chip mandatory-chip">
+                <ShieldCheck :size="12" />
+                <span>{{ getUnitName(uId) }} (Bắt buộc)</span>
+              </span>
+              <span v-for="uId in addModal.optionalUnitIds" :key="`o-${uId}`" class="unit-chip optional-chip">
+                <span>{{ getUnitName(uId) }}</span>
+              </span>
             </div>
           </div>
 
@@ -1007,13 +1050,47 @@ function getModulePrefix(type: string, moduleCode: string): string {
     case "course":
       return `${mod}KH`;
     case "chapter":
-      return "CH";
+      return `${mod}CH`;
     case "lesson":
-      return "BH";
+      return `${mod}BH`;
     default:
       return `${mod}_`;
   }
 }
+
+const descriptionLabel = computed(() => {
+  switch (addModal.value.type) {
+    case "domain":
+      return "Mục tiêu / Mô tả lĩnh vực";
+    case "program":
+      return "Mục tiêu / Mô tả chương trình";
+    case "course":
+      return "Mục tiêu / Chuẩn đầu ra khóa học";
+    case "chapter":
+      return "Tóm tắt nội dung chương";
+    case "lesson":
+      return "Tóm tắt / Hướng dẫn bài học";
+    default:
+      return "Mục tiêu / Mô tả tóm tắt";
+  }
+});
+
+const descriptionPlaceholder = computed(() => {
+  switch (addModal.value.type) {
+    case "domain":
+      return "Nhập mục tiêu đào tạo, định hướng hoặc phạm vi nghiệp vụ lĩnh vực...";
+    case "program":
+      return "Nhập mục tiêu chương trình, chuẩn năng lực hoặc đối tượng áp dụng...";
+    case "course":
+      return "Nhập mục tiêu đào tạo, chuẩn đầu ra hoặc nội dung chính khóa học...";
+    case "chapter":
+      return "Nhập tóm tắt nội dung chính hoặc mục tiêu của chương học...";
+    case "lesson":
+      return "Nhập tóm tắt kiến thức trọng tâm, hướng dẫn thực hành của bài học...";
+    default:
+      return "Nhập mô tả tóm tắt...";
+  }
+});
 
 function getModuleName(code?: string): string {
   if (!code) return "Chưa xác định";
@@ -1052,6 +1129,10 @@ function computeNextSequenceCode(type: string, moduleCode: string): string {
   } else if (type === "chapter") {
     const courseId = addModal.value.parentId;
     list = (courseId && chaptersMap.value[courseId]) || [];
+  } else if (type === "lesson") {
+    const chapterId = addModal.value.parentId;
+    const currentChapter = Object.values(chaptersMap.value).flat().find((ch) => ch.id === chapterId) || addModal.value.parentObj;
+    list = (currentChapter?.lessons || []).map((l: any) => ({ code: l.id || l.code }));
   } else {
     list = [];
   }
@@ -1343,35 +1424,54 @@ function openAddModal(
   const resolvedParent =
     (parent?.id && domains.value.find((d) => d.id === parent.id)) ||
     (parent?.id && programs.value.find((p) => p.id === parent.id)) ||
+    (parent?.id && courses.value.find((c) => c.id === parent.id)) ||
     parent;
   const parentCode = resolvedParent?.code || "";
 
   // Tự động kế thừa phân hệ & phân bổ đơn vị từ cấp cha
   let defaultModule = "";
+  if (resolvedParent) {
+    defaultModule =
+      extractModuleFromParent(resolvedParent) ||
+      (grandParentObj ? extractModuleFromParent(grandParentObj) : "");
+  }
+
   let inheritedMandatoryUnits: string[] = [];
   let inheritedOptionalUnits: string[] = [];
 
-  if (resolvedParent) {
-    if (type === "program" || type === "course") {
-      defaultModule = extractModuleFromParent(resolvedParent);
+  // Tìm đơn vị áp dụng từ cha hoặc ông
+  const parentCourse =
+    type === "chapter"
+      ? resolvedParent
+      : type === "lesson"
+      ? grandParentObj || courses.value.find((c) => c.id === (resolvedParent?.courseId || ""))
+      : null;
+  const parentProgram =
+    type === "course"
+      ? resolvedParent
+      : parentCourse
+      ? programs.value.find((p) => p.id === parentCourse.programId)
+      : null;
+  const sourceUnitsObj = parentProgram || resolvedParent;
+
+  if (sourceUnitsObj) {
+    if (sourceUnitsObj.mandatoryUnitIds && Array.isArray(sourceUnitsObj.mandatoryUnitIds)) {
+      inheritedMandatoryUnits = [...sourceUnitsObj.mandatoryUnitIds];
+    } else if (sourceUnitsObj.mandatoryUnitIds) {
+      inheritedMandatoryUnits = Array.from(sourceUnitsObj.mandatoryUnitIds);
     }
-    if (resolvedParent.mandatoryUnitIds && Array.isArray(resolvedParent.mandatoryUnitIds)) {
-      inheritedMandatoryUnits = [...resolvedParent.mandatoryUnitIds];
-    } else if (resolvedParent.mandatoryUnitIds) {
-      inheritedMandatoryUnits = Array.from(resolvedParent.mandatoryUnitIds);
-    }
-    if (resolvedParent.optionalUnitIds && Array.isArray(resolvedParent.optionalUnitIds)) {
-      inheritedOptionalUnits = [...resolvedParent.optionalUnitIds];
-    } else if (resolvedParent.optionalUnitIds) {
-      inheritedOptionalUnits = Array.from(resolvedParent.optionalUnitIds);
+    if (sourceUnitsObj.optionalUnitIds && Array.isArray(sourceUnitsObj.optionalUnitIds)) {
+      inheritedOptionalUnits = [...sourceUnitsObj.optionalUnitIds];
+    } else if (sourceUnitsObj.optionalUnitIds) {
+      inheritedOptionalUnits = Array.from(sourceUnitsObj.optionalUnitIds);
     }
     if (
       inheritedMandatoryUnits.length === 0 &&
       inheritedOptionalUnits.length === 0 &&
-      resolvedParent.unitIds &&
-      resolvedParent.unitIds.length > 0
+      sourceUnitsObj.unitIds &&
+      sourceUnitsObj.unitIds.length > 0
     ) {
-      inheritedOptionalUnits = Array.from(resolvedParent.unitIds);
+      inheritedOptionalUnits = Array.from(sourceUnitsObj.unitIds);
     }
   }
 
@@ -1452,6 +1552,32 @@ function openEditModal(
     optionalUnits = item.unitIds.filter((u: string) => !mandatoryUnits.includes(u));
   }
 
+  // Kế thừa đơn vị nếu cấp con chưa có đơn vị riêng
+  if (mandatoryUnits.length === 0 && optionalUnits.length === 0 && resolvedParent) {
+    const parentCourse =
+      type === "chapter"
+        ? resolvedParent
+        : type === "lesson"
+        ? grandParentObj || courses.value.find((c) => c.id === (resolvedParent?.courseId || ""))
+        : null;
+    const parentProgram =
+      type === "course"
+        ? resolvedParent
+        : parentCourse
+        ? programs.value.find((p) => p.id === parentCourse.programId)
+        : null;
+    const sourceUnitsObj = parentProgram || resolvedParent;
+
+    if (sourceUnitsObj?.mandatoryUnitIds) mandatoryUnits = [...sourceUnitsObj.mandatoryUnitIds];
+    if (sourceUnitsObj?.optionalUnitIds) optionalUnits = [...sourceUnitsObj.optionalUnitIds];
+    else if (sourceUnitsObj?.unitIds) optionalUnits = [...sourceUnitsObj.unitIds];
+  }
+
+  const defaultModule =
+    item.businessModule ||
+    (resolvedParent ? extractModuleFromParent(resolvedParent) : "") ||
+    (grandParentObj ? extractModuleFromParent(grandParentObj) : "");
+
   addModal.value = {
     show: true,
     isEdit: true,
@@ -1462,7 +1588,7 @@ function openEditModal(
     code: item.code || item.id || "",
     name: item.name || item.title || "",
     autoCode: false,
-    businessModule: item.businessModule || (resolvedParent ? extractModuleFromParent(resolvedParent) : ""),
+    businessModule: defaultModule,
     level: item.level || "BASIC",
     description: item.description || item.hint || "",
     status: item.status || "ACTIVE",
@@ -1560,10 +1686,18 @@ async function submitAddModal() {
       await trainingApi.saveChapter(parentId!, payload);
       showToast(isEdit ? "Cập nhật chương thành công!" : "Tạo chương thành công!", "success");
     } else if (type === "lesson") {
-      const courseId =
+      let courseId =
         addModal.value.parentObj?.courseId ||
         addModal.value.parentObj?.course?.id ||
         "";
+      if (!courseId && parentId) {
+        for (const [cId, chaps] of Object.entries(chaptersMap.value)) {
+          if (chaps.some((ch) => ch.id === parentId)) {
+            courseId = cId;
+            break;
+          }
+        }
+      }
       if (isEdit) {
         await adminApi.updateLesson(editId!, {
           id: editId!,
@@ -1581,7 +1715,7 @@ async function submitAddModal() {
         await adminApi.createLesson({
           id: code.trim().toUpperCase(),
           title: name.trim(),
-          hint: name.trim(),
+          hint: addModal.value.description.trim() || name.trim(),
           chapterId: parentId!,
           courseId: courseId,
           videoUrl: "",
@@ -2318,6 +2452,36 @@ onMounted(() => {
   cursor: not-allowed !important;
   border-color: #334155 !important;
   opacity: 0.85;
+}
+
+.inherited-parent-display {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid #334155;
+  border-radius: 6px;
+}
+
+.parent-chip-badge {
+  font-weight: 600;
+  color: #38bdf8;
+  font-size: 0.84rem;
+}
+
+.inherited-units-box {
+  background: rgba(15, 23, 42, 0.35);
+  border: 1px dashed rgba(51, 65, 85, 0.6);
+  border-radius: 8px;
+  padding: 0.75rem 0.85rem;
+}
+
+.inherited-units-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
 }
 
 /* Code Group with Auto-Generator */
