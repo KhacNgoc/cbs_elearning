@@ -1,10 +1,13 @@
 package com.bidv.coretraining.controller;
 
+import com.bidv.coretraining.entity.OrganizationUnit;
 import com.bidv.coretraining.repository.*;
 import com.bidv.coretraining.service.*;
 import com.bidv.coretraining.security.*;
 import org.springframework.web.bind.annotation.*;
 import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @RestController
 @RequestMapping("/api/admin/options")
@@ -45,26 +48,58 @@ public class AdminOptionsController {
                         .map(g -> new AccessManagementService.GroupDto(g.getId(), g.getName(),
                                 g.getOrganizationUnit() == null ? null : g.getOrganizationUnit().getId(),
                                 g.getMandatoryCourses().stream().map(com.bidv.coretraining.entity.Course::getId)
-                                        .collect(java.util.stream.Collectors.toSet())))
+                                        .collect(Collectors.toSet())))
                         .toList(),
                 "courses",
                 courses.findAll().stream().filter(c -> AccessPolicy.allowsCourse(u, permission, c))
-                        .map(c -> java.util.Map.of("id", c.getId(), "name", c.getName(),
+                        .map(c -> Map.of("id", c.getId(), "name", c.getName(),
                                 "code", c.getCode() == null ? "" : c.getCode())).toList(),
                 "domains",
                 domains.findAll().stream()
-                        .map(d -> new TrainingStructureService.DomainDto(d.getId(), d.getCode(), d.getName(),
-                                d.getDescription(), d.getStatus()))
+                        .map(d -> {
+                            Set<String> mandatoryUnits = new HashSet<>();
+                            Set<String> optionalUnits = new HashSet<>();
+                            if (d.getUnitGrants() != null) {
+                                for (var entry : d.getUnitGrants().entrySet()) {
+                                    if ("MANDATORY".equalsIgnoreCase(entry.getValue())) {
+                                        mandatoryUnits.add(entry.getKey());
+                                    } else {
+                                        optionalUnits.add(entry.getKey());
+                                    }
+                                }
+                            }
+                            Set<String> allUnits = new HashSet<>(d.getUnits().stream().map(OrganizationUnit::getId).toList());
+                            allUnits.addAll(mandatoryUnits);
+                            allUnits.addAll(optionalUnits);
+                            return new TrainingStructureService.DomainDto(d.getId(), d.getCode(), d.getName(),
+                                    d.getDescription(), d.getStatus(), Set.of("read"), d.getBusinessModule(),
+                                    d.getSeqNumber(), allUnits, mandatoryUnits, optionalUnits);
+                        })
                         .toList(),
                 "programs",
                 programs.findAll().stream().filter(p -> AccessPolicy.allowsProgram(u, permission, p))
-                        .map(p -> new TrainingStructureService.ProgramDto(p.getId(), p.getDomain().getId(), p.getCode(),
-                                p.getName(), p.getDescription(), p.getStatus(),
-                                p.getUnits().stream().map(com.bidv.coretraining.entity.OrganizationUnit::getId)
-                                        .collect(java.util.stream.Collectors.toSet()),
-                                java.util.stream.Stream.of("read", "create", "update", "delete")
-                                        .filter(action -> AccessPolicy.allowsProgram(u, page + ":" + action, p))
-                                        .collect(java.util.stream.Collectors.toSet())))
+                        .map(p -> {
+                            Set<String> mandatoryUnits = new HashSet<>();
+                            Set<String> optionalUnits = new HashSet<>();
+                            if (p.getUnitGrants() != null) {
+                                for (var entry : p.getUnitGrants().entrySet()) {
+                                    if ("MANDATORY".equalsIgnoreCase(entry.getValue())) {
+                                        mandatoryUnits.add(entry.getKey());
+                                    } else {
+                                        optionalUnits.add(entry.getKey());
+                                    }
+                                }
+                            }
+                            Set<String> allUnits = new HashSet<>(p.getUnits().stream().map(OrganizationUnit::getId).toList());
+                            allUnits.addAll(mandatoryUnits);
+                            allUnits.addAll(optionalUnits);
+                            return new TrainingStructureService.ProgramDto(p.getId(), p.getDomain() == null ? null : p.getDomain().getId(),
+                                    p.getCode(), p.getName(), p.getDescription(), p.getStatus(), allUnits,
+                                    Stream.of("read", "create", "update", "delete")
+                                            .filter(action -> AccessPolicy.allowsProgram(u, page + ":" + action, p))
+                                            .collect(Collectors.toSet()),
+                                    p.getBusinessModule(), p.getLevel(), mandatoryUnits, optionalUnits, false, p.getSeqNumber());
+                        })
                         .toList());
     }
 }
