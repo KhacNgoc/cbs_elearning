@@ -465,13 +465,14 @@
         <form @submit.prevent="submitAddModal" class="modal-form">
           <!-- SECTION 1: BASIC INFO -->
           <div class="form-section">
-            <!-- Chọn Lĩnh vực khi thêm chương trình -->
+            <!-- Chọn Lĩnh vực khi thêm chương trình (Khóa cố định) -->
             <div class="form-group" v-if="addModal.type === 'program'">
               <label>Lĩnh vực đào tạo (*):</label>
               <select
                 v-model="addModal.parentId"
-                class="form-control select-control"
+                class="form-control select-control disabled-select"
                 @change="handleDomainChange"
+                disabled
                 required
               >
                 <option v-for="d in domains" :key="d.id" :value="d.id">
@@ -505,7 +506,7 @@
               </select>
             </div>
 
-            <!-- PHÂN HỆ CHO CẤP 2 (CHƯƠNG TRÌNH) & CẤP 3 (KHÓA HỌC) - TỰ ĐỘNG KẾ THỪA CỐ ĐỊNH TỪ CHA -->
+            <!-- PHÂN HỆ CHO CẤP 2 (CHƯƠNG TRÌNH) & CẤP 3 (KHÓA HỌC) - TỰ ĐỘNG CỐ ĐỊNH TỪ CHA -->
             <div
               class="form-group inherited-module-info"
               v-else-if="addModal.type === 'program' || addModal.type === 'course'"
@@ -519,7 +520,6 @@
               <div class="inherited-module-display">
                 <span class="module-chip-badge">{{ addModal.businessModule || "N/A" }}</span>
                 <span class="module-title-text">{{ getModuleName(addModal.businessModule) }}</span>
-                <span class="inherited-tag">(Kế thừa tự động từ Lĩnh vực cha)</span>
               </div>
             </div>
 
@@ -1285,10 +1285,21 @@ function openAddModal(
   const parent = parentObj || grandParentObj;
   const parentCode = parent?.code || "";
 
-  // Tự động kế thừa phân hệ từ cấp cha cho Chương trình & Khóa học
+  // Tự động kế thừa phân hệ & phân bổ đơn vị từ cấp cha
   let defaultModule = "";
-  if (type === "program" || type === "course") {
-    defaultModule = extractModuleFromParent(parent);
+  let inheritedMandatoryUnits: string[] = [];
+  let inheritedOptionalUnits: string[] = [];
+
+  if (parent) {
+    if (type === "program" || type === "course") {
+      defaultModule = extractModuleFromParent(parent);
+    }
+    if (parent.mandatoryUnitIds && Array.isArray(parent.mandatoryUnitIds)) {
+      inheritedMandatoryUnits = [...parent.mandatoryUnitIds];
+    }
+    if (parent.optionalUnitIds && Array.isArray(parent.optionalUnitIds)) {
+      inheritedOptionalUnits = [...parent.optionalUnitIds];
+    }
   }
 
   const initialCode = defaultModule
@@ -1307,8 +1318,8 @@ function openAddModal(
     level: "BASIC",
     description: "",
     status: "ACTIVE",
-    mandatoryUnitIds: [],
-    optionalUnitIds: [],
+    mandatoryUnitIds: inheritedMandatoryUnits,
+    optionalUnitIds: inheritedOptionalUnits,
     autoEnrollStaff: true,
     completionDeadline: "",
   };
@@ -1335,6 +1346,12 @@ async function submitAddModal() {
         name: name.trim(),
         description: addModal.value.description.trim() || undefined,
         businessModule: addModal.value.businessModule || undefined,
+        mandatoryUnitIds: addModal.value.mandatoryUnitIds,
+        optionalUnitIds: addModal.value.optionalUnitIds,
+        unitIds: [
+          ...addModal.value.mandatoryUnitIds,
+          ...addModal.value.optionalUnitIds,
+        ],
         status: "ACTIVE",
       });
       showToast("Tạo lĩnh vực đào tạo thành công!", "success");
@@ -2104,6 +2121,14 @@ onMounted(() => {
 
 .select-control {
   cursor: pointer;
+}
+
+.disabled-select {
+  background-color: rgba(30, 41, 59, 0.75) !important;
+  color: #94a3b8 !important;
+  cursor: not-allowed !important;
+  border-color: #334155 !important;
+  opacity: 0.85;
 }
 
 /* Code Group with Auto-Generator */

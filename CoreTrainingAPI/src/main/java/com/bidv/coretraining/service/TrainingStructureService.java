@@ -12,12 +12,17 @@ import java.util.*;
 @Transactional
 public class TrainingStructureService {
     public record DomainDto(String id, String code, String name, String description, String status,
-            Set<String> allowedActions, String businessModule, Integer seqNumber) {
+            Set<String> allowedActions, String businessModule, Integer seqNumber,
+            Set<String> unitIds, Set<String> mandatoryUnitIds, Set<String> optionalUnitIds) {
         public DomainDto(String id, String code, String name, String description, String status) {
-            this(id, code, name, description, status, Set.of(), null, null);
+            this(id, code, name, description, status, Set.of(), null, null, Set.of(), Set.of(), Set.of());
         }
         public DomainDto(String id, String code, String name, String description, String status, Set<String> allowedActions) {
-            this(id, code, name, description, status, allowedActions, null, null);
+            this(id, code, name, description, status, allowedActions, null, null, Set.of(), Set.of(), Set.of());
+        }
+        public DomainDto(String id, String code, String name, String description, String status, Set<String> allowedActions,
+                String businessModule, Integer seqNumber) {
+            this(id, code, name, description, status, allowedActions, businessModule, seqNumber, Set.of(), Set.of(), Set.of());
         }
     }
 
@@ -186,8 +191,24 @@ public class TrainingStructureService {
             actions.add("create");
         if (canUpdateDomain(d))
             actions.add("update");
+
+        Set<String> mandatoryUnits = new HashSet<>();
+        Set<String> optionalUnits = new HashSet<>();
+        if (d.getUnitGrants() != null) {
+            for (var entry : d.getUnitGrants().entrySet()) {
+                if ("MANDATORY".equalsIgnoreCase(entry.getValue())) {
+                    mandatoryUnits.add(entry.getKey());
+                } else {
+                    optionalUnits.add(entry.getKey());
+                }
+            }
+        }
+        Set<String> allUnits = new HashSet<>(d.getUnits().stream().map(OrganizationUnit::getId).toList());
+        allUnits.addAll(mandatoryUnits);
+        allUnits.addAll(optionalUnits);
+
         return new DomainDto(d.getId(), d.getCode(), d.getName(), d.getDescription(), d.getStatus(), actions,
-                d.getBusinessModule(), d.getSeqNumber());
+                d.getBusinessModule(), d.getSeqNumber(), allUnits, mandatoryUnits, optionalUnits);
     }
 
     public Map<String, Object> catalog() {
@@ -204,6 +225,42 @@ public class TrainingStructureService {
                 : domains.findById(id).orElseThrow(() -> new ResourceNotFoundException("Domain", "id", id));
         if (id != null)
             com.bidv.coretraining.security.AccessPolicy.require(canUpdateDomain(d));
+
+        Set<String> mandatoryIds = request.mandatoryUnitIds() != null ? new HashSet<>(request.mandatoryUnitIds())
+                : new HashSet<>();
+        Set<String> optionalIds = request.optionalUnitIds() != null ? new HashSet<>(request.optionalUnitIds())
+                : new HashSet<>();
+
+        if (request.unitIds() != null) {
+            for (String uId : request.unitIds()) {
+                if (!mandatoryIds.contains(uId) && !optionalIds.contains(uId)) {
+                    optionalIds.add(uId);
+                }
+            }
+        }
+
+        Set<OrganizationUnit> assigned = new HashSet<>();
+        Map<String, String> grants = new HashMap<>();
+
+        for (String mId : mandatoryIds) {
+            OrganizationUnit n = authorization.unit(mId);
+            authorization.scope(n);
+            if (!com.bidv.coretraining.security.AccessPolicy.activeUnit(n))
+                throw new BadRequestException("Đơn vị " + n.getName() + " đã ngừng hoạt động");
+            assigned.add(n);
+            grants.put(mId, "MANDATORY");
+        }
+        for (String optId : optionalIds) {
+            OrganizationUnit n = authorization.unit(optId);
+            authorization.scope(n);
+            if (!com.bidv.coretraining.security.AccessPolicy.activeUnit(n))
+                throw new BadRequestException("Đơn vị " + n.getName() + " đã ngừng hoạt động");
+            assigned.add(n);
+            grants.put(optId, "OPTIONAL");
+        }
+
+        d.setUnits(assigned);
+        d.setUnitGrants(grants);
 
         String mod = clean(request.businessModule());
         d.setBusinessModule(mod);

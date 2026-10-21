@@ -68,6 +68,9 @@ export interface Course {
   thumbnail?: string | null;
   businessModule?: string;
   seqNumber?: number;
+  unitIds?: string[];
+  mandatoryUnitIds?: string[];
+  optionalUnitIds?: string[];
   level?: string;
   keywords?: string;
   completionDeadline?: string | null;
@@ -90,18 +93,17 @@ export interface TrainingDomain {
   status: string;
   businessModule?: string;
   seqNumber?: number;
-}
-export interface TrainingProgram extends TrainingDomain {
-  domainId: string;
   unitIds?: string[];
-  allowedActions?: string[];
-  businessModule?: string;
-  seqNumber?: number;
-  level?: string;
   mandatoryUnitIds?: string[];
   optionalUnitIds?: string[];
+}
+
+export interface TrainingProgram extends TrainingDomain {
+  domainId: string;
+  level?: string;
   autoEnrollStaff?: boolean;
 }
+
 export interface Chapter {
   id: string;
   courseId: string;
@@ -110,13 +112,12 @@ export interface Chapter {
   description?: string;
   chapterOrder: number;
   status: string;
-  businessModule?: string;
-  seqNumber?: number;
   version?: number;
   lessons: Lesson[];
   locked: boolean;
   completed: boolean;
 }
+
 export interface CourseOutline {
   course: Course;
   chapters: Chapter[];
@@ -197,6 +198,7 @@ export interface ResumeTarget {
   positionSeconds?: number;
   lastAccessedAt?: string;
 }
+
 export interface LearnerCourse {
   course: Course;
   source: "ASSIGNED" | "REGISTERED" | "AVAILABLE" | "PENDING";
@@ -214,6 +216,7 @@ export interface LearnerCourse {
   lastAccessedAt?: string;
   resume?: ResumeTarget;
 }
+
 export interface LearnerAttempt {
   id: string;
   quizId: string;
@@ -229,6 +232,7 @@ export interface LearnerAttempt {
   passed: boolean;
   takenAt: string;
 }
+
 export interface LearnerWorkspace {
   courses: LearnerCourse[];
   resume?: ResumeTarget;
