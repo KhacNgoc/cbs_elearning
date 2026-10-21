@@ -114,7 +114,7 @@
                 type="button"
                 class="hover-action-btn edit-btn"
                 title="Chỉnh sửa thông tin Lĩnh vực"
-                @click="openEditModal('domain', domain)"
+                @click.stop="openEditModal('domain', domain)"
               >
                 <Edit3 :size="13" />
               </button>
@@ -179,7 +179,7 @@
                     type="button"
                     class="hover-action-btn edit-btn"
                     title="Chỉnh sửa thông tin Chương trình"
-                    @click="openEditModal('program', program, domain)"
+                    @click.stop="openEditModal('program', program, domain)"
                   >
                     <Edit3 :size="13" />
                   </button>
@@ -244,7 +244,7 @@
                         type="button"
                         class="hover-action-btn edit-btn"
                         title="Chỉnh sửa thông tin Khóa học"
-                        @click="openEditModal('course', course, program)"
+                        @click.stop="openEditModal('course', course, program)"
                       >
                         <Edit3 :size="13" />
                       </button>
@@ -302,7 +302,7 @@
                             type="button"
                             class="hover-action-btn edit-btn"
                             title="Chỉnh sửa thông tin Chương"
-                            @click="openEditModal('chapter', chapter, course)"
+                            @click.stop="openEditModal('chapter', chapter, course)"
                           >
                             <Edit3 :size="13" />
                           </button>
@@ -388,7 +388,7 @@
                                 type="button"
                                 class="hover-action-btn edit-btn"
                                 title="Chỉnh sửa thông tin Bài học"
-                                @click="openEditModal('lesson', lesson, chapter, course)"
+                                @click.stop="openEditModal('lesson', lesson, chapter, course)"
                               >
                                 <Edit3 :size="13" />
                               </button>
@@ -1385,14 +1385,11 @@ function toggleAllNodes(expand: boolean) {
   }
 }
 
-// Select node & open edit modal
+// Select node & toggle tree (expand/collapse)
 function selectNode(type: string, data: any, parent?: any, grandparent?: any) {
   selectedId.value = data.id;
   emit("select", { type, data, parent: parent || grandparent });
-  if (type !== "lesson" && !isExpanded(data.id)) {
-    expandedIds.value.add(data.id);
-  }
-  openEditModal(type as any, data, parent, grandparent);
+  toggleNode(data.id);
 }
 
 // Open Inline Add Modal
