@@ -474,15 +474,32 @@
     </div>
 
     <!-- ENRICHED INLINE ADD MODAL -->
-    <div v-if="addModal.show" class="tree-modal-backdrop" @click.self="addModal.show = false">
+    <div v-if="addModal.show" class="tree-modal-backdrop" @click.self="closeAddModal">
       <div class="tree-quick-modal enriched-modal">
         <div class="modal-header">
           <div class="modal-title-box">
             <span class="modal-level-badge">{{ levelSubtitle }}</span>
             <h4>{{ modalTitle }}</h4>
           </div>
-          <button type="button" class="close-btn" @click="addModal.show = false">
+          <button type="button" class="close-btn" @click="closeAddModal">
             <X :size="16" />
+          </button>
+        </div>
+
+        <!-- DRAFT RESTORED NOTICE BANNER -->
+        <div v-if="hasRestoredDraft && !addModal.isEdit" class="modal-draft-banner">
+          <div class="draft-banner-info">
+            <Sparkles :size="15" class="draft-sparkle-icon" />
+            <span>Đã tự động khôi phục dữ liệu bạn đang nhập dở</span>
+          </div>
+          <button
+            type="button"
+            class="btn-clear-draft"
+            @click="resetCurrentDraft"
+            title="Xóa dữ liệu nháp và nhập mới từ đầu"
+          >
+            <RotateCcw :size="12" />
+            <span>Xóa nháp & Nhập mới</span>
           </button>
         </div>
 
@@ -805,7 +822,7 @@
               <span>Soạn chi tiết bài học</span>
             </button>
             <div class="actions-right">
-              <button type="button" class="btn btn-secondary" @click="addModal.show = false">
+              <button type="button" class="btn btn-secondary" @click="closeAddModal">
                 Hủy
               </button>
               <button type="submit" class="btn btn-primary" :disabled="submitting">
@@ -821,7 +838,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
 import { useRouter } from "vue-router";
 import {
   Layers,
@@ -844,6 +861,7 @@ import {
   FolderTree,
   Loader2,
   Sparkles,
+  RotateCcw,
   Lock,
   Unlock,
   Building2,
@@ -940,6 +958,121 @@ const addModal = ref<AddModalData>({
 });
 
 const nameInputRef = ref<HTMLInputElement | null>(null);
+
+// ================= DRAFT PRESERVATION SYSTEM =================
+// Lưu trữ dữ liệu đang nhập dở của modal thêm mới (theo phân cấp và cha)
+function getDraftKey(type: string, parentId?: string) {
+  return `${type}_${parentId || "root"}`;
+}
+
+const addModalDrafts = ref<Record<string, any>>((() => {
+  try {
+    const raw = sessionStorage.getItem("curriculum_add_modal_drafts");
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    return {};
+  }
+})());
+
+const hasRestoredDraft = ref(false);
+
+function saveCurrentDraft() {
+  if (!addModal.value.show || addModal.value.isEdit) return;
+  const {
+    type,
+    parentId,
+    name,
+    description,
+    code,
+    autoCode,
+    businessModule,
+    level,
+    status,
+    mandatoryUnitIds,
+    optionalUnitIds,
+    autoEnrollStaff,
+    completionDeadline,
+  } = addModal.value;
+
+  const hasContent = !!(
+    name.trim() ||
+    description.trim() ||
+    completionDeadline ||
+    !autoCode
+  );
+
+  const key = getDraftKey(type, parentId);
+  if (hasContent) {
+    addModalDrafts.value[key] = {
+      code,
+      name,
+      autoCode,
+      businessModule,
+      level,
+      description,
+      status,
+      mandatoryUnitIds: Array.isArray(mandatoryUnitIds) ? [...mandatoryUnitIds] : [],
+      optionalUnitIds: Array.isArray(optionalUnitIds) ? [...optionalUnitIds] : [],
+      autoEnrollStaff,
+      completionDeadline,
+      updatedAt: Date.now(),
+    };
+    try {
+      sessionStorage.setItem("curriculum_add_modal_drafts", JSON.stringify(addModalDrafts.value));
+    } catch (e) {}
+  }
+}
+
+function clearDraft(type: string, parentId?: string) {
+  const key = getDraftKey(type, parentId);
+  delete addModalDrafts.value[key];
+  try {
+    sessionStorage.setItem("curriculum_add_modal_drafts", JSON.stringify(addModalDrafts.value));
+  } catch (e) {}
+}
+
+function closeAddModal() {
+  saveCurrentDraft();
+  addModal.value.show = false;
+  hasRestoredDraft.value = false;
+}
+
+function resetCurrentDraft() {
+  const type = addModal.value.type;
+  const parentObj = addModal.value.parentObj;
+  clearDraft(type, addModal.value.parentId);
+  hasRestoredDraft.value = false;
+  openAddModal(type, parentObj);
+  showToast("Đã xóa bản nháp và làm mới biểu mẫu.", "info");
+}
+
+function handleGlobalKeyDown(e: KeyboardEvent) {
+  if (e.key === "Escape" && addModal.value.show) {
+    closeAddModal();
+  }
+}
+
+// Tự động lưu nháp khi có thay đổi trong modal tạo mới
+watch(
+  () => [
+    addModal.value.name,
+    addModal.value.description,
+    addModal.value.code,
+    addModal.value.autoCode,
+    addModal.value.businessModule,
+    addModal.value.level,
+    addModal.value.status,
+    addModal.value.completionDeadline,
+    addModal.value.mandatoryUnitIds,
+    addModal.value.optionalUnitIds,
+  ],
+  () => {
+    if (addModal.value.show && !addModal.value.isEdit) {
+      saveCurrentDraft();
+    }
+  },
+  { deep: true }
+);
 
 // Modal title & subtitle helpers
 const levelSubtitle = computed(() => {
@@ -1567,28 +1700,61 @@ function openAddModal(
     ? computeNextSequenceCode(type, defaultModule)
     : generateStandardCode(type, "", parentCode);
 
-  addModal.value = {
-    show: true,
-    isEdit: false,
-    editId: "",
-    type,
-    parentId: resolvedParent?.id,
-    parentObj: resolvedParent,
-    code: initialCode,
-    name: "",
-    autoCode: true,
-    businessModule: defaultModule,
-    level: "BASIC",
-    description: "",
-    status: "ACTIVE",
-    mandatoryUnitIds: inheritedMandatoryUnits,
-    optionalUnitIds: inheritedOptionalUnits,
-    autoEnrollStaff: true,
-    completionDeadline: "",
-  };
+  const draftKey = getDraftKey(type, resolvedParent?.id);
+  const existingDraft = addModalDrafts.value[draftKey];
 
-  if (defaultModule) {
-    handleBusinessModuleChange();
+  if (
+    existingDraft &&
+    (existingDraft.name?.trim() ||
+      existingDraft.description?.trim() ||
+      existingDraft.completionDeadline ||
+      !existingDraft.autoCode)
+  ) {
+    hasRestoredDraft.value = true;
+    addModal.value = {
+      show: true,
+      isEdit: false,
+      editId: "",
+      type,
+      parentId: resolvedParent?.id,
+      parentObj: resolvedParent,
+      code: existingDraft.code || initialCode,
+      name: existingDraft.name || "",
+      autoCode: existingDraft.autoCode ?? true,
+      businessModule: existingDraft.businessModule || defaultModule,
+      level: existingDraft.level || "BASIC",
+      description: existingDraft.description || "",
+      status: existingDraft.status || "ACTIVE",
+      mandatoryUnitIds: existingDraft.mandatoryUnitIds || inheritedMandatoryUnits,
+      optionalUnitIds: existingDraft.optionalUnitIds || inheritedOptionalUnits,
+      autoEnrollStaff: existingDraft.autoEnrollStaff ?? true,
+      completionDeadline: existingDraft.completionDeadline || "",
+    };
+  } else {
+    hasRestoredDraft.value = false;
+    addModal.value = {
+      show: true,
+      isEdit: false,
+      editId: "",
+      type,
+      parentId: resolvedParent?.id,
+      parentObj: resolvedParent,
+      code: initialCode,
+      name: "",
+      autoCode: true,
+      businessModule: defaultModule,
+      level: "BASIC",
+      description: "",
+      status: "ACTIVE",
+      mandatoryUnitIds: inheritedMandatoryUnits,
+      optionalUnitIds: inheritedOptionalUnits,
+      autoEnrollStaff: true,
+      completionDeadline: "",
+    };
+
+    if (defaultModule) {
+      handleBusinessModuleChange();
+    }
   }
 
   nextTick(() => {
@@ -1602,6 +1768,7 @@ function openEditModal(
   parentObj?: any,
   grandParentObj?: any
 ) {
+  hasRestoredDraft.value = false;
   selectedId.value = item.id;
   emit("select", { type, data: item, parent: parentObj || grandParentObj });
 
@@ -1826,6 +1993,8 @@ async function submitAddModal() {
       }
     }
 
+    clearDraft(type, parentId);
+    hasRestoredDraft.value = false;
     addModal.value.show = false;
     await loadTreeData({ type, id: savedNodeId, parentId });
     emit("refresh");
@@ -1868,6 +2037,11 @@ const filteredDomains = computed(() => {
 
 onMounted(() => {
   loadTreeData();
+  window.addEventListener("keydown", handleGlobalKeyDown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", handleGlobalKeyDown);
 });
 </script>
 
@@ -2482,6 +2656,54 @@ onMounted(() => {
 .close-btn:hover {
   color: #f8fafc;
   background: rgba(255, 255, 255, 0.08);
+}
+
+.modal-draft-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.85rem;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 6px;
+  margin-bottom: 0.85rem;
+  font-size: 0.8rem;
+}
+
+.draft-banner-info {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #fbbf24;
+  font-weight: 500;
+}
+
+.draft-sparkle-icon {
+  color: #f59e0b;
+  flex-shrink: 0;
+}
+
+.btn-clear-draft {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(245, 158, 11, 0.18);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fde68a;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.btn-clear-draft:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #fca5a5;
 }
 
 .modal-form {
