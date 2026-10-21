@@ -1271,6 +1271,18 @@ function handleDomainChange() {
   if (chosen) {
     addModal.value.parentObj = chosen;
     addModal.value.businessModule = extractModuleFromParent(chosen);
+    if (chosen.mandatoryUnitIds && chosen.mandatoryUnitIds.length > 0) {
+      addModal.value.mandatoryUnitIds = [...chosen.mandatoryUnitIds];
+    } else {
+      addModal.value.mandatoryUnitIds = [];
+    }
+    if (chosen.optionalUnitIds && chosen.optionalUnitIds.length > 0) {
+      addModal.value.optionalUnitIds = [...chosen.optionalUnitIds];
+    } else if (chosen.unitIds && chosen.unitIds.length > 0) {
+      addModal.value.optionalUnitIds = [...chosen.unitIds];
+    } else {
+      addModal.value.optionalUnitIds = [];
+    }
     if (addModal.value.autoCode) {
       handleBusinessModuleChange();
     }
@@ -1283,22 +1295,38 @@ function openAddModal(
   grandParentObj?: any
 ) {
   const parent = parentObj || grandParentObj;
-  const parentCode = parent?.code || "";
+  const resolvedParent =
+    (parent?.id && domains.value.find((d) => d.id === parent.id)) ||
+    (parent?.id && programs.value.find((p) => p.id === parent.id)) ||
+    parent;
+  const parentCode = resolvedParent?.code || "";
 
   // Tự động kế thừa phân hệ & phân bổ đơn vị từ cấp cha
   let defaultModule = "";
   let inheritedMandatoryUnits: string[] = [];
   let inheritedOptionalUnits: string[] = [];
 
-  if (parent) {
+  if (resolvedParent) {
     if (type === "program" || type === "course") {
-      defaultModule = extractModuleFromParent(parent);
+      defaultModule = extractModuleFromParent(resolvedParent);
     }
-    if (parent.mandatoryUnitIds && Array.isArray(parent.mandatoryUnitIds)) {
-      inheritedMandatoryUnits = [...parent.mandatoryUnitIds];
+    if (resolvedParent.mandatoryUnitIds && Array.isArray(resolvedParent.mandatoryUnitIds)) {
+      inheritedMandatoryUnits = [...resolvedParent.mandatoryUnitIds];
+    } else if (resolvedParent.mandatoryUnitIds) {
+      inheritedMandatoryUnits = Array.from(resolvedParent.mandatoryUnitIds);
     }
-    if (parent.optionalUnitIds && Array.isArray(parent.optionalUnitIds)) {
-      inheritedOptionalUnits = [...parent.optionalUnitIds];
+    if (resolvedParent.optionalUnitIds && Array.isArray(resolvedParent.optionalUnitIds)) {
+      inheritedOptionalUnits = [...resolvedParent.optionalUnitIds];
+    } else if (resolvedParent.optionalUnitIds) {
+      inheritedOptionalUnits = Array.from(resolvedParent.optionalUnitIds);
+    }
+    if (
+      inheritedMandatoryUnits.length === 0 &&
+      inheritedOptionalUnits.length === 0 &&
+      resolvedParent.unitIds &&
+      resolvedParent.unitIds.length > 0
+    ) {
+      inheritedOptionalUnits = Array.from(resolvedParent.unitIds);
     }
   }
 
@@ -1309,8 +1337,8 @@ function openAddModal(
   addModal.value = {
     show: true,
     type,
-    parentId: parent?.id,
-    parentObj: parent,
+    parentId: resolvedParent?.id,
+    parentObj: resolvedParent,
     code: initialCode,
     name: "",
     autoCode: true,
