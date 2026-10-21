@@ -112,11 +112,11 @@
               </button>
               <button
                 type="button"
-                class="hover-action-btn menu-btn"
-                title="Tùy chọn"
-                @click="openMenu('domain', domain)"
+                class="hover-action-btn edit-btn"
+                title="Chỉnh sửa thông tin Lĩnh vực"
+                @click="openEditModal('domain', domain)"
               >
-                <MoreHorizontal :size="14" />
+                <Edit3 :size="13" />
               </button>
             </div>
           </div>
@@ -177,11 +177,11 @@
                   </button>
                   <button
                     type="button"
-                    class="hover-action-btn menu-btn"
-                    title="Tùy chọn"
-                    @click="openMenu('program', program)"
+                    class="hover-action-btn edit-btn"
+                    title="Chỉnh sửa thông tin Chương trình"
+                    @click="openEditModal('program', program, domain)"
                   >
-                    <MoreHorizontal :size="14" />
+                    <Edit3 :size="13" />
                   </button>
                 </div>
               </div>
@@ -196,7 +196,7 @@
                   <div
                     class="tree-node course-node"
                     :class="{ active: selectedId === course.id, expanded: isExpanded(course.id) }"
-                    @click="selectNode('course', course)"
+                    @click="selectNode('course', course, program)"
                   >
                     <button
                       type="button"
@@ -229,20 +229,20 @@
                     <div class="node-hover-actions" @click.stop>
                       <button
                         type="button"
-                        class="hover-action-btn add-btn"
+                        class="btn-studio-node btn-primary-node"
                         title="Thêm Chương vào Khóa học này"
                         @click="openAddModal('chapter', course)"
                       >
-                        <Plus :size="14" />
-                        <span class="btn-tooltip">Thêm Chương</span>
+                        <Plus :size="13" />
+                        <span>Thêm Chương</span>
                       </button>
                       <button
                         type="button"
-                        class="hover-action-btn menu-btn"
-                        title="Tùy chọn"
-                        @click="openMenu('course', course)"
+                        class="hover-action-btn edit-btn"
+                        title="Chỉnh sửa thông tin Khóa học"
+                        @click="openEditModal('course', course, program)"
                       >
-                        <MoreHorizontal :size="14" />
+                        <Edit3 :size="13" />
                       </button>
                     </div>
                   </div>
@@ -296,11 +296,11 @@
                           </button>
                           <button
                             type="button"
-                            class="hover-action-btn menu-btn"
-                            title="Tùy chọn"
-                            @click="openMenu('chapter', chapter, course)"
+                            class="hover-action-btn edit-btn"
+                            title="Chỉnh sửa thông tin Chương"
+                            @click="openEditModal('chapter', chapter, course)"
                           >
-                            <MoreHorizontal :size="13" />
+                            <Edit3 :size="13" />
                           </button>
                         </div>
                       </div>
@@ -373,12 +373,20 @@
                             <div class="node-hover-actions" @click.stop>
                               <button
                                 type="button"
-                                class="hover-action-btn edit-btn"
+                                class="btn-studio-node btn-editor-node"
                                 title="Mở trang soạn bài học toàn diện"
                                 @click="openLessonEditor(lesson.id)"
                               >
-                                <ExternalLink :size="13" />
-                                <span class="btn-tooltip">Soạn bài</span>
+                                <ExternalLink :size="12" />
+                                <span>Soạn bài</span>
+                              </button>
+                              <button
+                                type="button"
+                                class="hover-action-btn edit-btn"
+                                title="Chỉnh sửa thông tin Bài học"
+                                @click="openEditModal('lesson', lesson, chapter, course)"
+                              >
+                                <Edit3 :size="13" />
                               </button>
                             </div>
                           </div>
@@ -728,13 +736,24 @@
 
           <!-- MODAL ACTIONS -->
           <div class="modal-actions">
-            <button type="button" class="btn btn-secondary" @click="addModal.show = false">
-              Hủy
+            <button
+              v-if="addModal.isEdit && addModal.type === 'lesson'"
+              type="button"
+              class="btn btn-outline-info"
+              @click="openLessonEditor(addModal.editId!)"
+            >
+              <ExternalLink :size="14" />
+              <span>Soạn chi tiết bài học</span>
             </button>
-            <button type="submit" class="btn btn-primary" :disabled="submitting">
-              <Loader2 v-if="submitting" :size="14" class="spin-icon" />
-              <span>{{ submitting ? "Đang xử lý..." : "Tạo mới & Đồng bộ" }}</span>
-            </button>
+            <div class="actions-right">
+              <button type="button" class="btn btn-secondary" @click="addModal.show = false">
+                Hủy
+              </button>
+              <button type="submit" class="btn btn-primary" :disabled="submitting">
+                <Loader2 v-if="submitting" :size="14" class="spin-icon" />
+                <span>{{ submitting ? "Đang xử lý..." : (addModal.isEdit ? "Cập nhật & Lưu" : "Tạo mới & Đồng bộ") }}</span>
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -762,7 +781,6 @@ import {
   FileUp,
   ListOrdered,
   HelpCircle,
-  MoreHorizontal,
   ExternalLink,
   FolderTree,
   Loader2,
@@ -771,6 +789,7 @@ import {
   Unlock,
   Building2,
   ShieldCheck,
+  Edit3,
 } from "lucide-vue-next";
 import { trainingApi } from "../api/trainingApi";
 import { adminApi, type AdminUser } from "../api/adminApi";
@@ -821,9 +840,11 @@ const chaptersMap = ref<Record<string, Chapter[]>>({});
 const unitsList = ref<OrganizationUnit[]>([]);
 const systemUsers = ref<AdminUser[]>([]);
 
-// Inline Add Modal State
+// Inline Add / Edit Modal State
 interface AddModalData {
   show: boolean;
+  isEdit?: boolean;
+  editId?: string;
   type: "domain" | "program" | "course" | "chapter" | "lesson";
   parentId?: string;
   parentObj?: any;
@@ -838,10 +859,13 @@ interface AddModalData {
   optionalUnitIds: string[];
   autoEnrollStaff: boolean;
   completionDeadline?: string;
+  version?: number;
 }
 
 const addModal = ref<AddModalData>({
   show: false,
+  isEdit: false,
+  editId: "",
   type: "domain",
   code: "",
   name: "",
@@ -860,23 +884,40 @@ const nameInputRef = ref<HTMLInputElement | null>(null);
 
 // Modal title & subtitle helpers
 const levelSubtitle = computed(() => {
+  const prefix = addModal.value.isEdit ? "Cập nhật " : "";
   switch (addModal.value.type) {
     case "domain":
-      return "Cấp 1: Lĩnh vực đào tạo";
+      return `${prefix}Cấp 1: Lĩnh vực đào tạo`;
     case "program":
-      return "Cấp 2: Chương trình đào tạo";
+      return `${prefix}Cấp 2: Chương trình đào tạo`;
     case "course":
-      return "Cấp 3: Khóa học nghiệp vụ";
+      return `${prefix}Cấp 3: Khóa học nghiệp vụ`;
     case "chapter":
-      return "Cấp 4: Chương học";
+      return `${prefix}Cấp 4: Chương học`;
     case "lesson":
-      return "Cấp 5: Bài học";
+      return `${prefix}Cấp 5: Bài học`;
     default:
       return "Cấu trúc đào tạo";
   }
 });
 
 const modalTitle = computed(() => {
+  if (addModal.value.isEdit) {
+    switch (addModal.value.type) {
+      case "domain":
+        return `Cập nhật Lĩnh vực: ${addModal.value.name || addModal.value.code}`;
+      case "program":
+        return `Cập nhật Chương trình: ${addModal.value.name || addModal.value.code}`;
+      case "course":
+        return `Cập nhật Khóa học: ${addModal.value.name || addModal.value.code}`;
+      case "chapter":
+        return `Cập nhật Chương: ${addModal.value.name || addModal.value.code}`;
+      case "lesson":
+        return `Cập nhật Bài học: ${addModal.value.name || addModal.value.code}`;
+      default:
+        return "Cập nhật thông tin";
+    }
+  }
   switch (addModal.value.type) {
     case "domain":
       return "Thêm Lĩnh vực đào tạo mới";
@@ -1259,10 +1300,14 @@ function toggleAllNodes(expand: boolean) {
   }
 }
 
-// Select node
+// Select node & open edit modal
 function selectNode(type: string, data: any, parent?: any, grandparent?: any) {
   selectedId.value = data.id;
   emit("select", { type, data, parent: parent || grandparent });
+  if (type !== "lesson" && !isExpanded(data.id)) {
+    expandedIds.value.add(data.id);
+  }
+  openEditModal(type as any, data, parent, grandparent);
 }
 
 // Open Inline Add Modal
@@ -1336,6 +1381,8 @@ function openAddModal(
 
   addModal.value = {
     show: true,
+    isEdit: false,
+    editId: "",
     type,
     parentId: resolvedParent?.id,
     parentObj: resolvedParent,
@@ -1361,15 +1408,85 @@ function openAddModal(
   });
 }
 
-// Submit Create Node
+function openEditModal(
+  type: "domain" | "program" | "course" | "chapter" | "lesson",
+  item: any,
+  parentObj?: any,
+  grandParentObj?: any
+) {
+  selectedId.value = item.id;
+  emit("select", { type, data: item, parent: parentObj || grandParentObj });
+
+  const parent = parentObj || grandParentObj;
+  let pId = "";
+  if (type === "program") {
+    pId = item.domainId || parent?.id || "";
+  } else if (type === "course") {
+    pId = item.programId || parent?.id || "";
+  } else if (type === "chapter") {
+    pId = item.courseId || parent?.id || "";
+  } else if (type === "lesson") {
+    pId = item.chapterId || parent?.id || "";
+  }
+
+  const resolvedParent =
+    (pId && domains.value.find((d) => d.id === pId)) ||
+    (pId && programs.value.find((p) => p.id === pId)) ||
+    (pId && courses.value.find((c) => c.id === pId)) ||
+    parent;
+
+  let mandatoryUnits: string[] = [];
+  let optionalUnits: string[] = [];
+
+  if (item.mandatoryUnitIds && Array.isArray(item.mandatoryUnitIds)) {
+    mandatoryUnits = [...item.mandatoryUnitIds];
+  } else if (item.mandatoryUnitIds) {
+    mandatoryUnits = Array.from(item.mandatoryUnitIds);
+  }
+
+  if (item.optionalUnitIds && Array.isArray(item.optionalUnitIds)) {
+    optionalUnits = [...item.optionalUnitIds];
+  } else if (item.optionalUnitIds) {
+    optionalUnits = Array.from(item.optionalUnitIds);
+  } else if (item.unitIds && Array.isArray(item.unitIds)) {
+    optionalUnits = item.unitIds.filter((u: string) => !mandatoryUnits.includes(u));
+  }
+
+  addModal.value = {
+    show: true,
+    isEdit: true,
+    editId: item.id,
+    type,
+    parentId: pId || resolvedParent?.id,
+    parentObj: resolvedParent,
+    code: item.code || item.id || "",
+    name: item.name || item.title || "",
+    autoCode: false,
+    businessModule: item.businessModule || (resolvedParent ? extractModuleFromParent(resolvedParent) : ""),
+    level: item.level || "BASIC",
+    description: item.description || item.hint || "",
+    status: item.status || "ACTIVE",
+    mandatoryUnitIds: mandatoryUnits,
+    optionalUnitIds: optionalUnits,
+    autoEnrollStaff: false,
+    completionDeadline: item.completionDeadline || "",
+    version: item.version,
+  };
+
+  nextTick(() => {
+    nameInputRef.value?.focus();
+  });
+}
+
+// Submit Create or Edit Node
 async function submitAddModal() {
-  const { type, parentId, code, name } = addModal.value;
+  const { type, parentId, code, name, isEdit, editId } = addModal.value;
   if (!code.trim() || !name.trim()) return;
 
   submitting.value = true;
   try {
     if (type === "domain") {
-      await trainingApi.saveDomain({
+      const payload: any = {
         code: code.trim().toUpperCase(),
         name: name.trim(),
         description: addModal.value.description.trim() || undefined,
@@ -1380,18 +1497,22 @@ async function submitAddModal() {
           ...addModal.value.mandatoryUnitIds,
           ...addModal.value.optionalUnitIds,
         ],
-        status: "ACTIVE",
-      });
-      showToast("Tạo lĩnh vực đào tạo thành công!", "success");
+        status: addModal.value.status || "ACTIVE",
+      };
+      if (isEdit) {
+        payload.id = editId;
+      }
+      await trainingApi.saveDomain(payload);
+      showToast(isEdit ? "Cập nhật lĩnh vực đào tạo thành công!" : "Tạo lĩnh vực đào tạo thành công!", "success");
     } else if (type === "program") {
-      await trainingApi.saveProgram({
+      const payload: any = {
         domainId: parentId,
         code: code.trim().toUpperCase(),
         name: name.trim(),
         description: addModal.value.description.trim() || undefined,
         businessModule: addModal.value.businessModule || undefined,
         level: "BASIC",
-        status: "ACTIVE",
+        status: addModal.value.status || "ACTIVE",
         mandatoryUnitIds: addModal.value.mandatoryUnitIds,
         optionalUnitIds: addModal.value.optionalUnitIds,
         unitIds: [
@@ -1399,14 +1520,18 @@ async function submitAddModal() {
           ...addModal.value.optionalUnitIds,
         ],
         autoEnrollStaff: addModal.value.autoEnrollStaff,
-      });
+      };
+      if (isEdit) {
+        payload.id = editId;
+      }
+      await trainingApi.saveProgram(payload);
       const staffMsg =
-        addModal.value.mandatoryUnitIds.length && affectedStaff.value.length
+        !isEdit && addModal.value.mandatoryUnitIds.length && affectedStaff.value.length
           ? ` Đã tự động ghi danh ${affectedStaff.value.length} học viên!`
           : "";
-      showToast(`Tạo chương trình đào tạo thành công!${staffMsg}`, "success");
+      showToast(isEdit ? "Cập nhật chương trình đào tạo thành công!" : `Tạo chương trình đào tạo thành công!${staffMsg}`, "success");
     } else if (type === "course") {
-      await trainingApi.saveCourse({
+      const payload: any = {
         programId: parentId,
         code: code.trim().toUpperCase(),
         name: name.trim(),
@@ -1415,39 +1540,64 @@ async function submitAddModal() {
         level: addModal.value.level || "BASIC",
         completionDeadline: addModal.value.completionDeadline || null,
         iconName: "BookOpen",
-      });
-      showToast("Tạo khóa học thành công!", "success");
+      };
+      if (isEdit) {
+        payload.id = editId;
+        payload.version = addModal.value.version;
+      }
+      await trainingApi.saveCourse(payload);
+      showToast(isEdit ? "Cập nhật khóa học thành công!" : "Tạo khóa học thành công!", "success");
     } else if (type === "chapter") {
-      await trainingApi.saveChapter(parentId!, {
+      const payload: any = {
         code: code.trim().toUpperCase(),
         title: name.trim(),
         description: addModal.value.description.trim() || undefined,
-      });
-      showToast("Tạo chương thành công!", "success");
+      };
+      if (isEdit) {
+        payload.id = editId;
+        payload.version = addModal.value.version;
+      }
+      await trainingApi.saveChapter(parentId!, payload);
+      showToast(isEdit ? "Cập nhật chương thành công!" : "Tạo chương thành công!", "success");
     } else if (type === "lesson") {
       const courseId =
         addModal.value.parentObj?.courseId ||
         addModal.value.parentObj?.course?.id ||
         "";
-      await adminApi.createLesson({
-        id: code.trim().toUpperCase(),
-        title: name.trim(),
-        hint: name.trim(),
-        chapterId: parentId!,
-        courseId: courseId,
-        videoUrl: "",
-        videoSource: "URL",
-        documents: [],
-        procedureSteps: [],
-      });
-      showToast("Tạo bài học thành công!", "success");
+      if (isEdit) {
+        await adminApi.updateLesson(editId!, {
+          id: editId!,
+          title: name.trim(),
+          hint: addModal.value.description.trim() || name.trim(),
+          chapterId: parentId!,
+          courseId: courseId,
+          videoUrl: "",
+          videoSource: "URL",
+          documents: [],
+          procedureSteps: [],
+        });
+        showToast("Cập nhật bài học thành công!", "success");
+      } else {
+        await adminApi.createLesson({
+          id: code.trim().toUpperCase(),
+          title: name.trim(),
+          hint: name.trim(),
+          chapterId: parentId!,
+          courseId: courseId,
+          videoUrl: "",
+          videoSource: "URL",
+          documents: [],
+          procedureSteps: [],
+        });
+        showToast("Tạo bài học thành công!", "success");
+      }
     }
 
     addModal.value.show = false;
     await loadTreeData();
     emit("refresh");
   } catch (error: any) {
-    const msg = error.response?.data?.message || "Lỗi khi tạo mục mới!";
+    const msg = error.response?.data?.message || (isEdit ? "Lỗi khi cập nhật!" : "Lỗi khi tạo mục mới!");
     showToast(msg, "error");
   } finally {
     submitting.value = false;
@@ -1455,10 +1605,6 @@ async function submitAddModal() {
 }
 
 // Actions
-function openMenu(type: string, item: any, parent?: any) {
-  selectNode(type, item, parent);
-}
-
 function openLessonEditor(lessonId: string) {
   router.push(`/admin/lessons/${encodeURIComponent(lessonId)}/edit`);
 }
@@ -2002,6 +2148,21 @@ onMounted(() => {
   border-color: #10b981;
 }
 
+.hover-action-btn.edit-btn:hover {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
+.btn-studio-node.btn-editor-node {
+  background: #3b82f6;
+  color: #ffffff;
+}
+
+.btn-studio-node.btn-editor-node:hover {
+  background: #2563eb;
+}
+
 .btn-tooltip {
   position: absolute;
   top: -24px;
@@ -2476,11 +2637,30 @@ onMounted(() => {
 /* Modal Actions */
 .modal-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   gap: 0.6rem;
   margin-top: 0.5rem;
   padding-top: 0.75rem;
   border-top: 1px solid rgba(51, 65, 85, 0.6);
+}
+
+.actions-right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-left: auto;
+}
+
+.btn-outline-info {
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  color: #60a5fa;
+}
+
+.btn-outline-info:hover {
+  background: #3b82f6;
+  color: #ffffff;
 }
 
 .btn {
