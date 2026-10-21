@@ -374,6 +374,9 @@ public class TrainingStructureService {
         p.setDomain(domains.findById(required(request.domainId(), "Lĩnh vực"))
                 .orElseThrow(() -> new BadRequestException("Lĩnh vực không tồn tại")));
 
+        p.setName(required(request.name(), "Tên chương trình"));
+        p.setDescription(request.description());
+
         String mod = clean(request.businessModule());
         p.setBusinessModule(mod);
         p.setLevel(clean(request.level()));
