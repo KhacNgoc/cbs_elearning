@@ -220,9 +220,13 @@
 
                     <div class="node-badge-group">
                       <span v-if="course.businessModule" class="meta-tag module-tag">{{ course.businessModule }}</span>
-                      <span v-if="course.mandatoryUnitIds?.length" class="meta-tag mandatory-tag" title="Đơn vị bắt buộc hoàn thành">
+                      <span
+                        v-if="getCourseMandatoryUnits(course).length"
+                        class="meta-tag mandatory-tag"
+                        :title="`Đơn vị bắt buộc: ${getCourseMandatoryUnits(course).map(getUnitName).join(', ')}`"
+                      >
                         <ShieldCheck :size="11" />
-                        {{ course.mandatoryUnitIds.length }} ĐV Bắt buộc
+                        {{ getCourseMandatoryUnits(course).length }} ĐV Bắt buộc
                       </span>
                       <span class="status-pill" :class="course.status?.toLowerCase()">
                         {{ course.status === 'PUBLISHED' ? 'Đã xuất bản' : 'Bản nháp' }}
@@ -284,6 +288,14 @@
                         </div>
 
                         <div class="node-badge-group">
+                          <span
+                            v-if="getCourseMandatoryUnits(course).length"
+                            class="meta-tag mandatory-tag"
+                            :title="`Đơn vị bắt buộc: ${getCourseMandatoryUnits(course).map(getUnitName).join(', ')}`"
+                          >
+                            <ShieldCheck :size="11" />
+                            {{ getCourseMandatoryUnits(course).length }} ĐV Bắt buộc
+                          </span>
                           <span class="count-tag">{{ chapter.lessons?.length || 0 }} bài</span>
                         </div>
 
@@ -1244,6 +1256,22 @@ function getUnitName(unitId: string): string {
   return found?.name || unitId;
 }
 
+function getCourseMandatoryUnits(course: any): string[] {
+  if (course?.mandatoryUnitIds && Array.isArray(course.mandatoryUnitIds) && course.mandatoryUnitIds.length > 0) {
+    return course.mandatoryUnitIds;
+  }
+  if (course?.mandatoryUnitIds && typeof course.mandatoryUnitIds[Symbol.iterator] === "function") {
+    const arr = Array.from(course.mandatoryUnitIds as string[]);
+    if (arr.length > 0) return arr;
+  }
+  // Fallback to parent program
+  const parentProg = programs.value.find((p) => p.id === course?.programId);
+  if (parentProg?.mandatoryUnitIds && Array.isArray(parentProg.mandatoryUnitIds) && parentProg.mandatoryUnitIds.length > 0) {
+    return parentProg.mandatoryUnitIds;
+  }
+  return [];
+}
+
 function handleSelectUnit(event: Event, type: "mandatory" | "optional") {
   const select = event.target as HTMLSelectElement;
   const unitId = select.value;
@@ -1290,8 +1318,63 @@ const affectedStaff = computed(() => {
   );
 });
 
+// Expand only operating branch
+function expandOperatingBranch(type: string, id?: string, parentId?: string) {
+  if (type === "domain") {
+    if (id) expandedIds.value.add(id);
+  } else if (type === "program") {
+    if (parentId) expandedIds.value.add(parentId);
+    if (id) expandedIds.value.add(id);
+  } else if (type === "course") {
+    if (parentId) {
+      expandedIds.value.add(parentId);
+      const prog = programs.value.find((p) => p.id === parentId);
+      if (prog?.domainId) expandedIds.value.add(prog.domainId);
+    }
+    if (id) {
+      expandedIds.value.add(id);
+      loadChaptersForCourse(id);
+    }
+  } else if (type === "chapter") {
+    if (parentId) {
+      expandedIds.value.add(parentId);
+      loadChaptersForCourse(parentId);
+      const crs = courses.value.find((c) => c.id === parentId);
+      if (crs) {
+        if (crs.programId) {
+          expandedIds.value.add(crs.programId);
+          const prog = programs.value.find((p) => p.id === crs.programId);
+          if (prog?.domainId) expandedIds.value.add(prog.domainId);
+        }
+      }
+    }
+    if (id) expandedIds.value.add(id);
+  } else if (type === "lesson") {
+    if (parentId) {
+      expandedIds.value.add(parentId);
+      let courseId = "";
+      for (const [cId, chaps] of Object.entries(chaptersMap.value)) {
+        if (chaps.some((ch) => ch.id === parentId)) {
+          courseId = cId;
+          break;
+        }
+      }
+      if (courseId) {
+        expandedIds.value.add(courseId);
+        const crs = courses.value.find((c) => c.id === courseId);
+        if (crs?.programId) {
+          expandedIds.value.add(crs.programId);
+          const prog = programs.value.find((p) => p.id === crs.programId);
+          if (prog?.domainId) expandedIds.value.add(prog.domainId);
+        }
+      }
+    }
+    if (id) expandedIds.value.add(id);
+  }
+}
+
 // Load full tree catalog & auxiliary options
-async function loadTreeData() {
+async function loadTreeData(expandTarget?: { type: string; id?: string; parentId?: string }) {
   loading.value = true;
   try {
     const catalog = await trainingApi.catalog();
@@ -1319,14 +1402,19 @@ async function loadTreeData() {
       console.warn("Could not load users for enroll preview:", e);
     }
 
-    // Expand domains & programs
-    domains.value.forEach((d) => expandedIds.value.add(d.id));
-    programs.value.forEach((p) => expandedIds.value.add(p.id));
-
-    // Load chapters for courses
+    // Preload chapters for courses without auto-expanding
     for (const c of courses.value) {
-      expandedIds.value.add(c.id);
       loadChaptersForCourse(c.id);
+    }
+
+    if (expandTarget) {
+      expandedIds.value.clear();
+      expandOperatingBranch(expandTarget.type, expandTarget.id, expandTarget.parentId);
+    } else if (expandedIds.value.size === 0) {
+      // First initial load: only expand the first domain
+      if (domains.value.length > 0) {
+        expandedIds.value.add(domains.value[0].id);
+      }
     }
   } catch (error) {
     console.error("Lỗi khi tải cấu trúc đào tạo:", error);
@@ -1340,7 +1428,6 @@ async function loadChaptersForCourse(courseId: string) {
   try {
     const chapters = await trainingApi.chapters(courseId);
     chaptersMap.value[courseId] = chapters || [];
-    chapters?.forEach((ch) => expandedIds.value.add(ch.id));
   } catch (err) {
     console.error(`Lỗi tải chương cho khóa ${courseId}:`, err);
   }
@@ -1611,6 +1698,7 @@ async function submitAddModal() {
   if (!code.trim() || !name.trim()) return;
 
   submitting.value = true;
+  let savedNodeId = isEdit ? editId : code.trim().toUpperCase();
   try {
     if (type === "domain") {
       const payload: any = {
@@ -1629,7 +1717,8 @@ async function submitAddModal() {
       if (isEdit) {
         payload.id = editId;
       }
-      await trainingApi.saveDomain(payload);
+      const res = await trainingApi.saveDomain(payload);
+      if (res?.id) savedNodeId = res.id;
       showToast(isEdit ? "Cập nhật lĩnh vực đào tạo thành công!" : "Tạo lĩnh vực đào tạo thành công!", "success");
     } else if (type === "program") {
       const payload: any = {
@@ -1651,7 +1740,8 @@ async function submitAddModal() {
       if (isEdit) {
         payload.id = editId;
       }
-      await trainingApi.saveProgram(payload);
+      const res = await trainingApi.saveProgram(payload);
+      if (res?.id) savedNodeId = res.id;
       const staffMsg =
         !isEdit && addModal.value.mandatoryUnitIds.length && affectedStaff.value.length
           ? ` Đã tự động ghi danh ${affectedStaff.value.length} học viên!`
@@ -1678,7 +1768,8 @@ async function submitAddModal() {
         payload.id = editId;
         payload.version = addModal.value.version;
       }
-      await trainingApi.saveCourse(payload);
+      const res = await trainingApi.saveCourse(payload);
+      if (res?.id) savedNodeId = res.id;
       showToast(isEdit ? "Cập nhật khóa học thành công!" : "Tạo khóa học thành công!", "success");
     } else if (type === "chapter") {
       const payload: any = {
@@ -1690,7 +1781,8 @@ async function submitAddModal() {
         payload.id = editId;
         payload.version = addModal.value.version;
       }
-      await trainingApi.saveChapter(parentId!, payload);
+      const res = await trainingApi.saveChapter(parentId!, payload);
+      if (res?.id) savedNodeId = res.id;
       showToast(isEdit ? "Cập nhật chương thành công!" : "Tạo chương thành công!", "success");
     } else if (type === "lesson") {
       let courseId =
@@ -1735,7 +1827,7 @@ async function submitAddModal() {
     }
 
     addModal.value.show = false;
-    await loadTreeData();
+    await loadTreeData({ type, id: savedNodeId, parentId });
     emit("refresh");
   } catch (error: any) {
     const msg = error.response?.data?.message || (isEdit ? "Lỗi khi cập nhật!" : "Lỗi khi tạo mục mới!");

@@ -543,7 +543,17 @@ public class TrainingStructureService {
             enrollStaffForCourse(saved, mandatoryUnitIds);
         }
 
-        return mapper.toCourseDto(saved);
+        CourseDto resultDto = mapper.toCourseDto(saved);
+        Set<String> optionalUnitIds = saved.getUnitGrants().entrySet().stream()
+                .filter(e -> !"MANDATORY".equalsIgnoreCase(e.getValue()))
+                .map(Map.Entry::getKey)
+                .collect(java.util.stream.Collectors.toSet());
+        resultDto.setMandatoryUnitIds(mandatoryUnitIds);
+        resultDto.setOptionalUnitIds(optionalUnitIds);
+        Set<String> allUnits = new HashSet<>(mandatoryUnitIds);
+        allUnits.addAll(optionalUnitIds);
+        resultDto.setUnitIds(allUnits);
+        return resultDto;
     }
 
     private Integer extractTrailingNumber(String code, Integer fallback) {
@@ -605,6 +615,32 @@ public class TrainingStructureService {
                                     .collect(java.util.stream.Collectors.toSet()))));
             if (!com.bidv.coretraining.security.AccessPolicy.canReadCourse(authorization.current(), c))
                 dto.getLessons().forEach(TrainingStructureService::outlineOnly);
+
+            Set<String> mandatory = new HashSet<>();
+            Set<String> optional = new HashSet<>();
+            if (c.getUnitGrants() != null && !c.getUnitGrants().isEmpty()) {
+                for (var entry : c.getUnitGrants().entrySet()) {
+                    if ("MANDATORY".equalsIgnoreCase(entry.getValue())) {
+                        mandatory.add(entry.getKey());
+                    } else {
+                        optional.add(entry.getKey());
+                    }
+                }
+            } else if (c.getProgram() != null && c.getProgram().getUnitGrants() != null) {
+                for (var entry : c.getProgram().getUnitGrants().entrySet()) {
+                    if ("MANDATORY".equalsIgnoreCase(entry.getValue())) {
+                        mandatory.add(entry.getKey());
+                    } else {
+                        optional.add(entry.getKey());
+                    }
+                }
+            }
+            dto.setMandatoryUnitIds(mandatory);
+            dto.setOptionalUnitIds(optional);
+            Set<String> allUnits = new HashSet<>(mandatory);
+            allUnits.addAll(optional);
+            dto.setUnitIds(allUnits);
+
             return dto;
         }).toList();
     }
