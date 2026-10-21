@@ -480,11 +480,8 @@
               </select>
             </div>
 
-            <!-- PHÂN HỆ NGHIỆP VỤ (ĐƯA LÊN ĐẦU CHO DOMAIN, PROGRAM, COURSE) -->
-            <div
-              class="form-group"
-              v-if="addModal.type === 'domain' || addModal.type === 'program' || addModal.type === 'course'"
-            >
+            <!-- PHÂN HỆ CHO CẤP 1 (LĨNH VỰC) - CHO PHÉP CHỌN GỐC -->
+            <div class="form-group" v-if="addModal.type === 'domain'">
               <div class="code-label-row">
                 <label>Phân hệ nghiệp vụ (*):</label>
                 <span class="badge-module-hint" v-if="addModal.businessModule">
@@ -497,7 +494,7 @@
                 @change="handleBusinessModuleChange"
                 required
               >
-                <option value="">-- Chọn phân hệ nghiệp vụ --</option>
+                <option value="">-- Chọn phân hệ nghiệp vụ gốc --</option>
                 <option
                   v-for="mod in BUSINESS_MODULES"
                   :key="mod.value"
@@ -506,6 +503,24 @@
                   {{ mod.label }}
                 </option>
               </select>
+            </div>
+
+            <!-- PHÂN HỆ CHO CẤP 2 (CHƯƠNG TRÌNH) & CẤP 3 (KHÓA HỌC) - TỰ ĐỘNG KẾ THỪA CỐ ĐỊNH TỪ CHA -->
+            <div
+              class="form-group inherited-module-info"
+              v-else-if="addModal.type === 'program' || addModal.type === 'course'"
+            >
+              <div class="code-label-row">
+                <label>Phân hệ nghiệp vụ:</label>
+                <span class="badge-module-hint" v-if="addModal.businessModule">
+                  Tiền tố mã: {{ getModulePrefix(addModal.type, addModal.businessModule) }}
+                </span>
+              </div>
+              <div class="inherited-module-display">
+                <span class="module-chip-badge">{{ addModal.businessModule || "N/A" }}</span>
+                <span class="module-title-text">{{ getModuleName(addModal.businessModule) }}</span>
+                <span class="inherited-tag">(Kế thừa tự động từ Lĩnh vực cha)</span>
+              </div>
             </div>
 
             <!-- MÃ ĐỊNH DANH (CODE) VỚI OPTION TỰ ĐỘNG SINH / DISABLE / ẨN -->
@@ -576,10 +591,10 @@
             </div>
           </div>
 
-          <!-- SECTION 2: BUSINESS EXPLOITATION & SUB-MENU EXPANSION (FOR DOMAIN, PROGRAM & COURSE) -->
+          <!-- SECTION 2: BỔ SUNG & MÔ TẢ (CHỈ CÒN MỨC ĐỘ NẾU LÀ KHÓA HỌC, VÀ MÔ TẢ) -->
           <div v-if="addModal.type === 'domain' || addModal.type === 'program' || addModal.type === 'course'" class="form-section meta-section">
-            <div class="form-row-grid">
-              <!-- Mức độ / Cấp độ -->
+            <!-- Mức độ / Cấp độ: CHỈ HIỂN THỊ Ở CẤP KHÓA HỌC (COURSE) -->
+            <div class="form-row-grid" v-if="addModal.type === 'course'">
               <div class="form-group">
                 <label>Mức độ / Cấp độ:</label>
                 <select v-model="addModal.level" class="form-control select-control">
@@ -593,24 +608,14 @@
                 </select>
               </div>
 
-              <!-- Trạng thái -->
               <div class="form-group">
-                <label>Trạng thái:</label>
-                <select v-model="addModal.status" class="form-control select-control">
-                  <option value="ACTIVE">Đang áp dụng (Active)</option>
-                  <option value="DRAFT">Bản nháp (Draft)</option>
-                </select>
+                <label>Hạn hoàn thành khuyến nghị:</label>
+                <input
+                  v-model="addModal.completionDeadline"
+                  type="date"
+                  class="form-control date-control"
+                />
               </div>
-            </div>
-
-            <!-- Hạn hoàn thành khuyến nghị nếu là Khóa học -->
-            <div class="form-group" v-if="addModal.type === 'course'">
-              <label>Hạn hoàn thành khuyến nghị:</label>
-              <input
-                v-model="addModal.completionDeadline"
-                type="date"
-                class="form-control date-control"
-              />
             </div>
 
             <!-- Mục tiêu / Mô tả -->
@@ -969,6 +974,25 @@ function getModulePrefix(type: string, moduleCode: string): string {
   }
 }
 
+function getModuleName(code?: string): string {
+  if (!code) return "Chưa xác định";
+  const found = BUSINESS_MODULES.find((m) => m.value === code);
+  return found ? found.label : code;
+}
+
+// Trích xuất mã phân hệ từ cấp cha một cách thông minh (kể cả khi code là RMLV1, RMCT1...)
+function extractModuleFromParent(parent: any): string {
+  if (!parent) return "";
+  if (parent.businessModule) return parent.businessModule;
+  const code = (parent.code || "").toUpperCase();
+  for (const mod of BUSINESS_MODULES) {
+    if (code.startsWith(mod.value)) {
+      return mod.value;
+    }
+  }
+  return "";
+}
+
 // Thuật toán In-Memory tính toán số Seq tiếp theo tức thì (0ms latency, zero DB scan)
 function computeNextSequenceCode(type: string, moduleCode: string): string {
   if (!moduleCode) {
@@ -1246,11 +1270,7 @@ function handleDomainChange() {
   const chosen = domains.value.find((d) => d.id === addModal.value.parentId);
   if (chosen) {
     addModal.value.parentObj = chosen;
-    if (chosen.businessModule) {
-      addModal.value.businessModule = chosen.businessModule;
-    } else if (BUSINESS_MODULES.some((m) => m.value === chosen.code)) {
-      addModal.value.businessModule = chosen.code;
-    }
+    addModal.value.businessModule = extractModuleFromParent(chosen);
     if (addModal.value.autoCode) {
       handleBusinessModuleChange();
     }
@@ -1265,12 +1285,10 @@ function openAddModal(
   const parent = parentObj || grandParentObj;
   const parentCode = parent?.code || "";
 
-  // If parent domain matches business module, default to it
+  // Tự động kế thừa phân hệ từ cấp cha cho Chương trình & Khóa học
   let defaultModule = "";
-  if (parentCode && BUSINESS_MODULES.some((m) => m.value === parentCode)) {
-    defaultModule = parentCode;
-  } else if (parent?.businessModule) {
-    defaultModule = parent.businessModule;
+  if (type === "program" || type === "course") {
+    defaultModule = extractModuleFromParent(parent);
   }
 
   const initialCode = defaultModule
@@ -1317,7 +1335,7 @@ async function submitAddModal() {
         name: name.trim(),
         description: addModal.value.description.trim() || undefined,
         businessModule: addModal.value.businessModule || undefined,
-        status: addModal.value.status,
+        status: "ACTIVE",
       });
       showToast("Tạo lĩnh vực đào tạo thành công!", "success");
     } else if (type === "program") {
@@ -1327,8 +1345,8 @@ async function submitAddModal() {
         name: name.trim(),
         description: addModal.value.description.trim() || undefined,
         businessModule: addModal.value.businessModule || undefined,
-        level: addModal.value.level || undefined,
-        status: addModal.value.status,
+        level: "BASIC",
+        status: "ACTIVE",
         mandatoryUnitIds: addModal.value.mandatoryUnitIds,
         optionalUnitIds: addModal.value.optionalUnitIds,
         unitIds: [
@@ -1349,7 +1367,7 @@ async function submitAddModal() {
         name: name.trim(),
         description: addModal.value.description.trim() || undefined,
         businessModule: addModal.value.businessModule || undefined,
-        level: addModal.value.level || undefined,
+        level: addModal.value.level || "BASIC",
         completionDeadline: addModal.value.completionDeadline || null,
         iconName: "BookOpen",
       });
@@ -2104,6 +2122,46 @@ onMounted(() => {
   border-radius: 9999px;
   border: 1px solid #99f6e4;
   letter-spacing: 0.3px;
+}
+
+.inherited-module-info {
+  background: rgba(15, 23, 42, 0.65);
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid rgba(51, 65, 85, 0.6);
+}
+
+.inherited-module-display {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.module-chip-badge {
+  background: #0284c7;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.72rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+
+.module-title-text {
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: #e2e8f0;
+}
+
+.inherited-tag {
+  font-size: 0.72rem;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-style: italic;
 }
 
 .auto-code-toggle {
