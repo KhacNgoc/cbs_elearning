@@ -99,16 +99,16 @@
               <span class="count-tag">{{ getProgramsForDomain(domain.id).length }} CT</span>
             </div>
 
-            <!-- Hover Action Buttons -->
+            <!-- Action Buttons -->
             <div class="node-hover-actions" @click.stop>
               <button
                 type="button"
-                class="hover-action-btn add-btn"
+                class="btn-studio-node btn-primary-node"
                 title="Thêm Chương trình đào tạo mới vào Lĩnh vực này"
                 @click="openAddModal('program', domain)"
               >
-                <Plus :size="14" />
-                <span class="btn-tooltip">Thêm CT</span>
+                <Plus :size="13" />
+                <span>Thêm Chương trình</span>
               </button>
               <button
                 type="button"
@@ -168,12 +168,12 @@
                 <div class="node-hover-actions" @click.stop>
                   <button
                     type="button"
-                    class="hover-action-btn add-btn"
+                    class="btn-studio-node btn-primary-node"
                     title="Thêm Khóa học vào Chương trình này"
                     @click="openAddModal('course', program)"
                   >
-                    <Plus :size="14" />
-                    <span class="btn-tooltip">Thêm Khóa</span>
+                    <Plus :size="13" />
+                    <span>Thêm Khóa</span>
                   </button>
                   <button
                     type="button"
@@ -287,12 +287,12 @@
                         <div class="node-hover-actions" @click.stop>
                           <button
                             type="button"
-                            class="hover-action-btn add-btn"
+                            class="btn-studio-node btn-primary-node"
                             title="Thêm Bài học vào Chương này"
                             @click="openAddModal('lesson', chapter, course)"
                           >
-                            <Plus :size="13" />
-                            <span class="btn-tooltip">Thêm Bài</span>
+                            <Plus :size="12" />
+                            <span>Thêm Bài</span>
                           </button>
                           <button
                             type="button"
@@ -465,17 +465,47 @@
         <form @submit.prevent="submitAddModal" class="modal-form">
           <!-- SECTION 1: BASIC INFO -->
           <div class="form-section">
-            <div class="form-group">
-              <label>Tên hiển thị (*):</label>
-              <input
-                v-model="addModal.name"
-                type="text"
-                :placeholder="namePlaceholder"
+            <!-- Chọn Lĩnh vực khi thêm chương trình -->
+            <div class="form-group" v-if="addModal.type === 'program'">
+              <label>Lĩnh vực đào tạo (*):</label>
+              <select
+                v-model="addModal.parentId"
+                class="form-control select-control"
+                @change="handleDomainChange"
                 required
-                class="form-control name-input"
-                @input="handleNameInput"
-                ref="nameInputRef"
-              />
+              >
+                <option v-for="d in domains" :key="d.id" :value="d.id">
+                  {{ d.name }} ({{ d.code }})
+                </option>
+              </select>
+            </div>
+
+            <!-- PHÂN HỆ NGHIỆP VỤ (ĐƯA LÊN ĐẦU CHO DOMAIN, PROGRAM, COURSE) -->
+            <div
+              class="form-group"
+              v-if="addModal.type === 'domain' || addModal.type === 'program' || addModal.type === 'course'"
+            >
+              <div class="code-label-row">
+                <label>Phân hệ nghiệp vụ (*):</label>
+                <span class="badge-module-hint" v-if="addModal.businessModule">
+                  Tiền tố mã: {{ getModulePrefix(addModal.type, addModal.businessModule) }}
+                </span>
+              </div>
+              <select
+                v-model="addModal.businessModule"
+                class="form-control select-control module-select"
+                @change="handleBusinessModuleChange"
+                required
+              >
+                <option value="">-- Chọn phân hệ nghiệp vụ --</option>
+                <option
+                  v-for="mod in BUSINESS_MODULES"
+                  :key="mod.value"
+                  :value="mod.value"
+                >
+                  {{ mod.label }}
+                </option>
+              </select>
             </div>
 
             <!-- MÃ ĐỊNH DANH (CODE) VỚI OPTION TỰ ĐỘNG SINH / DISABLE / ẨN -->
@@ -500,7 +530,7 @@
                 <input
                   v-model="addModal.code"
                   type="text"
-                  :placeholder="addModal.autoCode ? '(Hệ thống đang tự sinh mã...)' : 'Ví dụ: RM_QLRR_01, CRS_01...'"
+                  :placeholder="addModal.autoCode ? '(Hệ thống đang tự sinh mã...)' : 'Ví dụ: RMCT1, RMLV1...'"
                   :disabled="addModal.autoCode"
                   :readonly="addModal.autoCode"
                   required
@@ -528,29 +558,27 @@
                 </button>
               </div>
               <small class="form-hint" v-if="addModal.autoCode">
-                Mã định danh chuẩn nghiệp vụ, tự sinh theo tiền tố của cấp cha và tên hiển thị.
+                Mã định danh tuần tự chuẩn nghiệp vụ (Ví dụ: RMLV1, RMCT1, RMKH1...).
               </small>
+            </div>
+
+            <div class="form-group">
+              <label>Tên hiển thị (*):</label>
+              <input
+                v-model="addModal.name"
+                type="text"
+                :placeholder="namePlaceholder"
+                required
+                class="form-control name-input"
+                @input="handleNameInput"
+                ref="nameInputRef"
+              />
             </div>
           </div>
 
-          <!-- SECTION 2: BUSINESS EXPLOITATION & SUB-MENU EXPANSION (FOR PROGRAM & COURSE) -->
-          <div v-if="addModal.type === 'program' || addModal.type === 'course'" class="form-section meta-section">
+          <!-- SECTION 2: BUSINESS EXPLOITATION & SUB-MENU EXPANSION (FOR DOMAIN, PROGRAM & COURSE) -->
+          <div v-if="addModal.type === 'domain' || addModal.type === 'program' || addModal.type === 'course'" class="form-section meta-section">
             <div class="form-row-grid">
-              <!-- Phân hệ nghiệp vụ -->
-              <div class="form-group">
-                <label>Phân hệ nghiệp vụ:</label>
-                <select v-model="addModal.businessModule" class="form-control select-control">
-                  <option value="">-- Chọn phân hệ --</option>
-                  <option
-                    v-for="mod in BUSINESS_MODULES"
-                    :key="mod.value"
-                    :value="mod.value"
-                  >
-                    {{ mod.label }}
-                  </option>
-                </select>
-              </div>
-
               <!-- Mức độ / Cấp độ -->
               <div class="form-group">
                 <label>Mức độ / Cấp độ:</label>
@@ -564,6 +592,25 @@
                   </option>
                 </select>
               </div>
+
+              <!-- Trạng thái -->
+              <div class="form-group">
+                <label>Trạng thái:</label>
+                <select v-model="addModal.status" class="form-control select-control">
+                  <option value="ACTIVE">Đang áp dụng (Active)</option>
+                  <option value="DRAFT">Bản nháp (Draft)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Hạn hoàn thành khuyến nghị nếu là Khóa học -->
+            <div class="form-group" v-if="addModal.type === 'course'">
+              <label>Hạn hoàn thành khuyến nghị:</label>
+              <input
+                v-model="addModal.completionDeadline"
+                type="date"
+                class="form-control date-control"
+              />
             </div>
 
             <!-- Mục tiêu / Mô tả -->
@@ -576,33 +623,13 @@
                 class="form-control textarea-control"
               ></textarea>
             </div>
-
-            <!-- Trạng thái -->
-            <div class="form-row-grid">
-              <div class="form-group">
-                <label>Trạng thái:</label>
-                <select v-model="addModal.status" class="form-control select-control">
-                  <option value="ACTIVE">Đang áp dụng (Active)</option>
-                  <option value="DRAFT">Bản nháp (Draft)</option>
-                </select>
-              </div>
-
-              <div class="form-group" v-if="addModal.type === 'course'">
-                <label>Hạn hoàn thành khuyến nghị:</label>
-                <input
-                  v-model="addModal.completionDeadline"
-                  type="date"
-                  class="form-control date-control"
-                />
-              </div>
-            </div>
           </div>
 
-          <!-- SECTION 3: APPLIED UNITS & AUTO-ENROLLMENT (FOR PROGRAM) -->
-          <div v-if="addModal.type === 'program'" class="form-section units-section">
+          <!-- SECTION 3: APPLIED UNITS & AUTO-ENROLLMENT (FOR DOMAIN & PROGRAM) -->
+          <div v-if="addModal.type === 'domain' || addModal.type === 'program'" class="form-section units-section">
             <h5 class="section-sub-title">
               <Building2 :size="14" />
-              <span>Phân bổ Đơn vị & Tự động ghi danh</span>
+              <span>Phân bổ Đơn vị áp dụng</span>
             </h5>
 
             <!-- 1. ĐƠN VỊ BẮT BUỘC -->
@@ -647,32 +674,7 @@
                 </span>
               </div>
 
-              <!-- AUTO-ENROLL CHECKBOX & PREVIEW -->
-              <div v-if="addModal.mandatoryUnitIds.length" class="auto-enroll-wrapper">
-                <label class="auto-enroll-check-label">
-                  <input
-                    type="checkbox"
-                    v-model="addModal.autoEnrollStaff"
-                  />
-                  <span>Tự động ghi danh toàn bộ nhân sự hiện có của các đơn vị bắt buộc này</span>
-                </label>
 
-                <div v-if="affectedStaff.length > 0" class="auto-enroll-alert">
-                  <Users :size="14" class="alert-icon" />
-                  <div class="alert-content">
-                    <span class="alert-summary">
-                      Sẽ tự động đăng ký học cho <strong>{{ affectedStaff.length }} nhân sự</strong> hiện hữu:
-                    </span>
-                    <span class="staff-list">
-                      {{ affectedStaff.map(s => s.fullName).join(', ') }}
-                    </span>
-                  </div>
-                </div>
-                <div v-else class="auto-enroll-alert empty-staff">
-                  <AlertCircle :size="13" />
-                  <span>Chưa có tài khoản nhân sự được gán vào đơn vị này trong hệ thống.</span>
-                </div>
-              </div>
             </div>
 
             <!-- 2. ĐƠN VỊ TÙY CHỌN / KHÔNG BẮT BUỘC -->
@@ -764,8 +766,6 @@ import {
   Unlock,
   Building2,
   ShieldCheck,
-  Users,
-  AlertCircle,
 } from "lucide-vue-next";
 import { trainingApi } from "../api/trainingApi";
 import { adminApi, type AdminUser } from "../api/adminApi";
@@ -949,14 +949,107 @@ function generateStandardCode(type: string, name: string, parentCode = ""): stri
   return code.slice(0, 30);
 }
 
+// Prefix helper theo chuẩn phân hệ và cấp độ
+function getModulePrefix(type: string, moduleCode: string): string {
+  const mod = (moduleCode || "").trim().toUpperCase();
+  if (!mod) return "";
+  switch (type) {
+    case "domain":
+      return `${mod}LV`;
+    case "program":
+      return `${mod}CT`;
+    case "course":
+      return `${mod}KH`;
+    case "chapter":
+      return "CH";
+    case "lesson":
+      return "BH";
+    default:
+      return `${mod}_`;
+  }
+}
+
+// Thuật toán In-Memory tính toán số Seq tiếp theo tức thì (0ms latency, zero DB scan)
+function computeNextSequenceCode(type: string, moduleCode: string): string {
+  if (!moduleCode) {
+    return generateStandardCode(type, addModal.value.name, addModal.value.parentObj?.code || "");
+  }
+
+  const prefix = getModulePrefix(type, moduleCode);
+  let list: Array<{ code?: string }> = [];
+
+  if (type === "domain") {
+    list = domains.value || [];
+  } else if (type === "program") {
+    list = programs.value || [];
+  } else if (type === "course") {
+    list = courses.value || [];
+  } else if (type === "chapter") {
+    const courseId = addModal.value.parentId;
+    list = (courseId && chaptersMap.value[courseId]) || [];
+  } else {
+    list = [];
+  }
+
+  // Regex trích xuất số đuôi: ví dụ RMLV1 -> 1, RMCT2 -> 2
+  const regex = new RegExp(`^${prefix}(\\d+)$`, "i");
+  let maxSeq = 0;
+  for (const item of list) {
+    if (item.code) {
+      const match = item.code.trim().match(regex);
+      if (match) {
+        const seq = parseInt(match[1], 10);
+        if (seq > maxSeq) {
+          maxSeq = seq;
+        }
+      }
+    }
+  }
+
+  return `${prefix}${maxSeq + 1}`;
+}
+
+async function handleBusinessModuleChange() {
+  if (addModal.value.autoCode) {
+    // 1. Cập nhật tức thời (0ms UI latency) từ In-Memory Store
+    addModal.value.code = computeNextSequenceCode(
+      addModal.value.type,
+      addModal.value.businessModule
+    );
+
+    // 2. Kiểm tra xác thực nhẹ nhàng với server backend (non-blocking)
+    if (addModal.value.businessModule) {
+      try {
+        const res = await axiosClient.get("/api/admin/training/next-code", {
+          params: {
+            type: addModal.value.type,
+            module: addModal.value.businessModule,
+          },
+        });
+        if (res.data?.code && addModal.value.autoCode) {
+          addModal.value.code = res.data.code;
+        }
+      } catch (e) {
+        console.debug("Background next-code check:", e);
+      }
+    }
+  }
+}
+
 function handleNameInput() {
   if (addModal.value.autoCode) {
-    const parentCode = addModal.value.parentObj?.code || "";
-    addModal.value.code = generateStandardCode(
-      addModal.value.type,
-      addModal.value.name,
-      parentCode
-    );
+    if (addModal.value.businessModule) {
+      if (!addModal.value.code) {
+        handleBusinessModuleChange();
+      }
+    } else {
+      const parentCode = addModal.value.parentObj?.code || "";
+      addModal.value.code = generateStandardCode(
+        addModal.value.type,
+        addModal.value.name,
+        parentCode
+      );
+    }
   }
 }
 
@@ -967,12 +1060,16 @@ function handleAutoCodeToggle() {
 }
 
 function reGenerateCode() {
-  const parentCode = addModal.value.parentObj?.code || "";
-  addModal.value.code = generateStandardCode(
-    addModal.value.type,
-    addModal.value.name,
-    parentCode
-  );
+  if (addModal.value.businessModule) {
+    handleBusinessModuleChange();
+  } else {
+    const parentCode = addModal.value.parentObj?.code || "";
+    addModal.value.code = generateStandardCode(
+      addModal.value.type,
+      addModal.value.name,
+      parentCode
+    );
+  }
 }
 
 // Units selection helpers
@@ -1145,6 +1242,21 @@ function selectNode(type: string, data: any, parent?: any, grandparent?: any) {
 }
 
 // Open Inline Add Modal
+function handleDomainChange() {
+  const chosen = domains.value.find((d) => d.id === addModal.value.parentId);
+  if (chosen) {
+    addModal.value.parentObj = chosen;
+    if (chosen.businessModule) {
+      addModal.value.businessModule = chosen.businessModule;
+    } else if (BUSINESS_MODULES.some((m) => m.value === chosen.code)) {
+      addModal.value.businessModule = chosen.code;
+    }
+    if (addModal.value.autoCode) {
+      handleBusinessModuleChange();
+    }
+  }
+}
+
 function openAddModal(
   type: "domain" | "program" | "course" | "chapter" | "lesson",
   parentObj?: any,
@@ -1161,12 +1273,16 @@ function openAddModal(
     defaultModule = parent.businessModule;
   }
 
+  const initialCode = defaultModule
+    ? computeNextSequenceCode(type, defaultModule)
+    : generateStandardCode(type, "", parentCode);
+
   addModal.value = {
     show: true,
     type,
     parentId: parent?.id,
     parentObj: parent,
-    code: generateStandardCode(type, "", parentCode),
+    code: initialCode,
     name: "",
     autoCode: true,
     businessModule: defaultModule,
@@ -1178,6 +1294,10 @@ function openAddModal(
     autoEnrollStaff: true,
     completionDeadline: "",
   };
+
+  if (defaultModule) {
+    handleBusinessModuleChange();
+  }
 
   nextTick(() => {
     nameInputRef.value?.focus();
@@ -1196,6 +1316,7 @@ async function submitAddModal() {
         code: code.trim().toUpperCase(),
         name: name.trim(),
         description: addModal.value.description.trim() || undefined,
+        businessModule: addModal.value.businessModule || undefined,
         status: addModal.value.status,
       });
       showToast("Tạo lĩnh vực đào tạo thành công!", "success");
@@ -1383,6 +1504,30 @@ onMounted(() => {
 }
 
 .btn-studio.btn-primary:hover {
+  background: #059669;
+}
+
+/* Node action button styled like header add button */
+.btn-studio-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.76rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-studio-node.btn-primary-node {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.btn-studio-node.btn-primary-node:hover {
   background: #059669;
 }
 
@@ -1950,6 +2095,17 @@ onMounted(() => {
   align-items: center;
 }
 
+.badge-module-hint {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #0d9488;
+  background: #ccfbf1;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid #99f6e4;
+  letter-spacing: 0.3px;
+}
+
 .auto-code-toggle {
   display: flex;
   align-items: center;
@@ -2126,6 +2282,28 @@ onMounted(() => {
 }
 
 /* Auto-Enroll Box */
+.auto-enroll-master-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 6px;
+  padding: 0.65rem 0.85rem;
+}
+
+.auto-enroll-title {
+  font-weight: 600;
+  color: #fca5a5;
+  font-size: 0.82rem;
+}
+
+.auto-enroll-alert.pending-units {
+  background: rgba(51, 65, 85, 0.3);
+  color: #94a3b8;
+  border: 1px dashed rgba(100, 116, 139, 0.35);
+}
+
 .auto-enroll-wrapper {
   margin-top: 0.4rem;
   display: flex;

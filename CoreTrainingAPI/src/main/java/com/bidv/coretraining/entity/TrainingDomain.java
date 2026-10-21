@@ -4,7 +4,9 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "training_domains")
+@Table(name = "training_domains", indexes = {
+    @Index(name = "idx_domain_module_seq", columnList = "business_module, seq_number DESC")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -23,4 +25,10 @@ public class TrainingDomain {
     private String description;
     @Builder.Default
     private String status = "ACTIVE";
+
+    @Column(name = "business_module")
+    private String businessModule;
+
+    @Column(name = "seq_number")
+    private Integer seqNumber;
 }

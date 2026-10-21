@@ -67,6 +67,7 @@ export interface Course {
   domainId?: string;
   thumbnail?: string | null;
   businessModule?: string;
+  seqNumber?: number;
   level?: string;
   keywords?: string;
   completionDeadline?: string | null;
@@ -87,12 +88,15 @@ export interface TrainingDomain {
   name: string;
   description?: string;
   status: string;
+  businessModule?: string;
+  seqNumber?: number;
 }
 export interface TrainingProgram extends TrainingDomain {
   domainId: string;
   unitIds?: string[];
   allowedActions?: string[];
   businessModule?: string;
+  seqNumber?: number;
   level?: string;
   mandatoryUnitIds?: string[];
   optionalUnitIds?: string[];
@@ -106,6 +110,8 @@ export interface Chapter {
   description?: string;
   chapterOrder: number;
   status: string;
+  businessModule?: string;
+  seqNumber?: number;
   version?: number;
   lessons: Lesson[];
   locked: boolean;

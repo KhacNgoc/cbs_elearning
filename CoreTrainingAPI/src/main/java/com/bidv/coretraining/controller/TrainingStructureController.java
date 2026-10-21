@@ -22,6 +22,13 @@ public class TrainingStructureController {
         return service.catalog();
     }
 
+    @GetMapping("/admin/training/next-code")
+    public Map<String, Object> nextCode(
+            @RequestParam(defaultValue = "program") String type,
+            @RequestParam String module) {
+        return service.getNextCode(type, module);
+    }
+
     @PostMapping("/admin/training-domains")
     public DomainDto domain(@RequestBody DomainDto r) {
         return service.saveDomain(null, r);

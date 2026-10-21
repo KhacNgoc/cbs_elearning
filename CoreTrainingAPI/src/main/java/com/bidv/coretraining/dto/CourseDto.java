@@ -23,6 +23,7 @@ public class CourseDto {
     private String domainId;
     private String thumbnail;
     private String businessModule;
+    private Integer seqNumber;
     private String level;
     private String keywords;
     private java.time.LocalDate completionDeadline;

@@ -12,9 +12,12 @@ import java.util.*;
 @Transactional
 public class TrainingStructureService {
     public record DomainDto(String id, String code, String name, String description, String status,
-            Set<String> allowedActions) {
+            Set<String> allowedActions, String businessModule, Integer seqNumber) {
         public DomainDto(String id, String code, String name, String description, String status) {
-            this(id, code, name, description, status, Set.of());
+            this(id, code, name, description, status, Set.of(), null, null);
+        }
+        public DomainDto(String id, String code, String name, String description, String status, Set<String> allowedActions) {
+            this(id, code, name, description, status, allowedActions, null, null);
         }
     }
 
@@ -31,12 +34,13 @@ public class TrainingStructureService {
             String level,
             Set<String> mandatoryUnitIds,
             Set<String> optionalUnitIds,
-            Boolean autoEnrollStaff) {
+            Boolean autoEnrollStaff,
+            Integer seqNumber) {
 
         public ProgramDto(String id, String domainId, String code, String name, String description, String status,
                 Set<String> unitIds, Set<String> allowedActions) {
             this(id, domainId, code, name, description, status, unitIds, allowedActions, null, null,
-                    java.util.Collections.emptySet(), java.util.Collections.emptySet(), false);
+                    java.util.Collections.emptySet(), java.util.Collections.emptySet(), false, null);
         }
     }
 
@@ -55,7 +59,15 @@ public class TrainingStructureService {
     public record CourseRequest(String code, String name, String programId, String description, String iconName,
             Long version,
             String thumbnail, String businessModule, String level, String keywords,
-            java.time.LocalDate completionDeadline) {
+            java.time.LocalDate completionDeadline,
+            Integer seqNumber) {
+        public CourseRequest(String code, String name, String programId, String description, String iconName,
+                Long version,
+                String thumbnail, String businessModule, String level, String keywords,
+                java.time.LocalDate completionDeadline) {
+            this(code, name, programId, description, iconName, version, thumbnail, businessModule, level, keywords,
+                    completionDeadline, null);
+        }
     }
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -156,7 +168,8 @@ public class TrainingStructureService {
                 p.getLevel(),
                 mandatoryUnits,
                 optionalUnits,
-                false);
+                false,
+                p.getSeqNumber());
     }
 
     private boolean canUpdateDomain(TrainingDomain d) {
@@ -173,7 +186,8 @@ public class TrainingStructureService {
             actions.add("create");
         if (canUpdateDomain(d))
             actions.add("update");
-        return new DomainDto(d.getId(), d.getCode(), d.getName(), d.getDescription(), d.getStatus(), actions);
+        return new DomainDto(d.getId(), d.getCode(), d.getName(), d.getDescription(), d.getStatus(), actions,
+                d.getBusinessModule(), d.getSeqNumber());
     }
 
     public Map<String, Object> catalog() {
@@ -190,7 +204,31 @@ public class TrainingStructureService {
                 : domains.findById(id).orElseThrow(() -> new ResourceNotFoundException("Domain", "id", id));
         if (id != null)
             com.bidv.coretraining.security.AccessPolicy.require(canUpdateDomain(d));
-        d.setCode(required(request.code(), "Mã lĩnh vực"));
+
+        String mod = clean(request.businessModule());
+        d.setBusinessModule(mod);
+
+        if (id == null && mod != null && !mod.isBlank()) {
+            Integer nextSeq = domains.findMaxSeqNumberByBusinessModule(mod) + 1;
+            String candidateCode = mod + "LV" + nextSeq;
+            while (domains.existsByCode(candidateCode)) {
+                nextSeq++;
+                candidateCode = mod + "LV" + nextSeq;
+            }
+            if (request.code() != null && !request.code().isBlank() && !domains.existsByCode(request.code().trim().toUpperCase())) {
+                d.setCode(request.code().trim().toUpperCase());
+                d.setSeqNumber(extractTrailingNumber(d.getCode(), nextSeq));
+            } else {
+                d.setCode(candidateCode);
+                d.setSeqNumber(nextSeq);
+            }
+        } else {
+            d.setCode(required(request.code(), "Mã lĩnh vực"));
+            if (d.getSeqNumber() == null) {
+                d.setSeqNumber(extractTrailingNumber(d.getCode(), 1));
+            }
+        }
+
         d.setName(required(request.name(), "Tên lĩnh vực"));
         d.setDescription(request.description());
         d.setStatus("ARCHIVED".equals(request.status()) ? "ARCHIVED" : "ACTIVE");
@@ -257,12 +295,32 @@ public class TrainingStructureService {
         p.setUnitGrants(grants);
         p.setDomain(domains.findById(required(request.domainId(), "Lĩnh vực"))
                 .orElseThrow(() -> new BadRequestException("Lĩnh vực không tồn tại")));
-        p.setCode(required(request.code(), "Mã chương trình"));
-        p.setName(required(request.name(), "Tên chương trình"));
-        p.setDescription(request.description());
-        p.setBusinessModule(clean(request.businessModule()));
+
+        String mod = clean(request.businessModule());
+        p.setBusinessModule(mod);
         p.setLevel(clean(request.level()));
         p.setStatus("ARCHIVED".equals(request.status()) ? "ARCHIVED" : "ACTIVE");
+
+        if (id == null && mod != null && !mod.isBlank()) {
+            Integer nextSeq = programs.findMaxSeqNumberByBusinessModule(mod) + 1;
+            String candidateCode = mod + "CT" + nextSeq;
+            while (programs.existsByCode(candidateCode)) {
+                nextSeq++;
+                candidateCode = mod + "CT" + nextSeq;
+            }
+            if (request.code() != null && !request.code().isBlank() && !programs.existsByCode(request.code().trim().toUpperCase())) {
+                p.setCode(request.code().trim().toUpperCase());
+                p.setSeqNumber(extractTrailingNumber(p.getCode(), nextSeq));
+            } else {
+                p.setCode(candidateCode);
+                p.setSeqNumber(nextSeq);
+            }
+        } else {
+            p.setCode(required(request.code(), "Mã chương trình"));
+            if (p.getSeqNumber() == null) {
+                p.setSeqNumber(extractTrailingNumber(p.getCode(), 1));
+            }
+        }
         programs.save(p);
 
         // Auto-enroll all staff from mandatory units into courses of this program
@@ -327,16 +385,37 @@ public class TrainingStructureService {
             throw new BadRequestException("Danh mục đã lưu trữ");
         authorization.program(p, "courses", id == null ? "create" : "update");
         c.setProgram(p);
-        c.setCode(required(r.code(), "Mã khóa"));
         c.setName(required(r.name(), "Tên khóa"));
         c.setDescription(r.description());
         c.setIconName(r.iconName() == null ? "BookOpen" : r.iconName());
         courseImages.assertAttach(r.thumbnail(), c.getThumbnail());
         c.setThumbnail(r.thumbnail() == null || r.thumbnail().isBlank() ? null : r.thumbnail());
-        c.setBusinessModule(clean(r.businessModule() != null ? r.businessModule() : p.getBusinessModule()));
+        String mod = clean(r.businessModule() != null ? r.businessModule() : p.getBusinessModule());
+        c.setBusinessModule(mod);
         c.setLevel(clean(r.level() != null ? r.level() : p.getLevel()));
         c.setKeywords(clean(r.keywords()));
         c.setCompletionDeadline(r.completionDeadline());
+
+        if (id == null && mod != null && !mod.isBlank()) {
+            Integer nextSeq = courses.findMaxSeqNumberByBusinessModule(mod) + 1;
+            String candidateCode = mod + "KH" + nextSeq;
+            while (courses.existsByCode(candidateCode)) {
+                nextSeq++;
+                candidateCode = mod + "KH" + nextSeq;
+            }
+            if (r.code() != null && !r.code().isBlank() && !courses.existsByCode(r.code().trim().toUpperCase())) {
+                c.setCode(r.code().trim().toUpperCase());
+                c.setSeqNumber(extractTrailingNumber(c.getCode(), nextSeq));
+            } else {
+                c.setCode(candidateCode);
+                c.setSeqNumber(nextSeq);
+            }
+        } else {
+            c.setCode(required(r.code(), "Mã khóa"));
+            if (c.getSeqNumber() == null) {
+                c.setSeqNumber(extractTrailingNumber(c.getCode(), 1));
+            }
+        }
 
         // Auto-inherit unit grants from parent program
         if (p.getUnitGrants() != null && !p.getUnitGrants().isEmpty()) {
@@ -359,6 +438,47 @@ public class TrainingStructureService {
         }
 
         return mapper.toCourseDto(saved);
+    }
+
+    private Integer extractTrailingNumber(String code, Integer fallback) {
+        if (code == null) return fallback;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+)$").matcher(code.trim());
+        if (m.find()) {
+            try {
+                return Integer.parseInt(m.group(1));
+            } catch (Exception ignored) {}
+        }
+        return fallback;
+    }
+
+    public Map<String, Object> getNextCode(String type, String module) {
+        String mod = clean(module);
+        if (mod == null || mod.isBlank()) {
+            return Map.of("code", "", "seq", 0);
+        }
+        mod = mod.toUpperCase();
+        String prefix;
+        int nextSeq = 1;
+        if ("domain".equalsIgnoreCase(type)) {
+            prefix = mod + "LV";
+            nextSeq = domains.findMaxSeqNumberByBusinessModule(mod) + 1;
+            while (domains.existsByCode(prefix + nextSeq)) {
+                nextSeq++;
+            }
+        } else if ("course".equalsIgnoreCase(type)) {
+            prefix = mod + "KH";
+            nextSeq = courses.findMaxSeqNumberByBusinessModule(mod) + 1;
+            while (courses.existsByCode(prefix + nextSeq)) {
+                nextSeq++;
+            }
+        } else { // default program
+            prefix = mod + "CT";
+            nextSeq = programs.findMaxSeqNumberByBusinessModule(mod) + 1;
+            while (programs.existsByCode(prefix + nextSeq)) {
+                nextSeq++;
+            }
+        }
+        return Map.of("code", prefix + nextSeq, "seq", nextSeq, "prefix", prefix);
     }
 
     private String clean(String value) {

@@ -7,7 +7,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "courses")
+@Table(name = "courses", indexes = {
+    @Index(name = "idx_course_module_seq", columnList = "business_module, seq_number DESC")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -46,6 +48,8 @@ public class Course {
     private String description;
     private String thumbnail;
     private String businessModule;
+    @Column(name = "seq_number")
+    private Integer seqNumber;
     private String level;
     @Column(columnDefinition = "TEXT")
     private String keywords;

@@ -4,7 +4,9 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "training_programs")
+@Table(name = "training_programs", indexes = {
+    @Index(name = "idx_prog_module_seq", columnList = "business_module, seq_number DESC")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -29,6 +31,9 @@ public class TrainingProgram {
 
     @Column(name = "business_module")
     private String businessModule;
+
+    @Column(name = "seq_number")
+    private Integer seqNumber;
 
     @Column(name = "level")
     private String level;
