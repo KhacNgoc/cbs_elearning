@@ -35,4 +35,7 @@ public class CourseDto {
     private Boolean hasQuiz;
     private Integer quizPassingScore;
     private List<LessonDto> lessons;
+    private java.util.Set<String> mandatoryUnitIds;
+    private java.util.Set<String> optionalUnitIds;
+    private java.util.Set<String> unitIds;
 }

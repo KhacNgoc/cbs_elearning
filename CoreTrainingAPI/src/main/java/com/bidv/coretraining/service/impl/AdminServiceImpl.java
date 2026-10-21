@@ -79,7 +79,7 @@ public class AdminServiceImpl implements AdminService {
     private com.bidv.coretraining.service.TrainingStructureService.CourseRequest courseRequest(CourseDto dto) {
         return new com.bidv.coretraining.service.TrainingStructureService.CourseRequest(dto.getCode(), dto.getName(),
                 dto.getProgramId(), dto.getDescription(), dto.getIconName(), dto.getVersion(), dto.getThumbnail(),
-                dto.getBusinessModule(), dto.getLevel(), dto.getKeywords(), dto.getCompletionDeadline());
+                dto.getBusinessModule(), dto.getLevel(), dto.getKeywords(), dto.getCompletionDeadline(), dto.getMandatoryUnitIds(), dto.getOptionalUnitIds(), dto.getUnitIds());
     }
 
     @Override

@@ -220,6 +220,10 @@
 
                     <div class="node-badge-group">
                       <span v-if="course.businessModule" class="meta-tag module-tag">{{ course.businessModule }}</span>
+                      <span v-if="course.mandatoryUnitIds?.length" class="meta-tag mandatory-tag" title="Đơn vị bắt buộc hoàn thành">
+                        <ShieldCheck :size="11" />
+                        {{ course.mandatoryUnitIds.length }} ĐV Bắt buộc
+                      </span>
                       <span class="status-pill" :class="course.status?.toLowerCase()">
                         {{ course.status === 'PUBLISHED' ? 'Đã xuất bản' : 'Bản nháp' }}
                       </span>
@@ -664,8 +668,8 @@
           </div>
 
           <!-- SECTION 3: APPLIED UNITS & AUTO-ENROLLMENT -->
-          <!-- 1. Cấp Lĩnh vực & Chương trình: Phân bổ Đơn vị áp dụng chọn trực tiếp -->
-          <div v-if="addModal.type === 'domain' || addModal.type === 'program'" class="form-section units-section">
+          <!-- 1. Cấp Lĩnh vực, Chương trình & Khóa học: Phân bổ Đơn vị áp dụng chọn trực tiếp -->
+          <div v-if="addModal.type === 'domain' || addModal.type === 'program' || addModal.type === 'course'" class="form-section units-section">
             <h5 class="section-sub-title">
               <Building2 :size="14" />
               <span>Phân bổ Đơn vị áp dụng</span>
@@ -760,11 +764,11 @@
             </div>
           </div>
 
-          <!-- 2. Cấp Khóa học, Chương học, Bài học: Hiển thị phạm vi Đơn vị kế thừa từ cấp cha -->
+          <!-- 2. Cấp Chương học, Bài học: Hiển thị phạm vi Đơn vị kế thừa từ cấp cha -->
           <div v-else-if="addModal.mandatoryUnitIds?.length || addModal.optionalUnitIds?.length" class="form-section units-section inherited-units-box">
             <h5 class="section-sub-title">
               <Building2 :size="14" />
-              <span>Phân bổ Đơn vị áp dụng (Kế thừa từ Chương trình / Lĩnh vực)</span>
+              <span>Phân bổ Đơn vị áp dụng</span>
             </h5>
             <div class="inherited-units-chips">
               <span v-for="uId in addModal.mandatoryUnitIds" :key="`m-${uId}`" class="unit-chip mandatory-chip">
@@ -1666,6 +1670,12 @@ async function submitAddModal() {
         level: addModal.value.level || "BASIC",
         completionDeadline: addModal.value.completionDeadline || null,
         iconName: "BookOpen",
+        mandatoryUnitIds: addModal.value.mandatoryUnitIds,
+        optionalUnitIds: addModal.value.optionalUnitIds,
+        unitIds: [
+          ...addModal.value.mandatoryUnitIds,
+          ...addModal.value.optionalUnitIds,
+        ],
       };
       if (isEdit) {
         payload.id = editId;

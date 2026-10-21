@@ -52,8 +52,29 @@ public class AdminOptionsController {
                         .toList(),
                 "courses",
                 courses.findAll().stream().filter(c -> AccessPolicy.allowsCourse(u, permission, c))
-                        .map(c -> Map.of("id", c.getId(), "name", c.getName(),
-                                "code", c.getCode() == null ? "" : c.getCode())).toList(),
+                        .map(c -> {
+                            Set<String> mandatoryUnits = new HashSet<>();
+                            Set<String> optionalUnits = new HashSet<>();
+                            if (c.getUnitGrants() != null) {
+                                for (var entry : c.getUnitGrants().entrySet()) {
+                                    if ("MANDATORY".equalsIgnoreCase(entry.getValue())) {
+                                        mandatoryUnits.add(entry.getKey());
+                                    } else {
+                                        optionalUnits.add(entry.getKey());
+                                    }
+                                }
+                            }
+                            Set<String> allUnits = new HashSet<>(mandatoryUnits);
+                            allUnits.addAll(optionalUnits);
+                            Map<String, Object> map = new HashMap<>();
+                            map.put("id", c.getId());
+                            map.put("name", c.getName());
+                            map.put("code", c.getCode() == null ? "" : c.getCode());
+                            map.put("mandatoryUnitIds", mandatoryUnits);
+                            map.put("optionalUnitIds", optionalUnits);
+                            map.put("unitIds", allUnits);
+                            return map;
+                        }).toList(),
                 "domains",
                 domains.findAll().stream()
                         .map(d -> {

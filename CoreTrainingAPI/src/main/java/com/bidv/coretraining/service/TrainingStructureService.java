@@ -65,13 +65,34 @@ public class TrainingStructureService {
             Long version,
             String thumbnail, String businessModule, String level, String keywords,
             java.time.LocalDate completionDeadline,
-            Integer seqNumber) {
+            Integer seqNumber,
+            Set<String> mandatoryUnitIds,
+            Set<String> optionalUnitIds,
+            Set<String> unitIds) {
+        public CourseRequest(String code, String name, String programId, String description, String iconName,
+                Long version,
+                String thumbnail, String businessModule, String level, String keywords,
+                java.time.LocalDate completionDeadline,
+                Integer seqNumber) {
+            this(code, name, programId, description, iconName, version, thumbnail, businessModule, level, keywords,
+                    completionDeadline, seqNumber, null, null, null);
+        }
         public CourseRequest(String code, String name, String programId, String description, String iconName,
                 Long version,
                 String thumbnail, String businessModule, String level, String keywords,
                 java.time.LocalDate completionDeadline) {
             this(code, name, programId, description, iconName, version, thumbnail, businessModule, level, keywords,
-                    completionDeadline, null);
+                    completionDeadline, null, null, null, null);
+        }
+        public CourseRequest(String code, String name, String programId, String description, String iconName,
+                Long version,
+                String thumbnail, String businessModule, String level, String keywords,
+                java.time.LocalDate completionDeadline,
+                Set<String> mandatoryUnitIds,
+                Set<String> optionalUnitIds,
+                Set<String> unitIds) {
+            this(code, name, programId, description, iconName, version, thumbnail, businessModule, level, keywords,
+                    completionDeadline, null, mandatoryUnitIds, optionalUnitIds, unitIds);
         }
     }
 
@@ -474,11 +495,36 @@ public class TrainingStructureService {
             }
         }
 
-        // Auto-inherit unit grants from parent program
-        if (p.getUnitGrants() != null && !p.getUnitGrants().isEmpty()) {
-            for (var entry : p.getUnitGrants().entrySet()) {
-                if (!c.getUnitGrants().containsKey(entry.getKey())) {
-                    c.getUnitGrants().put(entry.getKey(), entry.getValue());
+        if (r.mandatoryUnitIds() != null || r.optionalUnitIds() != null || r.unitIds() != null) {
+            Set<String> mandatoryIds = r.mandatoryUnitIds() != null ? new HashSet<>(r.mandatoryUnitIds()) : new HashSet<>();
+            Set<String> optionalIds = r.optionalUnitIds() != null ? new HashSet<>(r.optionalUnitIds()) : new HashSet<>();
+            if (r.unitIds() != null) {
+                for (String uId : r.unitIds()) {
+                    if (!mandatoryIds.contains(uId) && !optionalIds.contains(uId)) {
+                        optionalIds.add(uId);
+                    }
+                }
+            }
+
+            Map<String, String> grants = new HashMap<>();
+            for (String mId : mandatoryIds) {
+                grants.put(mId, "MANDATORY");
+            }
+            for (String oId : optionalIds) {
+                grants.put(oId, "OPTIONAL");
+            }
+            if (grants.isEmpty() && id == null && p.getUnitGrants() != null && !p.getUnitGrants().isEmpty()) {
+                grants.putAll(p.getUnitGrants());
+            }
+            c.getUnitGrants().clear();
+            c.getUnitGrants().putAll(grants);
+        } else {
+            // Auto-inherit unit grants from parent program if new course
+            if (p.getUnitGrants() != null && !p.getUnitGrants().isEmpty()) {
+                for (var entry : p.getUnitGrants().entrySet()) {
+                    if (!c.getUnitGrants().containsKey(entry.getKey())) {
+                        c.getUnitGrants().put(entry.getKey(), entry.getValue());
+                    }
                 }
             }
         }
