@@ -208,7 +208,11 @@
               </div>
 
               <!-- DANH SÁCH KHÓA HỌC CON VỚI CHECKBOX -->
-              <div class="courses-checkbox-list">
+              <div v-if="loadingProgramCourses" class="picker-loading">
+                <Loader2 :size="16" class="spinner" />
+                <span>Đang tải khóa học của chương trình...</span>
+              </div>
+              <div v-else class="courses-checkbox-list">
                 <div v-if="!filteredAvailableProgramCourses.length" class="empty-hint">
                   {{ availableProgramCourses.length ? "Không tìm thấy khóa học khớp từ khóa." : "Chương trình này hiện chưa có khóa học nào." }}
                 </div>
@@ -379,7 +383,10 @@ const deletingId = ref("");
 const units = ref<OrganizationUnit[]>([]);
 const domains = ref<TrainingDomain[]>([]);
 const programs = ref<TrainingProgram[]>([]);
-const courses = ref<Course[]>([]);
+const unitAssignedCourses = ref<Course[]>([]);
+const programCourses = ref<Course[]>([]);
+const loadingUnitCourses = ref(false);
+const loadingProgramCourses = ref(false);
 
 // Form State
 const selectedUnitId = ref("");
@@ -407,15 +414,13 @@ const selectedSubCourseIds = ref<string[]>([]);
 // Filter active (non-deleted) items
 const activeDomains = computed(() => domains.value.filter((d) => d.status !== "DELETED"));
 const activePrograms = computed(() => programs.value.filter((p) => p.status !== "DELETED"));
-const activeCourses = computed(() => courses.value.filter((c) => c.status !== "DELETED"));
 
 const currentUnit = computed(() => units.value.find((u) => u.id === selectedUnitId.value));
 
 const courseSearchQuery = ref("");
 
 const availableProgramCourses = computed(() => {
-  if (!targetProgramId.value) return [];
-  return activeCourses.value.filter((c) => c.programId === targetProgramId.value);
+  return programCourses.value.filter((c) => c.status !== "DELETED");
 });
 
 const filteredAvailableProgramCourses = computed(() => {
@@ -457,21 +462,22 @@ function handleProgramDomainFilterChange() {
   }
 }
 
-// Load full data
+// Load metadata (Domains, Programs, Units) - KHÔNG load toàn bộ hàng nghìn khóa học lúc mở trang
 async function loadData() {
   loading.value = true;
   try {
-    const [catalog, allCourses, optionsRes] = await Promise.all([
+    const [catalog, optionsRes] = await Promise.all([
       trainingApi.catalog(),
-      trainingApi.courses(),
       axiosClient.get("/api/admin/options/catalog"),
     ]);
 
     domains.value = catalog.domains || [];
     programs.value = catalog.programs || [];
-    courses.value = allCourses || [];
     if (optionsRes.data?.units) {
       units.value = optionsRes.data.units;
+    }
+    if (selectedUnitId.value) {
+      await loadUnitCourses();
     }
   } catch (err) {
     console.error("Lỗi khi tải dữ liệu phân bổ:", err);
@@ -481,17 +487,55 @@ async function loadData() {
   }
 }
 
+// Lazy load các khóa học được phân bổ cho đơn vị đang chọn
+async function loadUnitCourses() {
+  if (!selectedUnitId.value) {
+    unitAssignedCourses.value = [];
+    return;
+  }
+  loadingUnitCourses.value = true;
+  try {
+    const res = await axiosClient.get(`/api/admin/units/${selectedUnitId.value}/courses`);
+    unitAssignedCourses.value = res.data || [];
+  } catch (err) {
+    console.error("Lỗi khi tải khóa học của đơn vị:", err);
+    unitAssignedCourses.value = [];
+  } finally {
+    loadingUnitCourses.value = false;
+  }
+}
+
 onMounted(() => {
   loadData();
 });
 
-function handleUnitChange() {
-  // Reset targets if needed
+async function handleUnitChange() {
+  await loadUnitCourses();
 }
 
-function handleProgramChange() {
-  selectAllCoursesInProgram.value = true;
-  selectedSubCourseIds.value = availableProgramCourses.value.map((c) => c.id);
+// Lazy load các khóa học thuộc Chương trình đang chọn
+async function handleProgramChange() {
+  if (!targetProgramId.value) {
+    programCourses.value = [];
+    selectedSubCourseIds.value = [];
+    return;
+  }
+  loadingProgramCourses.value = true;
+  try {
+    const res = await axiosClient.get(`/api/admin/programs/${targetProgramId.value}/courses`);
+    programCourses.value = res.data || [];
+    selectAllCoursesInProgram.value = true;
+    selectedSubCourseIds.value = programCourses.value
+      .filter((c) => c.status !== "DELETED")
+      .map((c) => c.id);
+  } catch (err) {
+    console.error("Lỗi khi tải khóa học theo chương trình:", err);
+    showToast("Không thể tải danh sách khóa học của chương trình", "error");
+    programCourses.value = [];
+    selectedSubCourseIds.value = [];
+  } finally {
+    loadingProgramCourses.value = false;
+  }
 }
 
 function handleToggleAllCourses() {
@@ -559,8 +603,9 @@ const assignedAllocations = computed<AllocationRow[]>(() => {
     }
   }
 
-  // 3. Courses
-  for (const c of activeCourses.value) {
+  // 3. Courses (Lazy loaded per unit)
+  for (const c of unitAssignedCourses.value) {
+    if (c.status === "DELETED") continue;
     const isMan = c.mandatoryUnitIds?.includes(uId);
     const isOpt = c.optionalUnitIds?.includes(uId) || c.unitIds?.includes(uId);
     if (isMan || isOpt) {
@@ -1314,6 +1359,17 @@ async function handleRemoveAllocation(item: AllocationRow) {
 
 .course-search-input::placeholder {
   color: #64748b;
+}
+
+
+.picker-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  color: #94a3b8;
+  font-size: 0.78rem;
 }
 
 </style>

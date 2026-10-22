@@ -618,47 +618,61 @@ public class TrainingStructureService {
     }
 
     public List<CourseDto> adminCourses() {
-        return authorization.editableCourses().stream().map(c -> {
-            CourseDto dto = mapper.toCourseDto(c);
-            dto.setCanEdit(com.bidv.coretraining.security.AccessPolicy.canEdit(authorization.current(), c));
-            dto.setAllowedActions(
-                    com.bidv.coretraining.security.AccessPolicy.courseActions(authorization.current(), c));
-            dto.setAdminActions(java.util.stream.Stream.of("courses", "exams", "documents")
-                    .collect(java.util.stream.Collectors.toMap(p -> p,
-                            p -> java.util.stream.Stream.of("read", "create", "update", "delete")
-                                     .filter(a -> com.bidv.coretraining.security.AccessPolicy
-                                            .allowsCourse(authorization.current(), p + ":" + a, c))
-                                    .collect(java.util.stream.Collectors.toSet()))));
-            if (!com.bidv.coretraining.security.AccessPolicy.canReadCourse(authorization.current(), c))
-                dto.getLessons().forEach(TrainingStructureService::outlineOnly);
+        return authorization.editableCourses().stream().map(this::mapToAdminCourseDto).toList();
+    }
 
-            Set<String> mandatory = new HashSet<>();
-            Set<String> optional = new HashSet<>();
-            if (c.getUnitGrants() != null && !c.getUnitGrants().isEmpty()) {
-                for (var entry : c.getUnitGrants().entrySet()) {
-                    if ("MANDATORY".equalsIgnoreCase(entry.getValue())) {
-                        mandatory.add(entry.getKey());
-                    } else {
-                        optional.add(entry.getKey());
-                    }
-                }
-            } else if (c.getProgram() != null && c.getProgram().getUnitGrants() != null) {
-                for (var entry : c.getProgram().getUnitGrants().entrySet()) {
-                    if ("MANDATORY".equalsIgnoreCase(entry.getValue())) {
-                        mandatory.add(entry.getKey());
-                    } else {
-                        optional.add(entry.getKey());
-                    }
+    public List<CourseDto> adminCoursesByProgram(String programId) {
+        return courses.findByProgramIdAndStatusNot(programId, "DELETED").stream()
+                .map(this::mapToAdminCourseDto)
+                .toList();
+    }
+
+    public List<CourseDto> adminCoursesByUnit(String unitId) {
+        return courses.findByUnitGrant(unitId).stream()
+                .map(this::mapToAdminCourseDto)
+                .toList();
+    }
+
+    private CourseDto mapToAdminCourseDto(Course c) {
+        CourseDto dto = mapper.toCourseDto(c);
+        dto.setCanEdit(com.bidv.coretraining.security.AccessPolicy.canEdit(authorization.current(), c));
+        dto.setAllowedActions(
+                com.bidv.coretraining.security.AccessPolicy.courseActions(authorization.current(), c));
+        dto.setAdminActions(java.util.stream.Stream.of("courses", "exams", "documents")
+                .collect(java.util.stream.Collectors.toMap(p -> p,
+                        p -> java.util.stream.Stream.of("read", "create", "update", "delete")
+                                 .filter(a -> com.bidv.coretraining.security.AccessPolicy
+                                        .allowsCourse(authorization.current(), p + ":" + a, c))
+                                .collect(java.util.stream.Collectors.toSet()))));
+        if (!com.bidv.coretraining.security.AccessPolicy.canReadCourse(authorization.current(), c))
+            dto.getLessons().forEach(TrainingStructureService::outlineOnly);
+
+        Set<String> mandatory = new HashSet<>();
+        Set<String> optional = new HashSet<>();
+        if (c.getUnitGrants() != null && !c.getUnitGrants().isEmpty()) {
+            for (var entry : c.getUnitGrants().entrySet()) {
+                if ("MANDATORY".equalsIgnoreCase(entry.getValue())) {
+                    mandatory.add(entry.getKey());
+                } else {
+                    optional.add(entry.getKey());
                 }
             }
-            dto.setMandatoryUnitIds(mandatory);
-            dto.setOptionalUnitIds(optional);
-            Set<String> allUnits = new HashSet<>(mandatory);
-            allUnits.addAll(optional);
-            dto.setUnitIds(allUnits);
+        } else if (c.getProgram() != null && c.getProgram().getUnitGrants() != null) {
+            for (var entry : c.getProgram().getUnitGrants().entrySet()) {
+                if ("MANDATORY".equalsIgnoreCase(entry.getValue())) {
+                    mandatory.add(entry.getKey());
+                } else {
+                    optional.add(entry.getKey());
+                }
+            }
+        }
+        dto.setMandatoryUnitIds(mandatory);
+        dto.setOptionalUnitIds(optional);
+        Set<String> allUnits = new HashSet<>(mandatory);
+        allUnits.addAll(optional);
+        dto.setUnitIds(allUnits);
 
-            return dto;
-        }).toList();
+        return dto;
     }
 
     public List<ChapterDto> adminChapters(String courseId) {

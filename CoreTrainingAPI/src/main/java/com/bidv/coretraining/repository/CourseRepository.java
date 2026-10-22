@@ -24,4 +24,9 @@ public interface CourseRepository extends JpaRepository<Course, String> {
             @Param("userId") Long userId,
             @Param("admin") boolean admin,
             @Param("instructor") boolean instructor);
+
+    List<Course> findByProgramIdAndStatusNot(String programId, String status);
+
+    @Query("select distinct c from Course c join c.unitGrants ug where key(ug) = :unitId and c.status <> 'DELETED'")
+    List<Course> findByUnitGrant(@Param("unitId") String unitId);
 }
