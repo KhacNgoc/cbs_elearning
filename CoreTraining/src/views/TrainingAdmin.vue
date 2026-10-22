@@ -4,7 +4,7 @@
       <div class="heading-with-back">
         <AdminBackButton v-if="backTo" :to="backTo" :label="backLabel" />
         <div class="heading-copy">
-          <div class="view-mode-tabs" v-if="!course && !chapter">
+          <div class="view-mode-tabs" v-if="!chapter">
             <button
               type="button"
               class="view-tab-btn"
@@ -82,8 +82,8 @@
       </button>
     </header>
 
-    <div v-if="!course && !chapter && viewType === 'tree'" class="tree-studio-wrapper">
-      <CurriculumTreeStudio @refresh="load" />
+    <div v-if="!chapter && viewType === 'tree'" class="tree-studio-wrapper">
+      <CurriculumTreeStudio :initial-course-id="course?.id" @refresh="load" />
     </div>
     <div v-else-if="mode === 'catalog'" class="catalog-layout">
       <section class="card catalog-domains">

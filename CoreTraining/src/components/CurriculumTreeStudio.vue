@@ -876,6 +876,16 @@ import type { TrainingDomain, TrainingProgram, Course, Chapter, Lesson } from ".
 import type { OrganizationUnit } from "../types/organization";
 
 const router = useRouter();
+
+const props = withDefaults(
+  defineProps<{
+    initialCourseId?: string;
+  }>(),
+  {
+    initialCourseId: "",
+  }
+);
+
 const emit = defineEmits<{
   (e: "select", item: { type: string; data: any; parent?: any }): void;
   (e: "refresh"): void;
@@ -1453,9 +1463,11 @@ function expandOperatingBranch(type: string, id?: string, parentId?: string) {
     if (parentId) expandedIds.value.add(parentId);
     if (id) expandedIds.value.add(id);
   } else if (type === "course") {
-    if (parentId) {
-      expandedIds.value.add(parentId);
-      const prog = programs.value.find((p) => p.id === parentId);
+    const crs = courses.value.find((c) => c.id === id);
+    const effectiveParentId = parentId || crs?.programId;
+    if (effectiveParentId) {
+      expandedIds.value.add(effectiveParentId);
+      const prog = programs.value.find((p) => p.id === effectiveParentId);
       if (prog?.domainId) expandedIds.value.add(prog.domainId);
     }
     if (id) {
@@ -1534,7 +1546,16 @@ async function loadTreeData(expandTarget?: { type: string; id?: string; parentId
       loadChaptersForCourse(c.id);
     }
 
-    if (expandTarget) {
+    if (props.initialCourseId) {
+      expandedIds.value.clear();
+      expandOperatingBranch("course", props.initialCourseId);
+      selectedId.value = props.initialCourseId;
+      await loadChaptersForCourse(props.initialCourseId);
+      const courseChaps = chaptersMap.value[props.initialCourseId] || [];
+      for (const ch of courseChaps) {
+        expandedIds.value.add(ch.id);
+      }
+    } else if (expandTarget) {
       expandedIds.value.clear();
       expandOperatingBranch(expandTarget.type, expandTarget.id, expandTarget.parentId);
     } else if (expandedIds.value.size === 0) {
@@ -2032,6 +2053,22 @@ const filteredDomains = computed(() => {
 onMounted(() => {
   loadTreeData();
 });
+
+watch(
+  () => props.initialCourseId,
+  async (newCourseId) => {
+    if (newCourseId && courses.value.length > 0) {
+      expandedIds.value.clear();
+      expandOperatingBranch("course", newCourseId);
+      selectedId.value = newCourseId;
+      await loadChaptersForCourse(newCourseId);
+      const courseChaps = chaptersMap.value[newCourseId] || [];
+      for (const ch of courseChaps) {
+        expandedIds.value.add(ch.id);
+      }
+    }
+  }
+);
 </script>
 
 <style scoped>
