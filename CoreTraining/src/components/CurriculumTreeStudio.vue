@@ -273,6 +273,14 @@
                       >
                         <Edit3 :size="13" />
                       </button>
+                      <button
+                        type="button"
+                        class="hover-action-btn delete-btn"
+                        title="Xóa Khóa học này"
+                        @click.stop="promptDeleteNode('course', course)"
+                      >
+                        <Trash2 :size="13" />
+                      </button>
                     </div>
                   </div>
 
@@ -330,6 +338,14 @@
                             @click.stop="openEditModal('chapter', chapter, course)"
                           >
                             <Edit3 :size="13" />
+                          </button>
+                          <button
+                            type="button"
+                            class="hover-action-btn delete-btn"
+                            title="Xóa Chương này"
+                            @click.stop="promptDeleteNode('chapter', chapter)"
+                          >
+                            <Trash2 :size="13" />
                           </button>
                         </div>
                       </div>
@@ -424,6 +440,14 @@
                               >
                                 <Edit3 :size="13" />
                               </button>
+                              <button
+                                type="button"
+                                class="hover-action-btn delete-btn"
+                                title="Xóa Bài học này"
+                                @click.stop="promptDeleteNode('lesson', lesson)"
+                              >
+                                <Trash2 :size="13" />
+                              </button>
                             </div>
                           </div>
 
@@ -488,6 +512,43 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONFIRM DELETE MODAL -->
+    <div v-if="deleteConfirm.show" class="tree-modal-backdrop">
+      <div class="tree-quick-modal delete-confirm-modal">
+        <div class="modal-header">
+          <div class="modal-title-box">
+            <span class="modal-level-badge level-danger">Xác nhận xóa</span>
+            <h4>{{ deleteConfirm.title }}</h4>
+          </div>
+          <button type="button" class="close-btn" @click="closeDeleteModal">
+            <X :size="16" />
+          </button>
+        </div>
+        <div class="modal-form">
+          <p class="delete-warning-text">{{ deleteConfirm.message }}</p>
+          <div class="modal-actions">
+            <button
+              type="button"
+              class="btn-cancel"
+              :disabled="deleteConfirm.busy"
+              @click="closeDeleteModal"
+            >
+              Hủy bỏ
+            </button>
+            <button
+              type="button"
+              class="btn-submit btn-delete-submit"
+              :disabled="deleteConfirm.busy"
+              @click="executeDeleteNode"
+            >
+              <Loader2 v-if="deleteConfirm.busy" class="spinner" :size="14" />
+              <span>{{ deleteConfirm.busy ? 'Đang xóa...' : 'Xóa vĩnh viễn' }}</span>
+            </button>
           </div>
         </div>
       </div>
@@ -842,6 +903,7 @@ import {
   Building2,
   ShieldCheck,
   Edit3,
+  Trash2,
   Info,
 } from "lucide-vue-next";
 import { trainingApi } from "../api/trainingApi";
@@ -902,6 +964,25 @@ const courses = ref<Course[]>([]);
 const chaptersMap = ref<Record<string, Chapter[]>>({});
 const unitsList = ref<OrganizationUnit[]>([]);
 const systemUsers = ref<AdminUser[]>([]);
+
+// Delete confirmation state
+const deleteConfirm = ref<{
+  show: boolean;
+  type: "course" | "chapter" | "lesson";
+  id: string;
+  name: string;
+  title: string;
+  message: string;
+  busy: boolean;
+}>({
+  show: false,
+  type: "lesson",
+  id: "",
+  name: "",
+  title: "",
+  message: "",
+  busy: false,
+});
 
 // Inline Add / Edit Modal State
 interface AddModalData {
@@ -1966,6 +2047,72 @@ async function submitAddModal() {
   }
 }
 
+// Delete handling
+function promptDeleteNode(
+  type: "course" | "chapter" | "lesson",
+  item: any
+) {
+  const name = item.title || item.name || item.code || "";
+  let typeLabel = "bài học";
+  let warnExtra = "";
+
+  if (type === "course") {
+    typeLabel = "khóa học";
+    const chaps = chaptersMap.value[item.id] || [];
+    if (chaps.length > 0) {
+      warnExtra = ` Khóa học này hiện có ${chaps.length} chương. Xóa khóa học sẽ đồng thời xóa toàn bộ chương và bài học bên trong.`;
+    }
+  } else if (type === "chapter") {
+    typeLabel = "chương";
+    if (item.lessons?.length > 0) {
+      warnExtra = ` Chương này hiện có ${item.lessons.length} bài học. Xóa chương sẽ đồng thời xóa toàn bộ bài học bên trong.`;
+    }
+  }
+
+  deleteConfirm.value = {
+    show: true,
+    type,
+    id: item.id,
+    name,
+    title: `Xác nhận xóa ${typeLabel}`,
+    message: `Bạn có chắc chắn muốn xóa ${typeLabel} "${name}"?${warnExtra} Thao tác này không thể hoàn tác.`,
+    busy: false,
+  };
+}
+
+function closeDeleteModal() {
+  if (deleteConfirm.value.busy) return;
+  deleteConfirm.value.show = false;
+}
+
+async function executeDeleteNode() {
+  const { type, id, name } = deleteConfirm.value;
+  if (!id) return;
+
+  deleteConfirm.value.busy = true;
+  try {
+    if (type === "lesson") {
+      await trainingApi.deleteLesson(id);
+      showToast(`Đã xóa bài học "${name}" thành công!`, "success");
+    } else if (type === "chapter") {
+      await trainingApi.deleteChapter(id);
+      showToast(`Đã xóa chương "${name}" thành công!`, "success");
+    } else if (type === "course") {
+      await adminApi.deleteCourse(id);
+      showToast(`Đã xóa khóa học "${name}" thành công!`, "success");
+    }
+
+    deleteConfirm.value.show = false;
+    await loadTreeData();
+    emit("refresh");
+  } catch (error: any) {
+    const msg = error.response?.data?.message || "Không thể xóa nội dung này. Vui lòng kiểm tra lại!";
+    showToast(msg, "error");
+  } finally {
+    deleteConfirm.value.busy = false;
+  }
+}
+
 // Actions
 function openLessonEditor(lessonId: string) {
   router.push(`/admin/lessons/${encodeURIComponent(lessonId)}/edit`);
@@ -2549,6 +2696,12 @@ watch(
   color: #ffffff;
 }
 
+.hover-action-btn.delete-btn:hover {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: #ffffff;
+}
+
 .btn-studio-node.btn-editor-node {
   background: #3b82f6;
   color: #ffffff;
@@ -2577,6 +2730,39 @@ watch(
 
 .hover-action-btn:hover .btn-tooltip {
   opacity: 1;
+}
+
+.delete-confirm-modal {
+  width: 100%;
+  max-width: 460px;
+  background: #111c2e;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
+.level-danger {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.delete-warning-text {
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: #cbd5e1;
+  padding: 0.5rem 0 1rem;
+}
+
+.btn-delete-submit {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+  border: 1px solid #dc2626 !important;
+}
+
+.btn-delete-submit:hover:not(:disabled) {
+  background: #dc2626 !important;
 }
 
 /* QUICK MODAL ENHANCED */
