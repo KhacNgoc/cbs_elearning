@@ -95,14 +95,14 @@
           <div v-if="categoryType === 'program'" class="form-group dynamic-group course-cascade-box">
             <!-- BƯỚC A: LĨNH VỰC CHA -->
             <div class="sub-form-group">
-              <label>Lĩnh vực cha (*):</label>
+              <label>Lĩnh vực (*):</label>
               <select
                 v-model="programFilterDomainId"
                 class="form-control select-control"
                 required
                 @change="handleProgramDomainFilterChange"
               >
-                <option value="">-- Chọn Lĩnh vực cha --</option>
+                <option value="">-- Chọn Lĩnh vực --</option>
                 <option
                   v-for="d in activeDomains"
                   :key="d.id"
@@ -137,14 +137,14 @@
           <div v-if="categoryType === 'course'" class="form-group dynamic-group course-cascade-box">
             <!-- BƯỚC A: LĨNH VỰC CHA -->
             <div class="sub-form-group">
-              <label>Lĩnh vực cha (*):</label>
+              <label>Lĩnh vực (*):</label>
               <select
                 v-model="courseFilterDomainId"
                 class="form-control select-control"
                 required
                 @change="handleDomainFilterChange"
               >
-                <option value="">-- Chọn Lĩnh vực cha --</option>
+                <option value="">-- Chọn Lĩnh vực --</option>
                 <option
                   v-for="d in activeDomains"
                   :key="d.id"
