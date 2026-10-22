@@ -215,27 +215,18 @@
             </div>
           </div>
 
-          <!-- BƯỚC 4: HÌNH THỨC ÁP DỤNG -->
+          <!-- BƯỚC 4: HÌNH THỨC ÁP DỤNG (DROPDOWN) -->
           <div class="form-group">
-            <label>3. Hình thức áp dụng:</label>
-            <div class="grant-mode-picker">
-              <label class="mode-label" :class="{ selected: grantType === 'MANDATORY' }">
-                <input type="radio" value="MANDATORY" v-model="grantType" />
-                <ShieldCheck :size="15" />
-                <div>
-                  <strong>Bắt buộc hoàn thành</strong>
-                  <small>Học viên đơn vị bắt buộc phải học</small>
-                </div>
-              </label>
-              <label class="mode-label" :class="{ selected: grantType === 'OPTIONAL' }">
-                <input type="radio" value="OPTIONAL" v-model="grantType" />
-                <Globe :size="15" />
-                <div>
-                  <strong>Tự chọn / Tham khảo</strong>
-                  <small>Học tập tự nguyện nâng cao nghiệp vụ</small>
-                </div>
-              </label>
-            </div>
+            <label for="grant-type-select">3. Hình thức áp dụng (*):</label>
+            <select
+              id="grant-type-select"
+              v-model="grantType"
+              class="form-control select-control"
+              required
+            >
+              <option value="MANDATORY">Bắt buộc hoàn thành (Học viên bắt buộc phải học)</option>
+              <option value="OPTIONAL">Tự chọn / Tham khảo (Học tập tự nguyện nâng cao nghiệp vụ)</option>
+            </select>
           </div>
 
           <!-- SUBMIT ACTION -->
@@ -351,7 +342,6 @@ import {
   Globe,
   Folder,
   BookOpen,
-  ShieldCheck,
   RotateCcw,
   Check,
   Trash2,
