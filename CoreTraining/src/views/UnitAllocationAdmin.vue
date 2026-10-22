@@ -495,7 +495,7 @@ async function loadUnitCourses() {
   }
   loadingUnitCourses.value = true;
   try {
-    const res = await axiosClient.get(`/api/admin/units/${selectedUnitId.value}/courses`);
+    const res = await axiosClient.get(`/api/admin/courses/by-unit/${selectedUnitId.value}`);
     unitAssignedCourses.value = res.data || [];
   } catch (err) {
     console.error("Lỗi khi tải khóa học của đơn vị:", err);
@@ -522,7 +522,7 @@ async function handleProgramChange() {
   }
   loadingProgramCourses.value = true;
   try {
-    const res = await axiosClient.get(`/api/admin/programs/${targetProgramId.value}/courses`);
+    const res = await axiosClient.get(`/api/admin/courses/by-program/${targetProgramId.value}`);
     programCourses.value = res.data || [];
     selectAllCoursesInProgram.value = true;
     selectedSubCourseIds.value = programCourses.value

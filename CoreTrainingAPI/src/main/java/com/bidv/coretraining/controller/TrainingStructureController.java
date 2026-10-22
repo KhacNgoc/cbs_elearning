@@ -54,12 +54,12 @@ public class TrainingStructureController {
         return service.adminCourses();
     }
 
-    @GetMapping("/admin/programs/{programId}/courses")
+    @GetMapping({"/admin/programs/{programId}/courses", "/admin/courses/by-program/{programId}"})
     public List<CourseDto> coursesByProgram(@PathVariable String programId) {
         return service.adminCoursesByProgram(programId);
     }
 
-    @GetMapping("/admin/units/{unitId}/courses")
+    @GetMapping({"/admin/units/{unitId}/courses", "/admin/courses/by-unit/{unitId}"})
     public List<CourseDto> coursesByUnit(@PathVariable String unitId) {
         return service.adminCoursesByUnit(unitId);
     }
