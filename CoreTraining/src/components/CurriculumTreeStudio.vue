@@ -93,6 +93,13 @@
             <div class="node-info">
               <span class="node-title">{{ domain.name }}</span>
               <span class="node-code">{{ domain.code }}</span>
+              <span
+                v-if="domain.description"
+                class="node-desc-tooltip-trigger"
+                :title="`Mục tiêu / Mô tả:\n${domain.description}`"
+              >
+                <Info :size="12" />
+              </span>
             </div>
 
             <div class="node-badge-group">
@@ -151,6 +158,13 @@
                 <div class="node-info">
                   <span class="node-title">{{ program.name }}</span>
                   <span class="node-code">{{ program.code }}</span>
+                  <span
+                    v-if="program.description"
+                    class="node-desc-tooltip-trigger"
+                    :title="`Mục tiêu / Mô tả:\n${program.description}`"
+                  >
+                    <Info :size="12" />
+                  </span>
                 </div>
 
                 <div class="node-badge-group">
@@ -216,6 +230,13 @@
                     <div class="node-info">
                       <span class="node-title">{{ course.name }}</span>
                       <span class="node-status-dot" :class="course.status?.toLowerCase()"></span>
+                      <span
+                        v-if="course.description"
+                        class="node-desc-tooltip-trigger"
+                        :title="`Mục tiêu / Chuẩn đầu ra:\n${course.description}`"
+                      >
+                        <Info :size="12" />
+                      </span>
                     </div>
 
                     <div class="node-badge-group">
@@ -343,6 +364,13 @@
                             <div class="node-info">
                               <span class="node-index">Bài {{ lIdx + 1 }}:</span>
                               <span class="node-title">{{ lesson.title }}</span>
+                              <span
+                                v-if="lesson.hint"
+                                class="node-desc-tooltip-trigger"
+                                :title="`Tóm tắt / Hướng dẫn:\n${lesson.hint}`"
+                              >
+                                <Info :size="11" />
+                              </span>
                             </div>
 
                             <!-- Level 6 & 7 Indicators -->
@@ -593,7 +621,6 @@
                     @change="handleAutoCodeToggle"
                   />
                   <label for="auto-code-checkbox" class="toggle-text">
-                    <Sparkles :size="12" class="sparkle-icon" />
                     <span>Hệ thống tự sinh mã</span>
                   </label>
                 </div>
@@ -676,8 +703,8 @@
               </div>
             </div>
 
-            <!-- Mục tiêu / Mô tả tóm tắt -->
-            <div class="form-group">
+            <!-- Mục tiêu / Mô tả tóm tắt (Khóa học, Bài học, Lĩnh vực, Chương trình; Chương học không cần mô tả) -->
+            <div v-if="addModal.type !== 'chapter'" class="form-group">
               <label>{{ descriptionLabel }}:</label>
               <textarea
                 v-model="addModal.description"
@@ -842,6 +869,7 @@ import {
   Building2,
   ShieldCheck,
   Edit3,
+  Info,
 } from "lucide-vue-next";
 import { trainingApi } from "../api/trainingApi";
 import { adminApi, type AdminUser } from "../api/adminApi";
@@ -2366,6 +2394,23 @@ watch(
   font-family: monospace;
 }
 
+.node-desc-tooltip-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #60a5fa;
+  opacity: 0.6;
+  cursor: help;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.node-desc-tooltip-trigger:hover {
+  opacity: 1;
+  transform: scale(1.15);
+  color: #93c5fd;
+}
+
 .node-index {
   font-size: 0.78rem;
   color: #94a3b8;
@@ -2406,9 +2451,9 @@ watch(
 }
 
 .mandatory-tag {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
 .status-pill {
@@ -2943,14 +2988,14 @@ watch(
   display: flex;
   align-items: center;
   gap: 0.3rem;
-  color: #f87171 !important;
+  color: #93c5fd !important;
 }
 
 .badge-mandatory {
   font-size: 0.68rem;
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.3);
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
 }
@@ -2989,9 +3034,9 @@ watch(
 }
 
 .unit-chip.mandatory-chip {
-  background: rgba(239, 68, 68, 0.2);
-  border: 1px solid rgba(239, 68, 68, 0.4);
-  color: #fca5a5;
+  background: rgba(59, 130, 246, 0.18);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  color: #bfdbfe;
 }
 
 .unit-chip.optional-chip {
