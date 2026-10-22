@@ -587,6 +587,18 @@ public class TrainingStructureService {
             while (courses.existsByCode(prefix + nextSeq)) {
                 nextSeq++;
             }
+        } else if ("chapter".equalsIgnoreCase(type)) {
+            prefix = mod + "CH";
+            nextSeq = 1;
+            while (chapters.existsById(prefix + nextSeq)) {
+                nextSeq++;
+            }
+        } else if ("lesson".equalsIgnoreCase(type)) {
+            prefix = mod + "BH";
+            nextSeq = 1;
+            while (lessons.existsById(prefix + nextSeq)) {
+                nextSeq++;
+            }
         } else { // default program
             prefix = mod + "CT";
             nextSeq = programs.findMaxSeqNumberByBusinessModule(mod) + 1;

@@ -93,6 +93,7 @@ END $$;
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'lessons' AND column_name = 'topic_id') THEN
+        ALTER TABLE lessons ALTER COLUMN topic_id DROP NOT NULL;
         UPDATE lessons SET course_id = topic_id WHERE course_id IS NULL AND topic_id IS NOT NULL;
     END IF;
 END $$;
