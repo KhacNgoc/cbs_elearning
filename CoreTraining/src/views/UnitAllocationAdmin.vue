@@ -113,23 +113,72 @@
               </select>
             </div>
 
-            <!-- BƯỚC B: CHƯƠNG TRÌNH ĐÀO TẠO (CHỈ HIỆN KHI ĐÃ CHỌN LĨNH VỰC) -->
+            <!-- BƯỚC B: CHƯƠNG TRÌNH ĐÀO TẠO (SEARCHABLE DROPDOWN KÈM INFINITE SCROLL) -->
             <div v-if="programFilterDomainId" class="sub-form-group">
               <label>Chọn Chương trình đào tạo (*):</label>
-              <select
-                v-model="targetProgramId"
-                class="form-control select-control"
-                required
-              >
-                <option value="">-- Chọn chương trình đào tạo --</option>
-                <option
-                  v-for="p in filteredProgramsForProgram"
-                  :key="p.id"
-                  :value="p.id"
+              <div class="searchable-dropdown-wrapper" ref="programDropdownWrapperRef">
+                <button
+                  type="button"
+                  class="form-control select-control searchable-trigger"
+                  :class="{ 'is-open': showProgramDropdown, 'has-value': !!targetProgramId }"
+                  @click="toggleProgramDropdown"
                 >
-                  [{{ p.code }}] {{ p.name }}
-                </option>
-              </select>
+                  <span class="trigger-label">{{ selectedProgramDisplay }}</span>
+                  <ChevronDown :size="15" class="dropdown-chevron" :class="{ 'rotated': showProgramDropdown }" />
+                </button>
+
+                <div v-if="showProgramDropdown" class="searchable-dropdown-menu">
+                  <div class="dropdown-search-box">
+                    <Search :size="13" class="search-icon" />
+                    <input
+                      type="text"
+                      v-model="programSearchQuery"
+                      class="dropdown-search-input"
+                      placeholder="Tìm theo mã hoặc tên chương trình..."
+                      @click.stop
+                      autofocus
+                    />
+                    <Loader2 v-if="searchingPrograms" :size="13" class="spinner search-spinner" />
+                    <button
+                      v-else-if="programSearchQuery"
+                      type="button"
+                      class="btn-clear-search"
+                      @click.stop="programSearchQuery = ''"
+                    >
+                      <X :size="12" />
+                    </button>
+                  </div>
+
+                  <div class="dropdown-items-list" @scroll="handleProgramsScroll">
+                    <div v-if="loadingPrograms" class="dropdown-state-row">
+                      <Loader2 :size="14" class="spinner" />
+                      <span>Đang tải danh sách chương trình...</span>
+                    </div>
+                    <div v-else-if="!pagedPrograms.length" class="dropdown-state-row empty-state-row">
+                      {{ programSearchQuery ? "Không tìm thấy chương trình phù hợp." : "Lĩnh vực này chưa có chương trình nào." }}
+                    </div>
+                    <div
+                      v-for="p in pagedPrograms"
+                      :key="p.id"
+                      class="dropdown-item"
+                      :class="{ 'is-selected': p.id === targetProgramId }"
+                      @click="selectProgram(p)"
+                    >
+                      <span class="item-code">[{{ p.code }}]</span>
+                      <span class="item-name">{{ p.name }}</span>
+                      <Check v-if="p.id === targetProgramId" :size="14" class="item-checked" />
+                    </div>
+
+                    <div v-if="loadingMorePrograms" class="dropdown-state-row loading-more">
+                      <Loader2 :size="12" class="spinner" />
+                      <span>Tải thêm 10 chương trình...</span>
+                    </div>
+                    <div v-else-if="!hasMorePrograms && pagedPrograms.length > 0" class="dropdown-state-row end-hint">
+                      <span>Đã hiển thị {{ pagedPrograms.length }} / {{ totalPrograms }} chương trình</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -155,24 +204,72 @@
               </select>
             </div>
 
-            <!-- BƯỚC B: CHƯƠNG TRÌNH ĐÀO TẠO (CHỈ HIỆN KHI ĐÃ CHỌN LĨNH VỰC) -->
+            <!-- BƯỚC B: CHƯƠNG TRÌNH ĐÀO TẠO (SEARCHABLE DROPDOWN KÈM INFINITE SCROLL) -->
             <div v-if="courseFilterDomainId" class="sub-form-group">
               <label>Chương trình đào tạo (*):</label>
-              <select
-                v-model="targetProgramId"
-                class="form-control select-control"
-                required
-                @change="handleProgramChange"
-              >
-                <option value="">-- Chọn Chương trình đào tạo --</option>
-                <option
-                  v-for="p in filteredProgramsForCourse"
-                  :key="p.id"
-                  :value="p.id"
+              <div class="searchable-dropdown-wrapper" ref="programDropdownWrapperRef">
+                <button
+                  type="button"
+                  class="form-control select-control searchable-trigger"
+                  :class="{ 'is-open': showProgramDropdown, 'has-value': !!targetProgramId }"
+                  @click="toggleProgramDropdown"
                 >
-                  [{{ p.code }}] {{ p.name }}
-                </option>
-              </select>
+                  <span class="trigger-label">{{ selectedProgramDisplay }}</span>
+                  <ChevronDown :size="15" class="dropdown-chevron" :class="{ 'rotated': showProgramDropdown }" />
+                </button>
+
+                <div v-if="showProgramDropdown" class="searchable-dropdown-menu">
+                  <div class="dropdown-search-box">
+                    <Search :size="13" class="search-icon" />
+                    <input
+                      type="text"
+                      v-model="programSearchQuery"
+                      class="dropdown-search-input"
+                      placeholder="Tìm theo mã hoặc tên chương trình..."
+                      @click.stop
+                      autofocus
+                    />
+                    <Loader2 v-if="searchingPrograms" :size="13" class="spinner search-spinner" />
+                    <button
+                      v-else-if="programSearchQuery"
+                      type="button"
+                      class="btn-clear-search"
+                      @click.stop="programSearchQuery = ''"
+                    >
+                      <X :size="12" />
+                    </button>
+                  </div>
+
+                  <div class="dropdown-items-list" @scroll="handleProgramsScroll">
+                    <div v-if="loadingPrograms" class="dropdown-state-row">
+                      <Loader2 :size="14" class="spinner" />
+                      <span>Đang tải danh sách chương trình...</span>
+                    </div>
+                    <div v-else-if="!pagedPrograms.length" class="dropdown-state-row empty-state-row">
+                      {{ programSearchQuery ? "Không tìm thấy chương trình phù hợp." : "Lĩnh vực này chưa có chương trình nào." }}
+                    </div>
+                    <div
+                      v-for="p in pagedPrograms"
+                      :key="p.id"
+                      class="dropdown-item"
+                      :class="{ 'is-selected': p.id === targetProgramId }"
+                      @click="selectProgram(p)"
+                    >
+                      <span class="item-code">[{{ p.code }}]</span>
+                      <span class="item-name">{{ p.name }}</span>
+                      <Check v-if="p.id === targetProgramId" :size="14" class="item-checked" />
+                    </div>
+
+                    <div v-if="loadingMorePrograms" class="dropdown-state-row loading-more">
+                      <Loader2 :size="12" class="spinner" />
+                      <span>Tải thêm 10 chương trình...</span>
+                    </div>
+                    <div v-else-if="!hasMorePrograms && pagedPrograms.length > 0" class="dropdown-state-row end-hint">
+                      <span>Đã hiển thị {{ pagedPrograms.length }} / {{ totalPrograms }} chương trình</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- BƯỚC C: KHÓA HỌC ÁP DỤNG (MẶC ĐỊNH ALL) -->
@@ -374,7 +471,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import {
   Search,
   Building2,
@@ -387,6 +484,8 @@ import {
   Loader2,
   Inbox,
   ListOrdered,
+  ChevronDown,
+  X,
 } from "lucide-vue-next";
 import { trainingApi } from "../api/trainingApi";
 import { axiosClient } from "../api/axiosClient";
@@ -416,14 +515,147 @@ const targetProgramId = ref("");
 watch(categoryType, () => {
   targetDomainId.value = "";
   targetProgramId.value = "";
+  selectedProgramObj.value = null;
+  showProgramDropdown.value = false;
   courseFilterDomainId.value = "";
   courseSearchQuery.value = "";
   programFilterDomainId.value = "";
+  programSearchQuery.value = "";
+  pagedPrograms.value = [];
   selectedSubCourseIds.value = [];
   selectAllCoursesInProgram.value = true;
   programCourses.value = [];
   totalProgramCourses.value = 0;
   hasMoreCourses.value = false;
+});
+
+// Searchable Program Dropdown State
+const programDropdownWrapperRef = ref<HTMLElement | null>(null);
+const showProgramDropdown = ref(false);
+const selectedProgramObj = ref<TrainingProgram | null>(null);
+const pagedPrograms = ref<TrainingProgram[]>([]);
+const programSearchQuery = ref("");
+const programPage = ref(0);
+const programPageSize = 10;
+const totalPrograms = ref(0);
+const hasMorePrograms = ref(false);
+const loadingPrograms = ref(false);
+const loadingMorePrograms = ref(false);
+const searchingPrograms = ref(false);
+
+const currentActiveDomainId = computed(() => {
+  return categoryType.value === "program"
+    ? programFilterDomainId.value
+    : courseFilterDomainId.value;
+});
+
+const selectedProgramDisplay = computed(() => {
+  if (!targetProgramId.value) return "-- Chọn chương trình đào tạo --";
+  if (selectedProgramObj.value) {
+    return `[${selectedProgramObj.value.code}] ${selectedProgramObj.value.name}`;
+  }
+  const found = pagedPrograms.value.find((p) => p.id === targetProgramId.value) ||
+                programs.value.find((p) => p.id === targetProgramId.value);
+  if (found) return `[${found.code}] ${found.name}`;
+  return "-- Chọn chương trình đào tạo --";
+});
+
+async function fetchPagedPrograms(reset = true) {
+  const domainId = currentActiveDomainId.value;
+  if (!domainId) {
+    pagedPrograms.value = [];
+    totalPrograms.value = 0;
+    hasMorePrograms.value = false;
+    return;
+  }
+
+  if (reset) {
+    programPage.value = 0;
+    loadingPrograms.value = true;
+  } else {
+    loadingMorePrograms.value = true;
+  }
+
+  try {
+    const params: any = {
+      domainId: domainId,
+      page: programPage.value,
+      size: programPageSize,
+    };
+    if (programSearchQuery.value.trim()) {
+      params.search = programSearchQuery.value.trim();
+    }
+    const res = await axiosClient.get("/api/admin/programs/paged", { params });
+    const data = res.data || {};
+    const items: TrainingProgram[] = data.items || [];
+    totalPrograms.value = data.totalElements || 0;
+    hasMorePrograms.value = !!data.hasNext;
+
+    if (reset) {
+      pagedPrograms.value = items;
+    } else {
+      pagedPrograms.value = [...pagedPrograms.value, ...items];
+    }
+  } catch (err) {
+    console.error("Lỗi khi tải danh sách chương trình:", err);
+    showToast("Không thể tải danh sách chương trình", "error");
+  } finally {
+    loadingPrograms.value = false;
+    loadingMorePrograms.value = false;
+    searchingPrograms.value = false;
+  }
+}
+
+function handleProgramsScroll(e: Event) {
+  const el = e.target as HTMLElement;
+  if (!el) return;
+  const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 20;
+  if (atBottom && hasMorePrograms.value && !loadingMorePrograms.value && !loadingPrograms.value) {
+    programPage.value++;
+    fetchPagedPrograms(false);
+  }
+}
+
+let progSearchTimer: any = null;
+watch(programSearchQuery, () => {
+  if (progSearchTimer) clearTimeout(progSearchTimer);
+  searchingPrograms.value = true;
+  progSearchTimer = setTimeout(() => {
+    fetchPagedPrograms(true);
+  }, 300);
+});
+
+function toggleProgramDropdown() {
+  showProgramDropdown.value = !showProgramDropdown.value;
+  if (showProgramDropdown.value && !pagedPrograms.value.length) {
+    fetchPagedPrograms(true);
+  }
+}
+
+function selectProgram(p: TrainingProgram) {
+  targetProgramId.value = p.id;
+  selectedProgramObj.value = p;
+  showProgramDropdown.value = false;
+  if (categoryType.value === "course") {
+    handleProgramChange();
+  }
+}
+
+function onDocumentClick(e: MouseEvent) {
+  if (
+    programDropdownWrapperRef.value &&
+    !programDropdownWrapperRef.value.contains(e.target as Node)
+  ) {
+    showProgramDropdown.value = false;
+  }
+}
+
+onMounted(() => {
+  document.addEventListener("click", onDocumentClick);
+});
+
+onUnmounted(() => {
+  document.removeEventListener("click", onDocumentClick);
 });
 const courseFilterDomainId = ref("");
 const programFilterDomainId = ref("");
@@ -446,32 +678,29 @@ const activePrograms = computed(() => programs.value.filter((p) => p.status !== 
 
 const currentUnit = computed(() => units.value.find((u) => u.id === selectedUnitId.value));
 
-const filteredProgramsForCourse = computed(() => {
-  if (!courseFilterDomainId.value) return activePrograms.value;
-  return activePrograms.value.filter((p) => p.domainId === courseFilterDomainId.value);
-});
+
 
 function handleDomainFilterChange() {
-  if (targetProgramId.value) {
-    const prog = programs.value.find((p) => p.id === targetProgramId.value);
-    if (prog && courseFilterDomainId.value && prog.domainId !== courseFilterDomainId.value) {
-      targetProgramId.value = "";
-      selectedSubCourseIds.value = [];
-    }
+  targetProgramId.value = "";
+  selectedProgramObj.value = null;
+  selectedSubCourseIds.value = [];
+  programCourses.value = [];
+  programSearchQuery.value = "";
+  pagedPrograms.value = [];
+  showProgramDropdown.value = false;
+  if (courseFilterDomainId.value) {
+    fetchPagedPrograms(true);
   }
 }
 
-const filteredProgramsForProgram = computed(() => {
-  if (!programFilterDomainId.value) return activePrograms.value;
-  return activePrograms.value.filter((p) => p.domainId === programFilterDomainId.value);
-});
-
 function handleProgramDomainFilterChange() {
-  if (targetProgramId.value) {
-    const prog = programs.value.find((p) => p.id === targetProgramId.value);
-    if (prog && programFilterDomainId.value && prog.domainId !== programFilterDomainId.value) {
-      targetProgramId.value = "";
-    }
+  targetProgramId.value = "";
+  selectedProgramObj.value = null;
+  programSearchQuery.value = "";
+  pagedPrograms.value = [];
+  showProgramDropdown.value = false;
+  if (programFilterDomainId.value) {
+    fetchPagedPrograms(true);
   }
 }
 
@@ -752,7 +981,7 @@ async function handleAssignAllocation() {
         saving.value = false;
         return;
       }
-      const program = programs.value.find((p) => p.id === targetProgramId.value);
+      const program = programs.value.find((p) => p.id === targetProgramId.value) || selectedProgramObj.value;
       if (program) {
         const manIds = new Set(program.mandatoryUnitIds || []);
         const optIds = new Set(program.optionalUnitIds || program.unitIds || []);
@@ -1467,6 +1696,172 @@ async function handleRemoveAllocation(item: AllocationRow) {
 .search-spinner {
   color: #38bdf8;
   flex-shrink: 0;
+}
+
+.searchable-dropdown-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.searchable-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  padding: 0.55rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  transition: all 0.15s ease;
+}
+
+.searchable-trigger.has-value {
+  color: #f8fafc;
+}
+
+.searchable-trigger.is-open {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+.dropdown-chevron {
+  color: #64748b;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.dropdown-chevron.rotated {
+  transform: rotate(180deg);
+  color: #38bdf8;
+}
+
+.searchable-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  animation: fadeInDown 0.15s ease;
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdown-search-box {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.65rem;
+  border-bottom: 1px solid #334155;
+  background: #0f172a;
+}
+
+.dropdown-search-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #f8fafc;
+  font-size: 0.78rem;
+  width: 100%;
+}
+
+.btn-clear-search {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+}
+
+.btn-clear-search:hover {
+  color: #f8fafc;
+}
+
+.dropdown-items-list {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  transition: background 0.12s;
+}
+
+.dropdown-item:hover {
+  background: #334155;
+  color: #f8fafc;
+}
+
+.dropdown-item.is-selected {
+  background: rgba(14, 165, 233, 0.15);
+  color: #38bdf8;
+  font-weight: 500;
+}
+
+.item-code {
+  color: #38bdf8;
+  font-family: monospace;
+  font-size: 0.74rem;
+}
+
+.item-name {
+  flex: 1;
+}
+
+.item-checked {
+  color: #38bdf8;
+  flex-shrink: 0;
+}
+
+.dropdown-state-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.65rem;
+  font-size: 0.74rem;
+  color: #94a3b8;
+}
+
+.dropdown-state-row.empty-state-row {
+  color: #64748b;
+  padding: 0.9rem;
+}
+
+.dropdown-state-row.loading-more {
+  color: #38bdf8;
+  border-top: 1px dashed #334155;
+}
+
+.dropdown-state-row.end-hint {
+  color: #64748b;
+  border-top: 1px dashed #334155;
+  font-size: 0.7rem;
 }
 
 </style>

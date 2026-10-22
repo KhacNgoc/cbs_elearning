@@ -645,6 +645,25 @@ public class TrainingStructureService {
         return res;
     }
 
+    public Map<String, Object> adminProgramsPaged(String domainId, String search, int page, int size) {
+        String query = (search != null && !search.isBlank()) ? search.trim() : null;
+        String dId = (domainId != null && !domainId.isBlank()) ? domainId.trim() : null;
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+        org.springframework.data.domain.Page<TrainingProgram> result = programs.findByDomainIdWithFilter(dId, query, pageable);
+        List<ProgramDto> dtos = result.getContent().stream()
+                .map(this::programDto)
+                .toList();
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("items", dtos);
+        res.put("page", result.getNumber());
+        res.put("size", result.getSize());
+        res.put("totalElements", result.getTotalElements());
+        res.put("totalPages", result.getTotalPages());
+        res.put("hasNext", result.hasNext());
+        return res;
+    }
+
     public void allocateCoursesToUnit(String unitId, String grantType, String programId, boolean allInProgram, List<String> courseIds) {
         authorization.permission("CATALOG_MANAGE");
         List<Course> targets;

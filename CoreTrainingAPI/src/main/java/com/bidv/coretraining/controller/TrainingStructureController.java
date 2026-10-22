@@ -62,6 +62,15 @@ public class TrainingStructureController {
             List<String> courseIds
     ) {}
 
+    @GetMapping({"/admin/programs/paged", "/admin/programs/by-domain"})
+    public java.util.Map<String, Object> programsPaged(
+            @RequestParam(required = false) String domainId,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return service.adminProgramsPaged(domainId, search, page, size);
+    }
+
     @GetMapping({"/admin/programs/{programId}/courses", "/admin/courses/by-program/{programId}"})
     public Object coursesByProgram(
             @PathVariable String programId,
