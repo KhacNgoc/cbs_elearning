@@ -157,7 +157,7 @@ const groupDefinitions = [
     id: "training",
     label: "Đào tạo & tài liệu",
     icon: BookOpen,
-    ids: ["admin.curriculum", "admin.catalog", "admin.courses", "admin.lessons", "admin.documents"],
+    ids: ["admin.curriculum", "admin.courses", "admin.unit-allocation", "admin.documents"],
   },
   {
     id: "assessment",
@@ -239,7 +239,9 @@ const activeSection = computed(() =>
               ? "admin.roles"
               : route.path.startsWith("/admin/permissions")
                 ? "admin.permissions"
-                : route.path.startsWith("/admin/curriculum") ? "admin.curriculum" : route.path.startsWith("/admin/catalog")
+                : route.path.startsWith("/admin/unit-allocation")
+                  ? "admin.unit-allocation"
+                  : route.path.startsWith("/admin/curriculum") ? "admin.curriculum" : route.path.startsWith("/admin/catalog")
                   ? "admin.catalog"
                   : route.path.startsWith("/admin/courses") ||
                       route.path.endsWith("/edit")
