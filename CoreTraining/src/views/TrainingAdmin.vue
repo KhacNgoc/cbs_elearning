@@ -23,7 +23,7 @@
             </button>
           </div>
           <nav class="breadcrumb" aria-label="Đường dẫn">
-            <RouterLink to="/admin/courses">Khóa học</RouterLink
+            <RouterLink to="/admin/courses">Danh mục đào tạo</RouterLink
             ><template v-if="course">
               /
               <RouterLink :to="`/admin/courses/${course.id}`">{{
@@ -700,10 +700,10 @@ const backTo = computed(() =>
 const backLabel = computed(() =>
   mode.value === "chapter"
     ? "Quay lại khóa học"
-    : "Quay lại danh sách khóa học",
+    : "Quay lại danh mục đào tạo",
 );
 const title = computed(() =>
-  mode.value === "catalog"
+  mode.value === "catalog" || mode.value === "list"
     ? "Danh mục đào tạo"
     : chapter.value?.title || course.value?.name || "Khóa học",
 );

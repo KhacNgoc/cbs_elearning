@@ -157,7 +157,7 @@ const groupDefinitions = [
     id: "training",
     label: "Đào tạo & tài liệu",
     icon: BookOpen,
-    ids: ["admin.curriculum", "admin.courses", "admin.unit-allocation", "admin.documents"],
+    ids: ["admin.courses", "admin.unit-allocation", "admin.documents"],
   },
   {
     id: "assessment",
