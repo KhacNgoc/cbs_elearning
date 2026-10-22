@@ -91,23 +91,45 @@
             </select>
           </div>
 
-          <!-- CASE 3B: CHỌN CHƯƠNG TRÌNH (CHỈ HIỆN OPTION ĐỂ CHỌN CHƯƠNG TRÌNH) -->
-          <div v-if="categoryType === 'program'" class="form-group dynamic-group">
-            <label>Chọn Chương trình đào tạo (*):</label>
-            <select
-              v-model="targetProgramId"
-              class="form-control select-control"
-              required
-            >
-              <option value="">-- Chọn chương trình đào tạo --</option>
-              <option
-                v-for="p in activePrograms"
-                :key="p.id"
-                :value="p.id"
+          <!-- CASE 3B: CHỌN CHƯƠNG TRÌNH (CÓ LĨNH VỰC CHA ĐỂ LỌC / CHỌN) -->
+          <div v-if="categoryType === 'program'" class="form-group dynamic-group course-cascade-box">
+            <!-- BƯỚC A: LĨNH VỰC CHA -->
+            <div class="sub-form-group">
+              <label>Lĩnh vực cha (Lọc theo lĩnh vực):</label>
+              <select
+                v-model="programFilterDomainId"
+                class="form-control select-control"
+                @change="handleProgramDomainFilterChange"
               >
-                [{{ p.code }}] {{ p.name }}
-              </option>
-            </select>
+                <option value="">-- Tất cả Lĩnh vực --</option>
+                <option
+                  v-for="d in activeDomains"
+                  :key="d.id"
+                  :value="d.id"
+                >
+                  [{{ d.code }}] {{ d.name }}
+                </option>
+              </select>
+            </div>
+
+            <!-- BƯỚC B: CHƯƠNG TRÌNH ĐÀO TẠO -->
+            <div class="sub-form-group">
+              <label>Chọn Chương trình đào tạo (*):</label>
+              <select
+                v-model="targetProgramId"
+                class="form-control select-control"
+                required
+              >
+                <option value="">-- Chọn chương trình đào tạo --</option>
+                <option
+                  v-for="p in filteredProgramsForProgram"
+                  :key="p.id"
+                  :value="p.id"
+                >
+                  [{{ p.code }}] {{ p.name }}
+                </option>
+              </select>
+            </div>
           </div>
 
           <!-- CASE 3C: CHỌN KHÓA HỌC (HIỂN THỊ CẤU TRÚC / LĨNH VỰC -> CHƯƠNG TRÌNH -> KHÓA HỌC, MẶC ĐỊNH ALL) -->
@@ -363,10 +385,12 @@ watch(categoryType, () => {
   targetDomainId.value = "";
   targetProgramId.value = "";
   courseFilterDomainId.value = "";
+  programFilterDomainId.value = "";
   selectedSubCourseIds.value = [];
   selectAllCoursesInProgram.value = true;
 });
 const courseFilterDomainId = ref("");
+const programFilterDomainId = ref("");
 const grantType = ref<"MANDATORY" | "OPTIONAL">("MANDATORY");
 
 // Sub-course picker state for Course cascade
@@ -396,6 +420,20 @@ function handleDomainFilterChange() {
     if (prog && courseFilterDomainId.value && prog.domainId !== courseFilterDomainId.value) {
       targetProgramId.value = "";
       selectedSubCourseIds.value = [];
+    }
+  }
+}
+
+const filteredProgramsForProgram = computed(() => {
+  if (!programFilterDomainId.value) return activePrograms.value;
+  return activePrograms.value.filter((p) => p.domainId === programFilterDomainId.value);
+});
+
+function handleProgramDomainFilterChange() {
+  if (targetProgramId.value) {
+    const prog = programs.value.find((p) => p.id === targetProgramId.value);
+    if (prog && programFilterDomainId.value && prog.domainId !== programFilterDomainId.value) {
+      targetProgramId.value = "";
     }
   }
 }
