@@ -9,6 +9,11 @@
       :course-name="`${fullCourse?.name} / ${chapter?.title}`"
       :back-to="`/courses/${fullCourse?.id}`"
       :lesson-title="lesson.title"
+      :sidebar-open="sidebarOpen"
+      :active-content="activeContentType"
+      :has-text="Boolean(lesson.textBody?.trim())"
+      :has-video="Boolean(lesson.videoUrl?.trim())"
+      @select-content="showPrimaryContent"
       :completed-count="completedCount"
       :total-lessons="course?.lessons.length || 0"
       :completed="isCompleted"
@@ -40,8 +45,6 @@
         "
         @document-position="handleDocumentPosition"
         @adjacent="goToAdjacentLesson"
-        @select-content="showPrimaryContent"
-        @download-document="downloadDocument"
         @time-update="currentVideoTime = $event"
         @progress-update="handleVideoProgress"
         @video-ended="handleVideoEnded"
@@ -60,9 +63,10 @@
         :course-quiz-scores="userStore.quizScores"
         :course-quiz-totals="userStore.quizTotals"
         @close="sidebarOpen = false"
-        @select="switchLesson"
+        @select="openLessonContent"
         @toggle-completion="toggleLessonCompletion"
         @select-document="showDocument"
+        @download-document="downloadDocument"
         @quiz="startQuiz"
         @course-quiz="startCourseQuiz"
       />
@@ -523,6 +527,17 @@ const switchLesson = async (lessonId: string): Promise<boolean> => {
   await router.push(`/lesson/${lessonId}`);
   return true;
 };
+const openLessonContent = async (lessonId: string) => {
+  if (lessonId === lesson.value?.id && selectedDocument.value) {
+    showPrimaryContent(
+      primaryContent.value === "TEXT" && !lesson.value.textBody?.trim()
+        ? "VIDEO"
+        : primaryContent.value,
+    );
+    return;
+  }
+  await switchLesson(lessonId);
+};
 const showDocument = async (lessonId: string, document: LessonDocument) => {
   if (lessonId !== lesson.value?.id) {
     pendingDocument.value = { lessonId, document };
@@ -815,7 +830,8 @@ const deleteComment = async (commentId: number) => {
   background: var(--bg-main);
   min-height: calc(100vh - 73px);
   color: var(--text-main);
-  transition: padding-right 0.25s ease;
+  --learning-motion: 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: padding-right var(--learning-motion);
 }
 .learning-page.sidebar-visible {
   padding-right: 370px;
@@ -1120,7 +1136,7 @@ const deleteComment = async (commentId: number) => {
   flex-direction: column;
   overflow: hidden;
   box-shadow: -8px 0 24px rgba(9, 31, 24, 0.08);
-  transition: transform 0.25s ease;
+  transition: transform var(--learning-motion);
   z-index: 90;
 }
 .sidebar-hidden .course-sidebar {
@@ -1270,7 +1286,7 @@ const deleteComment = async (commentId: number) => {
 .sidebar-reopen {
   position: fixed;
   right: 0;
-  top: 45%;
+  top: 165px;
   width: 35px;
   height: 52px;
   border: 0;
@@ -1800,9 +1816,6 @@ const deleteComment = async (commentId: number) => {
     width: 320px;
     min-width: 320px;
   }
-  .progress-summary {
-    display: none;
-  }
 }
 @media (max-width: 900px) {
   .learning-page {
@@ -1812,9 +1825,7 @@ const deleteComment = async (commentId: number) => {
     padding-right: 0;
   }
   .learning-header {
-    position: sticky;
-    top: 65px;
-    z-index: 82;
+    position: static;
   }
   .header-separator,
   .course-name,
@@ -1909,7 +1920,6 @@ const deleteComment = async (commentId: number) => {
   .learning-header {
     min-height: 58px;
     padding: 0 0.7rem;
-    top: 64px;
   }
   .content-tabs {
     top: 122px;
@@ -2009,15 +2019,24 @@ const deleteComment = async (commentId: number) => {
   border-bottom: 0;
 }
 .lesson-entry:hover {
-  background: rgba(239, 246, 243, 0.8);
+  background: var(--surface-f4f8f6);
+}
+.lesson-entry.active:hover {
+  background: var(--primary-light);
 }
 .lesson-entry.completed .lesson-check {
   background: var(--primary-color);
   border-color: var(--primary-color);
   color: white;
 }
+.lesson-content-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0 0.75rem 0.7rem 2.7rem;
+}
 .lesson-resources-toggle {
-  margin: 0 0.75rem 0.65rem auto;
   padding: 0.35rem 0.5rem;
   display: flex;
   align-items: center;
@@ -2034,6 +2053,10 @@ const deleteComment = async (commentId: number) => {
 .lesson-resources-toggle.expanded {
   background: var(--surface-e7f2ee);
   border-color: rgba(0, 91, 65, 0.4);
+}
+.lesson-content-actions button:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
 }
 .lesson-resources-toggle > svg:last-child {
   transition: transform 0.2s ease;
@@ -2059,7 +2082,13 @@ const deleteComment = async (commentId: number) => {
   gap: 0.2rem;
   border-left: 2px solid var(--line-b8d4ca);
 }
-.lesson-documents button {
+.lesson-document-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border-radius: 6px;
+}
+.lesson-documents .lesson-document-select {
   width: 100%;
   padding: 0.5rem 0.55rem;
   display: grid;
@@ -2072,14 +2101,41 @@ const deleteComment = async (commentId: number) => {
   color: var(--ink-42534c);
   text-align: left;
   cursor: pointer;
+  flex: 1;
+  min-width: 0;
 }
-.lesson-documents button:hover,
-.lesson-documents button.selected {
+.lesson-document-row:hover,
+.lesson-document-row.selected {
   background: var(--surface-ffffff);
   color: var(--primary-ink);
   box-shadow: 0 1px 4px rgba(11, 42, 32, 0.09);
 }
-.lesson-documents button > span {
+.lesson-document-row:hover .lesson-document-select,
+.lesson-document-row.selected .lesson-document-select {
+  color: var(--primary-ink);
+}
+.lesson-documents .lesson-document-download {
+  display: grid;
+  place-items: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  margin-right: 0.2rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--primary-ink);
+  cursor: pointer;
+}
+.lesson-documents .lesson-document-download:hover {
+  background: var(--primary-light);
+}
+.lesson-documents button:focus-visible {
+  outline: 2px solid var(--primary-ink);
+  outline-offset: -2px;
+}
+.lesson-document-select > span {
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -2087,6 +2143,7 @@ const deleteComment = async (commentId: number) => {
 .lesson-documents strong {
   font-size: 0.75rem;
   line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 .lesson-documents small {
   margin-top: 0.15rem;
@@ -2116,7 +2173,7 @@ const deleteComment = async (commentId: number) => {
   border: 0;
   background: var(--surface-ffffff);
 }
-.selected-document-preview > .word-preview,
+.selected-document-preview > .word-preview-shell,
 .selected-document-preview > .powerpoint-preview {
   flex: 1;
   min-height: 0;
@@ -2204,5 +2261,131 @@ const deleteComment = async (commentId: number) => {
   .chapter-completion-footer .btn {
     width: 100%;
   }
+}
+/* Lesson format controls in the learning header. */
+.learning-header .back-button,
+.learning-header .header-actions { flex-shrink: 0; }
+.lesson-content-switch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(138, 226, 194, 0.28);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.12);
+}
+.lesson-content-switch button {
+  min-height: 36px;
+  padding: 0 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #dbe7e3;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+.lesson-content-switch button:hover { background: rgba(255, 255, 255, 0.09); color: #fff; }
+.lesson-content-switch button[aria-pressed="true"] {
+  background: #e7f2ee;
+  color: #005b41;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+.lesson-content-switch button:focus-visible { outline: 2px solid #8ae2c2; outline-offset: 2px; }
+.learning-header .header-actions { gap: 0; }
+.header-completion {
+  flex: 0 0 auto;
+  min-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  transition: width var(--learning-motion), opacity 180ms ease, visibility 0s 320ms;
+}
+.header-completion.visible {
+  opacity: 1;
+  visibility: visible;
+  transition: width var(--learning-motion), opacity 220ms ease 70ms, visibility 0s;
+}
+.header-completion-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-left: 0.5rem;
+  width: max-content;
+  white-space: nowrap;
+}
+.header-completion-content > * { flex-shrink: 0; }
+.learning-header .mobile-content-button { margin-left: 0.5rem; }
+@media (max-width: 1100px) {
+  .learning-header { flex-wrap: wrap; gap: 0.5rem 0.75rem; padding-top: 0.6rem; padding-bottom: 0.6rem; }
+  .learning-header .header-actions { flex-wrap: wrap; justify-content: flex-end; margin-left: auto; max-width: 100%; }
+}
+@media (max-width: 900px) {
+  .learning-header {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) auto 40px;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 0.75rem;
+  }
+  .learning-header .back-button { grid-column: 1; grid-row: 1; }
+  .learning-header .header-copy { grid-column: 2 / 4; grid-row: 1; }
+  .learning-header .header-copy h1 { font-size: 0.85rem; }
+  .learning-header .header-actions { display: contents; }
+  .learning-header .mobile-content-button {
+    grid-column: 4;
+    grid-row: 1;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    margin: 0;
+  }
+  .learning-header .lesson-content-switch {
+    grid-column: 1 / 3;
+    grid-row: 2;
+    justify-self: start;
+    margin: 0;
+    max-width: 100%;
+  }
+  .learning-header .header-completion {
+    grid-column: 3 / 5;
+    grid-row: 2;
+    justify-self: end;
+    width: auto !important;
+    max-width: 100%;
+    transition: opacity 180ms ease, visibility 0s 180ms;
+  }
+  .learning-header .header-completion.visible {
+    transition: opacity 220ms ease, visibility 0s;
+  }
+  .header-completion-content { padding-left: 0; }
+  .lesson-content-switch button {
+    min-height: 34px;
+    padding: 0 0.5rem;
+    gap: 0.35rem;
+    font-size: 0.78rem;
+  }
+  .progress-summary { font-size: 0.7rem; gap: 0.3rem; }
+}
+@media (max-width: 360px) {
+  .lesson-content-switch { gap: 2px; padding: 3px; }
+  .lesson-content-switch button { padding: 0 0.35rem; font-size: 0.75rem; }
+  .progress-summary { font-size: 0.65rem; }
+  .progress-summary svg { width: 14px; height: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .learning-page,
+  .course-sidebar,
+  .lesson-content-switch button,
+  .header-completion,
+  .header-completion.visible { transition: none; }
 }
 </style>

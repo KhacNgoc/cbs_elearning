@@ -61,31 +61,54 @@
             </small>
           </button>
         </div>
-        <button
+        <div
           v-if="getDocuments(item).length"
-          class="lesson-resources-toggle"
-          :class="{ expanded: expandedLessons.has(item.id) }"
-          @click="toggleDocuments(item.id)"
+          class="lesson-content-actions"
+          role="group"
+          :aria-label="`Các phần của bài ${item.title}`"
         >
-          <FolderOpen :size="14" /><span>Tài liệu</span
-          ><span class="resource-count">{{ getDocuments(item).length }}</span
-          ><ChevronDown :size="14" />
-        </button>
-        <div v-if="expandedLessons.has(item.id)" class="lesson-documents">
           <button
+            v-if="getDocuments(item).length"
+            type="button"
+            class="lesson-resources-toggle"
+            :aria-expanded="expandedLessons.has(item.id)"
+            :class="{ expanded: expandedLessons.has(item.id) }"
+            @click="toggleDocuments(item.id)"
+          >
+            <FolderOpen :size="14" /><span>Tài liệu</span
+            ><span class="resource-count">{{ getDocuments(item).length }}</span
+            ><ChevronDown :size="14" />
+          </button>
+        </div>
+        <div v-if="expandedLessons.has(item.id)" class="lesson-documents">
+          <div
             v-for="document in getDocuments(item)"
             :key="document.id || document.fileUrl"
+            class="lesson-document-row"
             :class="{ selected: selectedDocumentId === document.id }"
-            @click="$emit('select-document', item.id, document)"
           >
-            <FileText :size="15" /><span
-              ><strong>{{ document.name }}</strong
-              ><small
-                >{{ document.documentType }} ·
-                {{ formatFileSize(document.fileSize) }}</small
-              ></span
+            <button
+              class="lesson-document-select"
+              @click="$emit('select-document', item.id, document)"
             >
-          </button>
+              <FileText :size="15" /><span
+                ><strong>{{ document.name }}</strong
+                ><small
+                  >{{ document.documentType }} ·
+                  {{ formatFileSize(document.fileSize) }}</small
+                ></span
+              >
+            </button>
+            <button
+              type="button"
+              class="lesson-document-download"
+              :aria-label="`Tải xuống ${document.name}`"
+              :title="`Tải xuống ${document.name}`"
+              @click="$emit('download-document', document)"
+            >
+              <Download :size="16" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -146,6 +169,7 @@ import {
   Award,
   Check,
   ChevronDown,
+  Download,
   FileText,
   FolderOpen,
   PlayCircle,
@@ -171,6 +195,7 @@ const emit = defineEmits<{
   select: [lessonId: string];
   "toggle-completion": [lessonId: string];
   "select-document": [lessonId: string, document: LessonDocument];
+  "download-document": [document: LessonDocument];
   quiz: [];
   "course-quiz": [];
 }>();
