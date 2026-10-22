@@ -180,11 +180,16 @@
               <div class="picker-header">
                 <label>Khóa học áp dụng (*):</label>
                 <span class="course-count-badge">
-                  Đã chọn {{ selectedSubCourseIds.length }} / {{ availableProgramCourses.length }} khóa
+                  <span v-if="selectAllCoursesInProgram">
+                    Đã chọn TẤT CẢ ({{ totalProgramCourses }} khóa)
+                  </span>
+                  <span v-else>
+                    Đã chọn {{ selectedSubCourseIds.length }} / {{ totalProgramCourses }} khóa
+                  </span>
                 </span>
               </div>
 
-              <!-- Checkbox TẤT CẢ (ALL) - MẶC ĐỊNH CHECKED -->
+              <!-- Checkbox TẤT CẢ (ALL) & Ô TÌM KIẾM SERVER-SIDE -->
               <div class="all-and-search-row">
                 <label class="all-courses-checkbox">
                   <input
@@ -195,29 +200,34 @@
                   <span class="all-text">ALL</span>
                 </label>
 
-                <!-- Ô TÌM NHANH KHÓA HỌC KHI CÓ NHIỀU KHÓA -->
-                <div v-if="availableProgramCourses.length > 4" class="course-search-box">
+                <!-- Ô TÌM KIẾM KHÓA HỌC (SERVER-SIDE LIKE QUERY) -->
+                <div class="course-search-box">
                   <Search :size="13" class="search-icon" />
                   <input
                     type="text"
                     v-model="courseSearchQuery"
                     class="course-search-input"
-                    placeholder="Lọc nhanh khóa..."
+                    placeholder="Tìm theo mã hoặc tên khóa..."
                   />
+                  <Loader2 v-if="searchingCourses" :size="13" class="spinner search-spinner" />
                 </div>
               </div>
 
-              <!-- DANH SÁCH KHÓA HỌC CON VỚI CHECKBOX -->
+              <!-- DANH SÁCH KHÓA HỌC CON VỚI SỰ KIỆN CUỘN TẢI TIẾP (INFINITE SCROLL) -->
               <div v-if="loadingProgramCourses" class="picker-loading">
                 <Loader2 :size="16" class="spinner" />
-                <span>Đang tải khóa học của chương trình...</span>
+                <span>Đang tải khóa học...</span>
               </div>
-              <div v-else class="courses-checkbox-list">
-                <div v-if="!filteredAvailableProgramCourses.length" class="empty-hint">
-                  {{ availableProgramCourses.length ? "Không tìm thấy khóa học khớp từ khóa." : "Chương trình này hiện chưa có khóa học nào." }}
+              <div
+                v-else
+                class="courses-checkbox-list"
+                @scroll="handleCoursesScroll"
+              >
+                <div v-if="!programCourses.length" class="empty-hint">
+                  {{ courseSearchQuery ? "Không tìm thấy khóa học nào khớp từ khóa." : "Chương trình này hiện chưa có khóa học nào." }}
                 </div>
                 <label
-                  v-for="c in filteredAvailableProgramCourses"
+                  v-for="c in programCourses"
                   :key="c.id"
                   class="course-checkbox-item"
                 >
@@ -230,6 +240,15 @@
                   <span class="course-code-tag">[{{ c.code }}]</span>
                   <span class="course-name">{{ c.name }}</span>
                 </label>
+
+                <!-- SPINNER KHI CUỘN TẢI THÊM 10 ITEM -->
+                <div v-if="loadingMoreCourses" class="scroll-loading-more">
+                  <Loader2 :size="14" class="spinner" />
+                  <span>Đang tải thêm 10 khóa tiếp theo...</span>
+                </div>
+                <div v-else-if="!hasMoreCourses && programCourses.length > 0" class="scroll-end-hint">
+                  <span>Đã hiển thị {{ programCourses.length }} / {{ totalProgramCourses }} khóa học</span>
+                </div>
               </div>
             </div>
           </div>
@@ -402,36 +421,30 @@ watch(categoryType, () => {
   programFilterDomainId.value = "";
   selectedSubCourseIds.value = [];
   selectAllCoursesInProgram.value = true;
+  programCourses.value = [];
+  totalProgramCourses.value = 0;
+  hasMoreCourses.value = false;
 });
 const courseFilterDomainId = ref("");
 const programFilterDomainId = ref("");
 const grantType = ref<"MANDATORY" | "OPTIONAL">("MANDATORY");
 
-// Sub-course picker state for Course cascade
+// Sub-course picker state for Course cascade with pagination & infinite scroll
 const selectAllCoursesInProgram = ref(true);
 const selectedSubCourseIds = ref<string[]>([]);
+const coursePage = ref(0);
+const coursePageSize = 10;
+const totalProgramCourses = ref(0);
+const hasMoreCourses = ref(false);
+const loadingMoreCourses = ref(false);
+const searchingCourses = ref(false);
+const courseSearchQuery = ref("");
 
 // Filter active (non-deleted) items
 const activeDomains = computed(() => domains.value.filter((d) => d.status !== "DELETED"));
 const activePrograms = computed(() => programs.value.filter((p) => p.status !== "DELETED"));
 
 const currentUnit = computed(() => units.value.find((u) => u.id === selectedUnitId.value));
-
-const courseSearchQuery = ref("");
-
-const availableProgramCourses = computed(() => {
-  return programCourses.value.filter((c) => c.status !== "DELETED");
-});
-
-const filteredAvailableProgramCourses = computed(() => {
-  const query = courseSearchQuery.value.trim().toLowerCase();
-  if (!query) return availableProgramCourses.value;
-  return availableProgramCourses.value.filter(
-    (c) =>
-      c.name.toLowerCase().includes(query) ||
-      (c.code && c.code.toLowerCase().includes(query))
-  );
-});
 
 const filteredProgramsForCourse = computed(() => {
   if (!courseFilterDomainId.value) return activePrograms.value;
@@ -513,34 +526,104 @@ async function handleUnitChange() {
   await loadUnitCourses();
 }
 
-// Lazy load các khóa học thuộc Chương trình đang chọn
-async function handleProgramChange() {
+// Tải danh sách khóa học theo phân trang (10 item/lần) và hỗ trợ tìm kiếm server-side LIKE
+async function fetchProgramCourses(reset = true) {
   if (!targetProgramId.value) {
     programCourses.value = [];
-    selectedSubCourseIds.value = [];
+    totalProgramCourses.value = 0;
+    hasMoreCourses.value = false;
     return;
   }
-  loadingProgramCourses.value = true;
+
+  if (reset) {
+    coursePage.value = 0;
+    loadingProgramCourses.value = true;
+  } else {
+    loadingMoreCourses.value = true;
+  }
+
   try {
-    const res = await axiosClient.get(`/api/admin/courses/by-program/${targetProgramId.value}`);
-    programCourses.value = res.data || [];
-    selectAllCoursesInProgram.value = true;
-    selectedSubCourseIds.value = programCourses.value
-      .filter((c) => c.status !== "DELETED")
-      .map((c) => c.id);
+    const params: any = {
+      page: coursePage.value,
+      size: coursePageSize,
+    };
+    if (courseSearchQuery.value.trim()) {
+      params.search = courseSearchQuery.value.trim();
+    }
+    const res = await axiosClient.get(
+      `/api/admin/courses/by-program/${targetProgramId.value}`,
+      { params }
+    );
+    const data = res.data || {};
+    const items: Course[] = data.items || [];
+    totalProgramCourses.value = data.totalElements || 0;
+    hasMoreCourses.value = !!data.hasNext;
+
+    if (reset) {
+      programCourses.value = items;
+      if (selectAllCoursesInProgram.value) {
+        selectedSubCourseIds.value = items.map((c) => c.id);
+      }
+    } else {
+      programCourses.value = [...programCourses.value, ...items];
+      if (selectAllCoursesInProgram.value) {
+        const set = new Set(selectedSubCourseIds.value);
+        items.forEach((c) => set.add(c.id));
+        selectedSubCourseIds.value = Array.from(set);
+      }
+    }
   } catch (err) {
-    console.error("Lỗi khi tải khóa học theo chương trình:", err);
+    console.error("Lỗi khi tải khóa học của chương trình:", err);
     showToast("Không thể tải danh sách khóa học của chương trình", "error");
-    programCourses.value = [];
-    selectedSubCourseIds.value = [];
+    if (reset) {
+      programCourses.value = [];
+      totalProgramCourses.value = 0;
+      hasMoreCourses.value = false;
+    }
   } finally {
     loadingProgramCourses.value = false;
+    loadingMoreCourses.value = false;
+    searchingCourses.value = false;
   }
+}
+
+// Xử lý sự kiện cuộn hết danh sách để tải thêm 10 khóa tiếp theo (Infinite Scroll)
+function handleCoursesScroll(e: Event) {
+  const el = e.target as HTMLElement;
+  if (!el) return;
+  const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 25;
+  if (
+    atBottom &&
+    hasMoreCourses.value &&
+    !loadingMoreCourses.value &&
+    !loadingProgramCourses.value
+  ) {
+    coursePage.value++;
+    fetchProgramCourses(false);
+  }
+}
+
+// Debounce tìm kiếm khóa học từ server (350ms)
+let courseSearchTimer: any = null;
+watch(courseSearchQuery, () => {
+  if (courseSearchTimer) clearTimeout(courseSearchTimer);
+  searchingCourses.value = true;
+  courseSearchTimer = setTimeout(() => {
+    fetchProgramCourses(true);
+  }, 350);
+});
+
+// Khi thay đổi Chương trình đào tạo
+async function handleProgramChange() {
+  courseSearchQuery.value = "";
+  selectAllCoursesInProgram.value = true;
+  selectedSubCourseIds.value = [];
+  await fetchProgramCourses(true);
 }
 
 function handleToggleAllCourses() {
   if (selectAllCoursesInProgram.value) {
-    selectedSubCourseIds.value = availableProgramCourses.value.map((c) => c.id);
+    selectedSubCourseIds.value = programCourses.value.map((c) => c.id);
   } else {
     selectedSubCourseIds.value = [];
   }
@@ -548,8 +631,8 @@ function handleToggleAllCourses() {
 
 function handleSubCourseCheckChange() {
   selectAllCoursesInProgram.value =
-    availableProgramCourses.value.length > 0 &&
-    selectedSubCourseIds.value.length === availableProgramCourses.value.length;
+    programCourses.value.length > 0 &&
+    selectedSubCourseIds.value.length === totalProgramCourses.value;
 }
 
 // Assigned allocations for the selected unit
@@ -699,36 +782,24 @@ async function handleAssignAllocation() {
         saving.value = false;
         return;
       }
-      const coursesToApply = selectAllCoursesInProgram.value
-        ? availableProgramCourses.value
-        : availableProgramCourses.value.filter((c) => selectedSubCourseIds.value.includes(c.id));
-
-      if (!coursesToApply.length) {
+      if (!selectAllCoursesInProgram.value && !selectedSubCourseIds.value.length) {
         showToast("Vui lòng chọn ít nhất 1 khóa học để phân bổ!", "warning");
         saving.value = false;
         return;
       }
 
-      for (const c of coursesToApply) {
-        const cManIds = new Set(c.mandatoryUnitIds || []);
-        const cOptIds = new Set(c.optionalUnitIds || c.unitIds || []);
-        if (grantType.value === "MANDATORY") {
-          cManIds.add(uId);
-          cOptIds.delete(uId);
-        } else {
-          cOptIds.add(uId);
-          cManIds.delete(uId);
-        }
-        await axiosClient.put(`/api/admin/courses/${c.id}`, {
-          name: c.name,
-          code: c.code || "",
-          programId: targetProgramId.value,
-          mandatoryUnitIds: Array.from(cManIds),
-          optionalUnitIds: Array.from(cOptIds),
-        });
-      }
+      await axiosClient.post("/api/admin/courses/batch-allocate", {
+        unitId: uId,
+        grantType: grantType.value,
+        programId: targetProgramId.value,
+        allInProgram: selectAllCoursesInProgram.value,
+        courseIds: selectAllCoursesInProgram.value ? [] : selectedSubCourseIds.value,
+      });
+
       showToast(
-        `Đã phân bổ ${coursesToApply.length} khóa học cho đơn vị!`,
+        selectAllCoursesInProgram.value
+          ? "Đã phân bổ toàn bộ khóa học trong chương trình cho đơn vị!"
+          : `Đã phân bổ ${selectedSubCourseIds.value.length} khóa học cho đơn vị!`,
         "success"
       );
     }
@@ -1370,6 +1441,32 @@ async function handleRemoveAllocation(item: AllocationRow) {
   padding: 1rem;
   color: #94a3b8;
   font-size: 0.78rem;
+}
+
+.scroll-loading-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  font-size: 0.75rem;
+  color: #38bdf8;
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: 4px;
+}
+
+.scroll-end-hint {
+  text-align: center;
+  padding: 0.45rem;
+  font-size: 0.72rem;
+  color: #64748b;
+  border-top: 1px dashed #334155;
+  margin-top: 0.25rem;
+}
+
+.search-spinner {
+  color: #38bdf8;
+  flex-shrink: 0;
 }
 
 </style>

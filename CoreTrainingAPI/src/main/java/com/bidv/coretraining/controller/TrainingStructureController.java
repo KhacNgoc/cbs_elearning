@@ -54,9 +54,38 @@ public class TrainingStructureController {
         return service.adminCourses();
     }
 
+    public record BatchCourseAllocationRequest(
+            String unitId,
+            String grantType,
+            String programId,
+            boolean allInProgram,
+            List<String> courseIds
+    ) {}
+
     @GetMapping({"/admin/programs/{programId}/courses", "/admin/courses/by-program/{programId}"})
-    public List<CourseDto> coursesByProgram(@PathVariable String programId) {
+    public Object coursesByProgram(
+            @PathVariable String programId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String search) {
+        if (page != null) {
+            int pageSize = (size != null && size > 0) ? size : 10;
+            return service.adminCoursesByProgramPaged(programId, search, page, pageSize);
+        }
         return service.adminCoursesByProgram(programId);
+    }
+
+    @PostMapping("/admin/courses/batch-allocate")
+    public org.springframework.http.ResponseEntity<Void> batchAllocateCourses(
+            @RequestBody BatchCourseAllocationRequest request) {
+        service.allocateCoursesToUnit(
+                request.unitId(),
+                request.grantType(),
+                request.programId(),
+                request.allInProgram(),
+                request.courseIds()
+        );
+        return org.springframework.http.ResponseEntity.ok().build();
     }
 
     @GetMapping({"/admin/units/{unitId}/courses", "/admin/courses/by-unit/{unitId}"})

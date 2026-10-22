@@ -627,6 +627,45 @@ public class TrainingStructureService {
                 .toList();
     }
 
+    public Map<String, Object> adminCoursesByProgramPaged(String programId, String search, int page, int size) {
+        String query = (search != null && !search.isBlank()) ? search.trim() : null;
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+        org.springframework.data.domain.Page<Course> result = courses.findByProgramIdWithFilter(programId, query, pageable);
+        List<CourseDto> dtos = result.getContent().stream()
+                .map(this::mapToAdminCourseDto)
+                .toList();
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("items", dtos);
+        res.put("page", result.getNumber());
+        res.put("size", result.getSize());
+        res.put("totalElements", result.getTotalElements());
+        res.put("totalPages", result.getTotalPages());
+        res.put("hasNext", result.hasNext());
+        return res;
+    }
+
+    public void allocateCoursesToUnit(String unitId, String grantType, String programId, boolean allInProgram, List<String> courseIds) {
+        authorization.permission("CATALOG_MANAGE");
+        List<Course> targets;
+        if (allInProgram) {
+            targets = courses.findByProgramIdAndStatusNot(programId, "DELETED");
+        } else {
+            if (courseIds == null || courseIds.isEmpty()) return;
+            targets = courses.findAllById(courseIds);
+        }
+        for (Course c : targets) {
+            if (c.getUnitGrants() == null) {
+                c.setUnitGrants(new HashMap<>());
+            }
+            c.getUnitGrants().put(unitId, grantType);
+            courses.save(c);
+            if ("MANDATORY".equalsIgnoreCase(grantType)) {
+                enrollStaffForCourse(c, Set.of(unitId));
+            }
+        }
+    }
+
     public List<CourseDto> adminCoursesByUnit(String unitId) {
         return courses.findByUnitGrant(unitId).stream()
                 .map(this::mapToAdminCourseDto)
