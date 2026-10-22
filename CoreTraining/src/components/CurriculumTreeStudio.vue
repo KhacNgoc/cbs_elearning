@@ -613,17 +613,6 @@
             <div class="form-group code-group">
               <div class="code-label-row">
                 <label>Mã định danh (*):</label>
-                <div class="auto-code-toggle">
-                  <input
-                    type="checkbox"
-                    id="auto-code-checkbox"
-                    v-model="addModal.autoCode"
-                    @change="handleAutoCodeToggle"
-                  />
-                  <label for="auto-code-checkbox" class="toggle-text">
-                    <span>Hệ thống tự sinh mã</span>
-                  </label>
-                </div>
               </div>
 
               <div class="code-input-wrapper">
@@ -650,7 +639,7 @@
                 <button
                   type="button"
                   class="manual-edit-btn"
-                  @click="addModal.autoCode = !addModal.autoCode"
+                  @click="toggleAutoCode"
                   :title="addModal.autoCode ? 'Chuyển sang tự nhập mã' : 'Chuyển sang tự động sinh mã'"
                 >
                   <component :is="addModal.autoCode ? Lock : Unlock" :size="13" />
@@ -1355,7 +1344,8 @@ function handleNameInput() {
   }
 }
 
-function handleAutoCodeToggle() {
+function toggleAutoCode() {
+  addModal.value.autoCode = !addModal.value.autoCode;
   if (addModal.value.autoCode) {
     reGenerateCode();
   }
