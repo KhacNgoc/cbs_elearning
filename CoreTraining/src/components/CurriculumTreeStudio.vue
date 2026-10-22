@@ -125,6 +125,14 @@
               >
                 <Edit3 :size="13" />
               </button>
+              <button
+                type="button"
+                class="hover-action-btn delete-btn"
+                title="Xóa Lĩnh vực này"
+                @click.stop="promptDeleteNode('domain', domain)"
+              >
+                <Trash2 :size="13" />
+              </button>
             </div>
           </div>
 
@@ -196,6 +204,14 @@
                     @click.stop="openEditModal('program', program, domain)"
                   >
                     <Edit3 :size="13" />
+                  </button>
+                  <button
+                    type="button"
+                    class="hover-action-btn delete-btn"
+                    title="Xóa Chương trình này"
+                    @click.stop="promptDeleteNode('program', program)"
+                  >
+                    <Trash2 :size="13" />
                   </button>
                 </div>
               </div>
@@ -353,7 +369,7 @@
                       <!-- LEVEL 5: LESSON (BÀI HỌC) -->
                       <div v-if="isExpanded(chapter.id)" class="tree-sub-tree">
                         <div
-                          v-for="(lesson, lIdx) in chapter.lessons || []"
+                          v-for="(lesson, lIdx) in (chapter.lessons || []).filter(l => l.status !== 'DELETED')"
                           :key="lesson.id"
                           class="tree-branch lesson-branch"
                         >
@@ -968,7 +984,7 @@ const systemUsers = ref<AdminUser[]>([]);
 // Delete confirmation state
 const deleteConfirm = ref<{
   show: boolean;
-  type: "course" | "chapter" | "lesson";
+  type: "domain" | "program" | "course" | "chapter" | "lesson";
   id: string;
   name: string;
   title: string;
@@ -1627,15 +1643,15 @@ async function loadChaptersForCourse(courseId: string) {
 
 // Helpers for relationships
 function getProgramsForDomain(domainId: string) {
-  return programs.value.filter((p) => p.domainId === domainId);
+  return programs.value.filter((p) => p.domainId === domainId && p.status !== "DELETED");
 }
 
 function getCoursesForProgram(programId: string) {
-  return courses.value.filter((c) => c.programId === programId);
+  return courses.value.filter((c) => c.programId === programId && c.status !== "DELETED");
 }
 
 function getChaptersForCourse(courseId: string) {
-  return chaptersMap.value[courseId] || [];
+  return (chaptersMap.value[courseId] || []).filter((ch) => ch.status !== "DELETED");
 }
 
 // Expand / Collapse
@@ -2049,14 +2065,26 @@ async function submitAddModal() {
 
 // Delete handling
 function promptDeleteNode(
-  type: "course" | "chapter" | "lesson",
+  type: "domain" | "program" | "course" | "chapter" | "lesson",
   item: any
 ) {
   const name = item.title || item.name || item.code || "";
   let typeLabel = "bài học";
   let warnExtra = "";
 
-  if (type === "course") {
+  if (type === "domain") {
+    typeLabel = "lĩnh vực";
+    const progs = getProgramsForDomain(item.id);
+    if (progs.length > 0) {
+      warnExtra = ` Lĩnh vực này hiện có ${progs.length} chương trình đào tạo. Xóa lĩnh vực sẽ đồng thời xóa toàn bộ chương trình và khóa học bên trong.`;
+    }
+  } else if (type === "program") {
+    typeLabel = "chương trình đào tạo";
+    const crss = getCoursesForProgram(item.id);
+    if (crss.length > 0) {
+      warnExtra = ` Chương trình này hiện có ${crss.length} khóa học. Xóa chương trình sẽ đồng thời xóa toàn bộ khóa học bên trong.`;
+    }
+  } else if (type === "course") {
     typeLabel = "khóa học";
     const chaps = chaptersMap.value[item.id] || [];
     if (chaps.length > 0) {
@@ -2075,7 +2103,7 @@ function promptDeleteNode(
     id: item.id,
     name,
     title: `Xác nhận xóa ${typeLabel}`,
-    message: `Bạn có chắc chắn muốn xóa ${typeLabel} "${name}"?${warnExtra} Thao tác này không thể hoàn tác.`,
+    message: `Bạn có chắc chắn muốn xóa ${typeLabel} "${name}"?${warnExtra} Trạng thái sẽ được chuyển sang DELETED.`,
     busy: false,
   };
 }
@@ -2091,15 +2119,53 @@ async function executeDeleteNode() {
 
   deleteConfirm.value.busy = true;
   try {
-    if (type === "lesson") {
-      await trainingApi.deleteLesson(id);
-      showToast(`Đã xóa bài học "${name}" thành công!`, "success");
-    } else if (type === "chapter") {
-      await trainingApi.deleteChapter(id);
-      showToast(`Đã xóa chương "${name}" thành công!`, "success");
+    if (type === "domain") {
+      const d = domains.value.find((item) => item.id === id);
+      await trainingApi.saveDomain({
+        id: id,
+        name: d?.name || name,
+        code: d?.code,
+        status: "DELETED",
+      });
+      // Soft-delete child programs & courses
+      const progs = getProgramsForDomain(id);
+      for (const p of progs) {
+        await trainingApi.saveProgram({
+          id: p.id,
+          name: p.name,
+          code: p.code,
+          domainId: id,
+          status: "DELETED",
+        });
+        const crss = getCoursesForProgram(p.id);
+        for (const c of crss) {
+          await adminApi.deleteCourse(c.id);
+        }
+      }
+      showToast(`Đã xóa lĩnh vực "${name}" thành công!`, "success");
+    } else if (type === "program") {
+      const p = programs.value.find((item) => item.id === id);
+      await trainingApi.saveProgram({
+        id: id,
+        name: p?.name || name,
+        code: p?.code,
+        domainId: p?.domainId,
+        status: "DELETED",
+      });
+      const crss = getCoursesForProgram(id);
+      for (const c of crss) {
+        await adminApi.deleteCourse(c.id);
+      }
+      showToast(`Đã xóa chương trình "${name}" thành công!`, "success");
     } else if (type === "course") {
       await adminApi.deleteCourse(id);
       showToast(`Đã xóa khóa học "${name}" thành công!`, "success");
+    } else if (type === "chapter") {
+      await trainingApi.deleteChapter(id);
+      showToast(`Đã xóa chương "${name}" thành công!`, "success");
+    } else if (type === "lesson") {
+      await trainingApi.deleteLesson(id);
+      showToast(`Đã xóa bài học "${name}" thành công!`, "success");
     }
 
     deleteConfirm.value.show = false;
@@ -2127,9 +2193,10 @@ function editLessonBlock(lesson: Lesson, blockType: string) {
 
 // Search Filter
 const filteredDomains = computed(() => {
-  if (!searchQuery.value.trim()) return domains.value;
+  const activeDomains = domains.value.filter((d) => d.status !== "DELETED");
+  if (!searchQuery.value.trim()) return activeDomains;
   const q = searchQuery.value.toLowerCase().trim();
-  return domains.value.filter(
+  return activeDomains.filter(
     (d) =>
       d.name.toLowerCase().includes(q) ||
       d.code.toLowerCase().includes(q) ||

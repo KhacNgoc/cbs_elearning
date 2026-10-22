@@ -233,9 +233,13 @@ public class TrainingStructureService {
     }
 
     public Map<String, Object> catalog() {
-        return Map.of("domains", domains.findAll().stream().map(this::domainDto).toList(),
+        return Map.of("domains", domains.findAll().stream()
+                        .filter(d -> !"DELETED".equals(d.getStatus()))
+                        .map(this::domainDto).toList(),
                 "programs", programs
-                        .findAll().stream().filter(p -> com.bidv.coretraining.security.AccessPolicy
+                        .findAll().stream()
+                        .filter(p -> !"DELETED".equals(p.getStatus()))
+                        .filter(p -> com.bidv.coretraining.security.AccessPolicy
                                 .allowsProgram(authorization.current(), "catalog:read", p))
                         .map(p -> programDto(p)).toList());
     }
@@ -309,7 +313,7 @@ public class TrainingStructureService {
 
         d.setName(required(request.name(), "Tên lĩnh vực"));
         d.setDescription(request.description());
-        d.setStatus("ARCHIVED".equals(request.status()) ? "ARCHIVED" : "ACTIVE");
+        d.setStatus("DELETED".equals(request.status()) ? "DELETED" : ("ARCHIVED".equals(request.status()) ? "ARCHIVED" : "ACTIVE"));
         domains.save(d);
         return domainDto(d);
     }
@@ -380,7 +384,7 @@ public class TrainingStructureService {
         String mod = clean(request.businessModule());
         p.setBusinessModule(mod);
         p.setLevel(clean(request.level()));
-        p.setStatus("ARCHIVED".equals(request.status()) ? "ARCHIVED" : "ACTIVE");
+        p.setStatus("DELETED".equals(request.status()) ? "DELETED" : ("ARCHIVED".equals(request.status()) ? "ARCHIVED" : "ACTIVE"));
 
         if (id == null && mod != null && !mod.isBlank()) {
             Integer nextSeq = programs.findMaxSeqNumberByBusinessModule(mod) + 1;
@@ -659,7 +663,9 @@ public class TrainingStructureService {
 
     public List<ChapterDto> adminChapters(String courseId) {
         authorization.edit(courseId);
-        return chapters.findByCourseIdOrderByChapterOrderAscIdAsc(courseId).stream().map(c -> chapterDto(c, null))
+        return chapters.findByCourseIdOrderByChapterOrderAscIdAsc(courseId).stream()
+                .filter(c -> !"DELETED".equals(c.getStatus()))
+                .map(c -> chapterDto(c, null))
                 .toList();
     }
 
@@ -671,7 +677,8 @@ public class TrainingStructureService {
 
     private ChapterDto chapterDto(Chapter c, User user) {
         boolean admin = user == null || com.bidv.coretraining.security.AccessPolicy.canReadCourse(user, c.getCourse());
-        List<Lesson> list = admin ? c.getLessons() : LearningPolicy.publishedLessons(c);
+        List<Lesson> list = (admin ? c.getLessons() : LearningPolicy.publishedLessons(c))
+                .stream().filter(l -> !"DELETED".equals(l.getStatus())).toList();
         List<LessonDto> lessonDtos = mapper.toLessonDtoList(list);
         if (!admin)
             lessonDtos.forEach(TrainingStructureService::outlineOnly);
@@ -722,28 +729,32 @@ public class TrainingStructureService {
         Chapter c = chapter(id);
         authorization.edit(c.getCourse());
         draft(c.getCourse());
-        noHistory(c.getLessons());
-        chapters.delete(c);
-        chapters.flush();
+        c.setStatus("DELETED");
+        for (Lesson l : c.getLessons()) {
+            l.setStatus("DELETED");
+        }
+        chapters.saveAndFlush(c);
     }
 
     public void deleteLesson(String id) {
         Lesson l = lesson(id);
         authorization.edit(l.getCourse());
         draft(l.getCourse());
-        noHistory(List.of(l));
-        lessons.delete(l);
-        lessons.flush();
+        l.setStatus("DELETED");
+        lessons.saveAndFlush(l);
     }
 
     public void deleteCourse(String id) {
         Course c = course(id);
         authorization.manage(c);
-        draft(c);
-        noHistory(c.getLessons());
-        if (!users.findAll().stream().noneMatch(u -> u.getRegisteredCourses().contains(c)))
-            throw new BadRequestException("Khóa đã có học viên đăng ký");
-        courses.delete(c);
+        c.setStatus("DELETED");
+        for (Chapter ch : c.getChapters()) {
+            ch.setStatus("DELETED");
+            for (Lesson l : ch.getLessons()) {
+                l.setStatus("DELETED");
+            }
+        }
+        courses.save(c);
     }
 
     public void reorderChapters(String id, List<String> ids) {
@@ -786,7 +797,7 @@ public class TrainingStructureService {
     public CourseDto status(String id, String status) {
         Course c = course(id);
         authorization.manage(c);
-        if (!Set.of("DRAFT", "PUBLISHED", "ARCHIVED").contains(status))
+        if (!Set.of("DRAFT", "PUBLISHED", "ARCHIVED", "DELETED").contains(status))
             throw new BadRequestException("Trạng thái không hợp lệ");
         if ("PUBLISHED".equals(status)) {
             if (c.getChapters().isEmpty())
