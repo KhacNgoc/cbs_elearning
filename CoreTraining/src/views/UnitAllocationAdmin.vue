@@ -66,7 +66,7 @@
               <label class="radio-card" :class="{ active: categoryType === 'course' }">
                 <input type="radio" value="course" v-model="categoryType" />
                 <BookOpen :size="15" />
-                <span>Khóa học lẻ</span>
+                <span>Khóa học</span>
               </label>
             </div>
           </div>
@@ -91,16 +91,15 @@
             </select>
           </div>
 
-          <!-- CASE 3B: CHỌN CHƯƠNG TRÌNH -->
-          <div v-if="categoryType === 'program'" class="form-group dynamic-group program-selection-box">
+          <!-- CASE 3B: CHỌN CHƯƠNG TRÌNH (CHỈ HIỆN OPTION ĐỂ CHỌN CHƯƠNG TRÌNH) -->
+          <div v-if="categoryType === 'program'" class="form-group dynamic-group">
             <label>Chọn Chương trình đào tạo (*):</label>
             <select
               v-model="targetProgramId"
               class="form-control select-control"
               required
-              @change="handleProgramChange"
             >
-              <option value="">-- Chọn chương trình --</option>
+              <option value="">-- Chọn chương trình đào tạo --</option>
               <option
                 v-for="p in activePrograms"
                 :key="p.id"
@@ -109,27 +108,70 @@
                 [{{ p.code }}] {{ p.name }}
               </option>
             </select>
+          </div>
 
-            <!-- Ô CHỌN KHÓA HỌC PHÍA DƯỚI (MẶC ĐỊNH ALL) -->
+          <!-- CASE 3C: CHỌN KHÓA HỌC (HIỂN THỊ CẤU TRÚC / LĨNH VỰC -> CHƯƠNG TRÌNH -> KHÓA HỌC, MẶC ĐỊNH ALL) -->
+          <div v-if="categoryType === 'course'" class="form-group dynamic-group course-cascade-box">
+            <!-- BƯỚC A: CẤU TRÚC / LĨNH VỰC ĐÀO TẠO -->
+            <div class="sub-form-group">
+              <label>Lĩnh vực / Cấu trúc đào tạo:</label>
+              <select
+                v-model="courseFilterDomainId"
+                class="form-control select-control"
+                @change="handleDomainFilterChange"
+              >
+                <option value="">-- Tất cả Lĩnh vực / Cấu trúc --</option>
+                <option
+                  v-for="d in activeDomains"
+                  :key="d.id"
+                  :value="d.id"
+                >
+                  [{{ d.code }}] {{ d.name }}
+                </option>
+              </select>
+            </div>
+
+            <!-- BƯỚC B: CHƯƠNG TRÌNH ĐÀO TẠO -->
+            <div class="sub-form-group">
+              <label>Chương trình đào tạo (*):</label>
+              <select
+                v-model="targetProgramId"
+                class="form-control select-control"
+                required
+                @change="handleProgramChange"
+              >
+                <option value="">-- Chọn Chương trình đào tạo --</option>
+                <option
+                  v-for="p in filteredProgramsForCourse"
+                  :key="p.id"
+                  :value="p.id"
+                >
+                  [{{ p.code }}] {{ p.name }}
+                </option>
+              </select>
+            </div>
+
+            <!-- BƯỚC C: KHÓA HỌC ÁP DỤNG (MẶC ĐỊNH ALL) -->
             <div v-if="targetProgramId" class="sub-courses-picker">
               <div class="picker-header">
-                <label>Khóa học áp dụng:</label>
-                <span class="course-count-badge">{{ availableProgramCourses.length }} khóa thuộc chương trình</span>
+                <label>Khóa học áp dụng (*):</label>
+                <span class="course-count-badge">
+                  Đã chọn {{ selectedSubCourseIds.length }} / {{ availableProgramCourses.length }} khóa
+                </span>
               </div>
 
-              <!-- Checkbox TẤT CẢ (ALL) -->
+              <!-- Checkbox TẤT CẢ (ALL) - MẶC ĐỊNH CHECKED -->
               <label class="all-courses-checkbox">
                 <input
                   type="checkbox"
                   v-model="selectAllCoursesInProgram"
                   @change="handleToggleAllCourses"
                 />
-                <span class="all-text">[ALL] Áp dụng toàn bộ khóa học trong chương trình này</span>
+                <span class="all-text">[ALL] Áp dụng toàn bộ khóa học trong chương trình này (Mặc định)</span>
               </label>
 
-              <!-- DANH SÁCH KHÓA HỌC CON (CHỈ HIỆN KHI BỎ TÍCH ALL HOẶC ĐỂ XEM) -->
-              <div v-if="!selectAllCoursesInProgram" class="courses-checkbox-list">
-                <p class="select-hint">Chọn cụ thể các khóa học muốn áp dụng:</p>
+              <!-- DANH SÁCH KHÓA HỌC CON VỚI CHECKBOX -->
+              <div class="courses-checkbox-list">
                 <div v-if="!availableProgramCourses.length" class="empty-hint">
                   Chương trình này hiện chưa có khóa học nào.
                 </div>
@@ -142,31 +184,13 @@
                     type="checkbox"
                     :value="c.id"
                     v-model="selectedSubCourseIds"
+                    @change="handleSubCourseCheckChange"
                   />
                   <span class="course-code-tag">[{{ c.code }}]</span>
                   <span class="course-name">{{ c.name }}</span>
                 </label>
               </div>
             </div>
-          </div>
-
-          <!-- CASE 3C: CHỌN KHÓA HỌC LẺ -->
-          <div v-if="categoryType === 'course'" class="form-group dynamic-group">
-            <label>Chọn Khóa học (*):</label>
-            <select
-              v-model="targetCourseId"
-              class="form-control select-control"
-              required
-            >
-              <option value="">-- Chọn khóa học lẻ --</option>
-              <option
-                v-for="c in activeCourses"
-                :key="c.id"
-                :value="c.id"
-              >
-                [{{ c.code }}] {{ c.name }}
-              </option>
-            </select>
           </div>
 
           <!-- BƯỚC 4: HÌNH THỨC ÁP DỤNG -->
@@ -299,7 +323,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import {
   Building2,
   Globe,
@@ -334,10 +358,18 @@ const selectedUnitId = ref("");
 const categoryType = ref<"domain" | "program" | "course">("program");
 const targetDomainId = ref("");
 const targetProgramId = ref("");
-const targetCourseId = ref("");
+
+watch(categoryType, () => {
+  targetDomainId.value = "";
+  targetProgramId.value = "";
+  courseFilterDomainId.value = "";
+  selectedSubCourseIds.value = [];
+  selectAllCoursesInProgram.value = true;
+});
+const courseFilterDomainId = ref("");
 const grantType = ref<"MANDATORY" | "OPTIONAL">("MANDATORY");
 
-// Sub-course picker state for Program
+// Sub-course picker state for Course cascade
 const selectAllCoursesInProgram = ref(true);
 const selectedSubCourseIds = ref<string[]>([]);
 
@@ -352,6 +384,21 @@ const availableProgramCourses = computed(() => {
   if (!targetProgramId.value) return [];
   return activeCourses.value.filter((c) => c.programId === targetProgramId.value);
 });
+
+const filteredProgramsForCourse = computed(() => {
+  if (!courseFilterDomainId.value) return activePrograms.value;
+  return activePrograms.value.filter((p) => p.domainId === courseFilterDomainId.value);
+});
+
+function handleDomainFilterChange() {
+  if (targetProgramId.value) {
+    const prog = programs.value.find((p) => p.id === targetProgramId.value);
+    if (prog && courseFilterDomainId.value && prog.domainId !== courseFilterDomainId.value) {
+      targetProgramId.value = "";
+      selectedSubCourseIds.value = [];
+    }
+  }
+}
 
 // Load full data
 async function loadData() {
@@ -396,6 +443,12 @@ function handleToggleAllCourses() {
   } else {
     selectedSubCourseIds.value = [];
   }
+}
+
+function handleSubCourseCheckChange() {
+  selectAllCoursesInProgram.value =
+    availableProgramCourses.value.length > 0 &&
+    selectedSubCourseIds.value.length === availableProgramCourses.value.length;
 }
 
 // Assigned allocations for the selected unit
@@ -516,7 +569,6 @@ async function handleAssignAllocation() {
       }
       const program = programs.value.find((p) => p.id === targetProgramId.value);
       if (program) {
-        // Save program grants
         const manIds = new Set(program.mandatoryUnitIds || []);
         const optIds = new Set(program.optionalUnitIds || program.unitIds || []);
         if (grantType.value === "MANDATORY") {
@@ -534,61 +586,49 @@ async function handleAssignAllocation() {
           mandatoryUnitIds: Array.from(manIds),
           optionalUnitIds: Array.from(optIds),
         });
-
-        // Save courses inside program
-        const coursesToApply = selectAllCoursesInProgram.value
-          ? availableProgramCourses.value
-          : availableProgramCourses.value.filter((c) => selectedSubCourseIds.value.includes(c.id));
-
-        for (const c of coursesToApply) {
-          const cManIds = new Set(c.mandatoryUnitIds || []);
-          const cOptIds = new Set(c.optionalUnitIds || c.unitIds || []);
-          if (grantType.value === "MANDATORY") {
-            cManIds.add(uId);
-            cOptIds.delete(uId);
-          } else {
-            cOptIds.add(uId);
-            cManIds.delete(uId);
-          }
-          await axiosClient.put(`/api/admin/courses/${c.id}`, {
-            name: c.name,
-            code: c.code || "",
-            programId: program.id,
-            mandatoryUnitIds: Array.from(cManIds),
-            optionalUnitIds: Array.from(cOptIds),
-          });
-        }
         showToast(
-          `Đã phân bổ chương trình và ${coursesToApply.length} khóa học cho đơn vị!`,
+          `Đã phân bổ chương trình [${program.name}] cho đơn vị!`,
           "success"
         );
       }
     } else if (categoryType.value === "course") {
-      if (!targetCourseId.value) {
-        showToast("Vui lòng chọn Khóa học!", "warning");
+      if (!targetProgramId.value) {
+        showToast("Vui lòng chọn Chương trình đào tạo!", "warning");
         saving.value = false;
         return;
       }
-      const course = courses.value.find((c) => c.id === targetCourseId.value);
-      if (course) {
-        const manIds = new Set(course.mandatoryUnitIds || []);
-        const optIds = new Set(course.optionalUnitIds || course.unitIds || []);
-        if (grantType.value === "MANDATORY") {
-          manIds.add(uId);
-          optIds.delete(uId);
-        } else {
-          optIds.add(uId);
-          manIds.delete(uId);
-        }
-        await axiosClient.put(`/api/admin/courses/${course.id}`, {
-          name: course.name,
-          code: course.code,
-          programId: course.programId,
-          mandatoryUnitIds: Array.from(manIds),
-          optionalUnitIds: Array.from(optIds),
-        });
-        showToast(`Đã phân bổ khóa học [${course.name}] cho đơn vị!`, "success");
+      const coursesToApply = selectAllCoursesInProgram.value
+        ? availableProgramCourses.value
+        : availableProgramCourses.value.filter((c) => selectedSubCourseIds.value.includes(c.id));
+
+      if (!coursesToApply.length) {
+        showToast("Vui lòng chọn ít nhất 1 khóa học để phân bổ!", "warning");
+        saving.value = false;
+        return;
       }
+
+      for (const c of coursesToApply) {
+        const cManIds = new Set(c.mandatoryUnitIds || []);
+        const cOptIds = new Set(c.optionalUnitIds || c.unitIds || []);
+        if (grantType.value === "MANDATORY") {
+          cManIds.add(uId);
+          cOptIds.delete(uId);
+        } else {
+          cOptIds.add(uId);
+          cManIds.delete(uId);
+        }
+        await axiosClient.put(`/api/admin/courses/${c.id}`, {
+          name: c.name,
+          code: c.code || "",
+          programId: targetProgramId.value,
+          mandatoryUnitIds: Array.from(cManIds),
+          optionalUnitIds: Array.from(cOptIds),
+        });
+      }
+      showToast(
+        `Đã phân bổ ${coursesToApply.length} khóa học cho đơn vị!`,
+        "success"
+      );
     }
 
     await loadData();
@@ -1164,4 +1204,23 @@ async function handleRemoveAllocation(item: AllocationRow) {
     transform: rotate(360deg);
   }
 }
+
+.course-cascade-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.sub-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.sub-form-group label {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
 </style>
