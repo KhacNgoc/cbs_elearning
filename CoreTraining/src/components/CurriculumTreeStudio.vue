@@ -288,14 +288,6 @@
                         </div>
 
                         <div class="node-badge-group">
-                          <span
-                            v-if="getCourseMandatoryUnits(course).length"
-                            class="meta-tag mandatory-tag"
-                            :title="`Đơn vị bắt buộc: ${getCourseMandatoryUnits(course).map(getUnitName).join(', ')}`"
-                          >
-                            <ShieldCheck :size="11" />
-                            {{ getCourseMandatoryUnits(course).length }} ĐV Bắt buộc
-                          </span>
                           <span class="count-tag">{{ chapter.lessons?.length || 0 }} bài</span>
                         </div>
 
@@ -790,23 +782,6 @@
                   </button>
                 </span>
               </div>
-            </div>
-          </div>
-
-          <!-- 2. Cấp Chương học, Bài học: Hiển thị phạm vi Đơn vị kế thừa từ cấp cha -->
-          <div v-else-if="addModal.mandatoryUnitIds?.length || addModal.optionalUnitIds?.length" class="form-section units-section inherited-units-box">
-            <h5 class="section-sub-title">
-              <Building2 :size="14" />
-              <span>Phân bổ Đơn vị áp dụng</span>
-            </h5>
-            <div class="inherited-units-chips">
-              <span v-for="uId in addModal.mandatoryUnitIds" :key="`m-${uId}`" class="unit-chip mandatory-chip">
-                <ShieldCheck :size="12" />
-                <span>{{ getUnitName(uId) }} (Bắt buộc)</span>
-              </span>
-              <span v-for="uId in addModal.optionalUnitIds" :key="`o-${uId}`" class="unit-chip optional-chip">
-                <span>{{ getUnitName(uId) }}</span>
-              </span>
             </div>
           </div>
 
@@ -1401,11 +1376,6 @@ function getCourseMandatoryUnits(course: any): string[] {
     const arr = Array.from(course.mandatoryUnitIds as string[]);
     if (arr.length > 0) return arr;
   }
-  // Fallback to parent program
-  const parentProg = programs.value.find((p) => p.id === course?.programId);
-  if (parentProg?.mandatoryUnitIds && Array.isArray(parentProg.mandatoryUnitIds) && parentProg.mandatoryUnitIds.length > 0) {
-    return parentProg.mandatoryUnitIds;
-  }
   return [];
 }
 
@@ -1675,22 +1645,9 @@ function openAddModal(
   let inheritedMandatoryUnits: string[] = [];
   let inheritedOptionalUnits: string[] = [];
 
-  // Tìm đơn vị áp dụng từ cha hoặc ông
-  const parentCourse =
-    type === "chapter"
-      ? resolvedParent
-      : type === "lesson"
-      ? grandParentObj || courses.value.find((c) => c.id === (resolvedParent?.courseId || ""))
-      : null;
-  const parentProgram =
-    type === "course"
-      ? resolvedParent
-      : parentCourse
-      ? programs.value.find((p) => p.id === parentCourse.programId)
-      : null;
-  const sourceUnitsObj = parentProgram || resolvedParent;
-
-  if (sourceUnitsObj) {
+  // CHỈ cấp Khóa học (course) mới kế thừa đơn vị từ Chương trình đào tạo cha (nếu có)
+  if (type === "course" && resolvedParent) {
+    const sourceUnitsObj = resolvedParent;
     if (sourceUnitsObj.mandatoryUnitIds && Array.isArray(sourceUnitsObj.mandatoryUnitIds)) {
       inheritedMandatoryUnits = [...sourceUnitsObj.mandatoryUnitIds];
     } else if (sourceUnitsObj.mandatoryUnitIds) {
@@ -1740,8 +1697,14 @@ function openAddModal(
       level: existingDraft.level || "BASIC",
       description: existingDraft.description || "",
       status: existingDraft.status || "ACTIVE",
-      mandatoryUnitIds: existingDraft.mandatoryUnitIds || inheritedMandatoryUnits,
-      optionalUnitIds: existingDraft.optionalUnitIds || inheritedOptionalUnits,
+      mandatoryUnitIds:
+        type === "chapter" || type === "lesson"
+          ? []
+          : existingDraft.mandatoryUnitIds || inheritedMandatoryUnits,
+      optionalUnitIds:
+        type === "chapter" || type === "lesson"
+          ? []
+          : existingDraft.optionalUnitIds || inheritedOptionalUnits,
       autoEnrollStaff: existingDraft.autoEnrollStaff ?? true,
       completionDeadline: existingDraft.completionDeadline || "",
     };
@@ -1822,25 +1785,14 @@ function openEditModal(
     optionalUnits = item.unitIds.filter((u: string) => !mandatoryUnits.includes(u));
   }
 
-  // Kế thừa đơn vị nếu cấp con chưa có đơn vị riêng
-  if (mandatoryUnits.length === 0 && optionalUnits.length === 0 && resolvedParent) {
-    const parentCourse =
-      type === "chapter"
-        ? resolvedParent
-        : type === "lesson"
-        ? grandParentObj || courses.value.find((c) => c.id === (resolvedParent?.courseId || ""))
-        : null;
-    const parentProgram =
-      type === "course"
-        ? resolvedParent
-        : parentCourse
-        ? programs.value.find((p) => p.id === parentCourse.programId)
-        : null;
-    const sourceUnitsObj = parentProgram || resolvedParent;
-
-    if (sourceUnitsObj?.mandatoryUnitIds) mandatoryUnits = [...sourceUnitsObj.mandatoryUnitIds];
-    if (sourceUnitsObj?.optionalUnitIds) optionalUnits = [...sourceUnitsObj.optionalUnitIds];
-    else if (sourceUnitsObj?.unitIds) optionalUnits = [...sourceUnitsObj.unitIds];
+  // Kế thừa đơn vị: CHỈ cấp Khóa học mới kế thừa nếu chưa có đơn vị riêng
+  if (type === "course" && mandatoryUnits.length === 0 && optionalUnits.length === 0 && resolvedParent) {
+    if (resolvedParent?.mandatoryUnitIds) mandatoryUnits = [...resolvedParent.mandatoryUnitIds];
+    if (resolvedParent?.optionalUnitIds) optionalUnits = [...resolvedParent.optionalUnitIds];
+    else if (resolvedParent?.unitIds) optionalUnits = [...resolvedParent.unitIds];
+  } else if (type === "chapter" || type === "lesson") {
+    mandatoryUnits = [];
+    optionalUnits = [];
   }
 
   const defaultModule =
