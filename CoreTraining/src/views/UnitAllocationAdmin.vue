@@ -185,22 +185,35 @@
               </div>
 
               <!-- Checkbox TẤT CẢ (ALL) - MẶC ĐỊNH CHECKED -->
-              <label class="all-courses-checkbox">
-                <input
-                  type="checkbox"
-                  v-model="selectAllCoursesInProgram"
-                  @change="handleToggleAllCourses"
-                />
-                <span class="all-text">[ALL] Áp dụng toàn bộ khóa học trong chương trình này (Mặc định)</span>
-              </label>
+              <div class="all-and-search-row">
+                <label class="all-courses-checkbox">
+                  <input
+                    type="checkbox"
+                    v-model="selectAllCoursesInProgram"
+                    @change="handleToggleAllCourses"
+                  />
+                  <span class="all-text">ALL</span>
+                </label>
+
+                <!-- Ô TÌM NHANH KHÓA HỌC KHI CÓ NHIỀU KHÓA -->
+                <div v-if="availableProgramCourses.length > 4" class="course-search-box">
+                  <Search :size="13" class="search-icon" />
+                  <input
+                    type="text"
+                    v-model="courseSearchQuery"
+                    class="course-search-input"
+                    placeholder="Lọc nhanh khóa..."
+                  />
+                </div>
+              </div>
 
               <!-- DANH SÁCH KHÓA HỌC CON VỚI CHECKBOX -->
               <div class="courses-checkbox-list">
-                <div v-if="!availableProgramCourses.length" class="empty-hint">
-                  Chương trình này hiện chưa có khóa học nào.
+                <div v-if="!filteredAvailableProgramCourses.length" class="empty-hint">
+                  {{ availableProgramCourses.length ? "Không tìm thấy khóa học khớp từ khóa." : "Chương trình này hiện chưa có khóa học nào." }}
                 </div>
                 <label
-                  v-for="c in availableProgramCourses"
+                  v-for="c in filteredAvailableProgramCourses"
                   :key="c.id"
                   class="course-checkbox-item"
                 >
@@ -340,6 +353,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from "vue";
 import {
+  Search,
   Building2,
   Globe,
   Folder,
@@ -377,6 +391,7 @@ watch(categoryType, () => {
   targetDomainId.value = "";
   targetProgramId.value = "";
   courseFilterDomainId.value = "";
+  courseSearchQuery.value = "";
   programFilterDomainId.value = "";
   selectedSubCourseIds.value = [];
   selectAllCoursesInProgram.value = true;
@@ -396,9 +411,21 @@ const activeCourses = computed(() => courses.value.filter((c) => c.status !== "D
 
 const currentUnit = computed(() => units.value.find((u) => u.id === selectedUnitId.value));
 
+const courseSearchQuery = ref("");
+
 const availableProgramCourses = computed(() => {
   if (!targetProgramId.value) return [];
   return activeCourses.value.filter((c) => c.programId === targetProgramId.value);
+});
+
+const filteredAvailableProgramCourses = computed(() => {
+  const query = courseSearchQuery.value.trim().toLowerCase();
+  if (!query) return availableProgramCourses.value;
+  return availableProgramCourses.value.filter(
+    (c) =>
+      c.name.toLowerCase().includes(query) ||
+      (c.code && c.code.toLowerCase().includes(query))
+  );
 });
 
 const filteredProgramsForCourse = computed(() => {
@@ -1251,6 +1278,42 @@ async function handleRemoveAllocation(item: AllocationRow) {
   font-size: 0.8rem;
   color: #94a3b8;
   font-weight: 500;
+}
+
+
+.all-and-search-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.course-search-box {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  padding: 0.35rem 0.55rem;
+  flex: 1;
+}
+
+.course-search-box .search-icon {
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.course-search-input {
+  background: transparent;
+  border: none;
+  color: #f1f5f9;
+  font-size: 0.76rem;
+  width: 100%;
+  outline: none;
+}
+
+.course-search-input::placeholder {
+  color: #64748b;
 }
 
 </style>
