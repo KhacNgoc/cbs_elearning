@@ -506,22 +506,7 @@
           </button>
         </div>
 
-        <!-- DRAFT RESTORED NOTICE BANNER -->
-        <div v-if="hasRestoredDraft && !addModal.isEdit" class="modal-draft-banner">
-          <div class="draft-banner-info">
-            <Sparkles :size="15" class="draft-sparkle-icon" />
-            <span>Đã tự động khôi phục dữ liệu bạn đang nhập dở</span>
-          </div>
-          <button
-            type="button"
-            class="btn-clear-draft"
-            @click="resetCurrentDraft"
-            title="Xóa dữ liệu nháp và nhập mới từ đầu"
-          >
-            <RotateCcw :size="12" />
-            <span>Xóa nháp & Nhập mới</span>
-          </button>
-        </div>
+        <!-- DRAFT RESTORED NOTICE BANNER (Bỏ banner) -->
 
         <form @submit.prevent="submitAddModal" class="modal-form">
           <!-- SECTION 1: BASIC INFO -->
@@ -852,7 +837,6 @@ import {
   FolderTree,
   Loader2,
   Sparkles,
-  RotateCcw,
   Lock,
   Unlock,
   Building2,
@@ -1037,15 +1021,6 @@ function closeAddModal() {
   saveCurrentDraft();
   addModal.value.show = false;
   hasRestoredDraft.value = false;
-}
-
-function resetCurrentDraft() {
-  const type = addModal.value.type;
-  const parentObj = addModal.value.parentObj;
-  clearDraft(type, addModal.value.parentId);
-  hasRestoredDraft.value = false;
-  openAddModal(type, parentObj);
-  showToast("Đã xóa bản nháp và làm mới biểu mẫu.", "info");
 }
 
 // Tự động lưu nháp khi có thay đổi trong modal tạo mới
@@ -2974,34 +2949,21 @@ watch(
   align-items: center;
 }
 
-.mandatory-label {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  color: #93c5fd !important;
-}
-
-.badge-mandatory {
-  font-size: 0.68rem;
-  background: rgba(59, 130, 246, 0.15);
-  color: #93c5fd;
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
-}
-
+.mandatory-label,
 .optional-label {
   display: flex;
   align-items: center;
   gap: 0.3rem;
-  color: #38bdf8 !important;
+  color: #e2e8f0 !important;
+  font-weight: 500;
 }
 
+.badge-mandatory,
 .badge-optional {
   font-size: 0.68rem;
-  background: rgba(56, 189, 248, 0.15);
-  color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.3);
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.3);
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
 }
@@ -3023,16 +2985,11 @@ watch(
   font-weight: 500;
 }
 
-.unit-chip.mandatory-chip {
+.unit-chip.mandatory-chip,
+.unit-chip.optional-chip {
   background: rgba(59, 130, 246, 0.18);
   border: 1px solid rgba(59, 130, 246, 0.35);
   color: #bfdbfe;
-}
-
-.unit-chip.optional-chip {
-  background: rgba(56, 189, 248, 0.2);
-  border: 1px solid rgba(56, 189, 248, 0.4);
-  color: #bae6fd;
 }
 
 .remove-chip-btn {
