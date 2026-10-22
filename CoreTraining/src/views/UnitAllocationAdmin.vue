@@ -91,17 +91,18 @@
             </select>
           </div>
 
-          <!-- CASE 3B: CHỌN CHƯƠNG TRÌNH (CÓ LĨNH VỰC CHA ĐỂ LỌC / CHỌN) -->
+          <!-- CASE 3B: CHỌN CHƯƠNG TRÌNH (CHỈ HIỆN CHƯƠNG TRÌNH KHI ĐÃ CHỌN LĨNH VỰC) -->
           <div v-if="categoryType === 'program'" class="form-group dynamic-group course-cascade-box">
             <!-- BƯỚC A: LĨNH VỰC CHA -->
             <div class="sub-form-group">
-              <label>Lĩnh vực cha (Lọc theo lĩnh vực):</label>
+              <label>Lĩnh vực cha (*):</label>
               <select
                 v-model="programFilterDomainId"
                 class="form-control select-control"
+                required
                 @change="handleProgramDomainFilterChange"
               >
-                <option value="">-- Tất cả Lĩnh vực --</option>
+                <option value="">-- Chọn Lĩnh vực cha --</option>
                 <option
                   v-for="d in activeDomains"
                   :key="d.id"
@@ -112,8 +113,8 @@
               </select>
             </div>
 
-            <!-- BƯỚC B: CHƯƠNG TRÌNH ĐÀO TẠO -->
-            <div class="sub-form-group">
+            <!-- BƯỚC B: CHƯƠNG TRÌNH ĐÀO TẠO (CHỈ HIỆN KHI ĐÃ CHỌN LĨNH VỰC) -->
+            <div v-if="programFilterDomainId" class="sub-form-group">
               <label>Chọn Chương trình đào tạo (*):</label>
               <select
                 v-model="targetProgramId"
@@ -132,17 +133,18 @@
             </div>
           </div>
 
-          <!-- CASE 3C: CHỌN KHÓA HỌC (HIỂN THỊ CẤU TRÚC / LĨNH VỰC -> CHƯƠNG TRÌNH -> KHÓA HỌC, MẶC ĐỊNH ALL) -->
+          <!-- CASE 3C: CHỌN KHÓA HỌC (CHỈ HIỆN CẤP TIẾP THEO KHI CẤP TRƯỚC ĐƯỢC CHỌN) -->
           <div v-if="categoryType === 'course'" class="form-group dynamic-group course-cascade-box">
-            <!-- BƯỚC A: CẤU TRÚC / LĨNH VỰC ĐÀO TẠO -->
+            <!-- BƯỚC A: LĨNH VỰC CHA -->
             <div class="sub-form-group">
-              <label>Lĩnh vực / Cấu trúc đào tạo:</label>
+              <label>Lĩnh vực cha (*):</label>
               <select
                 v-model="courseFilterDomainId"
                 class="form-control select-control"
+                required
                 @change="handleDomainFilterChange"
               >
-                <option value="">-- Tất cả Lĩnh vực / Cấu trúc --</option>
+                <option value="">-- Chọn Lĩnh vực cha --</option>
                 <option
                   v-for="d in activeDomains"
                   :key="d.id"
@@ -153,8 +155,8 @@
               </select>
             </div>
 
-            <!-- BƯỚC B: CHƯƠNG TRÌNH ĐÀO TẠO -->
-            <div class="sub-form-group">
+            <!-- BƯỚC B: CHƯƠNG TRÌNH ĐÀO TẠO (CHỈ HIỆN KHI ĐÃ CHỌN LĨNH VỰC) -->
+            <div v-if="courseFilterDomainId" class="sub-form-group">
               <label>Chương trình đào tạo (*):</label>
               <select
                 v-model="targetProgramId"
@@ -224,8 +226,8 @@
               class="form-control select-control"
               required
             >
-              <option value="MANDATORY">Bắt buộc hoàn thành (Học viên bắt buộc phải học)</option>
-              <option value="OPTIONAL">Tự chọn / Tham khảo (Học tập tự nguyện nâng cao nghiệp vụ)</option>
+              <option value="MANDATORY">Bắt buộc hoàn thành</option>
+              <option value="OPTIONAL">Tự chọn / Tham khảo</option>
             </select>
           </div>
 
