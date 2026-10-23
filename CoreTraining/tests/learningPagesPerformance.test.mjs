@@ -9,6 +9,7 @@ import { createLessonProgressWriter } from '../src/utils/lessonProgressWriter.ts
 import * as structure from '../src/utils/learningStructure.ts';
 import * as content from '../src/utils/lessonContent.ts';
 import { createDocumentProgressJournal } from '../src/utils/documentProgressJournal.ts';
+import { createVideoProgressJournal } from '../src/utils/videoProgressJournal.ts';
 
 const dom = new JSDOM('<!doctype html><div id="app"></div>');
 for (const key of ['window', 'document', 'Element', 'HTMLElement', 'SVGElement', 'Node']) globalThis[key] = dom.window[key];
@@ -35,7 +36,7 @@ async function compile(path, modules) {
 const Stub = { render() { return vue.h('div', this.$slots.default?.()); } };
 const Link = { render() { return vue.h('a', this.$slots.default?.()); } };
 
-async function fixture({ save, notes, comments, lessonComments, detail, realSidebar } = {}, view = 'LessonDetail') {
+async function fixture({ save, notes, comments, lessonComments, detail, realSidebar, videoStorage } = {}, view = 'LessonDetail') {
   const state = vue.reactive({ id: 'a', courseId: 'course' });
   const a = { id: 'a', courseId: 'course', chapterId: 'c1', title: 'Bài A', textBody: 'Văn bản A', videoUrl: '/a.mp4', documents: [], comments: [] };
   if (lessonComments) Object.assign(a, lessonComments);
@@ -59,7 +60,7 @@ async function fixture({ save, notes, comments, lessonComments, detail, realSide
   const user = vue.reactive({
     username: 'user', permissions: [], systemAdmin: false, completedLessons: ['a', 'c'],
     quizScores: {}, quizTotals: {}, lessonQuizScores: {}, lessonQuizTotals: {},
-    registeredCourses: ['course'], mandatoryCourses: [], canLearn: true, progressLoaded: true,
+    registeredCourses: ['course'], mandatoryCourses: [], canLearn: true, isAuthenticated: true, progressLoaded: true,
     lessonProgress: {}, fetchProgress: async () => {}, isCourseAccessible: () => true,
     saveLessonProgress: (id, request, touch) => writer.write(id, request, touch),
     getLatestLessonProgress: id => ({ ...user.lessonProgress[id], ...writer.pending(id) }),
@@ -82,7 +83,7 @@ async function fixture({ save, notes, comments, lessonComments, detail, realSide
     setup(props, { emit }) { discussionEmit = emit; return () => vue.h("div", { id: "discussion", "data-more": String(props.hasMore) }, JSON.stringify(props.comments)); },
   };
   const Media = {
-    props: ['lesson', 'initialPositionSeconds', 'initialDocumentPage', 'selectedDocument'], emits: ['progress-update', 'pause', 'document-position'],
+    props: ['lesson', 'initialPositionSeconds', 'initialDocumentPage', 'selectedDocument'], emits: ['progress-update', 'pause', 'document-position', 'text-completed'],
     setup(props, { emit }) { mediaEmit = emit; return () => vue.h('div', { id: 'media', 'data-lesson': props.lesson.id, 'data-position': props.initialPositionSeconds, 'data-page': props.initialDocumentPage, 'data-document': props.selectedDocument?.id }); },
   };
   const Notes = {
@@ -99,6 +100,7 @@ async function fixture({ save, notes, comments, lessonComments, detail, realSide
     '../utils/learningStructure': structure,
     '../utils/lessonContent': content,
     '../utils/documentProgressJournal': { createDocumentProgressJournal },
+    '../utils/videoProgressJournal': { createVideoProgressJournal: username => createVideoProgressJournal(username, videoStorage) },
     '../utils/learning': { resumeRoute: () => '/lesson/a' },
     '../api/axiosClient': { axiosClient: {} },
     '../api/courseApi': { courseApi: { getComments: comments, getVideoNotes(id) { calls.notes.push(id); return notes ? notes(id) : Promise.resolve([]); } } },
@@ -166,6 +168,45 @@ test('sidebar shows outline documents before their lesson detail is requested', 
   } finally { f.app.unmount(); }
 });
 
+test('document pagination displays the page without a jump input', async () => {
+  const PageNavigation = await compile('../src/components/lesson/DocumentPageNavigation.vue', {});
+  const targets = [];
+  const app = vue.createApp({ render: () => vue.h(PageNavigation, { page: 2, total: 8, onGo: page => targets.push(page) }) });
+  app.mount('#app');
+  try {
+    assert.equal(document.querySelector('input'), null);
+    assert.match(document.querySelector('.page-counter').textContent, /Trang 2 \/ 8/);
+    document.querySelector('.next').click();
+    assert.deepEqual(targets, [3]);
+  } finally { app.unmount(); }
+});
+
+test('reading the end of text submits a completion marker', async () => {
+  const f = await fixture({ lessonComments: { videoUrl: '' } });
+  try {
+    f.emit('text-completed'); await flush();
+    assert.equal(f.calls.saves.at(-1).request.contentType, 'TEXT');
+    assert.equal(f.calls.saves.at(-1).request.textCompleted, true);
+    const count = f.calls.saves.length;
+    f.emit('text-completed'); await flush();
+    assert.equal(f.calls.saves.length, count);
+  } finally { f.app.unmount(); }
+});
+
+test('last-page completion is saved immediately and repeated reports are deduplicated', async () => {
+  const documents = [{ id: 1, name: 'Doc', documentType: 'PDF', fileUrl: '/doc.pdf' }];
+  const f = await fixture({ realSidebar: true, lessonComments: { documents } });
+  try {
+    document.querySelector('.lesson-resources-toggle').click(); await flush();
+    document.querySelector('.lesson-document-select').click(); await flush();
+    f.emit('document-position', { page: 8, scrollOffset: 0, completed: true }); await flush();
+    assert.equal(f.calls.saves.at(-1).request.documentCompleted, true);
+    const count = f.calls.saves.length;
+    f.emit('document-position', { page: 8, scrollOffset: 100, completed: true }); await flush();
+    assert.equal(f.calls.saves.length, count);
+  } finally { f.app.unmount(); }
+});
+
 test('switching documents saves the outgoing page and restores each document independently', async t => {
   const documents = [1, 2].map(id => ({ id, name: `Doc ${id}`, documentType: 'PDF', fileUrl: `/${id}.pdf` }));
   const f = await fixture({ realSidebar: true, lessonComments: { documents } });
@@ -177,7 +218,7 @@ test('switching documents saves the outgoing page and restores each document ind
     document.querySelectorAll('.lesson-document-select')[1].click(); await flush();
     assert.ok(f.calls.saves.some(call => call.request.documentId === 1 && call.request.documentPage === 7));
     f.emit('document-position', { page: 3, scrollOffset: 0 });
-    t.mock.timers.tick(1000); await flush();
+    t.mock.timers.tick(5000); await flush();
     const count = f.calls.saves.length;
     for (let i = 0; i < 10; i++) f.emit('document-position', { page: 3, scrollOffset: i * 10 });
     t.mock.timers.tick(5000); await flush();
@@ -188,7 +229,7 @@ test('switching documents saves the outgoing page and restores each document ind
     assert.equal(document.querySelector('#media').dataset.page, '3');
     document.querySelectorAll('.lesson-document-select')[0].click(); await flush();
     f.emit('document-position', { page: 8, scrollOffset: 0 });
-    t.mock.timers.tick(1000); await flush();
+    t.mock.timers.tick(5000); await flush();
     const pageEightWrites = () => f.calls.saves.filter(call => call.request.documentId === 1 && call.request.documentPage === 8).length;
     assert.equal(pageEightWrites(), 1);
     document.querySelectorAll('.lesson-document-select')[1].click(); await flush();
@@ -229,7 +270,10 @@ test('continuous playback saves every throttle window and pausing flushes immedi
     f.emit('progress-update', { lastPositionSeconds: 1 });
     t.mock.timers.tick(4000);
     f.emit('progress-update', { lastPositionSeconds: 4 });
-    t.mock.timers.tick(1000);
+    t.mock.timers.tick(15999);
+    await flush();
+    assert.equal(f.calls.saves.length, baseline);
+    t.mock.timers.tick(1);
     await flush();
     assert.equal(f.calls.saves.length, baseline + 1);
     assert.equal(f.calls.saves.at(-1).request.lastPositionSeconds, 4);
@@ -240,6 +284,46 @@ test('continuous playback saves every throttle window and pausing flushes immedi
     t.mock.timers.tick(5000);
     await flush();
     assert.equal(f.calls.saves.length, baseline + 2);
+  } finally { f.app.unmount(); }
+});
+
+test('video crossing 90 percent saves immediately without waiting for the 20-second window', async () => {
+  const f = await fixture();
+  try {
+    const count = f.calls.saves.length;
+    f.emit('progress-update', { lastPositionSeconds: 89, watchedSeconds: 89, durationSeconds: 100 }); await flush();
+    assert.equal(f.calls.saves.length, count);
+    f.emit('progress-update', { lastPositionSeconds: 90, watchedSeconds: 90, durationSeconds: 100 }); await flush();
+    assert.equal(f.calls.saves.length, count + 1);
+    f.emit('progress-update', { lastPositionSeconds: 91, watchedSeconds: 91, durationSeconds: 100 }); await flush();
+    assert.equal(f.calls.saves.length, count + 1);
+  } finally { f.app.unmount(); }
+});
+
+test('reopening after a crash restores the local video snapshot and uploads it once', async () => {
+  const data = new Map();
+  const storage = { getItem: key => data.get(key), setItem: (key, value) => data.set(key, value) };
+  const journal = createVideoProgressJournal('user', storage);
+  journal.record('a', { contentType: 'VIDEO', lastPositionSeconds: 35, watchedSeconds: 35, durationSeconds: 100 }, true);
+  const f = await fixture({ videoStorage: storage });
+  try {
+    assert.equal(document.querySelector('#media').dataset.position, '35');
+    assert.equal(f.calls.saves.filter(call => call.id === 'a' && call.request.lastPositionSeconds === 35).length, 1);
+    assert.equal(createVideoProgressJournal('user', storage).pending('a'), undefined);
+  } finally { f.app.unmount(); }
+});
+
+test('failed snapshots retry with backoff and stop after acknowledgement', async t => {
+  const f = await fixture({ save: (id, request, count) => count === 2 ? null : { lessonId: id, ...request } });
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    f.emit('progress-update', { lastPositionSeconds: 7, watchedSeconds: 7, durationSeconds: 100 });
+    f.emit('pause'); await flush();
+    assert.equal(f.calls.saves.length, 2);
+    t.mock.timers.tick(1999); await flush(); assert.equal(f.calls.saves.length, 2);
+    t.mock.timers.tick(1); await flush(); assert.equal(f.calls.saves.length, 3);
+    assert.equal(f.calls.saves.at(-1).request.lastPositionSeconds, 7);
+    t.mock.timers.tick(60000); await flush(); assert.equal(f.calls.saves.length, 3);
   } finally { f.app.unmount(); }
 });
 

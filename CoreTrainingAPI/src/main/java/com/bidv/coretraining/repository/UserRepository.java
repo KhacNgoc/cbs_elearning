@@ -11,6 +11,8 @@ import org.springframework.data.repository.query.Param;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
+        @Query("select count(l) > 0 from User u join u.completedLessons l where u.id=:userId and l.id=:lessonId")
+        boolean hasCompletedLesson(@Param("userId") Long userId, @Param("lessonId") String lessonId);
         @Query("select u.id from User u join u.assignedRoles r where r.id=:roleId")
         List<Long> findIdsByAssignedRole(@Param("roleId") String roleId);
 

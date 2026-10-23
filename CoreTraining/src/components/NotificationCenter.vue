@@ -44,9 +44,14 @@
             >
             <i v-if="!item.read" class="unread-dot"></i>
           </button>
-          <div v-if="!notifications.length" class="notification-empty">
+          <div v-if="loading && !notifications.length" class="notification-empty" role="status">Đang tải thông báo...</div>
+          <div v-else-if="!notifications.length && !loadError" class="notification-empty">
             <BellOff :size="28" /><span>Chưa có thông báo.</span>
           </div>
+          <p v-if="loadError" class="notification-load-error" role="alert">{{ loadError }}</p>
+          <button v-if="hasMore || loadError" class="notification-load-more" :disabled="loading" @click="loadNotifications">
+            {{ loading ? 'Đang tải...' : loadError ? 'Thử lại' : 'Tải thêm' }}
+          </button>
         </div>
       </section>
     </Transition>
@@ -72,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import {
   Bell,
@@ -99,9 +104,37 @@ type ToastVariant = "info" | "success" | "warning" | "error";
 const toast = ref<{ message: string; variant: ToastVariant } | null>(null);
 let toastTimer: number | undefined;
 let socket: NotificationSocket | undefined;
-const unreadCount = computed(
-  () => notifications.value.filter((item) => !item.read).length,
-);
+const unreadCount = ref(0);
+const hasMore = ref(false);
+const loading = ref(false);
+const loadError = ref('');
+let beforeId: number | undefined;
+let initialLoaded = false;
+let disposed = false;
+let readAllRevision = 0;
+const readIds = new Set<number>();
+const loadNotifications = async () => {
+  if (loading.value || disposed) return;
+  loading.value = true;
+  loadError.value = '';
+  const revision = readAllRevision;
+  try {
+    const page = await notificationApi.getNotifications(beforeId);
+    if (disposed) return;
+    const known = new Set(notifications.value.map(item => item.id));
+    notifications.value.push(...page.content.filter(item => !known.has(item.id)).map(item => ({
+      ...item, read: item.read || revision !== readAllRevision || readIds.has(item.id),
+    })));
+    if (!initialLoaded && revision === readAllRevision) unreadCount.value = page.unreadCount;
+    initialLoaded = true;
+    beforeId = page.nextBeforeId ?? undefined;
+    hasMore.value = page.hasMore;
+  } catch {
+    if (!disposed) loadError.value = 'Không thể tải thông báo. Vui lòng thử lại.';
+  } finally {
+    if (!disposed) loading.value = false;
+  }
+};
 
 const showToast = (message: string, variant: ToastVariant = "info") => {
   toast.value = { message, variant };
@@ -109,8 +142,10 @@ const showToast = (message: string, variant: ToastVariant = "info") => {
   toastTimer = window.setTimeout(() => (toast.value = null), 5000);
 };
 const receiveNotification = (item: AppNotification) => {
-  if (!notifications.value.some((existing) => existing.id === item.id))
+  if (!notifications.value.some((existing) => existing.id === item.id)) {
     notifications.value.unshift(item);
+    if (!item.read) unreadCount.value++;
+  }
   if (
     item.type === "ENROLLMENT_APPROVED" ||
     item.type === "ENROLLMENT_REJECTED"
@@ -130,6 +165,8 @@ const openNotification = async (item: AppNotification) => {
     try {
       await notificationApi.markRead(item.id);
       item.read = true;
+      readIds.add(item.id);
+      unreadCount.value = Math.max(0, unreadCount.value - 1);
     } catch {
       showToast("Không thể cập nhật thông báo.", "error");
     }
@@ -141,6 +178,8 @@ const markAllRead = async () => {
   try {
     await notificationApi.markAllRead();
     notifications.value.forEach((item) => (item.read = true));
+    readAllRevision++;
+    unreadCount.value = 0;
   } catch {
     showToast("Không thể cập nhật thông báo.", "error");
   }
@@ -164,11 +203,8 @@ const handleAppToast = (event: Event) => {
 onMounted(async () => {
   document.addEventListener("click", closeOnOutside);
   window.addEventListener("app-toast", handleAppToast);
-  try {
-    notifications.value = await notificationApi.getNotifications();
-  } catch {
-    showToast("Không thể tải danh sách thông báo.", "error");
-  }
+  await loadNotifications();
+  if (disposed) return;
   socket = new NotificationSocket(
     receiveNotification,
     (value) => (connected.value = value),
@@ -176,6 +212,7 @@ onMounted(async () => {
   socket.start();
 });
 onBeforeUnmount(() => {
+  disposed = true;
   socket?.stop();
   document.removeEventListener("click", closeOnOutside);
   window.removeEventListener("app-toast", handleAppToast);
@@ -184,6 +221,12 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.notification-load-more {
+  display: block; width: 100%; padding: .8rem; border: 0;
+  background: var(--bg-card); color: var(--primary-ink); cursor: pointer; font: inherit;
+}
+.notification-load-more:disabled { opacity: .6; cursor: wait; }
+.notification-load-error { padding: .8rem; color: var(--text-muted); font-size: .85rem; }
 .notification-center {
   position: relative;
 }

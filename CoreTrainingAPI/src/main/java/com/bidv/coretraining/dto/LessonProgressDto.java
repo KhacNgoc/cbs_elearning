@@ -10,6 +10,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class LessonProgressDto {
+    private boolean lessonCompleted;
+    private boolean textCompleted;
     private String lessonId;
     private Double lastPositionSeconds;
     private Double watchedSeconds;

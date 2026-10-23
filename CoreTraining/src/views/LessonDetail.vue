@@ -32,12 +32,12 @@
         :current-index="currentLessonIndex"
         :total-lessons="course?.lessons.length || 0"
         :initial-position-seconds="
-          currentLessonProgress?.lastPositionSeconds || 0
+          videoInitialPosition.lastPositionSeconds || 0
         "
-        :initial-watched-seconds="currentLessonProgress?.watchedSeconds || 0"
+        :initial-watched-seconds="videoInitialPosition.watchedSeconds || 0"
         :initial-document-page="documentInitialPosition.page"
         :initial-scroll-offset="documentInitialPosition.scrollOffset"
-        @document-position="handleDocumentPosition"
+        @document-position="handleDocumentPosition" @text-completed="handleTextCompleted"
         @adjacent="goToAdjacentLesson"
         @time-update="currentVideoTime = $event"
         @progress-update="handleVideoProgress"
@@ -251,6 +251,7 @@ import LessonOverview from "../components/lesson/LessonOverview.vue";
 import LessonReportForm from "../components/lesson/LessonReportForm.vue";
 import { initialLessonContent } from "../utils/lessonContent";
 import { createDocumentProgressJournal } from "../utils/documentProgressJournal";
+import { createVideoProgressJournal } from "../utils/videoProgressJournal";
 import LessonDiscussion from "../components/lesson/LessonDiscussion.vue";
 import LessonVideoNotes from "../components/lesson/LessonVideoNotes.vue";
 
@@ -261,6 +262,37 @@ const bookmarkReady = ref(false);
 const courseStore = useCourseStore();
 const userStore = useUserStore();
 const documentJournal = createDocumentProgressJournal(userStore.username);
+const videoJournal = createVideoProgressJournal(userStore.username);
+const videoInitialPosition = ref<LessonProgressRequest>({});
+const retryJobs = new Map<string, { lessonId: string; snapshot: LessonProgressRequest; attempts: number }>();
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+const retryKey = (id: string, snapshot: LessonProgressRequest) => JSON.stringify([id, snapshot.contentType, snapshot.documentId]);
+function scheduleRetry() {
+  if (disposed || retryTimer || !retryJobs.size) return;
+  const eligible = [...retryJobs.values()].filter(job => job.attempts < 5);
+  if (!eligible.length) return;
+  const attempts = Math.max(...eligible.map(job => job.attempts));
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    for (const job of retryJobs.values()) if (job.attempts < 5) void sendProgress(job.lessonId, job.snapshot, false, job.attempts + 1);
+  }, Math.min(60000, 2000 * 2 ** attempts));
+}
+async function sendProgress(lessonId: string, snapshot: LessonProgressRequest, touch = false, attempts = 0) {
+  const key = retryKey(lessonId, snapshot);
+  const previous = retryJobs.get(key)?.snapshot;
+  snapshot = { ...snapshot };
+  if (previous?.documentCompleted) snapshot.documentCompleted = true;
+  if (previous?.textCompleted) snapshot.textCompleted = true;
+  const job = { lessonId, snapshot: { ...snapshot }, attempts };
+  retryJobs.set(key, job);
+  const result = await userStore.saveLessonProgress(lessonId, snapshot, touch);
+  if (result) {
+    if (snapshot.contentType === 'DOCUMENT') documentJournal.acknowledge(lessonId, snapshot);
+    if (snapshot.contentType === 'VIDEO') videoJournal.acknowledge(lessonId, snapshot);
+    if (retryJobs.get(key) === job) retryJobs.delete(key);
+  } else if (retryJobs.get(key) === job && userStore.canLearn && userStore.isAuthenticated) scheduleRetry();
+  return result;
+}
 const documentInitialPosition = ref({ page: 1, scrollOffset: 0 });
 const restoreDocumentPosition = (
   lessonId: string,
@@ -358,9 +390,6 @@ const quizPromptLesson = computed(
       (item) => item.id === quizPromptLessonId.value,
     ) || lesson.value,
 );
-const currentLessonProgress = computed(() =>
-  lesson.value ? userStore.getLatestLessonProgress(lesson.value.id) : undefined,
-);
 const isCompleted = computed(() =>
   lesson.value ? userStore.completedLessons.includes(lesson.value.id) : false,
 );
@@ -444,7 +473,8 @@ const loadLessonData = async (lessonId: string) => {
       );
     activeChapter.lessons[index] = loadedLesson;
 
-    const progress = userStore.getLatestLessonProgress(lessonId);
+    const progress = { ...userStore.getLatestLessonProgress(lessonId), ...videoJournal.pending(lessonId) };
+    videoInitialPosition.value = { ...progress };
     currentProgressSnapshot.value = {
       ...progress,
       lastPositionSeconds: progress?.lastPositionSeconds || 0,
@@ -458,16 +488,15 @@ const loadLessonData = async (lessonId: string) => {
         : undefined;
     pendingDocument.value = null;
     selectInitialContent(requestedDocument);
+    const recoveredVideo = videoJournal.pending(lessonId);
+    if (recoveredVideo && loadedLesson.videoUrl?.trim() && activeContentType.value !== 'VIDEO')
+      void sendProgress(lessonId, recoveredVideo);
     // Replay crash/offline snapshots before touching the current content's resume order.
     for (const entry of documentJournal.pending(lessonId)) {
       if (
         loadedLesson.documents?.some((d) => d.id === entry.request.documentId)
       ) {
-        void userStore
-          .saveLessonProgress(lessonId, entry.request)
-          .then((result) => {
-            if (result) documentJournal.acknowledge(lessonId, entry.request);
-          });
+        void sendProgress(lessonId, entry.request);
       }
     }
     // Initial content restoration is not a user-initiated content switch.
@@ -507,6 +536,7 @@ const selectInitialContent = (requestedDocument?: LessonDocument) => {
     currentProgressSnapshot.value = {
       ...currentProgressSnapshot.value,
       documentId: initial.document.id,
+      documentCompleted: false,
       documentPage: documentInitialPosition.value.page,
       scrollOffset: documentInitialPosition.value.scrollOffset,
     };
@@ -531,23 +561,29 @@ const loadVideoNotes = async (lessonId: string, loadId: number) => {
 const flushProgress = () => {
   void persistCurrentProgress();
 };
+const handleOnline = () => {
+  if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+  for (const job of retryJobs.values()) void sendProgress(job.lessonId, job.snapshot);
+  flushProgress();
+};
 const handleVisibilityChange = () => {
   if (document.visibilityState === "hidden") flushProgress();
 };
 onMounted(() => {
   document.addEventListener("visibilitychange", handleVisibilityChange);
   window.addEventListener("pagehide", flushProgress);
-  window.addEventListener("online", flushProgress);
+  window.addEventListener("online", handleOnline);
   void loadLessonData(props.id);
 });
 
 onBeforeUnmount(() => {
   void persistCurrentProgress();
   disposed = true;
+  if (retryTimer) clearTimeout(retryTimer);
   lessonLoadId++;
   document.removeEventListener("visibilitychange", handleVisibilityChange);
   window.removeEventListener("pagehide", flushProgress);
-  window.removeEventListener("online", flushProgress);
+  window.removeEventListener("online", handleOnline);
 });
 
 watch(
@@ -571,10 +607,21 @@ const scheduleProgressSave = (delay: number) => {
   }, delay);
 };
 
+const handleTextCompleted = () => {
+  if (!bookmarkReady.value || activeContentType.value !== "TEXT") return;
+  currentProgressSnapshot.value = { ...currentProgressSnapshot.value, textCompleted: true };
+  void persistCurrentProgress();
+};
 const handleVideoProgress = (progress: LessonProgressRequest) => {
   if (!bookmarkReady.value || activeContentType.value !== "VIDEO") return;
+  const wasComplete = (currentProgressSnapshot.value.durationSeconds || 0) > 0
+    && (currentProgressSnapshot.value.watchedSeconds || 0) >= currentProgressSnapshot.value.durationSeconds! * 0.9;
   currentProgressSnapshot.value = { ...progress, contentType: "VIDEO" };
-  scheduleProgressSave(5000);
+  if (progressLessonId.value) videoJournal.record(progressLessonId.value, currentProgressSnapshot.value);
+  if (!wasComplete && (progress.durationSeconds || 0) > 0 && (progress.watchedSeconds || 0) >= progress.durationSeconds! * 0.9) {
+    void persistCurrentProgress(); return;
+  }
+  scheduleProgressSave(20000);
 };
 
 const persistCurrentProgress = async (touch = false) => {
@@ -597,14 +644,12 @@ const persistCurrentProgress = async (touch = false) => {
   };
   if (snapshot.contentType === "DOCUMENT")
     documentJournal.record(lessonId, snapshot);
-  const result = await userStore.saveLessonProgress(lessonId, snapshot, touch);
-  if (result && snapshot.contentType === "DOCUMENT")
-    documentJournal.acknowledge(lessonId, snapshot);
-  return result;
+  if (snapshot.contentType === "VIDEO") videoJournal.record(lessonId, snapshot, true);
+  return sendProgress(lessonId, snapshot, touch);
 };
 const handleDocumentPosition = (position: {
   page: number;
-  scrollOffset: number;
+  scrollOffset: number; completed?: boolean;
 }) => {
   if (!selectedDocument.value || !bookmarkReady.value) return;
   currentProgressSnapshot.value = {
@@ -612,6 +657,7 @@ const handleDocumentPosition = (position: {
     contentType: "DOCUMENT",
     documentId: selectedDocument.value.id,
     documentPage: position.page,
+    documentCompleted: position.completed === true,
     scrollOffset: position.scrollOffset,
   };
   if (progressLessonId.value) {
@@ -619,8 +665,9 @@ const handleDocumentPosition = (position: {
       progressLessonId.value,
       currentProgressSnapshot.value,
     );
+    if (position.completed) { void persistCurrentProgress(); return; }
     if (documentJournal.pending(progressLessonId.value).length)
-      scheduleProgressSave(1000);
+      scheduleProgressSave(5000);
   }
 };
 watch([selectedDocument, primaryContent], async ([document]) => {
@@ -630,6 +677,7 @@ watch([selectedDocument, primaryContent], async ([document]) => {
     currentProgressSnapshot.value = {
       ...currentProgressSnapshot.value,
       documentId: document.id,
+      documentCompleted: false,
       documentPage: documentInitialPosition.value.page,
       scrollOffset: documentInitialPosition.value.scrollOffset,
     };
@@ -643,32 +691,8 @@ const handleVideoEnded = async (progress: LessonProgressRequest) => {
     clearTimeout(progressSaveTimer);
     progressSaveTimer = null;
   }
-  const finishedLessonId = lesson.value.id;
-  const hasQuiz = Boolean(lesson.value.hasQuiz && lesson.value.quizRequired);
-  const nextLesson = course.value?.lessons[currentLessonIndex.value + 1];
-  const wasCompleted = userStore.completedLessons.includes(finishedLessonId);
   currentProgressSnapshot.value = progress;
   await persistCurrentProgress();
-
-  if (wasCompleted || disposed || lesson.value?.id !== finishedLessonId) return;
-
-  if (hasQuiz) {
-    quizPromptKind.value = "lesson";
-    quizPromptLessonId.value = finishedLessonId;
-    quizGateOpen.value = true;
-    return;
-  }
-
-  if (promptForRequiredCourseQuiz(finishedLessonId)) return;
-  const completed = await completeLessonWithFeedback(finishedLessonId);
-  if (
-    completed &&
-    nextLesson &&
-    !disposed &&
-    lesson.value?.id === finishedLessonId
-  ) {
-    await router.push(`/lesson/${nextLesson.id}`);
-  }
 };
 
 const switchLesson = async (lessonId: string): Promise<boolean> => {
@@ -718,6 +742,10 @@ const showPrimaryContent = (type: "VIDEO" | "TEXT") => {
   )
     return;
   void persistCurrentProgress();
+  if (type === 'VIDEO' && lesson.value) videoInitialPosition.value = {
+    ...userStore.getLatestLessonProgress(lesson.value.id), ...currentProgressSnapshot.value,
+    ...videoJournal.pending(lesson.value.id),
+  };
   primaryContent.value = type;
   selectedDocument.value = null;
 };

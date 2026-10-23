@@ -9,4 +9,6 @@ public interface LessonAccessView {
     Integer getLessonOrder();
     Integer getChapterOrder();
     Boolean getHasVideo();
+    Boolean getHasText();
+    Long getVersion();
 }

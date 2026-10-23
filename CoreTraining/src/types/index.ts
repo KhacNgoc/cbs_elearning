@@ -159,6 +159,9 @@ export interface UserProgress {
 }
 
 export interface LessonProgress {
+  textCompleted?: boolean;
+  documentCompleted?: boolean;
+  lessonCompleted?: boolean;
   lessonId: string;
   lastPositionSeconds: number;
   watchedSeconds: number;

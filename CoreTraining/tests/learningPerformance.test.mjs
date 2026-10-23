@@ -4,6 +4,40 @@ import { createAsyncResourceCache } from '../src/utils/asyncResourceCache.ts';
 import { createLessonProgressWriter } from '../src/utils/lessonProgressWriter.ts';
 import { chapterLearningState, outlineContext } from '../src/utils/learningStructure.ts';
 import { createDocumentProgressJournal } from '../src/utils/documentProgressJournal.ts';
+import { createVideoProgressJournal } from '../src/utils/videoProgressJournal.ts';
+
+test('video journal limits disk writes, survives recreation and ignores stale acknowledgements', t => {
+  const data = new Map(); let writes = 0; let now = 0;
+  t.mock.method(Date, 'now', () => now);
+  const storage = { getItem: key => data.get(key), setItem: (key, value) => { writes++; data.set(key, value); } };
+  const journal = createVideoProgressJournal('alice', storage);
+  const snapshot = seconds => ({ contentType: 'VIDEO', lastPositionSeconds: seconds, watchedSeconds: seconds, durationSeconds: 100 });
+  journal.record('lesson', snapshot(1));
+  now = 100; journal.record('lesson', snapshot(2));
+  assert.equal(writes, 1);
+  now = 1000; journal.record('lesson', snapshot(3));
+  assert.equal(writes, 2);
+  const recovered = createVideoProgressJournal('alice', storage);
+  assert.equal(recovered.pending('lesson').lastPositionSeconds, 3);
+  assert.equal(createVideoProgressJournal('bob', storage).pending('lesson'), undefined);
+  recovered.acknowledge('lesson', snapshot(1));
+  assert.equal(recovered.pending('lesson').lastPositionSeconds, 3);
+  recovered.acknowledge('lesson', snapshot(3));
+  assert.equal(createVideoProgressJournal('alice', storage).pending('lesson'), undefined);
+});
+
+test('coalescing bookmarks preserves pending document completion', async () => {
+  const blocked = deferred(); const calls = [];
+  const writer = createLessonProgressWriter(async (id, request) => {
+    calls.push(request); if (calls.length === 1) await blocked.promise;
+    return { lessonId: id, ...request };
+  });
+  const a = writer.write('lesson', { contentType: 'DOCUMENT', documentId: 1, documentPage: 8, documentCompleted: true });
+  const b = writer.write('lesson', { contentType: 'DOCUMENT', documentId: 1, documentPage: 3, documentCompleted: false });
+  blocked.resolve(); await Promise.all([a, b]);
+  assert.equal(calls.at(-1).documentPage, 3);
+  assert.equal(calls.at(-1).documentCompleted, true);
+});
 
 test('document journal survives a crash, isolates accounts and retains changes after an older acknowledgement', () => {
   const data = new Map();

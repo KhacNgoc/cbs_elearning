@@ -79,6 +79,7 @@ public class QuizServiceImpl implements QuizService {
     @Override
     @Transactional
     public QuizResultDto submitLessonQuiz(String lessonId, QuizSubmitRequest request, String username) {
+        userRepository.findByUsername(username).ifPresent(u -> userRepository.lockForLearning(u.getId()).orElseThrow());
         Lesson lesson = lessonRepository.findById(lessonId)
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
         User user = userRepository.findByUsername(username)
@@ -142,11 +143,8 @@ public class QuizServiceImpl implements QuizService {
         }
         if (total > 0 && percent >= passingScore
                 && !user.getCompletedLessons().contains(lesson)
-                && progress.contentCompleted(user, lessonId)) {
-            user.getCompletedLessons().add(lesson);
-            user.setPoints(user.getPoints() + 100);
-            com.bidv.coretraining.service.LearningPolicy.recordCourseCompletion(user, lesson.getCourse());
-            userRepository.save(user);
+                && lesson.isQuizRequired()) {
+            progress.recordCompletion(user, lesson);
         }
         return QuizResultDto.builder().score(score).total(total).percent(percent)
                 .passingScore(passingScore).passed(total > 0 && percent >= passingScore).build();

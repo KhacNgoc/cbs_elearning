@@ -45,8 +45,14 @@ public class LessonProgress {
     private Integer documentPage;
     private Double scrollOffset;
 
-    public record DocumentPosition(Integer page, Double scrollOffset) {
+    public record DocumentPosition(Integer page, Double scrollOffset, Boolean completed) {
+        public DocumentPosition(Integer page, Double scrollOffset) { this(page, scrollOffset, false); }
     }
+    @Builder.Default
+    @Column(nullable = false)
+    @org.hibernate.annotations.ColumnDefault("false")
+    private boolean textCompleted = false;
+    private Long completionVersion;
 
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     @Column(name = "document_positions")

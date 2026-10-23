@@ -361,6 +361,10 @@ export const useUserStore = defineStore("user", {
             if (this.username !== username || progressWriters.get(this) !== writer) return null;
             this.lessonProgress ||= {};
             this.lessonProgress[id] = progress;
+            if (progress.lessonCompleted && !this.completedLessons.includes(id)) {
+              this.completedLessons.push(id);
+              void this.fetchProgress();
+            }
             return progress;
           } catch (error) {
             console.error("Failed to save lesson progress:", error);

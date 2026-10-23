@@ -15,14 +15,16 @@ export function initialLessonContent(
     );
   if (explicitDocument)
     return { type: "DOCUMENT" as const, document: explicitDocument };
+  // A normal lesson visit follows the content priority; explicit document
+  // selections above still open the file the learner requested.
+  if (lesson.videoUrl?.trim())
+    return { type: "VIDEO" as const, document: null };
+  if (lesson.textBody?.trim())
+    return { type: "TEXT" as const, document: null };
   if (saved?.contentType === "DOCUMENT") {
     const document = documents.find((item) => item.id === saved.documentId);
     if (document) return { type: "DOCUMENT" as const, document };
   }
-  if (saved?.contentType === "TEXT" && lesson.textBody?.trim())
-    return { type: "TEXT" as const, document: null };
-  if (lesson.videoUrl?.trim())
-    return { type: "VIDEO" as const, document: null };
   if (documents[0])
     return { type: "DOCUMENT" as const, document: documents[0] };
   return { type: "TEXT" as const, document: null };

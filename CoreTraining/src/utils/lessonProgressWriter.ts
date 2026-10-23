@@ -66,9 +66,7 @@ export function createLessonProgressWriter(
       touch = false,
     ): Promise<LessonProgress | null> {
       const stateKey =
-        request.contentType === "DOCUMENT"
-          ? JSON.stringify([id, request.documentId])
-          : id;
+        JSON.stringify([id, request.contentType, request.contentType === "DOCUMENT" ? request.documentId : null]);
       let state = states.get(stateKey);
       if (!state) {
         state = {};
@@ -76,7 +74,12 @@ export function createLessonProgressWriter(
       }
       latest.set(id, state);
       const snapshot = { ...request };
+      // A newer bookmark must not erase an unacknowledged completion transition.
+      const previousSnapshot = state.pending?.request || state.current?.request;
+      if (previousSnapshot?.documentCompleted) snapshot.documentCompleted = true;
+      if (previousSnapshot?.textCompleted) snapshot.textCompleted = true;
       const key = JSON.stringify([
+        snapshot.textCompleted, snapshot.documentCompleted,
         snapshot.contentType,
         snapshot.documentId,
         snapshot.documentPage,

@@ -1,6 +1,10 @@
 <template>
   <div class="pdf-preview">
-    <DocumentZoomControls v-if="pageCount && !error" v-model="zoom" :disabled="loading" />
+    <DocumentZoomControls
+      v-if="pageCount && !error"
+      v-model="zoom"
+      :disabled="loading"
+    />
     <DocumentPageNavigation
       v-if="pageCount && !error"
       :page="page"
@@ -39,7 +43,9 @@ import { axiosClient } from "../../api/axiosClient";
 GlobalWorkerOptions.workerSrc = workerUrl;
 const props = defineProps<{ url: string; initialPage?: number }>();
 const emit = defineEmits<{
-  "position-change": [value: { page: number; scrollOffset: number }];
+  "position-change": [
+    value: { page: number; scrollOffset: number; completed?: boolean },
+  ];
 }>();
 const zoom = ref(100);
 const page = ref(1),
@@ -79,7 +85,10 @@ async function draw() {
     const height = Math.max(1, container.value.clientHeight - 64);
     const ratio = window.devicePixelRatio || 1;
     const scaled = sheet.getViewport({
-      scale: Math.min(width / viewport.width, height / viewport.height, 2) * (zoom.value / 100) * ratio,
+      scale:
+        Math.min(width / viewport.width, height / viewport.height, 2) *
+        (zoom.value / 100) *
+        ratio,
     });
     canvas.value.width = scaled.width;
     canvas.value.height = scaled.height;
@@ -87,6 +96,12 @@ async function draw() {
     canvas.value.style.height = `${scaled.height / ratio}px`;
     renderTask = sheet.render({ canvas: canvas.value, viewport: scaled });
     await renderTask.promise;
+    if (current === drawRequest && doc === pdf && requested === page.value)
+      emit("position-change", {
+        page: requested,
+        scrollOffset: 0,
+        completed: requested === pageCount.value,
+      });
   } catch (e) {
     if (
       current === drawRequest &&
@@ -124,7 +139,6 @@ async function load() {
     page.value = Math.min(Math.max(1, props.initialPage || 1), doc.numPages);
     await nextTick();
     await draw();
-    emit("position-change", { page: page.value, scrollOffset: 0 });
   } catch (cause) {
     console.error("Failed to load PDF document:", cause);
     if (id === request)
@@ -137,7 +151,6 @@ async function go(value: number) {
   if (!pdf || !Number.isFinite(value)) return;
   page.value = Math.min(Math.max(1, Math.floor(value)), pageCount.value);
   await draw();
-  emit("position-change", { page: page.value, scrollOffset: 0 });
 }
 onMounted(() => {
   void load();

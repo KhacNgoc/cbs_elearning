@@ -40,6 +40,7 @@ public interface LessonDocumentRepository extends JpaRepository<LessonDocument, 
         Long getId();
     }
 
+    java.util.List<IdOnly> findAllByLessonId(String lessonId);
     boolean existsByIdAndLessonId(Long id, String lessonId);
 
     Optional<IdOnly> findFirstByLessonIdOrderByDocumentOrderAscIdAsc(String lessonId);

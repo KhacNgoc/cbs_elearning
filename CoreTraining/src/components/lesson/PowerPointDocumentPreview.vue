@@ -1,6 +1,10 @@
 <template>
   <div class="powerpoint-preview">
-    <DocumentZoomControls v-if="pageCount && !error" v-model="zoom" :disabled="loading" />
+    <DocumentZoomControls
+      v-if="pageCount && !error"
+      v-model="zoom"
+      :disabled="loading"
+    />
     <DocumentPageNavigation
       v-if="pageCount && !error"
       :page="page"
@@ -47,10 +51,16 @@ const props = defineProps<{
   initialPage?: number;
 }>();
 const emit = defineEmits<{
-  "position-change": [value: { page: number; scrollOffset: number }];
+  "position-change": [
+    value: { page: number; scrollOffset: number; completed?: boolean },
+  ];
 }>();
 function savePosition() {
-  emit("position-change", { page: page.value, scrollOffset: 0 });
+  emit("position-change", {
+    page: page.value,
+    scrollOffset: 0,
+    completed: page.value === pageCount.value,
+  });
 }
 const zoom = ref(100);
 const page = ref(1);
@@ -68,7 +78,12 @@ function fitSlide() {
 async function go(value: number) {
   const activeViewer = viewer;
   const currentRequest = requestId;
-  if (!activeViewer || loading.value || turningPage.value || !Number.isFinite(value))
+  if (
+    !activeViewer ||
+    loading.value ||
+    turningPage.value ||
+    !Number.isFinite(value)
+  )
     return;
   const next = Math.min(Math.max(1, Math.floor(value)), pageCount.value);
   turningPage.value = true;

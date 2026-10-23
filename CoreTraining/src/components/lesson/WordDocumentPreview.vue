@@ -15,7 +15,7 @@
         v-show="!loading && !error"
         ref="previewContainer"
         class="word-preview-content"
-        :style="{ zoom: fitScale * zoom / 100 }"
+        :style="{ zoom: (fitScale * zoom) / 100 }"
       ></div>
     </div>
   </div>
@@ -34,16 +34,23 @@ const props = defineProps<{
   initialPage?: number;
 }>();
 const emit = defineEmits<{
-  "position-change": [value: { page: number; scrollOffset: number }];
+  "position-change": [
+    value: { page: number; scrollOffset: number; completed?: boolean },
+  ];
 }>();
 const zoom = ref(100);
 const fitScale = ref(1);
 let observer: ResizeObserver | null = null;
 let resizeFrame = 0;
 function fitDocument() {
-  const page = previewContainer.value?.querySelector<HTMLElement>("section.docx-page");
+  const page =
+    previewContainer.value?.querySelector<HTMLElement>("section.docx-page");
   if (!page || !scrollContainer.value) return;
-  fitScale.value = Math.min(1, Math.max(1, scrollContainer.value.clientWidth - 48) / (page.offsetWidth + 40));
+  fitScale.value = Math.min(
+    1,
+    Math.max(1, scrollContainer.value.clientWidth - 48) /
+      (page.offsetWidth + 40),
+  );
 }
 const scrollContainer = ref<HTMLElement | null>(null);
 function savePosition() {
@@ -59,6 +66,7 @@ function savePosition() {
   emit("position-change", {
     page,
     scrollOffset: scrollContainer.value.scrollTop,
+    completed: pages.length > 0 && page === pages.length,
   });
 }
 const previewContainer = ref<HTMLElement | null>(null);
@@ -122,6 +130,7 @@ const renderDocument = async () => {
       "Không tải được nội dung tài liệu. Bạn vẫn có thể sử dụng nút Tải xuống.";
   } finally {
     loading.value = false;
+    if (!error.value) savePosition();
   }
 };
 
@@ -138,7 +147,8 @@ onBeforeUnmount(() => {
   cancelAnimationFrame(resizeFrame);
 });
 watch(zoom, () => {
-  if (zoom.value === 100 && scrollContainer.value) scrollContainer.value.scrollLeft = 0;
+  if (zoom.value === 100 && scrollContainer.value)
+    scrollContainer.value.scrollLeft = 0;
 });
 watch(() => props.url, renderDocument);
 </script>

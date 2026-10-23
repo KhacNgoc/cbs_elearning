@@ -22,8 +22,12 @@ import static org.assertj.core.api.Assertions.assertThat;
         "spring.sql.init.mode=never", "spring.jpa.properties.hibernate.generate_statistics=true" })
 @ContextConfiguration(classes = com.bidv.coretraining.CoreTrainingApiApplication.class)
 @Import({ LearningAccessService.class, LearningOutlineService.class, TrainingStructureService.class,
-        LearnerWorkspaceService.class, CourseMapperImpl.class, LessonProgressService.class, CourseServiceImpl.class })
+        LearnerWorkspaceService.class, CourseMapperImpl.class, LessonProgressService.class, CourseServiceImpl.class,
+        com.bidv.coretraining.service.impl.QuizServiceImpl.class, QuizMapperImpl.class, com.fasterxml.jackson.databind.ObjectMapper.class })
 class LearningQueryAuditTest {
+    @org.springframework.boot.test.mock.mockito.SpyBean
+    com.bidv.coretraining.repository.LessonDocumentRepository documentRepository;
+    @Autowired com.bidv.coretraining.service.impl.QuizServiceImpl quizService;
     @Autowired
     EntityManager em;
     @Autowired
@@ -220,6 +224,75 @@ class LearningQueryAuditTest {
         }
     }
 
+    @Test void automaticCompletionRequiresTextVideoAndEveryDocument() {
+        var f = seed(2);
+        var lesson = em.find(Lesson.class, f.lesson());
+        lesson.getQuiz().setRequiredForProgress(false);
+        lesson.setVideoUrl("/video.mp4");
+        var first = lesson.getDocuments().get(0).getId();
+        var other = LessonDocument.builder().lesson(lesson).name("Other").documentType(DocumentType.PDF)
+            .fileUrl("/other.pdf").documentOrder(2).build();
+        em.persist(other); em.flush(); var second = other.getId(); reset();
+        var request = new LessonProgressRequest(); request.setContentType("VIDEO");
+        request.setDurationSeconds(100D); request.setWatchedSeconds(90D);
+        assertThat(progress.saveProgress(f.user(), f.lesson(), request).isLessonCompleted()).isFalse();
+        request.setContentType("TEXT"); request.setTextCompleted(true);
+        assertThat(progress.saveProgress(f.user(), f.lesson(), request).isLessonCompleted()).isFalse();
+        request.setContentType("DOCUMENT"); request.setDocumentId(first); request.setDocumentPage(8); request.setDocumentCompleted(true);
+        assertThat(progress.saveProgress(f.user(), f.lesson(), request).isLessonCompleted()).isFalse();
+        request.setDocumentId(second);
+        assertThat(progress.saveProgress(f.user(), f.lesson(), request).isLessonCompleted()).isTrue();
+        reset(); request.setDocumentPage(1); request.setDocumentCompleted(false);
+        assertThat(progress.saveProgress(f.user(), f.lesson(), request).isLessonCompleted()).isTrue();
+        var user = em.createQuery("select u from User u where u.username=:name", User.class).setParameter("name", f.user()).getSingleResult();
+        assertThat(user.getPoints()).isEqualTo(100);
+    }
+
+    @Test void bookmarkOnlyUpdatesSkipCompletionQueriesAndDuplicateWrites() {
+        var f = seed(2); reset();
+        var request = new LessonProgressRequest(); request.setContentType("VIDEO");
+        request.setDurationSeconds(100D); request.setWatchedSeconds(10D); request.setLastPositionSeconds(10D);
+        var initial = progress.saveProgress(f.user(), f.lesson(), request); reset();
+        org.mockito.Mockito.clearInvocations(documentRepository);
+        var duplicate = progress.saveProgress(f.user(), f.lesson(), request); em.flush();
+        assertThat(duplicate.getUpdatedAt()).isCloseTo(initial.getUpdatedAt(),
+            org.assertj.core.api.Assertions.within(1, java.time.temporal.ChronoUnit.MICROS));
+        assertThat(emf.unwrap(SessionFactory.class).getStatistics().getEntityUpdateCount()).isZero();
+        report("bookmark-duplicate", f);
+        reset();
+        request.setWatchedSeconds(20D); request.setLastPositionSeconds(20D);
+        progress.saveProgress(f.user(), f.lesson(), request); em.flush();
+        report("bookmark-hot", f);
+        org.mockito.Mockito.verify(documentRepository, org.mockito.Mockito.never()).findAllByLessonId(f.lesson());
+        request.setWatchedSeconds(90D);
+        progress.saveProgress(f.user(), f.lesson(), request); em.flush();
+        org.mockito.Mockito.verify(documentRepository, org.mockito.Mockito.times(1)).findAllByLessonId(f.lesson());
+        request.setWatchedSeconds(95D);
+        progress.saveProgress(f.user(), f.lesson(), request); em.flush();
+        org.mockito.Mockito.verify(documentRepository, org.mockito.Mockito.times(1)).findAllByLessonId(f.lesson());
+        request.setContentType("TEXT"); request.setTextCompleted(true);
+        progress.saveProgress(f.user(), f.lesson(), request); em.flush();
+        org.mockito.Mockito.verify(documentRepository, org.mockito.Mockito.times(2)).findAllByLessonId(f.lesson());
+        // Editing metadata invalidates the last evaluation for an unfinished lesson.
+        em.find(Lesson.class, f.lesson()).setTitle("Changed"); reset();
+        progress.saveProgress(f.user(), f.lesson(), request); em.flush();
+        org.mockito.Mockito.verify(documentRepository, org.mockito.Mockito.times(3)).findAllByLessonId(f.lesson());
+    }
+
+    @Test void requiredQuizCompletesWithoutContentButOptionalQuizDoesNot() {
+        for (boolean required : List.of(true, false)) {
+            var f = seed(2); var lesson = em.find(Lesson.class, f.lesson());
+            lesson.getQuiz().setRequiredForProgress(required);
+            var question = lesson.getQuiz().getQuestions().get(0);
+            em.flush(); var questionId = question.getId(); reset();
+            var request = new QuizSubmitRequest(); request.setSelectedAnswers(Map.of(questionId, List.of(0)));
+            assertThat(quizService.submitLessonQuiz(f.lesson(), request, f.user()).getPassed()).isTrue();
+            reset();
+            var user = em.createQuery("select u from User u where u.username=:name", User.class).setParameter("name", f.user()).getSingleResult();
+            assertThat(user.getCompletedLessons().stream().anyMatch(l -> l.getId().equals(f.lesson()))).isEqualTo(required);
+        }
+    }
+
     void assertMetadataOnly() {
         var statistics = emf.unwrap(SessionFactory.class).getStatistics();
         for (Class<?> type : List.of(LessonContent.class, Quiz.class, Question.class, Comment.class,
@@ -363,7 +436,7 @@ class LearningQueryAuditTest {
                         .setParameter("id", f.lesson()).getResultList();
                 assertThat(saved).hasSize(1);
                 assertThat(saved.get(0).getWatchedSeconds()).isEqualTo(100D);
-                assertThat(saved.get(0).isContentCompleted()).isTrue();
+                assertThat(saved.get(0).isContentCompleted()).isFalse(); // Text and documents are still unread.
             });
         } finally {
             start.countDown();

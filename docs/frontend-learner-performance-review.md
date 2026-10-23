@@ -6,6 +6,25 @@ Phạm vi: Đăng nhập/đổi mật khẩu, Tổng quan, Cấu trúc khóa h�
 
 ## Cập nhật triển khai sau rà soát
 
+### Giảm đồng bộ tiến độ (23/10/2026, thay thế các chu kỳ ghi phía dưới)
+
+- Video throttle 20 giây; tài liệu throttle 5 giây. Khi video vừa vượt 90%, văn bản đọc xong hoặc tài liệu đến trang cuối thì gửi ngay. Pause, đổi nội dung/bài, pagehide và ẩn tab vẫn flush snapshot chưa đồng bộ. Hàng đợi tách VIDEO/TEXT/từng DOCUMENT và giữ marker hoàn thành khi gộp bookmark mới.
+- Journal video theo tài khoản cập nhật bản dự phòng tối đa mỗi giây trong khi phát và flush khi rời; chỉ lưu snapshot chưa xác nhận trong localStorage. Khi mở lại bài, lấy snapshot chưa đồng bộ làm vị trí khởi tạo video và gửi một lần. Journal tài liệu tiếp tục giữ theo từng file. Crash có thể mất thay đổi video giữa hai lần ghi local (khoảng 1 giây khi event đều), và không đảm bảo phục hồi nếu storage bị chặn/xóa.
+- Request lỗi được retry với backoff 2/4/8/16/32 giây, tối đa 5 lần trong vòng đời màn; có mạng trở lại thử gửi lại các snapshot lỗi. Rời màn dọn timer, journal chưa được xác nhận vẫn dùng cho lần mở lại bài.
+- Backend chỉ tổng hợp hoàn thành khi lần đầu đánh giá, phiên bản Lesson thay đổi, hoặc có chuyển trạng thái thành phần (văn bản mới hoàn thành, video lần đầu đủ 90%, tài liệu mới hoàn thành). Bookmark thông thường vẫn kiểm tra quyền và bảo vệ cập nhật đồng thời nhưng không lấy lại danh sách tài liệu để đánh giá toàn bài. Dùng exists theo user/lesson thay vì lấy tập bài hoàn thành cả khóa.
+- Backend bỏ UPDATE khi snapshot không đổi; access-only timestamp tối đa một lần mỗi 60 giây nếu request vẫn đến server. Thêm cột nullable `lesson_progress.completion_version`, migration PostgreSQL tùy chọn `20261023_progress_sync.sql`. Giữ nguyên thành tích đã hoàn thành.
+- Kiểm chứng H2: lần đánh giá đầu vẫn 14 SQL, bookmark thường 13 SQL, snapshot trùng 12 SQL và 0 entity UPDATE. 27 kiểm thử frontend learning performance và 11 kiểm thử LearningQueryAuditTest đạt; TypeScript/Vite build đạt. Chưa benchmark tải PostgreSQL hay crash trình duyệt thực; mức giảm 75% request video định kỳ là tính theo chu kỳ 5 → 20 giây, không phải kết quả load test.
+
+### Tự động hoàn thành bài (23/10/2026)
+
+Kiểm tra bắt buộc: đạt điểm yêu cầu là hoàn thành bài, không phụ thuộc xem nội dung. Kiểm tra tùy chọn/không có kiểm tra: phải đọc hết văn bản (nếu có), xem ít nhất 90% video (nếu có), và hiển thị thành công trang cuối của mọi file tài liệu. Bài rỗng không tự hoàn thành. Trang tài liệu chỉ hiển thị số trang, bỏ nhập số để nhảy trang; PDF chỉ báo hoàn thành sau render thành công. Word/PPT giữ giới hạn định dạng preview hiện có: file không preview được không tự xác nhận đã đọc.
+
+Backend tổng hợp trạng thái từ metadata và tiến độ từng phần, xác nhận thành tích/cộng điểm một lần dưới khóa học viên. Nút xác nhận thủ công không bỏ qua điều kiện. Giữ thành tích đã hoàn thành từ trước; không tự thu hồi. `contentCompleted` giờ là đủ tất cả phần nội dung, không còn chỉ đại diện video. Bổ sung cột `text_completed` và cờ `completed` trong JSON từng tài liệu; migration PostgreSQL tùy chọn `20261023_lesson_completion.sql`.
+
+Frontend gửi marker đọc xong cùng request tiến độ, cập nhật sidebar khi server xác nhận bài hoàn thành; giữ gộp request và journal khôi phục tài liệu, phân biệt marker hoàn thành trong khóa chống lưu trùng. Không tự chuyển sang bài tiếp ngay khi hết video vì có thể còn văn bản/tài liệu chưa đọc.
+
+Kiểm chứng: 22 kiểm thử frontend learning performance và 10 kiểm thử backend LearningQueryAuditTest đạt; TypeScript/Vite build đạt. Lượt chạy suite backend rộng hơn có 109 kiểm thử đạt, 8 lỗi thuộc LessonKnowledgeSourceServiceTest do không thiết lập được kết nối localhost. Chưa kiểm tra trực quan trình duyệt thực và migration PostgreSQL production.
+
 ### Lưu trang tài liệu (23/10/2026)
 
 - Lưu snapshot tài liệu cũ trước khi đổi tài liệu/nội dung. Hàng đợi phân biệt từng tài liệu để các snapshot chờ của tài liệu A không bị tài liệu B thay thế; vẫn tuần tự hóa request để giữ thứ tự resume.

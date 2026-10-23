@@ -42,6 +42,14 @@ public class LessonProgressService {
         Lesson lesson = lessonRepository.getReferenceById(lessonId);
         LessonProgress progress = progressRepository.findByUserIdAndLessonId(user.getId(), lessonId)
                 .orElseGet(() -> LessonProgress.builder().user(user).lesson(lesson).build());
+        var before = toDto(progress);
+        boolean videoWasComplete = videoComplete(progress);
+        boolean textWasComplete = progress.isTextCompleted();
+        boolean documentWasComplete = request.getDocumentId() != null && progress.getDocumentPositions() != null
+            && progress.getDocumentPositions().get(request.getDocumentId().toString()) != null
+            && Boolean.TRUE.equals(progress.getDocumentPositions().get(request.getDocumentId().toString()).completed());
+        boolean lessonCompleted = userRepository.hasCompletedLesson(user.getId(), lessonId);
+        boolean versionChanged = !java.util.Objects.equals(progress.getCompletionVersion(), authorized.lesson().getVersion());
 
         // Preserve the single-document bookmark from records created before this
         // feature.
@@ -69,17 +77,46 @@ public class LessonProgressService {
             if ("DOCUMENT".equals(request.getContentType())) {
                 var positions = new LinkedHashMap<>(
                         progress.getDocumentPositions() == null ? Map.of() : progress.getDocumentPositions());
+                var previous = positions.get(request.getDocumentId().toString());
                 positions.put(request.getDocumentId().toString(), new LessonProgress.DocumentPosition(
                         Math.max(1, request.getDocumentPage() == null ? 1 : request.getDocumentPage()),
-                        nonNegative(request.getScrollOffset())));
+                        nonNegative(request.getScrollOffset()), Boolean.TRUE.equals(request.getDocumentCompleted())
+                                || previous != null && Boolean.TRUE.equals(previous.completed())));
                 progress.setDocumentPositions(positions);
             }
         } else if (request.getLastPositionSeconds() != null)
             progress.setContentType("VIDEO");
-        if (progress.getDurationSeconds() > 0 && progress.getWatchedSeconds() >= progress.getDurationSeconds() * 0.9)
-            progress.setContentCompleted(true);
-        progress.setUpdatedAt(LocalDateTime.now());
-        return toDto(progressRepository.save(progress));
+        if ("TEXT".equals(request.getContentType()) && Boolean.TRUE.equals(request.getTextCompleted()))
+            progress.setTextCompleted(true);
+        boolean importantChange = !textWasComplete && progress.isTextCompleted()
+            || !videoWasComplete && videoComplete(progress)
+            || !documentWasComplete && "DOCUMENT".equals(request.getContentType()) && Boolean.TRUE.equals(request.getDocumentCompleted());
+        if (!lessonCompleted && (versionChanged || importantChange)) {
+            var documentIds = documents.findAllByLessonId(lessonId);
+            boolean hasText = Boolean.TRUE.equals(authorized.lesson().getHasText());
+            boolean hasVideo = Boolean.TRUE.equals(authorized.lesson().getHasVideo());
+            progress.setContentCompleted((hasText || hasVideo || !documentIds.isEmpty())
+                && (!hasText || progress.isTextCompleted())
+                && (!hasVideo || progress.getDurationSeconds() > 0
+                        && progress.getWatchedSeconds() >= progress.getDurationSeconds() * 0.9)
+                && documentIds.stream().allMatch(d -> progress.getDocumentPositions() != null
+                        && progress.getDocumentPositions().get(d.getId().toString()) != null
+                        && Boolean.TRUE.equals(progress.getDocumentPositions().get(d.getId().toString()).completed())));
+            if (progress.isContentCompleted() && !lesson.isQuizRequired()) {
+                recordCompletion(user, lesson);
+                lessonCompleted = true;
+            }
+        }
+        progress.setCompletionVersion(authorized.lesson().getVersion());
+        // Do not force an UPDATE for identical bookmarks. Access-only touches are bounded.
+        if (versionChanged || !before.equals(toDto(progress)) || progress.getUpdatedAt() == null
+            || progress.getUpdatedAt().isBefore(LocalDateTime.now().minusSeconds(60))) {
+            progress.setUpdatedAt(LocalDateTime.now());
+            progressRepository.save(progress);
+        }
+        var dto = toDto(progress);
+        dto.setLessonCompleted(lessonCompleted);
+        return dto;
     }
 
     @Transactional
@@ -90,12 +127,21 @@ public class LessonProgressService {
         Lesson lesson = lessonRepository.getReferenceById(lessonId);
         LessonProgress progress = progressRepository.findByUserIdAndLessonId(user.getId(), lessonId)
                 .orElseGet(() -> LessonProgress.builder().user(user).lesson(lesson).build());
-        if (Boolean.TRUE.equals(authorized.lesson().getHasVideo()) && !progress.isContentCompleted())
+        if (!lesson.isQuizRequired() && !progress.isContentCompleted())
             throw new com.bidv.coretraining.exception.BadRequestException(
-                    "Hãy học xong nội dung video trước khi hoàn thành bài");
-        progress.setContentCompleted(true);
+                    "Hãy xem hết văn bản, ít nhất 90% video và trang cuối của tất cả tài liệu trước khi hoàn thành bài");
         progress.setUpdatedAt(LocalDateTime.now());
         progressRepository.save(progress);
+    }
+
+    public void recordCompletion(User user, Lesson lesson) {
+        userRepository.lockForLearning(user.getId()).orElseThrow();
+        if (userRepository.findCompletedLessonIds(user.getId(), lesson.getCourse().getId()).contains(lesson.getId()))
+            return;
+        user.getCompletedLessons().add(lesson);
+        user.setPoints(user.getPoints() + 100);
+        LearningPolicy.recordCourseCompletion(user, lesson.getCourse());
+        userRepository.save(user);
     }
 
     @Transactional(readOnly = true)
@@ -130,11 +176,15 @@ public class LessonProgressService {
                 .documentId(progress.getDocumentId())
                 .documentPage(progress.getDocumentPage()).scrollOffset(progress.getScrollOffset())
                 .documentPositions(progress.getDocumentPositions())
+                .textCompleted(progress.isTextCompleted())
                 .contentCompleted(progress.isContentCompleted())
                 .build();
     }
 
     private double nonNegative(Double value) {
         return value == null ? 0D : Math.max(0D, value);
+    }
+    private boolean videoComplete(LessonProgress progress) {
+        return progress.getDurationSeconds() > 0 && progress.getWatchedSeconds() >= progress.getDurationSeconds() * 0.9;
     }
 }

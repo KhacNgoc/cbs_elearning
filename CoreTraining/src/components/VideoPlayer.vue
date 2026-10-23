@@ -494,7 +494,6 @@ const onPause = () => {
 const onVideoEnded = () => {
   isPlaying.value = false;
   currentTime.value = duration.value;
-  watchedSeconds.value = Math.max(watchedSeconds.value, duration.value);
   const progress = progressSnapshot();
   emit("progress-update", progress);
   emit("ended", progress);

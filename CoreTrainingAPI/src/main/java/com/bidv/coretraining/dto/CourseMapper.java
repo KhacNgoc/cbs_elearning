@@ -19,6 +19,10 @@ import java.util.Comparator;
 @Mapper(componentModel = "spring")
 public interface CourseMapper {
 
+        // Authorization fields are populated by the service for the current user.
+        @Mapping(target = "allowedActions", ignore = true)
+        @Mapping(target = "adminActions", ignore = true)
+        @Mapping(target = "canEdit", ignore = true)
         @Mapping(target = "hasQuiz", expression = "java(course.getQuestions() != null && course.getQuestions().stream().anyMatch(question -> question.getLesson() == null))")
         @Mapping(source = "program.id", target = "programId")
         @Mapping(source = "program.name", target = "programName")
@@ -42,6 +46,8 @@ public interface CourseMapper {
         @Mapping(target = "quizRequired", expression = "java(lesson.getQuiz() != null && lesson.getQuiz().isRequiredForProgress())")
         @Mapping(target = "hasQuiz", expression = "java(lesson.hasQuiz())")
         @Mapping(target = "comments", qualifiedByName = "rootComments")
+        // The detail service supplies the total from its paginated comments query.
+        @Mapping(target = "commentCount", ignore = true)
         LessonDto toLessonDto(Lesson lesson);
 
         @InheritConfiguration(name = "toLessonDto")

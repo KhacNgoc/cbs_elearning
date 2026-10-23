@@ -4,14 +4,14 @@
       <DocumentFullscreen v-if="selectedDocument">
         <PdfDocumentPreview
           v-if="selectedDocument.documentType === 'PDF'"
-          :key="selectedDocument.id || selectedDocument.fileUrl"
+          :key="`pdf:${selectedDocument.id ?? selectedDocument.fileUrl}`"
           :url="resolveDocumentUrl(selectedDocument.fileUrl)"
           :initial-page="initialDocumentPage"
           @position-change="$emit('document-position', $event)"
         />
         <PowerPointDocumentPreview
           v-else-if="selectedDocument.documentType === 'POWERPOINT'"
-          :key="selectedDocument.id || selectedDocument.fileUrl"
+          :key="`powerpoint:${selectedDocument.id ?? selectedDocument.fileUrl}`"
           :url="resolveDocumentUrl(selectedDocument.fileUrl)"
           :original-file-name="selectedDocument.originalFileName"
           :initial-page="initialDocumentPage"
@@ -20,7 +20,7 @@
         />
         <WordDocumentPreview
           v-else
-          :key="selectedDocument.id || selectedDocument.fileUrl"
+          :key="`word:${selectedDocument.id ?? selectedDocument.fileUrl}`"
           :url="resolveDocumentUrl(selectedDocument.fileUrl)"
           :original-file-name="selectedDocument.originalFileName"
           :initial-page="initialDocumentPage"
@@ -42,7 +42,12 @@
         @pause="$emit('pause')"
         @add-note="$emit('add-note', $event)"
       />
-      <article v-else-if="lesson.textBody" class="lesson-text-viewer">
+      <article
+        v-else-if="lesson.textBody"
+        class="lesson-text-viewer"
+        @scroll="checkTextEnd"
+        ref="textReader"
+      >
         <h2>{{ lesson.title }}</h2>
         <LessonRichText :content="lesson.textBody" />
       </article>
@@ -71,12 +76,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref } from "vue";
 import {
-  ChevronLeft,
-  ChevronRight,
-  FileText,
-} from "lucide-vue-next";
+  computed,
+  defineAsyncComponent,
+  ref,
+  watch,
+  nextTick,
+  onMounted,
+  onBeforeUnmount,
+} from "vue";
+import { ChevronLeft, ChevronRight, FileText } from "lucide-vue-next";
 import type {
   Lesson,
   LessonDocument,
@@ -103,15 +112,50 @@ const props = defineProps<{
   initialScrollOffset?: number;
 }>();
 const hasVideo = computed(() => Boolean(props.lesson.videoUrl?.trim()));
-defineEmits<{
+const emit = defineEmits<{
+  "text-completed": [];
   pause: [];
   adjacent: [offset: number];
   "time-update": [seconds: number];
   "progress-update": [progress: LessonProgressRequest];
-  "document-position": [position: { page: number; scrollOffset: number }];
+  "document-position": [
+    position: { page: number; scrollOffset: number; completed?: boolean },
+  ];
   "video-ended": [progress: LessonProgressRequest];
   "add-note": [seconds: number];
 }>();
+const textReader = ref<HTMLElement | null>(null);
+let textReported = false;
+function checkTextEnd() {
+  const el = textReader.value;
+  if (
+    !textReported &&
+    el &&
+    el.clientHeight > 0 &&
+    document.visibilityState !== "hidden" &&
+    el.scrollTop + el.clientHeight >= el.scrollHeight - 4
+  ) {
+    textReported = true;
+    emit("text-completed");
+  }
+}
+watch(
+  () => [props.lesson.id, props.primaryContent, props.selectedDocument],
+  async () => {
+    textReported = false;
+    await nextTick();
+    checkTextEnd();
+  },
+  { immediate: true },
+);
+onMounted(() => {
+  document.addEventListener("visibilitychange", checkTextEnd);
+  window.addEventListener("resize", checkTextEnd);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener("visibilitychange", checkTextEnd);
+  window.removeEventListener("resize", checkTextEnd);
+});
 defineExpose({
   seekTo: (seconds: number) => videoPlayer.value?.seekTo(seconds),
   resetProgress: () => videoPlayer.value?.resetProgress(),

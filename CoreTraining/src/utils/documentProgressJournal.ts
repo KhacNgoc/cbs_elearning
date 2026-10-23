@@ -48,21 +48,21 @@ export function createDocumentProgressJournal(
       const entryKey = id(lessonId, request.documentId);
       const previous = entries[entryKey];
       // Reading position is page-based: do not write storage on every scroll pixel.
-      if (previous?.request.documentPage === request.documentPage) return;
+      if (previous?.request.documentPage === request.documentPage && previous.request.documentCompleted === request.documentCompleted) return;
       delete entries[entryKey];
       entries[entryKey] = {
         lessonId,
         request: { ...request },
         dirty:
           previous?.dirty ||
-          previous?.request.documentPage !== request.documentPage,
+          previous?.request.documentPage !== request.documentPage || previous?.request.documentCompleted !== request.documentCompleted,
       };
       persist();
     },
     acknowledge(lesson: string, request: LessonProgressRequest) {
       if (!request.documentId) return;
       const entry = entries[id(lesson, request.documentId)];
-      if (entry?.dirty && entry.request.documentPage === request.documentPage) {
+      if (entry?.dirty && entry.request.documentPage === request.documentPage && entry.request.documentCompleted === request.documentCompleted) {
         entry.dirty = false;
         persist();
       }

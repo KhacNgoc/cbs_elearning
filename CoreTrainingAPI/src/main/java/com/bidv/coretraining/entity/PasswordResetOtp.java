@@ -26,7 +26,8 @@ public class PasswordResetOtp {
 
     @Column(name = "expiry_date", nullable = false)
     private LocalDateTime expiryDate;
-    @Column(nullable = false, columnDefinition = "integer default 0")
+    @Column(nullable = false)
+    @org.hibernate.annotations.ColumnDefault("0")
     @Builder.Default
     private int attempts = 0;
 
