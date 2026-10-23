@@ -1,3 +1,4 @@
+import { createLessonProgressWriter } from "../utils/lessonProgressWriter";
 import { defineStore } from "pinia";
 import type { LessonProgressRequest, UserProgress } from "../types";
 import { useCourseStore } from "./courseStore";
@@ -11,6 +12,7 @@ import { clearAuthSession, setCachedAuthSession } from "../utils/authSession";
 import { showToast } from "../utils/toast";
 import { useLearningStore } from "./learningStore";
 
+const progressWriters = new WeakMap<object, ReturnType<typeof createLessonProgressWriter>>();
 let progressRequest: Promise<void> | null = null;
 async function navigate(path: string) {
   const { default: router } = await import("../router");
@@ -20,6 +22,7 @@ async function navigate(path: string) {
 export const useUserStore = defineStore("user", {
   state: (): UserProgress & {
     progressError: string;
+    progressLoaded: boolean;
     isAuthenticated: boolean;
     role: string;
     roles: string[];
@@ -31,6 +34,7 @@ export const useUserStore = defineStore("user", {
     mustChangePassword: boolean;
   } => ({
     progressError: "",
+    progressLoaded: false,
     completedLessons: [],
     quizScores: {},
     quizTotals: {},
@@ -223,7 +227,10 @@ export const useUserStore = defineStore("user", {
       this.roleNames = {};
       this.systemAdmin = false;
       useNavigationStore().clear();
+      useCourseStore().clearOutlineCache();
       useCourseStore().$reset();
+      progressWriters.delete(this);
+      this.progressLoaded = false;
       useLearningStore().clear();
       await navigate("/login");
     },
@@ -239,6 +246,7 @@ export const useUserStore = defineStore("user", {
             userApi.getMyProfile(),
           ]);
 
+          this.progressLoaded = true;
           this.completedLessons = progress.completedLessons || [];
           this.quizScores = progress.quizScores || {};
           this.quizTotals = progress.quizTotals || {};
@@ -321,6 +329,7 @@ export const useUserStore = defineStore("user", {
       try {
         const updatedProgress = await courseApi.resetLesson(lessonId);
         this.completedLessons = updatedProgress.completedLessons || [];
+        progressWriters.delete(this);
         this.lessonProgress = updatedProgress.lessonProgress || {};
         this.points = updatedProgress.points;
         localStorage.setItem(
@@ -333,19 +342,34 @@ export const useUserStore = defineStore("user", {
       }
     },
 
-    async saveLessonProgress(lessonId: string, request: LessonProgressRequest) {
+    getLatestLessonProgress(lessonId: string) {
+      const pending = progressWriters.get(this)?.pending(lessonId);
+      const saved = this.lessonProgress?.[lessonId];
+      return pending ? { ...saved, ...pending } : saved;
+    },
+
+    async saveLessonProgress(lessonId: string, request: LessonProgressRequest, touch = false) {
       if (!this.canLearn || !this.isAuthenticated) return null;
-      try {
-        const progress = await courseApi.saveLessonProgress(lessonId, request);
-        this.lessonProgress = {
-          ...(this.lessonProgress || {}),
-          [lessonId]: progress,
-        };
-        return progress;
-      } catch (error) {
-        console.error("Failed to save lesson progress:", error);
-        return null;
+      let writer = progressWriters.get(this);
+      if (!writer) {
+        const username = this.username;
+        writer = createLessonProgressWriter(async (id, snapshot) => {
+          if (!this.isAuthenticated || this.username !== username || progressWriters.get(this) !== writer)
+            return null;
+          try {
+            const progress = await courseApi.saveLessonProgress(id, snapshot);
+            if (this.username !== username || progressWriters.get(this) !== writer) return null;
+            this.lessonProgress ||= {};
+            this.lessonProgress[id] = progress;
+            return progress;
+          } catch (error) {
+            console.error("Failed to save lesson progress:", error);
+            return null;
+          }
+        });
+        progressWriters.set(this, writer);
       }
+      return writer.write(lessonId, request, touch);
     },
 
     async registerCourse(courseId: string) {

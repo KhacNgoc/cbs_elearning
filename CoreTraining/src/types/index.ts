@@ -52,6 +52,7 @@ export interface Lesson {
   quizPassingScore?: number;
   procedureSteps: ProcedureSection[];
   comments: Comment[];
+  commentCount?: number;
 }
 
 export interface Course {

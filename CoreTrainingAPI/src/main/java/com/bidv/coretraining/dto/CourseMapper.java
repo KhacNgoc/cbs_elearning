@@ -7,6 +7,7 @@ import com.bidv.coretraining.entity.ProcedureSection;
 import com.bidv.coretraining.entity.Course;
 import com.bidv.coretraining.entity.VideoSource;
 import org.mapstruct.AfterMapping;
+import org.mapstruct.InheritConfiguration;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
@@ -43,6 +44,12 @@ public interface CourseMapper {
         @Mapping(target = "comments", qualifiedByName = "rootComments")
         LessonDto toLessonDto(Lesson lesson);
 
+        @InheritConfiguration(name = "toLessonDto")
+        @Mapping(target = "comments", ignore = true)
+        @Mapping(target = "hasQuiz", ignore = true)
+        @Named("lessonDetail")
+        LessonDto toLessonDetailDto(Lesson lesson);
+
         @AfterMapping
         default void inferLegacyVideoSource(Lesson lesson, @MappingTarget LessonDto dto) {
                 if (dto.getVideoSource() == null) {
@@ -69,6 +76,11 @@ public interface CourseMapper {
         @Mapping(source = "replyToUsername", target = "replyToUser")
         @Mapping(target = "replies", qualifiedByName = "allComments")
         CommentDto toCommentDto(Comment comment);
+
+        @InheritConfiguration(name = "toCommentDto")
+        @Mapping(target = "replies", ignore = true)
+        @Named("commentSummary")
+        CommentDto toCommentSummaryDto(Comment comment);
 
         @Named("allComments")
         List<CommentDto> toCommentDtoList(List<Comment> comments);

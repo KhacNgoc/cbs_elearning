@@ -18,6 +18,10 @@ import java.util.Map;
 
 @Service
 public class LessonProgressService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private LearningAccessService access;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bidv.coretraining.repository.LessonDocumentRepository documents;
     private final UserRepository userRepository;
     private final LessonRepository lessonRepository;
     private final LessonProgressRepository progressRepository;
@@ -32,11 +36,10 @@ public class LessonProgressService {
 
     @Transactional
     public LessonProgressDto saveProgress(String username, String lessonId, LessonProgressRequest request) {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
-        Lesson lesson = lessonRepository.findById(lessonId)
-                .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
-        LearningPolicy.assertLessonAccess(user, lesson);
+        var authorized = access.requireLesson(username, lessonId);
+        User user = authorized.user();
+        userRepository.lockForLearning(user.getId()).orElseThrow(() -> new ResourceNotFoundException("User"));
+        Lesson lesson = lessonRepository.getReferenceById(lessonId);
         LessonProgress progress = progressRepository.findByUserIdAndLessonId(user.getId(), lessonId)
                 .orElseGet(() -> LessonProgress.builder().user(user).lesson(lesson).build());
 
@@ -45,8 +48,8 @@ public class LessonProgressService {
         progress.setWatchedSeconds(Math.max(progress.getWatchedSeconds(), nonNegative(request.getWatchedSeconds())));
         progress.setDurationSeconds(Math.max(progress.getDurationSeconds(), nonNegative(request.getDurationSeconds())));
         if (request.getContentType() != null) {
-            if ("DOCUMENT".equals(request.getContentType()) && lesson.getDocuments().stream()
-                    .noneMatch(d -> java.util.Objects.equals(d.getId(), request.getDocumentId())))
+            if ("DOCUMENT".equals(request.getContentType()) && (request.getDocumentId() == null
+                    || !documents.existsByIdAndLessonId(request.getDocumentId(), lessonId)))
                 throw new com.bidv.coretraining.exception.BadRequestException("Tài liệu không thuộc bài học");
             progress.setContentType(request.getContentType());
             progress.setDocumentId("DOCUMENT".equals(request.getContentType()) ? request.getDocumentId() : null);
@@ -62,14 +65,13 @@ public class LessonProgressService {
 
     @Transactional
     public void completeContent(String username, String lessonId) {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
-        Lesson lesson = lessonRepository.findById(lessonId)
-                .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
-        LearningPolicy.assertLessonAccess(user, lesson);
+        var authorized = access.requireLesson(username, lessonId);
+        User user = authorized.user();
+        userRepository.lockForLearning(user.getId()).orElseThrow(() -> new ResourceNotFoundException("User"));
+        Lesson lesson = lessonRepository.getReferenceById(lessonId);
         LessonProgress progress = progressRepository.findByUserIdAndLessonId(user.getId(), lessonId)
                 .orElseGet(() -> LessonProgress.builder().user(user).lesson(lesson).build());
-        if (lesson.getVideoUrl() != null && !lesson.getVideoUrl().isBlank() && !progress.isContentCompleted())
+        if (Boolean.TRUE.equals(authorized.lesson().getHasVideo()) && !progress.isContentCompleted())
             throw new com.bidv.coretraining.exception.BadRequestException(
                     "Hãy học xong nội dung video trước khi hoàn thành bài");
         progress.setContentCompleted(true);
@@ -94,6 +96,7 @@ public class LessonProgressService {
 
     @Transactional
     public void resetProgress(Long userId, String lessonId) {
+        userRepository.lockForLearning(userId).orElseThrow(() -> new ResourceNotFoundException("User"));
         progressRepository.findByUserIdAndLessonId(userId, lessonId)
                 .ifPresent(progressRepository::delete);
     }

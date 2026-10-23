@@ -319,7 +319,6 @@ import {
 } from "lucide-vue-next";
 import { useUserStore } from "../stores/userStore";
 import { useLearningStore } from "../stores/learningStore";
-import { trainingApi } from "../api/trainingApi";
 import type { LearnerCourse, ResumeTarget } from "../types";
 import {
   deadlineState,
@@ -550,7 +549,6 @@ async function openCourse(item: LearnerCourse) {
     if (item.learningStatus === "IN_PROGRESS" && item.resume)
       await openLearning(item.resume);
     else {
-      await trainingApi.outline(item.course.id);
       await router.push(`/courses/${encodeURIComponent(item.course.id)}`);
     }
   } catch {

@@ -36,7 +36,7 @@ test('switches between document, video and text and hides unavailable sections',
     activeContent: state.activeContent, lessonTitle: lesson.title, completedCount: 0, totalLessons: 1, completed: false, canComplete: true,
     'onSelect-content': type => { state.activeContent = type; state.selectedDocumentId = undefined; },
   }), h(Sidebar, {
-    ...state, activeLessonId: lesson.id, completedLessons: [], completedCount: 0, progress: 0, open: true,
+    ...state, chapters: [{ id: 'chapter-1', title: 'Chương mẫu', lessons: state.course.lessons }], activeLessonId: lesson.id, completedLessons: [], completedCount: 0, progress: 0, open: true,
     lessonQuizScores: {}, lessonQuizTotals: {}, courseQuizScores: {}, courseQuizTotals: {},
     'onSelect-content': type => { state.activeContent = type; state.selectedDocumentId = undefined; },
     'onSelect-document': (id, doc) => { assert.equal(id, lesson.id); state.activeContent = 'DOCUMENT'; state.selectedDocumentId = doc.id; },
@@ -84,6 +84,82 @@ test('switches between document, video and text and hides unavailable sections',
     assert.ok(document.querySelector('.lesson-resources-toggle'));
   } finally {
     app.unmount();
-    dom.window.close();
   }
+});
+
+
+test('shows all chapters, expands only the current chapter initially and switches chapters on demand', async () => {
+  const { createApp, h, nextTick, reactive } = vue;
+  const first = { id: 'first', title: 'Bài chương 1', documents: [] };
+  const second = { id: 'second', title: 'Bài chương 2', documents: [{ id: 20, name: 'Tài liệu chương 2', fileUrl: '/two.pdf' }] };
+  const state = reactive({
+    activeLessonId: second.id,
+    chapters: [
+      { id: 'c1', title: 'Chương đầu', lessons: [first] },
+      { id: 'c2', title: 'Chương đang học', lessons: [second] },
+      { id: 'c3', title: 'Chương trống', lessons: [] },
+    ],
+    completedLessons: [first.id],
+  });
+  const selected = [];
+  const app = createApp({ render: () => h(Sidebar, {
+    ...state, course: { id: 'course', lessons: [first, second] },
+    completedCount: 1, progress: 50, open: true,
+    lessonQuizScores: {}, lessonQuizTotals: {}, courseQuizScores: {}, courseQuizTotals: {},
+    onSelect: id => selected.push(id),
+  }) });
+  app.mount('#app');
+  const chapters = () => [...document.querySelectorAll('.chapter-toggle')];
+  const visibleTitles = () => [...document.querySelectorAll('.chapter-lessons:not([aria-hidden="true"]) .lesson-row-copy strong')].map(item => item.textContent);
+  try {
+    assert.equal(chapters().length, 3);
+    assert.deepEqual(chapters().map(item => item.getAttribute('aria-expanded')), ['false', 'true', 'false']);
+    assert.deepEqual(visibleTitles(), ['1. Bài chương 2']);
+    assert.match(chapters()[0].textContent, /1\/1 bài hoàn thành/);
+    assert.match(document.querySelector('.sidebar-header').textContent, /1\/2 bài đã hoàn thành/);
+    chapters()[0].click();
+    await nextTick();
+    assert.deepEqual(visibleTitles(), ['1. Bài chương 1']);
+    assert.deepEqual(selected, []);
+    document.querySelector('.chapter-lessons:not([aria-hidden="true"]) .lesson-row-copy').click();
+    assert.deepEqual(selected, [first.id]);
+    chapters()[0].click();
+    await nextTick();
+    assert.deepEqual(visibleTitles(), []);
+    chapters()[2].click();
+    await nextTick();
+    assert.match(document.querySelector('.chapter-empty').textContent, /chưa có bài học/);
+    state.activeLessonId = first.id;
+    await nextTick();
+    assert.equal(chapters()[0].getAttribute('aria-expanded'), 'true');
+    assert.deepEqual(visibleTitles(), ['1. Bài chương 1']);
+    // Reopening during collapse must not leave the active panel inert.
+    chapters()[0].click();
+    await nextTick();
+    chapters()[0].click();
+    await nextTick();
+    const activePanel = document.querySelector('.chapter-lessons:not([aria-hidden="true"])');
+    assert.ok(activePanel);
+    assert.equal(activePanel.hasAttribute('inert'), false);
+    state.completedLessons.push(second.id);
+    await nextTick();
+    assert.match(chapters()[1].textContent, /1\/1 bài hoàn thành/);
+  } finally { app.unmount(); }
+});
+
+test('opens the active chapter when the outline arrives asynchronously', async () => {
+  const state = vue.reactive({ chapters: [] });
+  const app = vue.createApp({ render: () => vue.h(Sidebar, {
+    chapters: state.chapters, course: { id: 'c', lessons: [] }, activeLessonId: 'l',
+    completedLessons: [], completedCount: 0, progress: 0, open: true,
+    lessonQuizScores: {}, lessonQuizTotals: {}, courseQuizScores: {}, courseQuizTotals: {},
+  }) });
+  app.mount('#app');
+  try {
+    assert.equal(document.querySelector('.chapter-toggle'), null);
+    state.chapters = [{ id: 'c1', title: 'Chương', lessons: [{ id: 'l', title: 'Bài học' }] }];
+    await vue.nextTick();
+    assert.equal(document.querySelector('.chapter-toggle').getAttribute('aria-expanded'), 'true');
+    assert.ok(document.querySelector('.lesson-row-copy'));
+  } finally { app.unmount(); }
 });

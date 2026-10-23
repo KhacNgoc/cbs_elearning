@@ -94,7 +94,7 @@
           </div>
         </div>
         <div
-          v-show="expanded.has(chapter.id)"
+          v-if="expanded.has(chapter.id)"
           :id="`chapter-${chapter.id}`"
           class="chapter-lessons"
         >
@@ -129,7 +129,7 @@
   </main>
 </template>
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   ArrowLeft,
@@ -140,7 +140,8 @@ import {
   Lock,
   PlayCircle,
 } from "lucide-vue-next";
-import { trainingApi } from "../api/trainingApi";
+import { useCourseStore } from "../stores/courseStore";
+import { chapterLearningState, outlineContext } from "../utils/learningStructure";
 import { useUserStore } from "../stores/userStore";
 import type { CourseOutline, Chapter, Lesson } from "../types";
 import CourseThumbnail from "../components/CourseThumbnail.vue";
@@ -149,19 +150,20 @@ import CourseRatingForm from '../components/CourseRatingForm.vue';
 const route = useRoute(),
   router = useRouter(),
   user = useUserStore(),
+  courses = useCourseStore(),
   outline = ref<CourseOutline | null>(null),
   error = ref(""),
   expanded = ref(new Set<string>());
 const totalLessons = computed(
   () => outline.value?.chapters.reduce((n, c) => n + c.lessons.length, 0) || 0,
 );
-const completedCount = computed(
-  () =>
-    outline.value?.chapters.reduce((n, c) => n + chapterCompleted(c), 0) || 0,
+const completedSet = computed(() => new Set(user.completedLessons));
+const chapterStates = computed(() => chapterLearningState(outline.value?.chapters || [], completedSet.value));
+const completedCount = computed(() =>
+  [...chapterStates.value.values()].reduce((sum, chapter) => sum + chapter.completedCount, 0),
 );
-const completed = (id: string) => user.completedLessons.includes(id);
-const chapterCompleted = (chapter: Chapter) =>
-  chapter.lessons.filter((l) => completed(l.id)).length;
+const completed = (id: string) => completedSet.value.has(id);
+const chapterCompleted = (chapter: Chapter) => chapterStates.value.get(chapter.id)?.completedCount || 0;
 const passed = (l: Lesson) =>
   (user.lessonQuizTotals[l.id] || 0) > 0 &&
   Math.round(
@@ -171,7 +173,7 @@ const passed = (l: Lesson) =>
 const isLocked = (c: Chapter, index: number) =>
   !outline.value?.course.canEdit &&
   !user.systemAdmin &&
-  c.lessons.slice(0, index).some((l) => !completed(l.id));
+  index > (chapterStates.value.get(c.id)?.firstIncomplete ?? c.lessons.length);
 function toggle(id: string) {
   const set = new Set(expanded.value);
   set.has(id) ? set.delete(id) : set.add(id);
@@ -188,19 +190,27 @@ function start(c: Chapter) {
   const l = c.lessons.find((l) => !completed(l.id)) || c.lessons[0];
   if (l) learn(l.id);
 }
+let loadId = 0;
+onBeforeUnmount(() => { loadId++; });
 watch(
   () => route.params.courseId,
-  async () => {
+  async courseId => {
+    const current = ++loadId;
     error.value = "";
     outline.value = null;
+    expanded.value = new Set();
     try {
-      await user.fetchProgress();
-      outline.value = await trainingApi.outline(String(route.params.courseId));
-      const first =
-        outline.value.chapters.find((c) => !c.locked && !c.completed) ||
-        outline.value.chapters[0];
+      // Re-entering this screen refreshes server-calculated locks/resume without a waterfall.
+      const [, loaded] = await Promise.all([
+        user.fetchProgress(),
+        courses.fetchOutline(String(courseId), outlineContext(user), true),
+      ]);
+      if (current !== loadId) return;
+      outline.value = loaded;
+      const first = loaded.chapters.find(c => !c.locked && !c.completed) || loaded.chapters[0];
       if (first) expanded.value = new Set([first.id]);
     } catch (e) {
+      if (current !== loadId) return;
       error.value =
         (e as { response?: { data?: { message?: string } } }).response?.data
           ?.message || "Không thể tải khóa học.";

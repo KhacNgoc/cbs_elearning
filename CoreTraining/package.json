@@ -14,7 +14,8 @@
     "test:learning": "node --experimental-strip-types --test tests/learning.test.mjs",
     "test:lesson-text": "node --experimental-strip-types --test tests/lessonText.test.mjs",
     "test:theme": "node --experimental-strip-types --test tests/theme.test.mjs",
-    "test:lesson-content": "node --experimental-strip-types --test tests/lessonContent.test.mjs"
+    "test:lesson-content": "node --experimental-strip-types --test tests/lessonContent.test.mjs",
+    "test:learning-performance": "node --experimental-strip-types --test tests/learningPerformance.test.mjs tests/learningPagesPerformance.test.mjs"
   },
   "dependencies": {
     "@aiden0z/pptx-renderer": "^1.2.4",

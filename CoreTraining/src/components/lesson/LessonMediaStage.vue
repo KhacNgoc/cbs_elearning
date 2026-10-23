@@ -39,6 +39,7 @@
         @time-update="$emit('time-update', $event)"
         @progress-update="$emit('progress-update', $event)"
         @ended="$emit('video-ended', $event)"
+        @pause="$emit('pause')"
         @add-note="$emit('add-note', $event)"
       />
       <article v-else-if="lesson.textBody" class="lesson-text-viewer">
@@ -103,6 +104,7 @@ const props = defineProps<{
 }>();
 const hasVideo = computed(() => Boolean(props.lesson.videoUrl?.trim()));
 defineEmits<{
+  pause: [];
   adjacent: [offset: number];
   "time-update": [seconds: number];
   "progress-update": [progress: LessonProgressRequest];

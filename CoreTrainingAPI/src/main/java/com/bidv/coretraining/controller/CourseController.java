@@ -21,8 +21,6 @@ import java.util.List;
 public class CourseController {
 
     private final CourseService courseService;
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.bidv.coretraining.service.TrainingStructureService structure;
 
     public CourseController(CourseService courseService) {
         this.courseService = courseService;
@@ -41,8 +39,13 @@ public class CourseController {
     @GetMapping("/lessons/{id}")
     public ResponseEntity<LessonDto> getLessonById(@PathVariable String id,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
-        structure.requireLesson(id, userDetails.getUsername());
         return ResponseEntity.ok(courseService.getLessonById(id));
+    }
+
+    @GetMapping("/lessons/{id}/comments")
+    public com.bidv.coretraining.dto.CommentPageDto comments(@PathVariable String id,
+            @RequestParam(defaultValue="0") int page, @RequestParam(defaultValue="20") int size) {
+        return courseService.getComments(id, page, size);
     }
 
     @PostMapping("/lessons/{id}/comments")

@@ -14,6 +14,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
         @Query("select u.id from User u join u.assignedRoles r where r.id=:roleId")
         List<Long> findIdsByAssignedRole(@Param("roleId") String roleId);
 
+        @Query("select l.id from User u join u.completedLessons l where u.id=:userId and l.course.id=:courseId")
+        java.util.Set<String> findCompletedLessonIds(@Param("userId") Long userId, @Param("courseId") String courseId);
+
+        // Serializes progress creation and monotonic updates across tabs/devices without changing other users.
+        @Query(value="select id from users where id=:id for update", nativeQuery=true)
+        Optional<Long> lockForLearning(@Param("id") Long id);
+
         Optional<User> findByUsername(String username);
 
         boolean existsByUsername(String username);

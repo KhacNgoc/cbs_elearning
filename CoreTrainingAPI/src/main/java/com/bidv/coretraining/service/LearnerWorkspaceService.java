@@ -186,7 +186,7 @@ public class LearnerWorkspaceService {
         public Resume resumeCourse(Course course, User user) {
                 LearningPolicy.assertCourseAccess(user, course);
                 Map<String, LessonProgress> history = new HashMap<>();
-                progress.findByUserId(user.getId()).forEach(p -> history.put(p.getLesson().getId(), p));
+                progress.findByUserIdAndCourseId(user.getId(), course.getId()).forEach(p -> history.put(p.getLesson().getId(), p));
                 List<Lesson> lessons = LearningPolicy.publishedChapters(course).stream()
                                 .flatMap(c -> LearningPolicy.publishedLessons(c).stream()).toList();
                 return resume(user, course, lessons, history);

@@ -53,6 +53,21 @@ export const courseApi = {
     return response.data;
   },
 
+  async getComments(lessonId: string, page = 0, size = 20): Promise<{
+    content: Comment[]; page: number; last: boolean; totalElements: number;
+  }> {
+    if (isMockApi()) {
+      const comments = mockDbCourses.flatMap((course) => course.lessons)
+        .find((lesson) => lesson.id === lessonId)?.comments || [];
+      return { content: comments.slice(page * size, (page + 1) * size), page,
+        last: (page + 1) * size >= comments.length, totalElements: comments.length };
+    }
+    const response = await axiosClient.get(`/api/lessons/${lessonId}/comments`, {
+      params: { page, size },
+    });
+    return response.data;
+  },
+
   async addComment(
     lessonId: string,
     rating: number | null,
