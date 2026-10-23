@@ -39,6 +39,11 @@ public class TrainingStructureController {
         return service.saveDomain(id, r);
     }
 
+    @DeleteMapping("/admin/training-domains/{id}")
+    public void deleteDomain(@PathVariable String id) {
+        service.deleteDomain(id);
+    }
+
     @PostMapping("/admin/training-programs")
     public ProgramDto program(@RequestBody ProgramDto r) {
         return service.saveProgram(null, r);
@@ -47,6 +52,11 @@ public class TrainingStructureController {
     @PutMapping("/admin/training-programs/{id}")
     public ProgramDto program(@PathVariable String id, @RequestBody ProgramDto r) {
         return service.saveProgram(id, r);
+    }
+
+    @DeleteMapping("/admin/training-programs/{id}")
+    public void deleteProgram(@PathVariable String id) {
+        service.deleteProgram(id);
     }
 
     @GetMapping("/admin/courses")
@@ -61,6 +71,54 @@ public class TrainingStructureController {
             boolean allInProgram,
             List<String> courseIds
     ) {}
+
+    public record UnitAllocationAssignRequest(
+            String unitId,
+            String categoryType,
+            String grantType,
+            String domainId,
+            String programId,
+            boolean allInProgram,
+            List<String> courseIds
+    ) {}
+
+    public record UnitAllocationToggleRequest(
+            String unitId,
+            String categoryType,
+            String targetId,
+            String grantType
+    ) {}
+
+    @PostMapping("/admin/unit-allocations/assign")
+    public Map<String, Object> assignUnitAllocation(@RequestBody UnitAllocationAssignRequest request) {
+        return service.assignUnitAllocation(
+                request.unitId(),
+                request.categoryType(),
+                request.grantType(),
+                request.domainId(),
+                request.programId(),
+                request.allInProgram(),
+                request.courseIds()
+        );
+    }
+
+    @PatchMapping("/admin/unit-allocations/grant-type")
+    public Map<String, Object> toggleUnitAllocationGrantType(@RequestBody UnitAllocationToggleRequest request) {
+        return service.toggleUnitAllocationGrantType(
+                request.unitId(),
+                request.categoryType(),
+                request.targetId(),
+                request.grantType()
+        );
+    }
+
+    @DeleteMapping("/admin/unit-allocations")
+    public Map<String, Object> removeUnitAllocation(
+            @RequestParam String unitId,
+            @RequestParam String categoryType,
+            @RequestParam String targetId) {
+        return service.removeUnitAllocation(unitId, categoryType, targetId);
+    }
 
     @GetMapping({"/admin/programs/paged", "/admin/programs/by-domain"})
     public java.util.Map<String, Object> programsPaged(

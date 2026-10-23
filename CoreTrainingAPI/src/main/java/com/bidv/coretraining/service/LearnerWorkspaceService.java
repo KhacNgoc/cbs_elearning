@@ -86,7 +86,7 @@ public class LearnerWorkspaceService {
                                                         a.getTakenAt());
                                 }).toList();
                 List<LearnerCourse> list = courses.findAll().stream()
-                                .filter(c -> "PUBLISHED".equals(c.getStatus()) && AccessPolicy.visible(user, c))
+                                .filter(c -> LearningPolicy.isLearnableStatus(c.getStatus()) && AccessPolicy.visible(user, c))
                                 .map(c -> {
                                         boolean mandatory = AccessPolicy.mandatory(user, c)
                                                         || user.hasGroupMandatoryCourse(c.getId());

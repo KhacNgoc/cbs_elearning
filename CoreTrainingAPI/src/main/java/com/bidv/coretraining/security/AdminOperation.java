@@ -41,13 +41,16 @@ public record AdminOperation(String page, String action) {
             page = "permissions";
         else if (p.startsWith("/api/admin/users"))
             page = "users";
+        else if (p.matches("/api/admin/units/[^/]+/courses"))
+            page = "courses";
         else if (p.startsWith("/api/admin/units"))
             page = "units";
         else if (p.startsWith("/api/admin/groups") || p.startsWith("/api/admin/access/groups"))
             page = "groups";
         else if (p.startsWith("/api/admin/enrollment-requests"))
             page = "enrollments";
-        else if (p.startsWith("/api/admin/training") || p.startsWith("/api/admin/programs"))
+        else if (p.startsWith("/api/admin/training") || p.startsWith("/api/admin/programs")
+                || p.startsWith("/api/admin/unit-allocations"))
             page = "courses";
         else if (p.contains("/documents") && !p.equals("/api/admin/documents/upload"))
             page = "documents";

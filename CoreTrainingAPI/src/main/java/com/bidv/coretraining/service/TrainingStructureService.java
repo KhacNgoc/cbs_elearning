@@ -135,8 +135,8 @@ public class TrainingStructureService {
     }
 
     private void draft(Course course) {
-        if (!"DRAFT".equals(course.getStatus()))
-            throw new BadRequestException("Chuyển khóa về bản nháp trước khi thay đổi cấu trúc");
+        if ("DELETED".equals(course.getStatus()))
+            throw new BadRequestException("Khóa học đã bị xóa");
     }
 
     private void version(Long actual, Long expected) {
@@ -245,6 +245,11 @@ public class TrainingStructureService {
     }
 
     public DomainDto saveDomain(String id, DomainDto request) {
+        if (id != null && request != null && "DELETED".equalsIgnoreCase(request.status())) {
+            deleteDomain(id);
+            TrainingDomain deleted = domains.findById(id).orElseThrow(() -> new ResourceNotFoundException("Domain", "id", id));
+            return domainDto(deleted);
+        }
         authorization.permission("CATALOG_MANAGE");
         TrainingDomain d = id == null ? TrainingDomain.builder().build()
                 : domains.findById(id).orElseThrow(() -> new ResourceNotFoundException("Domain", "id", id));
@@ -319,6 +324,11 @@ public class TrainingStructureService {
     }
 
     public ProgramDto saveProgram(String id, ProgramDto request) {
+        if (id != null && request != null && "DELETED".equalsIgnoreCase(request.status())) {
+            deleteProgram(id);
+            TrainingProgram deleted = programs.findById(id).orElseThrow(() -> new ResourceNotFoundException("Program", "id", id));
+            return programDto(deleted);
+        }
         authorization.permission("CATALOG_MANAGE");
         TrainingProgram p = id == null ? TrainingProgram.builder().build()
                 : programs.findById(id).orElseThrow(() -> new ResourceNotFoundException("Program", "id", id));
@@ -418,7 +428,7 @@ public class TrainingStructureService {
 
     private void enrollStaffForMandatoryUnits(TrainingProgram p, Set<String> mandatoryUnitIds) {
         List<Course> programCourses = courses.findAll().stream()
-                .filter(c -> c.getProgram() != null && c.getProgram().getId().equals(p.getId()))
+                .filter(c -> c.getProgram() != null && c.getProgram().getId().equals(p.getId()) && !"DELETED".equals(c.getStatus()))
                 .toList();
 
         for (Course c : programCourses) {
@@ -430,26 +440,60 @@ public class TrainingStructureService {
         }
     }
 
-    private void enrollStaffForCourse(Course course, Set<String> mandatoryUnitIds) {
-        Set<String> targetUnitIds = new HashSet<>(mandatoryUnitIds);
-        if (organizationUnits != null) {
-            for (String uId : mandatoryUnitIds) {
-                organizationUnits.findAll().stream()
-                        .filter(child -> child.getParent() != null && targetUnitIds.contains(child.getParent().getId()))
-                        .map(OrganizationUnit::getId)
-                        .forEach(targetUnitIds::add);
-            }
-        }
-
-        List<User> staff = users.findAll().stream()
-                .filter(u -> u.getOrganizationUnit() != null && targetUnitIds.contains(u.getOrganizationUnit().getId()))
+    private List<User> findActiveStaffInUnits(Set<String> rootUnitIds) {
+        if (rootUnitIds == null || rootUnitIds.isEmpty()) return List.of();
+        return users.findAll().stream()
                 .filter(User::activeAccount)
+                .filter(u -> u.getOrganizationUnit() != null
+                        && com.bidv.coretraining.security.AccessPolicy.ancestors(u.getOrganizationUnit())
+                                .stream().anyMatch(rootUnitIds::contains))
                 .toList();
+    }
 
+    private void enrollStaffForCourse(Course course, Set<String> mandatoryUnitIds) {
+        List<User> staff = findActiveStaffInUnits(mandatoryUnitIds);
         for (User u : staff) {
             if (!u.getRegisteredCourses().contains(course)) {
                 u.getRegisteredCourses().add(course);
                 users.save(u);
+            }
+        }
+    }
+
+    private void unenrollUnstartedStaffForCourse(Course course, Set<String> unitIds) {
+        List<User> staff = findActiveStaffInUnits(unitIds);
+        Set<String> courseLessonIds = course.getChapters().stream()
+                .flatMap(ch -> ch.getLessons().stream())
+                .map(Lesson::getId)
+                .collect(java.util.stream.Collectors.toSet());
+        for (User u : staff) {
+            if (u.getRegisteredCourses().contains(course)) {
+                boolean hasCompletedAnyLesson = u.getCompletedLessons().stream()
+                        .anyMatch(l -> courseLessonIds.contains(l.getId()));
+                if (!hasCompletedAnyLesson) {
+                    u.getRegisteredCourses().remove(course);
+                    users.save(u);
+                }
+            }
+        }
+    }
+
+    private void ensureCourseLearnableWhenAllocated(Course c) {
+        if ("DRAFT".equalsIgnoreCase(c.getStatus())) {
+            c.setStatus("PUBLISHED");
+        }
+        if (c.getChapters() != null) {
+            for (Chapter ch : c.getChapters()) {
+                if ("DRAFT".equalsIgnoreCase(ch.getStatus())) {
+                    ch.setStatus("PUBLISHED");
+                }
+                if (ch.getLessons() != null) {
+                    for (Lesson l : ch.getLessons()) {
+                        if ("DRAFT".equalsIgnoreCase(l.getStatus()) || l.getStatus() == null) {
+                            l.setStatus("PUBLISHED");
+                        }
+                    }
+                }
             }
         }
     }
@@ -665,24 +709,189 @@ public class TrainingStructureService {
     }
 
     public void allocateCoursesToUnit(String unitId, String grantType, String programId, boolean allInProgram, List<String> courseIds) {
+        assignUnitAllocation(unitId, "course", grantType, null, programId, allInProgram, courseIds);
+    }
+
+    public Map<String, Object> assignUnitAllocation(
+            String unitId,
+            String categoryType,
+            String grantType,
+            String domainId,
+            String programId,
+            boolean allInProgram,
+            List<String> courseIds) {
         authorization.permission("CATALOG_MANAGE");
-        List<Course> targets;
-        if (allInProgram) {
-            targets = courses.findByProgramIdAndStatusNot(programId, "DELETED");
-        } else {
-            if (courseIds == null || courseIds.isEmpty()) return;
-            targets = courses.findAllById(courseIds);
+        OrganizationUnit unit = authorization.unit(required(unitId, "Đơn vị áp dụng"));
+        authorization.scope(unit);
+        if (!com.bidv.coretraining.security.AccessPolicy.activeUnit(unit)) {
+            throw new BadRequestException("Đơn vị " + unit.getName() + " đã ngừng hoạt động");
         }
-        for (Course c : targets) {
+
+        String normalizedGrant = "MANDATORY".equalsIgnoreCase(grantType) ? "MANDATORY" : "OPTIONAL";
+        String type = categoryType == null ? "program" : categoryType.trim().toLowerCase();
+        List<Course> targetCourses = new ArrayList<>();
+
+        if ("domain".equals(type)) {
+            TrainingDomain d = domains.findById(required(domainId, "Lĩnh vực đào tạo"))
+                    .orElseThrow(() -> new ResourceNotFoundException("Domain", "id", domainId));
+            d.getUnits().add(unit);
+            if (d.getUnitGrants() == null) d.setUnitGrants(new HashMap<>());
+            d.getUnitGrants().put(unit.getId(), normalizedGrant);
+            domains.save(d);
+
+            List<TrainingProgram> domainPrograms = programs.findAll().stream()
+                    .filter(p -> p.getDomain() != null && p.getDomain().getId().equals(d.getId()) && !"DELETED".equals(p.getStatus()))
+                    .toList();
+            for (TrainingProgram p : domainPrograms) {
+                p.getUnits().add(unit);
+                if (p.getUnitGrants() == null) p.setUnitGrants(new HashMap<>());
+                p.getUnitGrants().put(unit.getId(), normalizedGrant);
+                programs.save(p);
+                targetCourses.addAll(courses.findByProgramIdAndStatusNot(p.getId(), "DELETED"));
+            }
+        } else if ("program".equals(type)) {
+            TrainingProgram p = programs.findById(required(programId, "Chương trình đào tạo"))
+                    .orElseThrow(() -> new ResourceNotFoundException("Program", "id", programId));
+            p.getUnits().add(unit);
+            if (p.getUnitGrants() == null) p.setUnitGrants(new HashMap<>());
+            p.getUnitGrants().put(unit.getId(), normalizedGrant);
+            programs.save(p);
+            targetCourses.addAll(courses.findByProgramIdAndStatusNot(p.getId(), "DELETED"));
+        } else if ("course".equals(type)) {
+            if (allInProgram) {
+                String pId = required(programId, "Chương trình đào tạo");
+                TrainingProgram p = programs.findById(pId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Program", "id", pId));
+                p.getUnits().add(unit);
+                if (p.getUnitGrants() == null) p.setUnitGrants(new HashMap<>());
+                p.getUnitGrants().put(unit.getId(), normalizedGrant);
+                programs.save(p);
+                targetCourses.addAll(courses.findByProgramIdAndStatusNot(pId, "DELETED"));
+            } else {
+                if (courseIds == null || courseIds.isEmpty()) {
+                    throw new BadRequestException("Vui lòng chọn ít nhất 1 khóa học để phân bổ");
+                }
+                targetCourses.addAll(courses.findAllById(courseIds).stream()
+                        .filter(c -> !"DELETED".equals(c.getStatus()))
+                        .toList());
+            }
+        } else {
+            throw new BadRequestException("Cấp độ phân bổ không hợp lệ: " + categoryType);
+        }
+
+        for (Course c : targetCourses) {
             if (c.getUnitGrants() == null) {
                 c.setUnitGrants(new HashMap<>());
             }
-            c.getUnitGrants().put(unitId, grantType);
+            c.getUnitGrants().put(unit.getId(), normalizedGrant);
+            ensureCourseLearnableWhenAllocated(c);
             courses.save(c);
-            if ("MANDATORY".equalsIgnoreCase(grantType)) {
-                enrollStaffForCourse(c, Set.of(unitId));
+        }
+
+        List<User> staffInUnit = findActiveStaffInUnits(Set.of(unit.getId()));
+        int enrolledUsersCount = 0;
+
+        if ("MANDATORY".equals(normalizedGrant)) {
+            // Bắt buộc: Tự động đăng ký toàn bộ khóa học cho tất cả nhân sự trong phòng ban (vào thẳng "Khóa học của tôi")
+            for (User u : staffInUnit) {
+                boolean changed = false;
+                for (Course c : targetCourses) {
+                    if (!u.getRegisteredCourses().contains(c)) {
+                        u.getRegisteredCourses().add(c);
+                        changed = true;
+                    }
+                }
+                if (changed) {
+                    users.save(u);
+                }
+                if (!targetCourses.isEmpty()) {
+                    enrolledUsersCount++;
+                }
+            }
+        } else {
+            // Tự chọn (OPTIONAL): Không tự động đăng ký, để hiển thị ở ngoài ("Khám phá & đăng ký") cho nhân sự tự đăng ký học
+            for (Course c : targetCourses) {
+                unenrollUnstartedStaffForCourse(c, Set.of(unit.getId()));
             }
         }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("unitId", unit.getId());
+        result.put("unitName", unit.getName());
+        result.put("categoryType", type);
+        result.put("grantType", normalizedGrant);
+        result.put("allocatedCoursesCount", targetCourses.size());
+        result.put("unitUsersCount", staffInUnit.size());
+        result.put("enrolledUsersCount", enrolledUsersCount);
+        return result;
+    }
+
+    public Map<String, Object> toggleUnitAllocationGrantType(
+            String unitId,
+            String categoryType,
+            String targetId,
+            String grantType) {
+        String type = categoryType == null ? "course" : categoryType.trim().toLowerCase();
+        if ("domain".equals(type)) {
+            return assignUnitAllocation(unitId, "domain", grantType, targetId, null, false, List.of());
+        } else if ("program".equals(type)) {
+            return assignUnitAllocation(unitId, "program", grantType, null, targetId, true, List.of());
+        } else {
+            return assignUnitAllocation(unitId, "course", grantType, null, null, false, List.of(targetId));
+        }
+    }
+
+    public Map<String, Object> removeUnitAllocation(
+            String unitId,
+            String categoryType,
+            String targetId) {
+        authorization.permission("CATALOG_MANAGE");
+        OrganizationUnit unit = authorization.unit(required(unitId, "Đơn vị"));
+        authorization.scope(unit);
+
+        String type = categoryType == null ? "course" : categoryType.trim().toLowerCase();
+        List<Course> affectedCourses = new ArrayList<>();
+
+        if ("domain".equals(type)) {
+            TrainingDomain d = domains.findById(required(targetId, "Lĩnh vực"))
+                    .orElseThrow(() -> new ResourceNotFoundException("Domain", "id", targetId));
+            d.getUnits().removeIf(u -> u.getId().equals(unitId));
+            if (d.getUnitGrants() != null) d.getUnitGrants().remove(unitId);
+            domains.save(d);
+
+            List<TrainingProgram> domainPrograms = programs.findAll().stream()
+                    .filter(p -> p.getDomain() != null && p.getDomain().getId().equals(d.getId()))
+                    .toList();
+            for (TrainingProgram p : domainPrograms) {
+                p.getUnits().removeIf(u -> u.getId().equals(unitId));
+                if (p.getUnitGrants() != null) p.getUnitGrants().remove(unitId);
+                programs.save(p);
+                affectedCourses.addAll(courses.findByProgramIdAndStatusNot(p.getId(), "DELETED"));
+            }
+        } else if ("program".equals(type)) {
+            TrainingProgram p = programs.findById(required(targetId, "Chương trình"))
+                    .orElseThrow(() -> new ResourceNotFoundException("Program", "id", targetId));
+            p.getUnits().removeIf(u -> u.getId().equals(unitId));
+            if (p.getUnitGrants() != null) p.getUnitGrants().remove(unitId);
+            programs.save(p);
+            affectedCourses.addAll(courses.findByProgramIdAndStatusNot(p.getId(), "DELETED"));
+        } else {
+            Course c = course(required(targetId, "Khóa học"));
+            affectedCourses.add(c);
+        }
+
+        for (Course c : affectedCourses) {
+            if (c.getUnitGrants() != null) {
+                c.getUnitGrants().remove(unitId);
+                courses.save(c);
+            }
+            unenrollUnstartedStaffForCourse(c, Set.of(unitId));
+        }
+
+        return Map.of(
+                "unitId", unitId,
+                "removedCoursesCount", affectedCourses.size()
+        );
     }
 
     public List<CourseDto> adminCoursesByUnit(String unitId) {
@@ -797,13 +1006,61 @@ public class TrainingStructureService {
             throw new BadRequestException("Nội dung đã có lịch sử học. Hãy lưu trữ khóa thay vì xóa");
     }
 
+    public void deleteDomain(String id) {
+        authorization.permission("CATALOG_MANAGE");
+        TrainingDomain d = domains.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Domain", "id", id));
+        String suffix = "_DEL_" + (System.currentTimeMillis() % 100000);
+        d.setStatus("DELETED");
+        if (d.getCode() != null && !d.getCode().contains("_DEL_")) {
+            d.setCode(d.getCode() + suffix);
+        }
+        domains.saveAndFlush(d);
+
+        List<TrainingProgram> childPrograms = programs.findAll().stream()
+                .filter(p -> p.getDomain() != null && id.equals(p.getDomain().getId()) && !"DELETED".equals(p.getStatus()))
+                .toList();
+        for (TrainingProgram p : childPrograms) {
+            deleteProgramInternal(p, suffix);
+        }
+    }
+
+    public void deleteProgram(String id) {
+        authorization.permission("CATALOG_MANAGE");
+        TrainingProgram p = programs.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Program", "id", id));
+        String suffix = "_DEL_" + (System.currentTimeMillis() % 100000);
+        deleteProgramInternal(p, suffix);
+    }
+
+    private void deleteProgramInternal(TrainingProgram p, String suffix) {
+        p.setStatus("DELETED");
+        if (p.getCode() != null && !p.getCode().contains("_DEL_")) {
+            p.setCode(p.getCode() + suffix);
+        }
+        programs.saveAndFlush(p);
+
+        List<Course> childCourses = courses.findByProgramIdAndStatusNot(p.getId(), "DELETED");
+        for (Course c : childCourses) {
+            deleteCourseInternal(c, suffix);
+        }
+    }
+
     public void deleteChapter(String id) {
         Chapter c = chapter(id);
         authorization.edit(c.getCourse());
         draft(c.getCourse());
+        String suffix = "_DEL_" + (System.currentTimeMillis() % 100000);
+        int negBase = -Math.abs((int) (System.currentTimeMillis() % 900000) + 1000);
         c.setStatus("DELETED");
+        if (c.getCode() != null && !c.getCode().contains("_DEL_")) {
+            c.setCode(c.getCode() + suffix);
+        }
+        c.setChapterOrder(negBase);
+        int idx = 1;
         for (Lesson l : c.getLessons()) {
             l.setStatus("DELETED");
+            l.setLessonOrder(negBase - (idx++));
         }
         chapters.saveAndFlush(c);
     }
@@ -812,21 +1069,39 @@ public class TrainingStructureService {
         Lesson l = lesson(id);
         authorization.edit(l.getCourse());
         draft(l.getCourse());
+        int negOrder = -Math.abs((int) (System.currentTimeMillis() % 900000) + 1000);
         l.setStatus("DELETED");
+        l.setLessonOrder(negOrder);
         lessons.saveAndFlush(l);
     }
 
     public void deleteCourse(String id) {
         Course c = course(id);
-        authorization.manage(c);
+        authorization.edit(c);
+        String suffix = "_DEL_" + (System.currentTimeMillis() % 100000);
+        deleteCourseInternal(c, suffix);
+    }
+
+    private void deleteCourseInternal(Course c, String suffix) {
         c.setStatus("DELETED");
+        if (c.getCode() != null && !c.getCode().contains("_DEL_")) {
+            c.setCode(c.getCode() + suffix);
+        }
+        int negBase = -Math.abs((int) (System.currentTimeMillis() % 900000) + 1000);
+        int chIdx = 1;
         for (Chapter ch : c.getChapters()) {
             ch.setStatus("DELETED");
+            if (ch.getCode() != null && !ch.getCode().contains("_DEL_")) {
+                ch.setCode(ch.getCode() + suffix);
+            }
+            ch.setChapterOrder(negBase - (chIdx++));
+            int lIdx = 1;
             for (Lesson l : ch.getLessons()) {
                 l.setStatus("DELETED");
+                l.setLessonOrder(negBase - (chIdx * 100) - (lIdx++));
             }
         }
-        courses.save(c);
+        courses.saveAndFlush(c);
     }
 
     public void reorderChapters(String id, List<String> ids) {

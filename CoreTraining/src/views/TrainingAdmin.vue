@@ -22,13 +22,12 @@
               <Table :size="15" /> Bảng quản lý truyền thống
             </button>
           </div>
-          <nav class="breadcrumb" aria-label="Đường dẫn">
-            <RouterLink to="/admin/courses">Danh mục đào tạo</RouterLink
-            ><template v-if="course">
-              /
-              <RouterLink :to="`/admin/courses/${course.id}`">{{
-                course.name
-              }}</RouterLink></template
+          <nav v-if="course" class="breadcrumb" aria-label="Đường dẫn">
+            <RouterLink to="/admin/courses">Danh mục đào tạo</RouterLink>
+            /
+            <RouterLink :to="`/admin/courses/${course.id}`">{{
+              course.name
+            }}</RouterLink
             ><span v-if="chapter"> / {{ chapter.title }}</span>
           </nav>
           <h1>{{ title }}</h1>
@@ -291,8 +290,8 @@
         <button
           v-if="
             (!course && accessUser.can('courses', 'create')) ||
-            (course?.status === 'DRAFT' &&
-              !!course.allowedActions?.includes('create'))
+            (course?.status !== 'ARCHIVED' &&
+              !!course?.allowedActions?.includes('create'))
           "
           class="btn btn-primary"
           @click="openForm(chapter ? 'lesson' : course ? 'chapter' : 'course')"
@@ -311,12 +310,12 @@
         :expanded-ids="expandedChapterIds"
         :can-edit="canEditCourse"
         :can-create="
-          course?.status === 'DRAFT' &&
+          course?.status !== 'ARCHIVED' &&
           accessUser.can('courses', 'create') &&
           !!course?.allowedActions?.includes('create')
         "
         :can-delete="
-          course?.status === 'DRAFT' &&
+          course?.status !== 'ARCHIVED' &&
           accessUser.can('courses', 'delete') &&
           !!course?.allowedActions?.includes('delete')
         "
@@ -712,13 +711,15 @@ const rows = computed<Row[]>(
     chapter.value?.lessons || (course.value ? chapters.value : courses.value),
 );
 const canEditCourse = computed(
-  () => course.value?.status === "DRAFT" && managesCourses.value,
+  () => course.value?.status !== "ARCHIVED" && course.value?.status !== "DELETED" && managesCourses.value,
 );
 const canEditRow = (row: Row) =>
   course.value
-    ? course.value.status === "DRAFT" &&
+    ? course.value.status !== "ARCHIVED" &&
+      course.value.status !== "DELETED" &&
       course.value.allowedActions?.some((a) => a === "update" || a === "delete")
-    : row.status === "DRAFT" &&
+    : row.status !== "ARCHIVED" &&
+      row.status !== "DELETED" &&
       (row as Course).allowedActions?.some(
         (a) => a === "update" || a === "delete",
       );
@@ -858,7 +859,10 @@ async function load() {
     domains.value = catalog.domains;
     programs.value = catalog.programs;
     domainId.value ||= domains.value[0]?.id || "";
-    courses.value = mode.value === "catalog" ? [] : await trainingApi.courses();
+    const needsAllCourses =
+      mode.value !== "catalog" &&
+      (viewType.value === "table" || !!route.params.courseId || !!route.params.chapterId);
+    courses.value = needsAllCourses ? await trainingApi.courses() : [];
     course.value =
       courses.value.find((item) => item.id === route.params.courseId) || null;
     chapter.value = null;
@@ -897,6 +901,13 @@ watch(
   },
   { immediate: true },
 );
+watch(viewType, async (nextView) => {
+  if (nextView === "table" && mode.value !== "catalog" && !courses.value.length) {
+    try {
+      courses.value = await trainingApi.courses();
+    } catch (e) {}
+  }
+});
 const formKind = ref<FormKind | null>(null);
 const form = ref({
   id: "",
@@ -1705,9 +1716,9 @@ button:disabled {
 <style scoped>
 .view-mode-tabs {
   display: inline-flex;
-  background: var(--bg-surface, #1e293b);
-  border: 1px solid var(--border-color, #334155);
-  border-radius: 8px;
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
   padding: 0.25rem;
   gap: 0.25rem;
   margin-bottom: 0.75rem;
@@ -1716,23 +1727,24 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.4rem 0.85rem;
+  padding: 0.45rem 0.9rem;
   font-size: 0.83rem;
-  font-weight: 500;
-  color: var(--text-secondary, #94a3b8);
+  font-weight: 600;
+  color: var(--text-muted);
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.18s ease;
 }
 .view-tab-btn:hover {
-  color: var(--text-primary, #f8fafc);
-  background: rgba(255, 255, 255, 0.05);
+  color: var(--primary-ink);
+  background: var(--primary-light);
 }
 .view-tab-btn.active {
-  color: #fff;
-  background: var(--brand-color, #10b981);
+  color: #ffffff;
+  background: var(--primary-color);
+  box-shadow: var(--shadow-sm);
 }
 .tree-studio-wrapper {
   flex: 1;

@@ -19,8 +19,8 @@
           </div>
         </div>
       </header>
-      <p v-if="course?.status !== 'DRAFT'" class="readonly-notice">
-        Khóa đang xuất bản hoặc lưu trữ.
+      <p v-if="course?.status === 'ARCHIVED'" class="readonly-notice">
+        Khóa đang ở trạng thái lưu trữ.
         <RouterLink :to="`/admin/courses/${chapter.courseId}`"
           >Mở chi tiết khóa và chuyển về nháp</RouterLink
         >
@@ -81,7 +81,7 @@
             </p>
             <button
               v-if="
-                course?.status === 'DRAFT' &&
+                course?.status !== 'ARCHIVED' &&
                 !!course?.adminActions?.exams?.includes('create')
               "
               class="btn btn-primary"
@@ -95,7 +95,7 @@
             :key="lesson.id"
             embedded
             :lesson="lesson"
-            :read-only="course?.status !== 'DRAFT'"
+            :read-only="course?.status === 'ARCHIVED'"
             @saved="refreshLesson"
           />
         </section>
@@ -124,7 +124,8 @@ const route = useRoute(),
   user = useUserStore();
 const canEdit = computed(
   () =>
-    course.value?.status === "DRAFT" &&
+    course.value?.status !== "ARCHIVED" &&
+    course.value?.status !== "DELETED" &&
     !!course.value?.allowedActions?.includes("update"),
 );
 const lesson = ref<Lesson | null>(null),

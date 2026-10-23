@@ -66,7 +66,7 @@
       <div v-else class="tree-root">
         <!-- LEVEL 1: DOMAIN (LĨNH VỰC) -->
         <div
-          v-for="domain in filteredDomains"
+          v-for="domain in pagedDomains"
           :key="domain.id"
           class="tree-branch domain-branch"
         >
@@ -90,16 +90,12 @@
               <Globe :size="16" />
             </span>
 
-            <div class="node-info">
+            <div
+              class="node-info"
+              @mouseenter="showNodeTooltip($event, 'domain', domain)"
+              @mouseleave="hideNodeTooltip"
+            >
               <span class="node-title">{{ domain.name }}</span>
-              <span class="node-code">{{ domain.code }}</span>
-              <span
-                v-if="domain.description"
-                class="node-desc-tooltip-trigger"
-                :title="`Mục tiêu / Mô tả:\n${domain.description}`"
-              >
-                <Info :size="12" />
-              </span>
             </div>
 
             <div class="node-badge-group">
@@ -163,27 +159,23 @@
                   <Folder :size="15" />
                 </span>
 
-                <div class="node-info">
+                <div
+                  class="node-info"
+                  @mouseenter="showNodeTooltip($event, 'program', program)"
+                  @mouseleave="hideNodeTooltip"
+                >
                   <span class="node-title">{{ program.name }}</span>
-                  <span class="node-code">{{ program.code }}</span>
-                  <span
-                    v-if="program.description"
-                    class="node-desc-tooltip-trigger"
-                    :title="`Mục tiêu / Mô tả:\n${program.description}`"
-                  >
-                    <Info :size="12" />
-                  </span>
                 </div>
 
                 <div class="node-badge-group">
-                  <span v-if="program.businessModule" class="meta-tag module-tag">
-                    {{ program.businessModule }}
-                  </span>
                   <span v-if="program.mandatoryUnitIds?.length" class="meta-tag mandatory-tag" title="Đơn vị bắt buộc hoàn thành">
                     <ShieldCheck :size="11" />
                     {{ program.mandatoryUnitIds.length }} ĐV Bắt buộc
                   </span>
-                  <span class="count-tag">{{ getCoursesForProgram(program.id).length }} Khóa</span>
+                  <span v-if="isProgramCourseCountLoaded(program.id)" class="count-tag">
+                    <Loader2 v-if="loadingProgramCoursesMap[program.id]" :size="10" class="spin-icon" />
+                    <span v-else>{{ getProgramTotalCoursesCount(program.id) }} Khóa</span>
+                  </span>
                 </div>
 
                 <!-- Hover Actions -->
@@ -209,17 +201,25 @@
                     type="button"
                     class="hover-action-btn delete-btn"
                     title="Xóa Chương trình này"
-                    @click.stop="promptDeleteNode('program', program)"
+                    @click.stop="promptDeleteNode('program', program, domain)"
                   >
                     <Trash2 :size="13" />
                   </button>
                 </div>
               </div>
 
-              <!-- LEVEL 3: COURSE (KHÓA HỌC) -->
+              <!-- LEVEL 3: COURSE (KHÓA HỌC - LAZY FETCHED) -->
               <div v-if="isExpanded(program.id)" class="tree-sub-tree">
                 <div
-                  v-for="course in getCoursesForProgram(program.id)"
+                  v-if="loadingProgramCoursesMap[program.id] && !getCoursesForProgram(program.id).length"
+                  class="tree-inline-loading"
+                >
+                  <Loader2 :size="13" class="spin-icon" />
+                  <span>Đang tải danh sách khóa học...</span>
+                </div>
+
+                <div
+                  v-for="course in getVisibleCoursesForProgram(program.id)"
                   :key="course.id"
                   class="tree-branch course-branch"
                 >
@@ -243,20 +243,16 @@
                       <BookOpen :size="14" />
                     </span>
 
-                    <div class="node-info">
+                    <div
+                      class="node-info"
+                      @mouseenter="showNodeTooltip($event, 'course', course)"
+                      @mouseleave="hideNodeTooltip"
+                    >
                       <span class="node-title">{{ course.name }}</span>
                       <span class="node-status-dot" :class="course.status?.toLowerCase()"></span>
-                      <span
-                        v-if="course.description"
-                        class="node-desc-tooltip-trigger"
-                        :title="`Mục tiêu / Chuẩn đầu ra:\n${course.description}`"
-                      >
-                        <Info :size="12" />
-                      </span>
                     </div>
 
                     <div class="node-badge-group">
-                      <span v-if="course.businessModule" class="meta-tag module-tag">{{ course.businessModule }}</span>
                       <span
                         v-if="getCourseMandatoryUnits(course).length"
                         class="meta-tag mandatory-tag"
@@ -265,7 +261,7 @@
                         <ShieldCheck :size="11" />
                         {{ getCourseMandatoryUnits(course).length }} ĐV Bắt buộc
                       </span>
-                      <span class="status-pill" :class="course.status?.toLowerCase()">
+                      <span class="status-pill" :class="course.status === 'PUBLISHED' ? 'published' : 'draft'">
                         {{ course.status === 'PUBLISHED' ? 'Đã xuất bản' : 'Bản nháp' }}
                       </span>
                     </div>
@@ -293,15 +289,22 @@
                         type="button"
                         class="hover-action-btn delete-btn"
                         title="Xóa Khóa học này"
-                        @click.stop="promptDeleteNode('course', course)"
+                        @click.stop="promptDeleteNode('course', course, program)"
                       >
                         <Trash2 :size="13" />
                       </button>
                     </div>
                   </div>
 
-                  <!-- LEVEL 4: CHAPTER (CHƯƠNG HỌC) -->
+                  <!-- LEVEL 4: CHAPTER (CHƯƠNG HỌC - LAZY FETCHED) -->
                   <div v-if="isExpanded(course.id)" class="tree-sub-tree">
+                    <div
+                      v-if="loadingCourseChaptersMap[course.id] && !getChaptersForCourse(course.id).length"
+                      class="tree-inline-loading"
+                    >
+                      <Loader2 :size="12" class="spin-icon" />
+                      <span>Đang tải danh sách chương...</span>
+                    </div>
                     <div
                       v-for="(chapter, cIdx) in getChaptersForCourse(course.id)"
                       :key="chapter.id"
@@ -327,13 +330,17 @@
                           <Bookmark :size="13" />
                         </span>
 
-                        <div class="node-info">
+                        <div
+                          class="node-info"
+                          @mouseenter="showNodeTooltip($event, 'chapter', chapter, course)"
+                          @mouseleave="hideNodeTooltip"
+                        >
                           <span class="node-index">Chương {{ cIdx + 1 }}:</span>
-                          <span class="node-title">{{ chapter.title }}</span>
+                          <span class="node-title">{{ stripLeadingIndexPrefix(chapter.title, 'Chương') }}</span>
                         </div>
 
                         <div class="node-badge-group">
-                          <span class="count-tag">{{ chapter.lessons?.length || 0 }} bài</span>
+                          <span class="count-tag">{{ (chapter.lessons || []).filter(l => l.status !== 'DELETED').length }} bài</span>
                         </div>
 
                         <!-- Hover Actions -->
@@ -359,7 +366,7 @@
                             type="button"
                             class="hover-action-btn delete-btn"
                             title="Xóa Chương này"
-                            @click.stop="promptDeleteNode('chapter', chapter)"
+                            @click.stop="promptDeleteNode('chapter', chapter, course)"
                           >
                             <Trash2 :size="13" />
                           </button>
@@ -393,16 +400,13 @@
                               <FileText :size="13" />
                             </span>
 
-                            <div class="node-info">
+                            <div
+                              class="node-info"
+                              @mouseenter="showNodeTooltip($event, 'lesson', lesson, course)"
+                              @mouseleave="hideNodeTooltip"
+                            >
                               <span class="node-index">Bài {{ lIdx + 1 }}:</span>
-                              <span class="node-title">{{ lesson.title }}</span>
-                              <span
-                                v-if="lesson.hint"
-                                class="node-desc-tooltip-trigger"
-                                :title="`Tóm tắt / Hướng dẫn:\n${lesson.hint}`"
-                              >
-                                <Info :size="11" />
-                              </span>
+                              <span class="node-title">{{ stripLeadingIndexPrefix(lesson.title, 'Bài') }}</span>
                             </div>
 
                             <!-- Level 6 & 7 Indicators -->
@@ -460,7 +464,7 @@
                                 type="button"
                                 class="hover-action-btn delete-btn"
                                 title="Xóa Bài học này"
-                                @click.stop="promptDeleteNode('lesson', lesson)"
+                                @click.stop="promptDeleteNode('lesson', lesson, chapter, course)"
                               >
                                 <Trash2 :size="13" />
                               </button>
@@ -526,9 +530,85 @@
                     </div>
                   </div>
                 </div>
+
+                <!-- TIER-2 IN-BRANCH COURSE PAGINATION (SERVER-SIDE LAZY FETCH) -->
+                <div
+                  v-if="getProgramTotalCoursesCount(program.id) > DEFAULT_COURSE_BRANCH_SIZE"
+                  class="in-branch-pagination-row"
+                >
+                  <span class="in-branch-count">
+                    Đang hiển thị {{ getVisibleCoursesForProgram(program.id).length }} / {{ getProgramTotalCoursesCount(program.id) }} khóa học trong chương trình
+                  </span>
+                  <div class="in-branch-actions">
+                    <button
+                      v-if="getVisibleCoursesForProgram(program.id).length < getProgramTotalCoursesCount(program.id)"
+                      type="button"
+                      class="btn-in-branch-more"
+                      :disabled="loadingMoreProgramCoursesMap[program.id]"
+                      @click.stop="expandCourseBranchLimit(program.id)"
+                    >
+                      <Loader2 v-if="loadingMoreProgramCoursesMap[program.id]" :size="11" class="spin-icon" />
+                      <span>
+                        + Xem thêm {{ Math.min(DEFAULT_COURSE_BRANCH_SIZE, getProgramTotalCoursesCount(program.id) - getVisibleCoursesForProgram(program.id).length) }} khóa học
+                      </span>
+                    </button>
+                    <button
+                      v-if="getCourseBranchLimit(program.id) > DEFAULT_COURSE_BRANCH_SIZE"
+                      type="button"
+                      class="btn-in-branch-collapse"
+                      @click.stop="resetCourseBranchLimit(program.id)"
+                    >
+                      Thu gọn bớt
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TIER-1 ROOT TREE PAGINATION FOOTER BAR -->
+    <div v-if="!loading && filteredDomains.length > 0" class="tree-pagination-bar">
+      <div class="pagination-summary">
+        <span>
+          Hiển thị <strong>{{ (treeDomainPage - 1) * treeDomainPageSize + 1 }}–{{ Math.min(treeDomainPage * treeDomainPageSize, filteredDomains.length) }}</strong>
+          trên tổng số <strong>{{ filteredDomains.length }}</strong> lĩnh vực
+          ({{ totalActiveProgramsCount }} chương trình)
+        </span>
+      </div>
+
+      <div class="pagination-controls">
+        <label class="page-size-label">
+          <span>Hiển thị:</span>
+          <select v-model.number="treeDomainPageSize" class="page-size-select">
+            <option :value="5">5 lĩnh vực / trang</option>
+            <option :value="10">10 lĩnh vực / trang</option>
+            <option :value="20">20 lĩnh vực / trang</option>
+          </select>
+        </label>
+
+        <div class="page-nav-group">
+          <button
+            type="button"
+            class="page-btn"
+            :disabled="treeDomainPage <= 1"
+            @click="treeDomainPage--"
+          >
+            Trước
+          </button>
+          <span class="page-indicator">
+            Trang {{ treeDomainPage }} / {{ treeDomainTotalPages }}
+          </span>
+          <button
+            type="button"
+            class="page-btn"
+            :disabled="treeDomainPage >= treeDomainTotalPages"
+            @click="treeDomainPage++"
+          >
+            Sau
+          </button>
         </div>
       </div>
     </div>
@@ -887,6 +967,44 @@
         </form>
       </div>
     </div>
+
+    <!-- FLOATING RICH HOVER DESCRIPTION TOOLTIP (Synchronized with UnitAllocationAdmin) -->
+    <Teleport to="body">
+      <Transition name="tooltip-fade">
+        <div
+          v-if="hoverTooltip.visible"
+          class="impeccable-desc-popover"
+          :style="{ top: `${hoverTooltip.y}px`, left: `${hoverTooltip.x}px` }"
+        >
+          <div class="popover-header">
+            <span class="popover-type-badge" :class="hoverTooltip.type">
+              {{ hoverTooltip.typeLabel }}
+            </span>
+            <span v-if="hoverTooltip.businessModule" class="popover-module">
+              Phân hệ {{ hoverTooltip.businessModule }}
+            </span>
+          </div>
+          <div class="popover-title">{{ hoverTooltip.title }}</div>
+          <div class="popover-desc-box">
+            <span class="popover-desc-label">Mục tiêu / Mô tả nội dung:</span>
+            <p class="popover-desc-text" :class="{ 'is-empty': !hoverTooltip.description }">
+              {{ hoverTooltip.description || "Chưa có mô tả chi tiết cho mục đào tạo này." }}
+            </p>
+          </div>
+          <div v-if="hoverTooltip.level || hoverTooltip.deadline || hoverTooltip.extraMeta" class="popover-footer-meta">
+            <span v-if="hoverTooltip.level" class="meta-item">
+              Cấp độ: <strong>{{ formatLevelLabel(hoverTooltip.level) }}</strong>
+            </span>
+            <span v-if="hoverTooltip.deadline" class="meta-item">
+              Hạn khuyến nghị: <strong>{{ hoverTooltip.deadline }}</strong>
+            </span>
+            <span v-if="hoverTooltip.extraMeta" class="meta-item">
+              Nội dung: <strong>{{ hoverTooltip.extraMeta }}</strong>
+            </span>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -920,7 +1038,6 @@ import {
   ShieldCheck,
   Edit3,
   Trash2,
-  Info,
 } from "lucide-vue-next";
 import { trainingApi } from "../api/trainingApi";
 import { adminApi, type AdminUser } from "../api/adminApi";
@@ -987,6 +1104,8 @@ const deleteConfirm = ref<{
   type: "domain" | "program" | "course" | "chapter" | "lesson";
   id: string;
   name: string;
+  parentId?: string;
+  grandParentId?: string;
   title: string;
   message: string;
   busy: boolean;
@@ -995,6 +1114,8 @@ const deleteConfirm = ref<{
   type: "lesson",
   id: "",
   name: "",
+  parentId: "",
+  grandParentId: "",
   title: "",
   message: "",
   busy: false,
@@ -1515,33 +1636,196 @@ const affectedStaff = computed(() => {
   );
 });
 
+// ================= TRUE LAZY FETCH & SERVER-SIDE PAGINATION STATE =================
+const DEFAULT_COURSE_BRANCH_SIZE = 6;
+const programCoursesMap = ref<Record<string, Course[]>>({});
+const programTotalCoursesMap = ref<Record<string, number>>({});
+const programCoursePageMap = ref<Record<string, number>>({});
+const programCourseHasNextMap = ref<Record<string, boolean>>({});
+const loadingProgramCoursesMap = ref<Record<string, boolean>>({});
+const loadingMoreProgramCoursesMap = ref<Record<string, boolean>>({});
+const loadingCourseChaptersMap = ref<Record<string, boolean>>({});
+const courseBranchLimits = ref<Record<string, number>>({});
+const auxiliaryModalLoaded = ref(false);
+const searchCoursesLoaded = ref(false);
+
+function mergeCoursesIntoStore(newCourses: Course[]) {
+  if (!newCourses?.length) return;
+  const map = new Map<string, Course>();
+  for (const c of courses.value) {
+    map.set(c.id, c);
+  }
+  for (const c of newCourses) {
+    map.set(c.id, c);
+  }
+  courses.value = Array.from(map.values());
+}
+
+async function ensureModalAuxiliaryDataLoaded() {
+  if (auxiliaryModalLoaded.value) return;
+  auxiliaryModalLoaded.value = true;
+  try {
+    const [optionsRes, allUsers] = await Promise.allSettled([
+      axiosClient.get("/api/admin/options/catalog"),
+      adminApi.getAllUsers(),
+    ]);
+    if (optionsRes.status === "fulfilled" && optionsRes.value.data?.units) {
+      unitsList.value = optionsRes.value.data.units;
+    }
+    if (allUsers.status === "fulfilled" && Array.isArray(allUsers.value)) {
+      systemUsers.value = allUsers.value;
+    }
+  } catch (e) {
+    console.warn("Could not lazy-load auxiliary modal data:", e);
+  }
+}
+
+async function ensureProgramCoursesLoaded(programId: string, forceReload = false) {
+  if (
+    !programId ||
+    (!forceReload && programCoursesMap.value[programId] !== undefined) ||
+    loadingProgramCoursesMap.value[programId]
+  ) {
+    return;
+  }
+  loadingProgramCoursesMap.value = { ...loadingProgramCoursesMap.value, [programId]: true };
+  try {
+    const fetchSize = Math.max(DEFAULT_COURSE_BRANCH_SIZE, getCourseBranchLimit(programId));
+    const res = await axiosClient.get(`/api/admin/courses/by-program/${programId}`, {
+      params: { page: 0, size: fetchSize },
+    });
+    const data = res.data || {};
+    const items: Course[] = (data.items || (Array.isArray(data) ? data : [])).filter(
+      (c: Course) => c.status !== "DELETED"
+    );
+    programCoursesMap.value = {
+      ...programCoursesMap.value,
+      [programId]: items,
+    };
+    programTotalCoursesMap.value = {
+      ...programTotalCoursesMap.value,
+      [programId]: typeof data.totalElements === "number" ? data.totalElements : items.length,
+    };
+    programCoursePageMap.value = {
+      ...programCoursePageMap.value,
+      [programId]: 0,
+    };
+    programCourseHasNextMap.value = {
+      ...programCourseHasNextMap.value,
+      [programId]: !!data.hasNext,
+    };
+    mergeCoursesIntoStore(items);
+  } catch (err) {
+    console.error(`Lỗi tải khóa học cho chương trình ${programId}:`, err);
+    programCoursesMap.value = { ...programCoursesMap.value, [programId]: [] };
+    programTotalCoursesMap.value = { ...programTotalCoursesMap.value, [programId]: 0 };
+    programCourseHasNextMap.value = { ...programCourseHasNextMap.value, [programId]: false };
+  } finally {
+    loadingProgramCoursesMap.value = { ...loadingProgramCoursesMap.value, [programId]: false };
+  }
+}
+
+async function fetchMoreCoursesForProgram(programId: string) {
+  if (
+    !programId ||
+    loadingMoreProgramCoursesMap.value[programId] ||
+    !programCourseHasNextMap.value[programId]
+  ) {
+    return;
+  }
+  const nextPage = (programCoursePageMap.value[programId] ?? 0) + 1;
+  loadingMoreProgramCoursesMap.value = {
+    ...loadingMoreProgramCoursesMap.value,
+    [programId]: true,
+  };
+  try {
+    const res = await axiosClient.get(`/api/admin/courses/by-program/${programId}`, {
+      params: { page: nextPage, size: DEFAULT_COURSE_BRANCH_SIZE },
+    });
+    const data = res.data || {};
+    const newItems: Course[] = (data.items || []).filter(
+      (c: Course) => c.status !== "DELETED"
+    );
+    const existing = programCoursesMap.value[programId] || [];
+    const existingIds = new Set(existing.map((c) => c.id));
+    const merged = [...existing, ...newItems.filter((c) => !existingIds.has(c.id))];
+
+    programCoursesMap.value = {
+      ...programCoursesMap.value,
+      [programId]: merged,
+    };
+    if (typeof data.totalElements === "number") {
+      programTotalCoursesMap.value = {
+        ...programTotalCoursesMap.value,
+        [programId]: data.totalElements,
+      };
+    }
+    programCoursePageMap.value = {
+      ...programCoursePageMap.value,
+      [programId]: nextPage,
+    };
+    programCourseHasNextMap.value = {
+      ...programCourseHasNextMap.value,
+      [programId]: !!data.hasNext,
+    };
+    mergeCoursesIntoStore(newItems);
+  } catch (err) {
+    console.error(`Lỗi tải thêm khóa học cho chương trình ${programId}:`, err);
+  } finally {
+    loadingMoreProgramCoursesMap.value = {
+      ...loadingMoreProgramCoursesMap.value,
+      [programId]: false,
+    };
+  }
+}
+
+function isProgramCourseCountLoaded(programId: string): boolean {
+  return (
+    !!loadingProgramCoursesMap.value[programId] ||
+    programTotalCoursesMap.value[programId] !== undefined
+  );
+}
+
+function getProgramTotalCoursesCount(programId: string): number {
+  const serverTotal = programTotalCoursesMap.value[programId];
+  if (typeof serverTotal === "number") {
+    return Math.max(serverTotal, getCoursesForProgram(programId).length);
+  }
+  return getCoursesForProgram(programId).length;
+}
+
 // Expand only operating branch
 function expandOperatingBranch(type: string, id?: string, parentId?: string) {
   if (type === "domain") {
     if (id) expandedIds.value.add(id);
   } else if (type === "program") {
     if (parentId) expandedIds.value.add(parentId);
-    if (id) expandedIds.value.add(id);
+    if (id) {
+      expandedIds.value.add(id);
+      ensureProgramCoursesLoaded(id, true);
+    }
   } else if (type === "course") {
     const crs = courses.value.find((c) => c.id === id);
     const effectiveParentId = parentId || crs?.programId;
     if (effectiveParentId) {
       expandedIds.value.add(effectiveParentId);
+      ensureProgramCoursesLoaded(effectiveParentId, true);
       const prog = programs.value.find((p) => p.id === effectiveParentId);
       if (prog?.domainId) expandedIds.value.add(prog.domainId);
     }
     if (id) {
       expandedIds.value.add(id);
-      loadChaptersForCourse(id);
+      loadChaptersForCourse(id, true);
     }
   } else if (type === "chapter") {
     if (parentId) {
       expandedIds.value.add(parentId);
-      loadChaptersForCourse(parentId);
+      loadChaptersForCourse(parentId, true);
       const crs = courses.value.find((c) => c.id === parentId);
       if (crs) {
         if (crs.programId) {
           expandedIds.value.add(crs.programId);
+          ensureProgramCoursesLoaded(crs.programId);
           const prog = programs.value.find((p) => p.id === crs.programId);
           if (prog?.domainId) expandedIds.value.add(prog.domainId);
         }
@@ -1560,9 +1844,11 @@ function expandOperatingBranch(type: string, id?: string, parentId?: string) {
       }
       if (courseId) {
         expandedIds.value.add(courseId);
+        loadChaptersForCourse(courseId, true);
         const crs = courses.value.find((c) => c.id === courseId);
         if (crs?.programId) {
           expandedIds.value.add(crs.programId);
+          ensureProgramCoursesLoaded(crs.programId);
           const prog = programs.value.find((p) => p.id === crs.programId);
           if (prog?.domainId) expandedIds.value.add(prog.domainId);
         }
@@ -1572,7 +1858,7 @@ function expandOperatingBranch(type: string, id?: string, parentId?: string) {
   }
 }
 
-// Load full tree catalog & auxiliary options
+// Load lightweight catalog (Domains + Programs only) — True Lazy Fetch for Courses & Chapters
 async function loadTreeData(expandTarget?: { type: string; id?: string; parentId?: string }) {
   loading.value = true;
   try {
@@ -1580,37 +1866,30 @@ async function loadTreeData(expandTarget?: { type: string; id?: string; parentId
     domains.value = catalog.domains || [];
     programs.value = catalog.programs || [];
 
-    // Load courses
-    const allCourses = await trainingApi.courses();
-    courses.value = allCourses || [];
-
-    // Load units from options
-    try {
-      const optionsRes = await axiosClient.get("/api/admin/options/catalog");
-      if (optionsRes.data?.units) {
-        unitsList.value = optionsRes.data.units;
-      }
-    } catch (e) {
-      console.warn("Could not load units from options:", e);
-    }
-
-    // Load users for staff calculation
-    try {
-      systemUsers.value = await adminApi.getAllUsers();
-    } catch (e) {
-      console.warn("Could not load users for enroll preview:", e);
-    }
-
-    // Preload chapters for courses without auto-expanding
-    for (const c of courses.value) {
-      loadChaptersForCourse(c.id);
+    // Load units lightly so unit badges on courses/programs have names
+    if (!unitsList.value.length) {
+      axiosClient
+        .get("/api/admin/options/catalog")
+        .then((res) => {
+          if (res.data?.units) unitsList.value = res.data.units;
+        })
+        .catch(() => {});
     }
 
     if (props.initialCourseId) {
+      // Only fetch the specific course if needed
+      if (!courses.value.some((c) => c.id === props.initialCourseId)) {
+        try {
+          const singleCourseRes = await axiosClient.get(`/api/courses/${props.initialCourseId}`);
+          if (singleCourseRes.data) {
+            mergeCoursesIntoStore([singleCourseRes.data]);
+          }
+        } catch (e) {}
+      }
       expandedIds.value.clear();
       expandOperatingBranch("course", props.initialCourseId);
       selectedId.value = props.initialCourseId;
-      await loadChaptersForCourse(props.initialCourseId);
+      await loadChaptersForCourse(props.initialCourseId, true);
       const courseChaps = chaptersMap.value[props.initialCourseId] || [];
       for (const ch of courseChaps) {
         expandedIds.value.add(ch.id);
@@ -1619,9 +1898,10 @@ async function loadTreeData(expandTarget?: { type: string; id?: string; parentId
       expandedIds.value.clear();
       expandOperatingBranch(expandTarget.type, expandTarget.id, expandTarget.parentId);
     } else if (expandedIds.value.size === 0) {
-      // First initial load: only expand the first domain
-      if (domains.value.length > 0) {
-        expandedIds.value.add(domains.value[0].id);
+      // First initial load: only expand the first domain (zero course/chapter calls until program is expanded!)
+      const firstActiveDomain = domains.value.find((d) => d.status !== "DELETED");
+      if (firstActiveDomain) {
+        expandedIds.value.add(firstActiveDomain.id);
       }
     }
   } catch (error) {
@@ -1632,12 +1912,29 @@ async function loadTreeData(expandTarget?: { type: string; id?: string; parentId
   }
 }
 
-async function loadChaptersForCourse(courseId: string) {
+async function loadChaptersForCourse(courseId: string, forceReload = false) {
+  if (
+    !courseId ||
+    (!forceReload && chaptersMap.value[courseId] !== undefined) ||
+    loadingCourseChaptersMap.value[courseId]
+  ) {
+    return;
+  }
+  loadingCourseChaptersMap.value = { ...loadingCourseChaptersMap.value, [courseId]: true };
   try {
     const chapters = await trainingApi.chapters(courseId);
-    chaptersMap.value[courseId] = chapters || [];
+    chaptersMap.value = {
+      ...chaptersMap.value,
+      [courseId]: chapters || [],
+    };
   } catch (err) {
     console.error(`Lỗi tải chương cho khóa ${courseId}:`, err);
+    chaptersMap.value = {
+      ...chaptersMap.value,
+      [courseId]: [],
+    };
+  } finally {
+    loadingCourseChaptersMap.value = { ...loadingCourseChaptersMap.value, [courseId]: false };
   }
 }
 
@@ -1647,6 +1944,9 @@ function getProgramsForDomain(domainId: string) {
 }
 
 function getCoursesForProgram(programId: string) {
+  if (programCoursesMap.value[programId] !== undefined && !searchQuery.value.trim()) {
+    return programCoursesMap.value[programId].filter((c) => c.status !== "DELETED");
+  }
   return courses.value.filter((c) => c.programId === programId && c.status !== "DELETED");
 }
 
@@ -1654,7 +1954,7 @@ function getChaptersForCourse(courseId: string) {
   return (chaptersMap.value[courseId] || []).filter((ch) => ch.status !== "DELETED");
 }
 
-// Expand / Collapse
+// Expand / Collapse (with On-Demand Lazy Fetch)
 function isExpanded(id: string) {
   return expandedIds.value.has(id);
 }
@@ -1664,6 +1964,14 @@ function toggleNode(id: string) {
     expandedIds.value.delete(id);
   } else {
     expandedIds.value.add(id);
+    // Nếu mở rộng 1 Chương trình -> Lazy fetch trang đầu (6 khóa học) của Chương trình đó
+    if (programs.value.some((p) => p.id === id)) {
+      ensureProgramCoursesLoaded(id);
+    }
+    // Nếu mở rộng 1 Khóa học -> Lazy fetch danh sách Chương của đúng Khóa học đó
+    else if (courses.value.some((c) => c.id === id)) {
+      loadChaptersForCourse(id);
+    }
   }
 }
 
@@ -1671,12 +1979,15 @@ function toggleAllNodes(expand: boolean) {
   if (!expand) {
     expandedIds.value.clear();
   } else {
-    domains.value.forEach((d) => expandedIds.value.add(d.id));
-    programs.value.forEach((p) => expandedIds.value.add(p.id));
-    courses.value.forEach((c) => expandedIds.value.add(c.id));
-    Object.values(chaptersMap.value)
-      .flat()
-      .forEach((ch) => expandedIds.value.add(ch.id));
+    // Chỉ mở rộng các Lĩnh vực & Chương trình thuộc TRANG HIỆN TẠI để tránh query ồ ạt
+    for (const d of pagedDomains.value) {
+      expandedIds.value.add(d.id);
+      const progs = getProgramsForDomain(d.id);
+      for (const p of progs) {
+        expandedIds.value.add(p.id);
+        ensureProgramCoursesLoaded(p.id);
+      }
+    }
   }
 }
 
@@ -1716,6 +2027,7 @@ function openAddModal(
   parentObj?: any,
   grandParentObj?: any
 ) {
+  ensureModalAuxiliaryDataLoaded();
   const parent = parentObj || grandParentObj;
   const resolvedParent =
     (parent?.id && domains.value.find((d) => d.id === parent.id)) ||
@@ -1836,6 +2148,7 @@ function openEditModal(
   parentObj?: any,
   grandParentObj?: any
 ) {
+  ensureModalAuxiliaryDataLoaded();
   hasRestoredDraft.value = false;
   selectedId.value = item.id;
   emit("select", { type, data: item, parent: parentObj || grandParentObj });
@@ -2066,7 +2379,9 @@ async function submitAddModal() {
 // Delete handling
 function promptDeleteNode(
   type: "domain" | "program" | "course" | "chapter" | "lesson",
-  item: any
+  item: any,
+  parentObj?: any,
+  grandParentObj?: any
 ) {
   const name = item.title || item.name || item.code || "";
   let typeLabel = "bài học";
@@ -2080,20 +2395,21 @@ function promptDeleteNode(
     }
   } else if (type === "program") {
     typeLabel = "chương trình đào tạo";
-    const crss = getCoursesForProgram(item.id);
-    if (crss.length > 0) {
-      warnExtra = ` Chương trình này hiện có ${crss.length} khóa học. Xóa chương trình sẽ đồng thời xóa toàn bộ khóa học bên trong.`;
+    const totalCrss = getProgramTotalCoursesCount(item.id);
+    if (totalCrss > 0) {
+      warnExtra = ` Chương trình này hiện có ${totalCrss} khóa học. Xóa chương trình sẽ đồng thời xóa toàn bộ khóa học bên trong.`;
     }
   } else if (type === "course") {
     typeLabel = "khóa học";
-    const chaps = chaptersMap.value[item.id] || [];
+    const chaps = getChaptersForCourse(item.id);
     if (chaps.length > 0) {
       warnExtra = ` Khóa học này hiện có ${chaps.length} chương. Xóa khóa học sẽ đồng thời xóa toàn bộ chương và bài học bên trong.`;
     }
   } else if (type === "chapter") {
     typeLabel = "chương";
-    if (item.lessons?.length > 0) {
-      warnExtra = ` Chương này hiện có ${item.lessons.length} bài học. Xóa chương sẽ đồng thời xóa toàn bộ bài học bên trong.`;
+    const activeLessons = (item.lessons || []).filter((l: any) => l.status !== "DELETED");
+    if (activeLessons.length > 0) {
+      warnExtra = ` Chương này hiện có ${activeLessons.length} bài học. Xóa chương sẽ đồng thời xóa toàn bộ bài học bên trong.`;
     }
   }
 
@@ -2102,6 +2418,8 @@ function promptDeleteNode(
     type,
     id: item.id,
     name,
+    parentId: parentObj?.id || item.programId || item.courseId || item.chapterId || item.domainId || "",
+    grandParentId: grandParentObj?.id || item.courseId || "",
     title: `Xác nhận xóa ${typeLabel}`,
     message: `Bạn có chắc chắn muốn xóa ${typeLabel} "${name}"?${warnExtra} Trạng thái sẽ được chuyển sang DELETED.`,
     busy: false,
@@ -2114,62 +2432,102 @@ function closeDeleteModal() {
 }
 
 async function executeDeleteNode() {
-  const { type, id, name } = deleteConfirm.value;
+  const { type, id, name, parentId, grandParentId } = deleteConfirm.value;
   if (!id) return;
 
   deleteConfirm.value.busy = true;
   try {
     if (type === "domain") {
-      const d = domains.value.find((item) => item.id === id);
-      await trainingApi.saveDomain({
-        id: id,
-        name: d?.name || name,
-        code: d?.code,
-        status: "DELETED",
-      });
-      // Soft-delete child programs & courses
-      const progs = getProgramsForDomain(id);
-      for (const p of progs) {
-        await trainingApi.saveProgram({
-          id: p.id,
-          name: p.name,
-          code: p.code,
-          domainId: id,
-          status: "DELETED",
-        });
-        const crss = getCoursesForProgram(p.id);
-        for (const c of crss) {
-          await adminApi.deleteCourse(c.id);
-        }
-      }
+      await trainingApi.deleteDomain(id);
+      const removedProgIds = new Set(getProgramsForDomain(id).map((p) => p.id));
+      domains.value = domains.value.filter((d) => d.id !== id);
+      programs.value = programs.value.filter((p) => p.domainId !== id);
+      courses.value = courses.value.filter((c) => !c.programId || !removedProgIds.has(c.programId));
+      expandedIds.value.delete(id);
+      await loadTreeData();
       showToast(`Đã xóa lĩnh vực "${name}" thành công!`, "success");
     } else if (type === "program") {
-      const p = programs.value.find((item) => item.id === id);
-      await trainingApi.saveProgram({
-        id: id,
-        name: p?.name || name,
-        code: p?.code,
-        domainId: p?.domainId,
-        status: "DELETED",
-      });
-      const crss = getCoursesForProgram(id);
-      for (const c of crss) {
-        await adminApi.deleteCourse(c.id);
-      }
+      await trainingApi.deleteProgram(id);
+      programs.value = programs.value.filter((p) => p.id !== id);
+      courses.value = courses.value.filter((c) => c.programId !== id);
+      const nextProgCourses = { ...programCoursesMap.value };
+      delete nextProgCourses[id];
+      programCoursesMap.value = nextProgCourses;
+      const nextProgTotals = { ...programTotalCoursesMap.value };
+      delete nextProgTotals[id];
+      programTotalCoursesMap.value = nextProgTotals;
+      expandedIds.value.delete(id);
+      await loadTreeData();
       showToast(`Đã xóa chương trình "${name}" thành công!`, "success");
     } else if (type === "course") {
+      const targetCourse = courses.value.find((c) => c.id === id);
+      const progId = parentId || targetCourse?.programId || "";
       await adminApi.deleteCourse(id);
+      courses.value = courses.value.filter((c) => c.id !== id);
+      const nextChaps = { ...chaptersMap.value };
+      delete nextChaps[id];
+      chaptersMap.value = nextChaps;
+      expandedIds.value.delete(id);
+      if (progId) {
+        if (programCoursesMap.value[progId]) {
+          programCoursesMap.value = {
+            ...programCoursesMap.value,
+            [progId]: programCoursesMap.value[progId].filter((c) => c.id !== id),
+          };
+        }
+        await ensureProgramCoursesLoaded(progId, true);
+      }
       showToast(`Đã xóa khóa học "${name}" thành công!`, "success");
     } else if (type === "chapter") {
       await trainingApi.deleteChapter(id);
+      let courseId = parentId || "";
+      if (!courseId) {
+        for (const [cId, chaps] of Object.entries(chaptersMap.value)) {
+          if (chaps.some((ch) => ch.id === id)) {
+            courseId = cId;
+            break;
+          }
+        }
+      }
+      expandedIds.value.delete(id);
+      if (courseId) {
+        if (chaptersMap.value[courseId]) {
+          chaptersMap.value = {
+            ...chaptersMap.value,
+            [courseId]: chaptersMap.value[courseId].filter((ch) => ch.id !== id),
+          };
+        }
+        await loadChaptersForCourse(courseId, true);
+      }
       showToast(`Đã xóa chương "${name}" thành công!`, "success");
     } else if (type === "lesson") {
       await trainingApi.deleteLesson(id);
+      let courseId = grandParentId || "";
+      if (!courseId) {
+        for (const [cId, chaps] of Object.entries(chaptersMap.value)) {
+          if (chaps.some((ch) => (ch.lessons || []).some((l) => l.id === id))) {
+            courseId = cId;
+            break;
+          }
+        }
+      }
+      expandedIds.value.delete(id);
+      if (courseId) {
+        if (chaptersMap.value[courseId]) {
+          chaptersMap.value = {
+            ...chaptersMap.value,
+            [courseId]: chaptersMap.value[courseId].map((ch) => ({
+              ...ch,
+              lessons: (ch.lessons || []).filter((l) => l.id !== id),
+            })),
+          };
+        }
+        await loadChaptersForCourse(courseId, true);
+      }
       showToast(`Đã xóa bài học "${name}" thành công!`, "success");
     }
 
     deleteConfirm.value.show = false;
-    await loadTreeData();
     emit("refresh");
   } catch (error: any) {
     const msg = error.response?.data?.message || "Không thể xóa nội dung này. Vui lòng kiểm tra lại!";
@@ -2191,7 +2549,7 @@ function editLessonBlock(lesson: Lesson, blockType: string) {
   });
 }
 
-// Search Filter
+// Search Filter & 2-Tier Tree Pagination
 const filteredDomains = computed(() => {
   const activeDomains = domains.value.filter((d) => d.status !== "DELETED");
   if (!searchQuery.value.trim()) return activeDomains;
@@ -2207,6 +2565,190 @@ const filteredDomains = computed(() => {
           getCoursesForProgram(p.id).some((c) => c.name.toLowerCase().includes(q))
       )
   );
+});
+
+const treeDomainPage = ref(1);
+const treeDomainPageSize = ref(5);
+
+const treeDomainTotalPages = computed(() =>
+  Math.max(1, Math.ceil(filteredDomains.value.length / treeDomainPageSize.value))
+);
+
+const pagedDomains = computed(() => {
+  const start = (treeDomainPage.value - 1) * treeDomainPageSize.value;
+  return filteredDomains.value.slice(start, start + treeDomainPageSize.value);
+});
+
+const totalActiveProgramsCount = computed(() =>
+  filteredDomains.value.reduce((acc, d) => acc + getProgramsForDomain(d.id).length, 0)
+);
+
+watch([searchQuery, treeDomainPageSize], () => {
+  treeDomainPage.value = 1;
+});
+
+watch(filteredDomains, () => {
+  if (treeDomainPage.value > treeDomainTotalPages.value) {
+    treeDomainPage.value = treeDomainTotalPages.value;
+  }
+});
+
+// Tier-2 In-Branch Course Pagination inside a Program (Server-Side Lazy Fetch)
+function getCourseBranchLimit(programId: string): number {
+  return courseBranchLimits.value[programId] || DEFAULT_COURSE_BRANCH_SIZE;
+}
+
+function getVisibleCoursesForProgram(programId: string): Course[] {
+  const all = getCoursesForProgram(programId);
+  if (searchQuery.value.trim()) {
+    return all;
+  }
+  return all.slice(0, getCourseBranchLimit(programId));
+}
+
+async function expandCourseBranchLimit(programId: string) {
+  const total = getProgramTotalCoursesCount(programId);
+  const current = getCourseBranchLimit(programId);
+  const nextLimit = Math.min(total, current + DEFAULT_COURSE_BRANCH_SIZE);
+  courseBranchLimits.value[programId] = nextLimit;
+
+  const loadedCount = (programCoursesMap.value[programId] || []).length;
+  if (nextLimit > loadedCount && programCourseHasNextMap.value[programId]) {
+    await fetchMoreCoursesForProgram(programId);
+  }
+}
+
+function resetCourseBranchLimit(programId: string) {
+  courseBranchLimits.value[programId] = DEFAULT_COURSE_BRANCH_SIZE;
+}
+
+// ================= RICH HOVER DESCRIPTION TOOLTIP =================
+const hoverTooltip = ref<{
+  visible: boolean;
+  x: number;
+  y: number;
+  type: string;
+  typeLabel: string;
+  code: string;
+  title: string;
+  description: string;
+  businessModule: string;
+  level: string;
+  deadline: string;
+  extraMeta: string;
+}>({
+  visible: false,
+  x: 0,
+  y: 0,
+  type: "domain",
+  typeLabel: "Lĩnh vực đào tạo",
+  code: "",
+  title: "",
+  description: "",
+  businessModule: "",
+  level: "",
+  deadline: "",
+  extraMeta: "",
+});
+
+function formatLevelLabel(level?: string): string {
+  switch (level) {
+    case "BASIC":
+      return "Cơ bản";
+    case "ADVANCED":
+      return "Nâng cao";
+    case "EXPERT":
+      return "Chuyên gia";
+    case "COMPLIANCE":
+      return "Định kỳ bắt buộc";
+    default:
+      return level || "";
+  }
+}
+
+function stripLeadingIndexPrefix(text: string | undefined, prefixWord: string): string {
+  if (!text) return "";
+  const regex = new RegExp(`^${prefixWord}\\s*\\d+\\s*[:.-]\\s*`, "i");
+  return text.replace(regex, "").trim() || text;
+}
+
+function showNodeTooltip(
+  e: MouseEvent,
+  type: "domain" | "program" | "course" | "chapter" | "lesson",
+  rawObj: any,
+  parentObj?: any
+) {
+  if (!rawObj) return;
+  const target = e.currentTarget as HTMLElement;
+  const rect = target.getBoundingClientRect();
+
+  const popoverWidth = 340;
+  let left = rect.left;
+  if (left + popoverWidth > window.innerWidth - 20) {
+    left = Math.max(16, window.innerWidth - popoverWidth - 20);
+  }
+  let top = rect.bottom + 8;
+  if (top + 180 > window.innerHeight) {
+    top = Math.max(16, rect.top - 160);
+  }
+
+  const typeLabelMap: Record<string, string> = {
+    domain: "Lĩnh vực đào tạo",
+    program: "Chương trình đào tạo",
+    course: "Khóa học nghiệp vụ",
+    chapter: "Chương học",
+    lesson: "Bài giảng",
+  };
+
+  let description = rawObj.description || rawObj.hint || "";
+  let extraMeta = "";
+  if (type === "chapter") {
+    const lessonCount = (rawObj.lessons || []).filter((l: any) => l.status !== "DELETED").length;
+    if (!description) {
+      description = `Chương học thuộc khóa "${parentObj?.name || "Khóa học hiện tại"}", bao gồm ${lessonCount} bài giảng nghiệp vụ.`;
+    }
+    extraMeta = `${lessonCount} bài giảng`;
+  } else if (type === "lesson") {
+    const parts: string[] = [];
+    if (rawObj.videoUrl) parts.push("Video");
+    if (rawObj.documents?.length) parts.push(`${rawObj.documents.length} Tài liệu`);
+    if (rawObj.procedureSteps?.length) parts.push(`${rawObj.procedureSteps.length} Bước quy trình`);
+    if (rawObj.hasQuiz) parts.push("Quiz đánh giá");
+    extraMeta = parts.length ? parts.join(" • ") : "Chưa đính kèm học liệu";
+  }
+
+  hoverTooltip.value = {
+    visible: true,
+    x: left,
+    y: top,
+    type,
+    typeLabel: typeLabelMap[type] || "Nội dung đào tạo",
+    code: rawObj.code || "",
+    title: rawObj.name || rawObj.title || "",
+    description,
+    businessModule: rawObj.businessModule || parentObj?.businessModule || "",
+    level: type === "course" ? rawObj.level || "" : "",
+    deadline: type === "course" ? rawObj.completionDeadline || "" : "",
+    extraMeta,
+  };
+}
+
+function hideNodeTooltip() {
+  hoverTooltip.value.visible = false;
+}
+
+// On-Demand Search: chỉ khi người dùng gõ từ khóa tìm kiếm mới tải danh sách khóa học phục vụ lọc toàn cây
+let treeSearchDebounceTimer: any = null;
+watch(searchQuery, (q) => {
+  if (treeSearchDebounceTimer) clearTimeout(treeSearchDebounceTimer);
+  if (!q.trim() || searchCoursesLoaded.value) return;
+  treeSearchDebounceTimer = setTimeout(async () => {
+    try {
+      const allCourses = await trainingApi.courses();
+      mergeCoursesIntoStore(allCourses || []);
+      searchCoursesLoaded.value = true;
+    } catch (e) {}
+  }, 300);
 });
 
 onMounted(() => {
@@ -2231,15 +2773,22 @@ watch(
 </script>
 
 <style scoped>
+/* ==========================================================================
+   IMPECCABLE DESIGN SYSTEM: CURRICULUM TREE STUDIO (7 LEVELS)
+   Synchronized with global Light & Dark Mode tokens + BIDV Emerald Brand
+   ========================================================================== */
+
 .curriculum-tree-studio {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--bg-surface, #1e293b);
-  border-radius: 8px;
-  border: 1px solid var(--border-color, #334155);
+  background: var(--bg-card);
+  border-radius: 14px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
   font-family: inherit;
+  color: var(--text-main);
 }
 
 /* Header */
@@ -2247,65 +2796,69 @@ watch(
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.85rem 1rem;
-  border-bottom: 1px solid var(--border-color, #334155);
-  background: rgba(15, 23, 42, 0.4);
+  padding: 0.95rem 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-main);
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.65rem;
 }
 
 .tree-title {
   margin: 0;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--text-primary, #f8fafc);
+  font-size: 0.96rem;
+  font-weight: 700;
+  color: var(--text-main);
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
 .title-icon {
-  color: var(--brand-color, #10b981);
+  color: var(--primary-ink);
 }
 
 .tree-badge {
-  font-size: 0.7rem;
-  padding: 0.15rem 0.45rem;
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
-  border-radius: 4px;
-  font-weight: 500;
+  font-size: 0.72rem;
+  padding: 0.18rem 0.6rem;
+  background: var(--primary-light);
+  color: var(--primary-ink);
+  border: 1px solid var(--success-border);
+  border-radius: 9999px;
+  font-weight: 600;
 }
 
 .header-actions {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.5rem;
 }
 
 .btn-studio {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.4rem 0.75rem;
-  border-radius: 6px;
+  padding: 0.48rem 0.9rem;
+  border-radius: 10px;
   font-size: 0.82rem;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  border: none;
-  transition: all 0.15s ease;
+  border: 1px solid transparent;
+  transition: all 0.16s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .btn-studio.btn-primary {
-  background: #10b981;
+  background: var(--primary-color);
   color: #ffffff;
+  border-color: var(--primary-color);
+  box-shadow: 0 2px 6px rgba(0, 91, 65, 0.2);
 }
 
 .btn-studio.btn-primary:hover {
-  background: #059669;
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
 }
 
 /* Node action button styled like header add button */
@@ -2313,34 +2866,35 @@ watch(
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.28rem 0.65rem;
-  border-radius: 6px;
+  padding: 0.3rem 0.7rem;
+  border-radius: 8px;
   font-size: 0.76rem;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  border: none;
+  border: 1px solid transparent;
   transition: all 0.15s ease;
   white-space: nowrap;
 }
 
 .btn-studio-node.btn-primary-node {
-  background: #10b981;
+  background: var(--primary-color);
   color: #ffffff;
 }
 
 .btn-studio-node.btn-primary-node:hover {
-  background: #059669;
+  background: var(--primary-hover);
 }
 
 .btn-studio.btn-ghost {
-  background: rgba(51, 65, 85, 0.5);
-  color: #cbd5e1;
-  border: 1px solid #334155;
+  background: var(--bg-card);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
 }
 
 .btn-studio.btn-ghost:hover {
-  background: #334155;
-  color: #ffffff;
+  background: var(--primary-light);
+  border-color: var(--primary-color);
+  color: var(--primary-ink);
 }
 
 /* Search */
@@ -2348,40 +2902,42 @@ watch(
   position: relative;
   display: flex;
   align-items: center;
-  padding: 0.6rem 1rem;
-  border-bottom: 1px solid var(--border-color, #334155);
-  background: rgba(15, 23, 42, 0.25);
+  padding: 0.7rem 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-card);
 }
 
 .search-icon {
   position: absolute;
-  left: 1.6rem;
-  color: #64748b;
+  left: 1.95rem;
+  color: var(--text-muted);
   pointer-events: none;
 }
 
 .tree-search-input {
   width: 100%;
-  padding: 0.45rem 2rem 0.45rem 2.2rem;
-  background: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 6px;
-  color: #f8fafc;
-  font-size: 0.82rem;
+  padding: 0.52rem 2.2rem 0.52rem 2.3rem;
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  color: var(--text-main);
+  font-size: 0.84rem;
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
 }
 
 .tree-search-input:focus {
-  border-color: #10b981;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px var(--primary-light);
+  background: var(--bg-card);
 }
 
 .clear-search-btn {
   position: absolute;
-  right: 1.5rem;
+  right: 1.8rem;
   background: none;
   border: none;
-  color: #64748b;
+  color: var(--text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -2390,14 +2946,14 @@ watch(
 }
 
 .clear-search-btn:hover {
-  color: #f8fafc;
+  color: var(--text-main);
 }
 
 /* Tree Scroll Container */
 .tree-scroll-container {
   flex: 1;
   overflow-y: auto;
-  padding: 0.75rem 0.5rem;
+  padding: 0.85rem 0.9rem;
 }
 
 .tree-empty-state {
@@ -2405,15 +2961,15 @@ watch(
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 3rem 1rem;
-  color: #64748b;
+  padding: 3.5rem 1rem;
+  color: var(--text-muted);
   text-align: center;
   gap: 0.75rem;
 }
 
 .spin-icon {
   animation: spin 1s linear infinite;
-  color: #10b981;
+  color: var(--primary-ink);
 }
 
 @keyframes spin {
@@ -2423,14 +2979,15 @@ watch(
 }
 
 .empty-icon {
-  color: #475569;
+  color: var(--primary-ink);
+  opacity: 0.75;
 }
 
 /* Tree Structure */
 .tree-root {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.35rem;
 }
 
 .tree-branch {
@@ -2440,14 +2997,14 @@ watch(
 }
 
 .tree-sub-tree {
-  margin-left: 1.25rem;
-  padding-left: 0.5rem;
-  border-left: 1px dashed rgba(100, 116, 139, 0.35);
+  margin-left: 1.35rem;
+  padding-left: 0.65rem;
+  border-left: 1.5px dashed var(--border-color);
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  margin-top: 0.15rem;
-  margin-bottom: 0.25rem;
+  gap: 0.25rem;
+  margin-top: 0.2rem;
+  margin-bottom: 0.3rem;
 }
 
 /* Node Styling */
@@ -2455,71 +3012,75 @@ watch(
   position: relative;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.45rem 0.6rem;
-  border-radius: 6px;
+  gap: 0.55rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
   background: transparent;
+  border: 1px solid transparent;
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: all 0.14s ease;
   user-select: none;
-  min-height: 36px;
+  min-height: 38px;
 }
 
 .tree-node:hover {
-  background: rgba(51, 65, 85, 0.45);
+  background: var(--primary-light);
+  border-color: var(--success-border);
 }
 
 .tree-node.active {
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  background: var(--primary-light);
+  border: 1px solid var(--primary-color);
+  color: var(--primary-ink);
 }
 
 /* Level specifics */
 .domain-node {
-  font-weight: 600;
-  color: #f1f5f9;
-  background: rgba(30, 41, 59, 0.7);
-  border: 1px solid rgba(51, 65, 85, 0.5);
+  font-weight: 700;
+  color: var(--text-main);
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
   margin-bottom: 0.15rem;
 }
 
 .domain-icon {
-  color: #38bdf8;
+  color: var(--info-ink);
 }
 
 .program-node {
-  font-weight: 500;
-  color: #e2e8f0;
+  font-weight: 600;
+  color: var(--text-main);
 }
 
 .program-icon {
-  color: #fbbf24;
+  color: var(--warning-ink);
 }
 
 .course-node {
-  color: #cbd5e1;
+  color: var(--text-main);
+  font-weight: 500;
 }
 
 .course-icon {
-  color: #34d399;
+  color: var(--success-ink);
 }
 
 .chapter-node {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 0.85rem;
 }
 
 .chapter-icon {
-  color: #a78bfa;
+  color: var(--purple-ink);
 }
 
 .lesson-node {
-  color: #cbd5e1;
-  font-size: 0.83rem;
+  color: var(--text-main);
+  font-size: 0.84rem;
 }
 
 .lesson-icon {
-  color: #f472b6;
+  color: var(--danger-ink);
 }
 
 /* Toggle Chevron */
@@ -2529,15 +3090,15 @@ watch(
   justify-content: center;
   background: none;
   border: none;
-  color: #64748b;
+  color: var(--text-muted);
   cursor: pointer;
-  padding: 0.1rem;
-  border-radius: 3px;
+  padding: 0.15rem;
+  border-radius: 4px;
 }
 
 .toggle-chevron:hover {
-  color: #f8fafc;
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--primary-ink);
+  background: var(--primary-light);
 }
 
 .toggle-chevron svg {
@@ -2552,7 +3113,7 @@ watch(
 .node-info {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.5rem;
   flex: 1;
   overflow: hidden;
   white-space: nowrap;
@@ -2565,20 +3126,22 @@ watch(
 }
 
 .node-code {
-  font-size: 0.72rem;
-  color: #64748b;
-  background: rgba(15, 23, 42, 0.6);
-  padding: 0.1rem 0.35rem;
-  border-radius: 4px;
-  font-family: monospace;
+  font-size: 0.73rem;
+  font-weight: 600;
+  color: var(--primary-ink);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 0.12rem 0.42rem;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 .node-desc-tooltip-trigger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #60a5fa;
-  opacity: 0.6;
+  color: var(--info-ink);
+  opacity: 0.7;
   cursor: help;
   transition: opacity 0.15s ease, transform 0.15s ease;
   flex-shrink: 0;
@@ -2587,12 +3150,11 @@ watch(
 .node-desc-tooltip-trigger:hover {
   opacity: 1;
   transform: scale(1.15);
-  color: #93c5fd;
 }
 
 .node-index {
   font-size: 0.78rem;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-weight: 600;
 }
 
@@ -2605,50 +3167,57 @@ watch(
 }
 
 .count-tag {
-  font-size: 0.7rem;
-  padding: 0.1rem 0.4rem;
-  background: rgba(15, 23, 42, 0.6);
-  color: #94a3b8;
-  border-radius: 4px;
-  border: 1px solid rgba(51, 65, 85, 0.4);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.14rem 0.5rem;
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  border-radius: 9999px;
+  border: 1px solid var(--border-color);
 }
 
 .meta-tag {
-  font-size: 0.68rem;
-  padding: 0.1rem 0.38rem;
-  border-radius: 4px;
-  font-weight: 500;
+  font-size: 0.7rem;
+  padding: 0.14rem 0.5rem;
+  border-radius: 9999px;
+  font-weight: 600;
   display: inline-flex;
   align-items: center;
-  gap: 0.2rem;
+  gap: 0.25rem;
 }
 
 .module-tag {
-  background: rgba(56, 189, 248, 0.15);
-  color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.3);
+  background: var(--info-surface);
+  color: var(--info-ink);
+  border: 1px solid var(--info-border);
 }
 
 .mandatory-tag {
-  background: rgba(59, 130, 246, 0.15);
-  color: #93c5fd;
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: var(--success-surface);
+  color: var(--success-ink);
+  border: 1px solid var(--success-border);
 }
 
 .status-pill {
-  font-size: 0.68rem;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.14rem 0.5rem;
+  border-radius: 9999px;
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
 }
 
 .status-pill.published {
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
+  background: var(--success-surface);
+  color: var(--success-ink);
+  border: 1px solid var(--success-border);
 }
 
 .status-pill.draft {
-  background: rgba(148, 163, 184, 0.15);
-  color: #94a3b8;
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
 }
 
 /* Mini block indicators */
@@ -2661,23 +3230,24 @@ watch(
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 3px;
-  background: rgba(15, 23, 42, 0.8);
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
 }
 
 .mini-block-badge.video {
-  color: #38bdf8;
+  color: var(--info-ink);
 }
 .mini-block-badge.docs {
-  color: #fbbf24;
+  color: var(--warning-ink);
 }
 .mini-block-badge.proc {
-  color: #a78bfa;
+  color: var(--purple-ink);
 }
 .mini-block-badge.quiz {
-  color: #10b981;
+  color: var(--success-ink);
 }
 
 /* Level 6 & 7: Blocks */
@@ -2689,20 +3259,21 @@ watch(
 }
 
 .block-node {
-  font-size: 0.78rem;
-  padding: 0.35rem 0.55rem;
-  color: #94a3b8;
+  font-size: 0.79rem;
+  padding: 0.35rem 0.6rem;
+  color: var(--text-muted);
   border: 1px solid transparent;
-  min-height: 28px;
+  min-height: 30px;
 }
 
 .block-node:hover {
-  background: rgba(30, 41, 59, 0.6);
-  color: #f1f5f9;
+  background: var(--primary-light);
+  color: var(--primary-ink);
 }
 
 .block-node.active {
-  color: #cbd5e1;
+  color: var(--primary-ink);
+  font-weight: 600;
 }
 
 .block-icon {
@@ -2714,8 +3285,8 @@ watch(
 }
 
 .block-check {
-  font-size: 0.72rem;
-  color: #10b981;
+  font-size: 0.74rem;
+  color: var(--success-ink);
   font-weight: bold;
 }
 
@@ -2723,7 +3294,7 @@ watch(
 .node-hover-actions {
   display: none;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.3rem;
   margin-left: 0.4rem;
 }
 
@@ -2736,62 +3307,66 @@ watch(
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  background: #334155;
-  border: 1px solid #475569;
-  border-radius: 4px;
-  color: #cbd5e1;
+  width: 26px;
+  height: 26px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: all 0.14s ease;
 }
 
 .hover-action-btn:hover {
-  background: #10b981;
-  border-color: #10b981;
+  background: var(--primary-color);
+  border-color: var(--primary-color);
   color: #ffffff;
 }
 
 .hover-action-btn.add-btn:hover {
-  background: #10b981;
-  border-color: #10b981;
+  background: var(--primary-color);
+  border-color: var(--primary-color);
 }
 
 .hover-action-btn.edit-btn:hover {
-  background: #3b82f6;
-  border-color: #3b82f6;
+  background: var(--primary-color);
+  border-color: var(--primary-color);
   color: #ffffff;
 }
 
 .hover-action-btn.delete-btn:hover {
-  background: #ef4444;
-  border-color: #ef4444;
+  background: #dc2626;
+  border-color: #dc2626;
   color: #ffffff;
 }
 
 .btn-studio-node.btn-editor-node {
-  background: #3b82f6;
-  color: #ffffff;
+  background: var(--info-surface);
+  color: var(--info-ink);
+  border: 1px solid var(--info-border);
 }
 
 .btn-studio-node.btn-editor-node:hover {
-  background: #2563eb;
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #ffffff;
 }
 
 .btn-tooltip {
   position: absolute;
-  top: -24px;
+  top: -26px;
   right: 0;
-  background: #09101d;
-  color: #f8fafc;
-  font-size: 0.68rem;
-  padding: 0.15rem 0.4rem;
-  border-radius: 3px;
+  background: var(--bg-card);
+  color: var(--text-main);
+  font-size: 0.7rem;
+  padding: 0.18rem 0.45rem;
+  border-radius: 6px;
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.15s ease;
-  border: 1px solid #334155;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
   z-index: 10;
 }
 
@@ -2799,44 +3374,47 @@ watch(
   opacity: 1;
 }
 
+/* MODALS (Add / Edit / Delete) */
 .delete-confirm-modal {
   width: 100%;
   max-width: 460px;
-  background: #111c2e;
-  border: 1px solid #334155;
-  border-radius: 10px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 1.35rem 1.5rem;
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
+  color: var(--text-main);
 }
 
 .level-danger {
-  background: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
-  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: var(--danger-surface);
+  color: var(--danger-ink);
+  border: 1px solid var(--danger-border);
 }
 
 .delete-warning-text {
   font-size: 0.88rem;
   line-height: 1.55;
-  color: #cbd5e1;
+  color: var(--text-main);
   padding: 0.5rem 0 1rem;
 }
 
 .btn-delete-submit {
-  background: #ef4444 !important;
+  background: #dc2626 !important;
   color: #ffffff !important;
   border: 1px solid #dc2626 !important;
 }
 
 .btn-delete-submit:hover:not(:disabled) {
-  background: #dc2626 !important;
+  background: #b91c1c !important;
 }
 
 /* QUICK MODAL ENHANCED */
 .tree-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(15, 23, 42, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2849,14 +3427,15 @@ watch(
   width: 100%;
   max-width: 600px;
   max-height: 90vh;
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 10px;
-  padding: 1.25rem 1.4rem;
-  box-shadow: 0 20px 35px -10px rgba(0, 0, 0, 0.6);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 1.35rem 1.5rem;
+  box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  color: var(--text-main);
 }
 
 .modal-header {
@@ -2864,39 +3443,40 @@ watch(
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 1rem;
-  padding-bottom: 0.6rem;
-  border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .modal-title-box h4 {
-  margin: 0.2rem 0 0;
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: #f8fafc;
+  margin: 0.25rem 0 0;
+  font-size: 1.08rem;
+  font-weight: 700;
+  color: var(--text-main);
 }
 
 .modal-level-badge {
-  font-size: 0.7rem;
-  color: #10b981;
-  background: rgba(16, 185, 129, 0.15);
-  padding: 0.1rem 0.45rem;
-  border-radius: 4px;
-  font-weight: 500;
+  font-size: 0.72rem;
+  color: var(--primary-ink);
+  background: var(--primary-light);
+  border: 1px solid var(--success-border);
+  padding: 0.14rem 0.55rem;
+  border-radius: 9999px;
+  font-weight: 600;
   display: inline-block;
 }
 
 .close-btn {
   background: none;
   border: none;
-  color: #94a3b8;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 0.25rem;
-  border-radius: 4px;
+  border-radius: 6px;
 }
 
 .close-btn:hover {
-  color: #f8fafc;
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-main);
+  background: var(--bg-main);
 }
 
 .modal-draft-banner {
@@ -2904,10 +3484,10 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.55rem 0.85rem;
-  background: rgba(245, 158, 11, 0.12);
-  border: 1px solid rgba(245, 158, 11, 0.35);
-  border-radius: 6px;
+  padding: 0.6rem 0.9rem;
+  background: var(--warning-surface);
+  border: 1px solid var(--warning-border);
+  border-radius: 10px;
   margin-bottom: 0.85rem;
   font-size: 0.8rem;
 }
@@ -2916,12 +3496,12 @@ watch(
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  color: #fbbf24;
-  font-weight: 500;
+  color: var(--warning-ink);
+  font-weight: 600;
 }
 
 .draft-sparkle-icon {
-  color: #f59e0b;
+  color: var(--warning-ink);
   flex-shrink: 0;
 }
 
@@ -2929,22 +3509,22 @@ watch(
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  background: rgba(245, 158, 11, 0.18);
-  border: 1px solid rgba(245, 158, 11, 0.4);
-  color: #fde68a;
-  padding: 0.25rem 0.6rem;
-  border-radius: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--warning-border);
+  color: var(--warning-ink);
+  padding: 0.28rem 0.65rem;
+  border-radius: 6px;
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.2s ease;
 }
 
 .btn-clear-draft:hover {
-  background: rgba(239, 68, 68, 0.25);
-  border-color: rgba(239, 68, 68, 0.5);
-  color: #fca5a5;
+  background: var(--danger-surface);
+  border-color: var(--danger-border);
+  color: var(--danger-ink);
 }
 
 .modal-form {
@@ -2966,30 +3546,31 @@ watch(
 }
 
 .form-group label {
-  font-size: 0.8rem;
-  color: #cbd5e1;
-  font-weight: 500;
+  font-size: 0.82rem;
+  color: var(--text-main);
+  font-weight: 600;
 }
 
 .form-control {
-  padding: 0.55rem 0.75rem;
+  padding: 0.6rem 0.8rem;
   font-size: 0.85rem;
-  background: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 6px;
-  color: #f8fafc;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  color: var(--text-main);
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .form-control:focus {
-  border-color: #10b981;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px var(--primary-light);
 }
 
 .form-control:disabled,
 .form-control:read-only {
-  background: #09101d;
-  color: #94a3b8;
+  background: var(--bg-subtle);
+  color: var(--text-muted);
   cursor: not-allowed;
 }
 
@@ -3009,10 +3590,10 @@ watch(
 }
 
 .disabled-select {
-  background-color: rgba(30, 41, 59, 0.75) !important;
-  color: #94a3b8 !important;
+  background-color: var(--bg-subtle) !important;
+  color: var(--text-muted) !important;
   cursor: not-allowed !important;
-  border-color: #334155 !important;
+  border-color: var(--border-color) !important;
   opacity: 0.85;
 }
 
@@ -3020,22 +3601,22 @@ watch(
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.55rem 0.75rem;
-  background: rgba(15, 23, 42, 0.75);
-  border: 1px solid #334155;
-  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
 }
 
 .parent-chip-badge {
-  font-weight: 600;
-  color: #38bdf8;
+  font-weight: 700;
+  color: var(--primary-ink);
   font-size: 0.84rem;
 }
 
 .inherited-units-box {
-  background: rgba(15, 23, 42, 0.35);
-  border: 1px dashed rgba(51, 65, 85, 0.6);
-  border-radius: 8px;
+  background: var(--bg-main);
+  border: 1px dashed var(--border-color);
+  border-radius: 10px;
   padding: 0.75rem 0.85rem;
 }
 
@@ -3056,19 +3637,19 @@ watch(
 .badge-module-hint {
   font-size: 0.72rem;
   font-weight: 600;
-  color: #0d9488;
-  background: #ccfbf1;
-  padding: 0.15rem 0.5rem;
+  color: var(--primary-ink);
+  background: var(--primary-light);
+  padding: 0.15rem 0.55rem;
   border-radius: 9999px;
-  border: 1px solid #99f6e4;
+  border: 1px solid var(--success-border);
   letter-spacing: 0.3px;
 }
 
 .inherited-module-info {
-  background: rgba(15, 23, 42, 0.65);
+  background: var(--bg-main);
   padding: 0.65rem 0.85rem;
-  border-radius: 8px;
-  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
 }
 
 .inherited-module-display {
@@ -3080,27 +3661,28 @@ watch(
 }
 
 .module-chip-badge {
-  background: #0284c7;
+  background: var(--primary-color);
   color: #ffffff;
   font-weight: 700;
   font-size: 0.72rem;
   padding: 0.15rem 0.5rem;
-  border-radius: 4px;
+  border-radius: 6px;
   letter-spacing: 0.5px;
 }
 
 .module-title-text {
   font-size: 0.84rem;
-  font-weight: 500;
-  color: #e2e8f0;
+  font-weight: 600;
+  color: var(--text-main);
 }
 
 .inherited-tag {
   font-size: 0.72rem;
-  color: #38bdf8;
-  background: rgba(56, 189, 248, 0.1);
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
+  color: var(--info-ink);
+  background: var(--info-surface);
+  border: 1px solid var(--info-border);
+  padding: 0.1rem 0.45rem;
+  border-radius: 6px;
   font-style: italic;
 }
 
@@ -3111,18 +3693,18 @@ watch(
 }
 
 .auto-code-toggle input[type="checkbox"] {
-  accent-color: #10b981;
+  accent-color: var(--primary-color);
   cursor: pointer;
 }
 
 .toggle-text {
   font-size: 0.74rem !important;
-  color: #10b981 !important;
+  color: var(--primary-ink) !important;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .code-input-wrapper {
@@ -3134,12 +3716,12 @@ watch(
 
 .code-input {
   flex: 1;
-  font-family: monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   letter-spacing: 0.5px;
 }
 
 .code-input.is-auto {
-  border-color: rgba(16, 185, 129, 0.4);
+  border-color: var(--success-border);
 }
 
 .re-generate-btn,
@@ -3147,46 +3729,48 @@ watch(
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.45rem 0.6rem;
-  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+  border-radius: 8px;
   font-size: 0.76rem;
-  background: #334155;
-  border: 1px solid #475569;
-  color: #cbd5e1;
+  font-weight: 600;
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
   cursor: pointer;
   white-space: nowrap;
 }
 
 .re-generate-btn:hover,
 .manual-edit-btn:hover {
-  background: #475569;
-  color: #ffffff;
+  background: var(--primary-light);
+  border-color: var(--primary-color);
+  color: var(--primary-ink);
 }
 
 .form-hint {
-  font-size: 0.72rem;
-  color: #64748b;
+  font-size: 0.73rem;
+  color: var(--text-muted);
 }
 
 /* Section Sub Title */
 .section-sub-title {
   margin: 0;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #f1f5f9;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--text-main);
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  padding-bottom: 0.35rem;
-  border-bottom: 1px dashed rgba(51, 65, 85, 0.5);
+  padding-bottom: 0.4rem;
+  border-bottom: 1px dashed var(--border-color);
 }
 
 /* Units Selection Section */
 .units-section {
-  background: rgba(15, 23, 42, 0.45);
-  border: 1px solid rgba(51, 65, 85, 0.5);
-  border-radius: 8px;
-  padding: 0.85rem;
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 0.9rem;
   gap: 0.85rem;
 }
 
@@ -3207,18 +3791,19 @@ watch(
   display: flex;
   align-items: center;
   gap: 0.3rem;
-  color: #e2e8f0 !important;
-  font-weight: 500;
+  color: var(--text-main) !important;
+  font-weight: 600;
 }
 
 .badge-mandatory,
 .badge-optional {
-  font-size: 0.68rem;
-  background: rgba(59, 130, 246, 0.15);
-  color: #93c5fd;
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--primary-light);
+  color: var(--primary-ink);
+  border: 1px solid var(--success-border);
+  padding: 0.12rem 0.5rem;
+  border-radius: 9999px;
 }
 
 .unit-tags-container {
@@ -3232,17 +3817,17 @@ watch(
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  padding: 0.2rem 0.45rem;
-  border-radius: 4px;
+  padding: 0.22rem 0.55rem;
+  border-radius: 6px;
   font-size: 0.74rem;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .unit-chip.mandatory-chip,
 .unit-chip.optional-chip {
-  background: rgba(59, 130, 246, 0.18);
-  border: 1px solid rgba(59, 130, 246, 0.35);
-  color: #bfdbfe;
+  background: var(--primary-light);
+  border: 1px solid var(--success-border);
+  color: var(--primary-ink);
 }
 
 .remove-chip-btn {
@@ -3266,22 +3851,22 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  border-radius: 6px;
-  padding: 0.65rem 0.85rem;
+  background: var(--danger-surface);
+  border: 1px solid var(--danger-border);
+  border-radius: 10px;
+  padding: 0.7rem 0.9rem;
 }
 
 .auto-enroll-title {
-  font-weight: 600;
-  color: #fca5a5;
+  font-weight: 700;
+  color: var(--danger-ink);
   font-size: 0.82rem;
 }
 
 .auto-enroll-alert.pending-units {
-  background: rgba(51, 65, 85, 0.3);
-  color: #94a3b8;
-  border: 1px dashed rgba(100, 116, 139, 0.35);
+  background: var(--bg-main);
+  color: var(--text-muted);
+  border: 1px dashed var(--border-color);
 }
 
 .auto-enroll-wrapper {
@@ -3289,10 +3874,10 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  border-radius: 6px;
-  padding: 0.55rem 0.75rem;
+  background: var(--danger-surface);
+  border: 1px solid var(--danger-border);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
 }
 
 .auto-enroll-check-label {
@@ -3300,33 +3885,35 @@ watch(
   align-items: center;
   gap: 0.45rem;
   font-size: 0.78rem;
-  color: #fca5a5;
+  color: var(--danger-ink);
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .auto-enroll-check-label input[type="checkbox"] {
-  accent-color: #ef4444;
+  accent-color: #dc2626;
 }
 
 .auto-enroll-alert {
   display: flex;
   align-items: flex-start;
   gap: 0.4rem;
-  font-size: 0.74rem;
-  color: #fed7aa;
-  background: rgba(249, 115, 22, 0.12);
-  border-radius: 4px;
-  padding: 0.4rem 0.55rem;
+  font-size: 0.75rem;
+  color: var(--warning-ink);
+  background: var(--warning-surface);
+  border: 1px solid var(--warning-border);
+  border-radius: 8px;
+  padding: 0.45rem 0.65rem;
 }
 
 .auto-enroll-alert.empty-staff {
-  color: #94a3b8;
-  background: rgba(51, 65, 85, 0.3);
+  color: var(--text-muted);
+  background: var(--bg-main);
+  border-color: var(--border-color);
 }
 
 .alert-icon {
-  color: #f97316;
+  color: var(--warning-ink);
   flex-shrink: 0;
   margin-top: 0.1rem;
 }
@@ -3339,7 +3926,7 @@ watch(
 
 .staff-list {
   font-style: italic;
-  color: #fdba74;
+  color: var(--warning-ink);
 }
 
 /* Modal Actions */
@@ -3349,8 +3936,8 @@ watch(
   align-items: center;
   gap: 0.6rem;
   margin-top: 0.5rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid rgba(51, 65, 85, 0.6);
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border-color);
 }
 
 .actions-right {
@@ -3361,23 +3948,24 @@ watch(
 }
 
 .btn-outline-info {
-  background: rgba(59, 130, 246, 0.12);
-  border: 1px solid rgba(59, 130, 246, 0.4);
-  color: #60a5fa;
+  background: var(--info-surface);
+  border: 1px solid var(--info-border);
+  color: var(--info-ink);
 }
 
 .btn-outline-info:hover {
-  background: #3b82f6;
+  background: var(--primary-color);
+  border-color: var(--primary-color);
   color: #ffffff;
 }
 
 .btn {
-  padding: 0.5rem 1rem;
+  padding: 0.55rem 1.05rem;
   font-size: 0.84rem;
-  border-radius: 6px;
-  border: none;
+  border-radius: 10px;
+  border: 1px solid transparent;
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 600;
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -3385,26 +3973,316 @@ watch(
 }
 
 .btn-primary {
-  background: #10b981;
+  background: var(--primary-color);
   color: #ffffff;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #059669;
+  background: var(--primary-hover);
 }
 
 .btn-primary:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
 .btn-secondary {
-  background: #334155;
-  color: #cbd5e1;
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
 }
 
 .btn-secondary:hover {
-  background: #475569;
+  background: var(--primary-light);
+  border-color: var(--primary-color);
+  color: var(--primary-ink);
+}
+
+/* ==========================================================================
+   2-TIER TREE PAGINATION (IN-BRANCH & ROOT FOOTER BAR)
+   ========================================================================== */
+.in-branch-pagination-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  background: var(--bg-main);
+  border: 1px dashed var(--border-color);
+  margin-top: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.in-branch-count {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.in-branch-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.btn-in-branch-more,
+.btn-in-branch-collapse {
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 0.24rem 0.65rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-in-branch-more {
+  background: var(--primary-light);
+  color: var(--primary-ink);
+  border: 1px solid var(--success-border);
+}
+
+.btn-in-branch-more:hover {
+  background: var(--primary-color);
   color: #ffffff;
+}
+
+.btn-in-branch-collapse {
+  background: var(--bg-card);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+}
+
+.btn-in-branch-collapse:hover {
+  color: var(--text-main);
+}
+
+.tree-pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-main);
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+
+.pagination-summary {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pagination-summary strong {
+  color: var(--text-main);
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.page-size-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.page-size-select {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  border-radius: 8px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+}
+
+.page-size-select:focus {
+  border-color: var(--primary-color);
+}
+
+.page-nav-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.page-btn {
+  padding: 0.28rem 0.68rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-main);
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: var(--primary-light);
+  border-color: var(--primary-color);
+  color: var(--primary-ink);
+}
+
+.page-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.page-indicator {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-main);
+  padding: 0 0.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tree-inline-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.48rem 0.85rem;
+  margin-left: 1.5rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+</style>
+
+<!-- GLOBAL STYLE FOR TELEPORTED HOVER DESCRIPTION POPOVER (Light & Dark Mode Synchronized) -->
+<style>
+.impeccable-desc-popover {
+  position: fixed;
+  z-index: 9999;
+  width: 340px;
+  background: var(--bg-card);
+  color: var(--text-main);
+  border: 1px solid var(--primary-color);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  box-shadow: var(--shadow-lg);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.impeccable-desc-popover .popover-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.impeccable-desc-popover .popover-type-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.14rem 0.5rem;
+  border-radius: 9999px;
+}
+
+.impeccable-desc-popover .popover-type-badge.domain {
+  background: var(--info-surface);
+  color: var(--info-ink);
+  border: 1px solid var(--info-border);
+}
+
+.impeccable-desc-popover .popover-type-badge.program {
+  background: var(--purple-surface);
+  color: var(--purple-ink);
+  border: 1px solid var(--purple-border);
+}
+
+.impeccable-desc-popover .popover-type-badge.course {
+  background: var(--success-surface);
+  color: var(--success-ink);
+  border: 1px solid var(--success-border);
+}
+
+.impeccable-desc-popover .popover-type-badge.chapter {
+  background: var(--warning-surface);
+  color: var(--warning-ink);
+  border: 1px solid var(--warning-border);
+}
+
+.impeccable-desc-popover .popover-type-badge.lesson {
+  background: var(--danger-surface);
+  color: var(--danger-ink);
+  border: 1px solid var(--danger-border);
+}
+
+.impeccable-desc-popover .popover-module {
+  margin-left: auto;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-main);
+  padding: 0.1rem 0.45rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.impeccable-desc-popover .popover-title {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.35;
+}
+
+.impeccable-desc-popover .popover-desc-box {
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.impeccable-desc-popover .popover-desc-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--primary-ink);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.impeccable-desc-popover .popover-desc-text {
+  font-size: 0.79rem;
+  color: var(--text-main);
+  margin: 0;
+  line-height: 1.45;
+  white-space: pre-line;
+}
+
+.impeccable-desc-popover .popover-desc-text.is-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.impeccable-desc-popover .popover-footer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  padding-top: 0.2rem;
+  border-top: 1px dashed var(--border-color);
+  flex-wrap: wrap;
+}
+
+.impeccable-desc-popover .popover-footer-meta strong {
+  color: var(--text-main);
 }
 </style>

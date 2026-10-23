@@ -10,18 +10,22 @@ public final class LearningPolicy {
     private LearningPolicy() {
     }
 
+    public static boolean isLearnableStatus(String status) {
+        return status == null || "PUBLISHED".equalsIgnoreCase(status) || "ACTIVE".equalsIgnoreCase(status);
+    }
+
     public static boolean completed(User user, Lesson lesson) {
         return user.getCompletedLessons().stream().anyMatch(item -> item.getId().equals(lesson.getId()));
     }
 
     public static List<Chapter> publishedChapters(Course course) {
-        return course.getChapters().stream().filter(c -> "PUBLISHED".equals(c.getStatus()))
+        return course.getChapters().stream().filter(c -> isLearnableStatus(c.getStatus()))
                 .sorted(java.util.Comparator.comparing(Chapter::getChapterOrder).thenComparing(Chapter::getId))
                 .toList();
     }
 
     public static List<Lesson> publishedLessons(Chapter chapter) {
-        return chapter.getLessons().stream().filter(l -> "PUBLISHED".equals(l.getStatus()))
+        return chapter.getLessons().stream().filter(l -> isLearnableStatus(l.getStatus()))
                 .sorted(java.util.Comparator.comparing(Lesson::getLessonOrder).thenComparing(Lesson::getId)).toList();
     }
 
@@ -56,7 +60,7 @@ public final class LearningPolicy {
         boolean enrolled = com.bidv.coretraining.security.AccessPolicy.mandatory(user, course)
                 || user.getRegisteredCourses().stream().anyMatch(c -> c.getId().equals(course.getId()))
                 || user.hasGroupMandatoryCourse(course.getId());
-        if (!"PUBLISHED".equals(course.getStatus()) || !enrolled)
+        if (!isLearnableStatus(course.getStatus()) || !enrolled)
             throw new AccessDeniedException("Bạn chưa được cấp quyền học khóa này");
     }
 
@@ -65,8 +69,8 @@ public final class LearningPolicy {
         if (com.bidv.coretraining.security.AccessPolicy.canReadCourse(user, lesson.getCourse()))
             return;
         assertCourseAccess(user, lesson.getCourse());
-        if (lesson.getChapter() == null || !"PUBLISHED".equals(lesson.getChapter().getStatus())
-                || !"PUBLISHED".equals(lesson.getStatus()) || !lessonUnlocked(user, lesson))
+        if (lesson.getChapter() == null || !isLearnableStatus(lesson.getChapter().getStatus())
+                || !isLearnableStatus(lesson.getStatus()) || !lessonUnlocked(user, lesson))
             throw new AccessDeniedException("Hoàn thành các bài và chương trước để mở bài học này");
     }
 

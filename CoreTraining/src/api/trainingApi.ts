@@ -79,11 +79,17 @@ export const trainingApi = {
       )
     ).data;
   },
+  async deleteDomain(id: string) {
+    await axiosClient.delete(`/api/admin/training-domains/${encodeURIComponent(id)}`);
+  },
+  async deleteProgram(id: string) {
+    await axiosClient.delete(`/api/admin/training-programs/${encodeURIComponent(id)}`);
+  },
   async deleteChapter(id: string) {
-    await axiosClient.delete(`/api/admin/chapters/${id}`);
+    await axiosClient.delete(`/api/admin/chapters/${encodeURIComponent(id)}`);
   },
   async deleteLesson(id: string) {
-    await axiosClient.delete(`/api/admin/lessons/${id}`);
+    await axiosClient.delete(`/api/admin/lessons/${encodeURIComponent(id)}`);
   },
   async reorderChapters(id: string, ids: string[]) {
     await axiosClient.put(`/api/admin/courses/${id}/chapters/order`, ids);
