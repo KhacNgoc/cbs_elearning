@@ -1,9 +1,24 @@
 <template>
   <div class="unit-allocation-page">
+    <!-- BREADCRUMB BAR -->
+    <nav class="breadcrumb-bar" aria-label="Breadcrumb">
+      <span class="crumb">Hệ thống</span>
+      <ChevronRight :size="12" class="crumb-separator" />
+      <span class="crumb">Quản trị Đào tạo</span>
+      <ChevronRight :size="12" class="crumb-separator" />
+      <span class="crumb active">Phân bổ theo Đơn vị</span>
+    </nav>
+
     <!-- PAGE HEADER -->
     <header class="page-header">
       <div class="header-left">
-        <h2>Phân bổ Đào tạo theo Đơn vị</h2>
+        <div class="title-with-badge">
+          <h2>Phân bổ Đào tạo theo Đơn vị</h2>
+          <span class="badge-live">
+            <Sparkles :size="11" />
+            <span>Ma trận quyền đào tạo</span>
+          </span>
+        </div>
         <p class="subtitle">
           Quản lý phân bổ nội dung đào tạo (Lĩnh vực, Chương trình, Khóa học) cho từng Đơn vị / Chi nhánh trong hệ thống
         </p>
@@ -21,16 +36,20 @@
       <!-- LEFT PANEL: ALLOCATION FORM -->
       <section class="card form-panel">
         <div class="panel-header">
-          <Building2 :size="18" class="panel-icon" />
-          <h3>Thiết lập Phân bổ mới</h3>
+          <div class="panel-header-title">
+            <Building2 :size="16" class="panel-icon" />
+            <h3>Thiết lập Phân bổ mới</h3>
+          </div>
+          <span class="step-guide-badge">4 bước thiết lập</span>
         </div>
 
         <form @submit.prevent="handleAssignAllocation" class="allocation-form">
           <!-- BƯỚC 1: CHỌN ĐƠN VỊ -->
-          <div class="form-group">
-            <label for="unit-select">
-              1. Đơn vị áp dụng (*):
-            </label>
+          <div class="step-group">
+            <div class="step-header">
+              <span class="step-number">01</span>
+              <label for="unit-select">Đơn vị nhận đào tạo (*)</label>
+            </div>
             <select
               id="unit-select"
               v-model="selectedUnitId"
@@ -50,59 +69,49 @@
           </div>
 
           <!-- BƯỚC 2: CHỌN LOẠI DANH MỤC ĐÀO TẠO -->
-          <div class="form-group">
-            <label>2. Cấp danh mục đào tạo (*):</label>
+          <div class="step-group">
+            <div class="step-header">
+              <span class="step-number">02</span>
+              <label>Cấp danh mục phân bổ (*)</label>
+            </div>
             <div class="category-type-selector">
               <label class="radio-card" :class="{ active: categoryType === 'domain' }">
                 <input type="radio" value="domain" v-model="categoryType" />
                 <Globe :size="15" />
-                <span>Lĩnh vực</span>
+                <span class="radio-card-title">Lĩnh vực</span>
+                <span class="radio-card-sub">Cấp vĩ mô</span>
               </label>
               <label class="radio-card" :class="{ active: categoryType === 'program' }">
                 <input type="radio" value="program" v-model="categoryType" />
                 <Folder :size="15" />
-                <span>Chương trình</span>
+                <span class="radio-card-title">Chương trình</span>
+                <span class="radio-card-sub">Theo nhóm</span>
               </label>
               <label class="radio-card" :class="{ active: categoryType === 'course' }">
                 <input type="radio" value="course" v-model="categoryType" />
                 <BookOpen :size="15" />
-                <span>Khóa học</span>
+                <span class="radio-card-title">Khóa học</span>
+                <span class="radio-card-sub">Từng khóa lẻ</span>
               </label>
             </div>
           </div>
 
           <!-- BƯỚC 3: CHỌN NỘI DUNG TƯƠNG ỨNG -->
-          <!-- CASE 3A: CHỌN LĨNH VỰC -->
-          <div v-if="categoryType === 'domain'" class="form-group dynamic-group">
-            <label>Chọn Lĩnh vực đào tạo (*):</label>
-            <select
-              v-model="targetDomainId"
-              class="form-control select-control"
-              required
-            >
-              <option value="">-- Chọn lĩnh vực --</option>
-              <option
-                v-for="d in activeDomains"
-                :key="d.id"
-                :value="d.id"
-              >
-                [{{ d.code }}] {{ d.name }}
-              </option>
-            </select>
-          </div>
+          <div class="step-group dynamic-group">
+            <div class="step-header">
+              <span class="step-number">03</span>
+              <label>Nội dung chi tiết (*)</label>
+            </div>
 
-          <!-- CASE 3B: CHỌN CHƯƠNG TRÌNH (CHỈ HIỆN CHƯƠNG TRÌNH KHI ĐÃ CHỌN LĨNH VỰC) -->
-          <div v-if="categoryType === 'program'" class="form-group dynamic-group course-cascade-box">
-            <!-- BƯỚC A: LĨNH VỰC CHA -->
-            <div class="sub-form-group">
-              <label>Lĩnh vực (*):</label>
+            <!-- CASE 3A: CHỌN LĨNH VỰC -->
+            <div v-if="categoryType === 'domain'" class="sub-form-group">
+              <label class="sub-label">Chọn Lĩnh vực đào tạo:</label>
               <select
-                v-model="programFilterDomainId"
+                v-model="targetDomainId"
                 class="form-control select-control"
                 required
-                @change="handleProgramDomainFilterChange"
               >
-                <option value="">-- Chọn Lĩnh vực --</option>
+                <option value="">-- Chọn lĩnh vực --</option>
                 <option
                   v-for="d in activeDomains"
                   :key="d.id"
@@ -113,255 +122,289 @@
               </select>
             </div>
 
-            <!-- BƯỚC B: CHƯƠNG TRÌNH ĐÀO TẠO (SEARCHABLE DROPDOWN KÈM INFINITE SCROLL) -->
-            <div v-if="programFilterDomainId" class="sub-form-group">
-              <label>Chọn Chương trình đào tạo (*):</label>
-              <div class="searchable-dropdown-wrapper" ref="programDropdownWrapperRef">
-                <button
-                  type="button"
-                  class="form-control select-control searchable-trigger"
-                  :class="{ 'is-open': showProgramDropdown, 'has-value': !!targetProgramId }"
-                  @click="toggleProgramDropdown"
+            <!-- CASE 3B: CHỌN CHƯƠNG TRÌNH -->
+            <div v-if="categoryType === 'program'" class="course-cascade-box">
+              <div class="sub-form-group">
+                <label class="sub-label">Lĩnh vực quản lý:</label>
+                <select
+                  v-model="programFilterDomainId"
+                  class="form-control select-control"
+                  required
+                  @change="handleProgramDomainFilterChange"
                 >
-                  <span class="trigger-label">{{ selectedProgramDisplay }}</span>
-                  <ChevronDown :size="15" class="dropdown-chevron" :class="{ 'rotated': showProgramDropdown }" />
-                </button>
+                  <option value="">-- Chọn Lĩnh vực --</option>
+                  <option
+                    v-for="d in activeDomains"
+                    :key="d.id"
+                    :value="d.id"
+                  >
+                    [{{ d.code }}] {{ d.name }}
+                  </option>
+                </select>
+              </div>
 
-                <div v-if="showProgramDropdown" class="searchable-dropdown-menu">
-                  <div class="dropdown-search-box">
+              <div v-if="programFilterDomainId" class="sub-form-group">
+                <label class="sub-label">Chương trình đào tạo:</label>
+                <div class="searchable-dropdown-wrapper" ref="programDropdownWrapperRef">
+                  <button
+                    type="button"
+                    class="form-control select-control searchable-trigger"
+                    :class="{ 'is-open': showProgramDropdown, 'has-value': !!targetProgramId }"
+                    @click="toggleProgramDropdown"
+                  >
+                    <span class="trigger-label">{{ selectedProgramDisplay }}</span>
+                    <ChevronDown :size="15" class="dropdown-chevron" :class="{ 'rotated': showProgramDropdown }" />
+                  </button>
+
+                  <div v-if="showProgramDropdown" class="searchable-dropdown-menu">
+                    <div class="dropdown-search-box">
+                      <Search :size="13" class="search-icon" />
+                      <input
+                        type="text"
+                        v-model="programSearchQuery"
+                        class="dropdown-search-input"
+                        placeholder="Tìm theo mã hoặc tên chương trình..."
+                        @click.stop
+                        autofocus
+                      />
+                      <Loader2 v-if="searchingPrograms" :size="13" class="spinner search-spinner" />
+                      <button
+                        v-else-if="programSearchQuery"
+                        type="button"
+                        class="btn-clear-search"
+                        @click.stop="programSearchQuery = ''"
+                      >
+                        <X :size="12" />
+                      </button>
+                    </div>
+
+                    <div class="dropdown-items-list" @scroll="handleProgramsScroll">
+                      <div v-if="loadingPrograms" class="dropdown-state-row">
+                        <Loader2 :size="14" class="spinner" />
+                        <span>Đang tải danh sách chương trình...</span>
+                      </div>
+                      <div v-else-if="!pagedPrograms.length" class="dropdown-state-row empty-state-row">
+                        {{ programSearchQuery ? "Không tìm thấy chương trình phù hợp." : "Lĩnh vực này chưa có chương trình nào." }}
+                      </div>
+                      <div
+                        v-for="p in pagedPrograms"
+                        :key="p.id"
+                        class="dropdown-item"
+                        :class="{ 'is-selected': p.id === targetProgramId }"
+                        @click="selectProgram(p)"
+                      >
+                        <span class="item-code">[{{ p.code }}]</span>
+                        <span class="item-name">{{ p.name }}</span>
+                        <Check v-if="p.id === targetProgramId" :size="14" class="item-checked" />
+                      </div>
+
+                      <div v-if="loadingMorePrograms" class="dropdown-state-row loading-more">
+                        <Loader2 :size="12" class="spinner" />
+                        <span>Tải thêm 10 chương trình...</span>
+                      </div>
+                      <div v-else-if="!hasMorePrograms && pagedPrograms.length > 0" class="dropdown-state-row end-hint">
+                        <span>Đã hiển thị {{ pagedPrograms.length }} / {{ totalPrograms }} chương trình</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- CASE 3C: CHỌN KHÓA HỌC -->
+            <div v-if="categoryType === 'course'" class="course-cascade-box">
+              <div class="sub-form-group">
+                <label class="sub-label">Lĩnh vực:</label>
+                <select
+                  v-model="courseFilterDomainId"
+                  class="form-control select-control"
+                  required
+                  @change="handleDomainFilterChange"
+                >
+                  <option value="">-- Chọn Lĩnh vực --</option>
+                  <option
+                    v-for="d in activeDomains"
+                    :key="d.id"
+                    :value="d.id"
+                  >
+                    [{{ d.code }}] {{ d.name }}
+                  </option>
+                </select>
+              </div>
+
+              <div v-if="courseFilterDomainId" class="sub-form-group">
+                <label class="sub-label">Chương trình đào tạo:</label>
+                <div class="searchable-dropdown-wrapper" ref="programDropdownWrapperRef">
+                  <button
+                    type="button"
+                    class="form-control select-control searchable-trigger"
+                    :class="{ 'is-open': showProgramDropdown, 'has-value': !!targetProgramId }"
+                    @click="toggleProgramDropdown"
+                  >
+                    <span class="trigger-label">{{ selectedProgramDisplay }}</span>
+                    <ChevronDown :size="15" class="dropdown-chevron" :class="{ 'rotated': showProgramDropdown }" />
+                  </button>
+
+                  <div v-if="showProgramDropdown" class="searchable-dropdown-menu">
+                    <div class="dropdown-search-box">
+                      <Search :size="13" class="search-icon" />
+                      <input
+                        type="text"
+                        v-model="programSearchQuery"
+                        class="dropdown-search-input"
+                        placeholder="Tìm theo mã hoặc tên chương trình..."
+                        @click.stop
+                        autofocus
+                      />
+                      <Loader2 v-if="searchingPrograms" :size="13" class="spinner search-spinner" />
+                      <button
+                        v-else-if="programSearchQuery"
+                        type="button"
+                        class="btn-clear-search"
+                        @click.stop="programSearchQuery = ''"
+                      >
+                        <X :size="12" />
+                      </button>
+                    </div>
+
+                    <div class="dropdown-items-list" @scroll="handleProgramsScroll">
+                      <div v-if="loadingPrograms" class="dropdown-state-row">
+                        <Loader2 :size="14" class="spinner" />
+                        <span>Đang tải danh sách chương trình...</span>
+                      </div>
+                      <div v-else-if="!pagedPrograms.length" class="dropdown-state-row empty-state-row">
+                        {{ programSearchQuery ? "Không tìm thấy chương trình phù hợp." : "Lĩnh vực này chưa có chương trình nào." }}
+                      </div>
+                      <div
+                        v-for="p in pagedPrograms"
+                        :key="p.id"
+                        class="dropdown-item"
+                        :class="{ 'is-selected': p.id === targetProgramId }"
+                        @click="selectProgram(p)"
+                      >
+                        <span class="item-code">[{{ p.code }}]</span>
+                        <span class="item-name">{{ p.name }}</span>
+                        <Check v-if="p.id === targetProgramId" :size="14" class="item-checked" />
+                      </div>
+
+                      <div v-if="loadingMorePrograms" class="dropdown-state-row loading-more">
+                        <Loader2 :size="12" class="spinner" />
+                        <span>Tải thêm 10 chương trình...</span>
+                      </div>
+                      <div v-else-if="!hasMorePrograms && pagedPrograms.length > 0" class="dropdown-state-row end-hint">
+                        <span>Đã hiển thị {{ pagedPrograms.length }} / {{ totalPrograms }} chương trình</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- KHÓA HỌC CON -->
+              <div v-if="targetProgramId" class="sub-courses-picker">
+                <div class="picker-header">
+                  <label class="picker-title">Khóa học áp dụng (*):</label>
+                  <span class="course-count-badge">
+                    <span v-if="selectAllCoursesInProgram">
+                      TẤT CẢ ({{ totalProgramCourses }} khóa)
+                    </span>
+                    <span v-else>
+                      {{ selectedSubCourseIds.length }} / {{ totalProgramCourses }} khóa
+                    </span>
+                  </span>
+                </div>
+
+                <div class="all-and-search-row">
+                  <label class="all-courses-checkbox">
+                    <input
+                      type="checkbox"
+                      v-model="selectAllCoursesInProgram"
+                      @change="handleToggleAllCourses"
+                    />
+                    <span class="all-text">CHỌN TOÀN BỘ</span>
+                  </label>
+
+                  <div class="course-search-box">
                     <Search :size="13" class="search-icon" />
                     <input
                       type="text"
-                      v-model="programSearchQuery"
-                      class="dropdown-search-input"
-                      placeholder="Tìm theo mã hoặc tên chương trình..."
-                      @click.stop
-                      autofocus
+                      v-model="courseSearchQuery"
+                      class="course-search-input"
+                      placeholder="Lọc nhanh theo mã hoặc tên khóa..."
                     />
-                    <Loader2 v-if="searchingPrograms" :size="13" class="spinner search-spinner" />
-                    <button
-                      v-else-if="programSearchQuery"
-                      type="button"
-                      class="btn-clear-search"
-                      @click.stop="programSearchQuery = ''"
-                    >
-                      <X :size="12" />
-                    </button>
+                    <Loader2 v-if="searchingCourses" :size="13" class="spinner search-spinner" />
                   </div>
+                </div>
 
-                  <div class="dropdown-items-list" @scroll="handleProgramsScroll">
-                    <div v-if="loadingPrograms" class="dropdown-state-row">
-                      <Loader2 :size="14" class="spinner" />
-                      <span>Đang tải danh sách chương trình...</span>
-                    </div>
-                    <div v-else-if="!pagedPrograms.length" class="dropdown-state-row empty-state-row">
-                      {{ programSearchQuery ? "Không tìm thấy chương trình phù hợp." : "Lĩnh vực này chưa có chương trình nào." }}
-                    </div>
-                    <div
-                      v-for="p in pagedPrograms"
-                      :key="p.id"
-                      class="dropdown-item"
-                      :class="{ 'is-selected': p.id === targetProgramId }"
-                      @click="selectProgram(p)"
-                    >
-                      <span class="item-code">[{{ p.code }}]</span>
-                      <span class="item-name">{{ p.name }}</span>
-                      <Check v-if="p.id === targetProgramId" :size="14" class="item-checked" />
-                    </div>
+                <div v-if="loadingProgramCourses" class="picker-loading">
+                  <Loader2 :size="16" class="spinner" />
+                  <span>Đang tải khóa học...</span>
+                </div>
+                <div
+                  v-else
+                  class="courses-checkbox-list"
+                  @scroll="handleCoursesScroll"
+                >
+                  <div v-if="!programCourses.length" class="empty-hint">
+                    {{ courseSearchQuery ? "Không tìm thấy khóa học nào khớp từ khóa." : "Chương trình này hiện chưa có khóa học nào." }}
+                  </div>
+                  <label
+                    v-for="c in programCourses"
+                    :key="c.id"
+                    class="course-checkbox-item"
+                  >
+                    <input
+                      type="checkbox"
+                      :value="c.id"
+                      v-model="selectedSubCourseIds"
+                      @change="handleSubCourseCheckChange"
+                    />
+                    <span class="course-code-tag">[{{ c.code }}]</span>
+                    <span class="course-name">{{ c.name }}</span>
+                  </label>
 
-                    <div v-if="loadingMorePrograms" class="dropdown-state-row loading-more">
-                      <Loader2 :size="12" class="spinner" />
-                      <span>Tải thêm 10 chương trình...</span>
-                    </div>
-                    <div v-else-if="!hasMorePrograms && pagedPrograms.length > 0" class="dropdown-state-row end-hint">
-                      <span>Đã hiển thị {{ pagedPrograms.length }} / {{ totalPrograms }} chương trình</span>
-                    </div>
+                  <div v-if="loadingMoreCourses" class="scroll-loading-more">
+                    <Loader2 :size="14" class="spinner" />
+                    <span>Đang tải thêm 10 khóa tiếp theo...</span>
+                  </div>
+                  <div v-else-if="!hasMoreCourses && programCourses.length > 0" class="scroll-end-hint">
+                    <span>Đã hiển thị {{ programCourses.length }} / {{ totalProgramCourses }} khóa học</span>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- CASE 3C: CHỌN KHÓA HỌC (CHỈ HIỆN CẤP TIẾP THEO KHI CẤP TRƯỚC ĐƯỢC CHỌN) -->
-          <div v-if="categoryType === 'course'" class="form-group dynamic-group course-cascade-box">
-            <!-- BƯỚC A: LĨNH VỰC CHA -->
-            <div class="sub-form-group">
-              <label>Lĩnh vực (*):</label>
-              <select
-                v-model="courseFilterDomainId"
-                class="form-control select-control"
-                required
-                @change="handleDomainFilterChange"
-              >
-                <option value="">-- Chọn Lĩnh vực --</option>
-                <option
-                  v-for="d in activeDomains"
-                  :key="d.id"
-                  :value="d.id"
-                >
-                  [{{ d.code }}] {{ d.name }}
-                </option>
-              </select>
+          <!-- BƯỚC 4: HÌNH THỨC ÁP DỤNG -->
+          <div class="step-group">
+            <div class="step-header">
+              <span class="step-number">04</span>
+              <label>Hình thức áp dụng (*)</label>
             </div>
-
-            <!-- BƯỚC B: CHƯƠNG TRÌNH ĐÀO TẠO (SEARCHABLE DROPDOWN KÈM INFINITE SCROLL) -->
-            <div v-if="courseFilterDomainId" class="sub-form-group">
-              <label>Chương trình đào tạo (*):</label>
-              <div class="searchable-dropdown-wrapper" ref="programDropdownWrapperRef">
-                <button
-                  type="button"
-                  class="form-control select-control searchable-trigger"
-                  :class="{ 'is-open': showProgramDropdown, 'has-value': !!targetProgramId }"
-                  @click="toggleProgramDropdown"
-                >
-                  <span class="trigger-label">{{ selectedProgramDisplay }}</span>
-                  <ChevronDown :size="15" class="dropdown-chevron" :class="{ 'rotated': showProgramDropdown }" />
-                </button>
-
-                <div v-if="showProgramDropdown" class="searchable-dropdown-menu">
-                  <div class="dropdown-search-box">
-                    <Search :size="13" class="search-icon" />
-                    <input
-                      type="text"
-                      v-model="programSearchQuery"
-                      class="dropdown-search-input"
-                      placeholder="Tìm theo mã hoặc tên chương trình..."
-                      @click.stop
-                      autofocus
-                    />
-                    <Loader2 v-if="searchingPrograms" :size="13" class="spinner search-spinner" />
-                    <button
-                      v-else-if="programSearchQuery"
-                      type="button"
-                      class="btn-clear-search"
-                      @click.stop="programSearchQuery = ''"
-                    >
-                      <X :size="12" />
-                    </button>
+            <div class="grant-mode-cards">
+              <label class="grant-mode-card" :class="{ selected: grantType === 'MANDATORY' }">
+                <input type="radio" value="MANDATORY" v-model="grantType" />
+                <div class="mode-card-radio"></div>
+                <div class="mode-card-content">
+                  <div class="mode-card-title">
+                    <span class="dot mandatory-dot"></span>
+                    <span>Bắt buộc hoàn thành</span>
                   </div>
+                  <span class="mode-card-desc">Gắn KPI tính tỉ lệ tuân thủ & lộ trình cho nhân sự</span>
+                </div>
+              </label>
 
-                  <div class="dropdown-items-list" @scroll="handleProgramsScroll">
-                    <div v-if="loadingPrograms" class="dropdown-state-row">
-                      <Loader2 :size="14" class="spinner" />
-                      <span>Đang tải danh sách chương trình...</span>
-                    </div>
-                    <div v-else-if="!pagedPrograms.length" class="dropdown-state-row empty-state-row">
-                      {{ programSearchQuery ? "Không tìm thấy chương trình phù hợp." : "Lĩnh vực này chưa có chương trình nào." }}
-                    </div>
-                    <div
-                      v-for="p in pagedPrograms"
-                      :key="p.id"
-                      class="dropdown-item"
-                      :class="{ 'is-selected': p.id === targetProgramId }"
-                      @click="selectProgram(p)"
-                    >
-                      <span class="item-code">[{{ p.code }}]</span>
-                      <span class="item-name">{{ p.name }}</span>
-                      <Check v-if="p.id === targetProgramId" :size="14" class="item-checked" />
-                    </div>
-
-                    <div v-if="loadingMorePrograms" class="dropdown-state-row loading-more">
-                      <Loader2 :size="12" class="spinner" />
-                      <span>Tải thêm 10 chương trình...</span>
-                    </div>
-                    <div v-else-if="!hasMorePrograms && pagedPrograms.length > 0" class="dropdown-state-row end-hint">
-                      <span>Đã hiển thị {{ pagedPrograms.length }} / {{ totalPrograms }} chương trình</span>
-                    </div>
+              <label class="grant-mode-card" :class="{ selected: grantType === 'OPTIONAL' }">
+                <input type="radio" value="OPTIONAL" v-model="grantType" />
+                <div class="mode-card-radio"></div>
+                <div class="mode-card-content">
+                  <div class="mode-card-title">
+                    <span class="dot optional-dot"></span>
+                    <span>Tự chọn / Tham khảo</span>
                   </div>
+                  <span class="mode-card-desc">Kho tự học mở rộng, nhân viên tùy ý lựa chọn học</span>
                 </div>
-              </div>
+              </label>
             </div>
-
-            <!-- BƯỚC C: KHÓA HỌC ÁP DỤNG (MẶC ĐỊNH ALL) -->
-            <div v-if="targetProgramId" class="sub-courses-picker">
-              <div class="picker-header">
-                <label>Khóa học áp dụng (*):</label>
-                <span class="course-count-badge">
-                  <span v-if="selectAllCoursesInProgram">
-                    Đã chọn TẤT CẢ ({{ totalProgramCourses }} khóa)
-                  </span>
-                  <span v-else>
-                    Đã chọn {{ selectedSubCourseIds.length }} / {{ totalProgramCourses }} khóa
-                  </span>
-                </span>
-              </div>
-
-              <!-- Checkbox TẤT CẢ (ALL) & Ô TÌM KIẾM SERVER-SIDE -->
-              <div class="all-and-search-row">
-                <label class="all-courses-checkbox">
-                  <input
-                    type="checkbox"
-                    v-model="selectAllCoursesInProgram"
-                    @change="handleToggleAllCourses"
-                  />
-                  <span class="all-text">ALL</span>
-                </label>
-
-                <!-- Ô TÌM KIẾM KHÓA HỌC (SERVER-SIDE LIKE QUERY) -->
-                <div class="course-search-box">
-                  <Search :size="13" class="search-icon" />
-                  <input
-                    type="text"
-                    v-model="courseSearchQuery"
-                    class="course-search-input"
-                    placeholder="Tìm theo mã hoặc tên khóa..."
-                  />
-                  <Loader2 v-if="searchingCourses" :size="13" class="spinner search-spinner" />
-                </div>
-              </div>
-
-              <!-- DANH SÁCH KHÓA HỌC CON VỚI SỰ KIỆN CUỘN TẢI TIẾP (INFINITE SCROLL) -->
-              <div v-if="loadingProgramCourses" class="picker-loading">
-                <Loader2 :size="16" class="spinner" />
-                <span>Đang tải khóa học...</span>
-              </div>
-              <div
-                v-else
-                class="courses-checkbox-list"
-                @scroll="handleCoursesScroll"
-              >
-                <div v-if="!programCourses.length" class="empty-hint">
-                  {{ courseSearchQuery ? "Không tìm thấy khóa học nào khớp từ khóa." : "Chương trình này hiện chưa có khóa học nào." }}
-                </div>
-                <label
-                  v-for="c in programCourses"
-                  :key="c.id"
-                  class="course-checkbox-item"
-                >
-                  <input
-                    type="checkbox"
-                    :value="c.id"
-                    v-model="selectedSubCourseIds"
-                    @change="handleSubCourseCheckChange"
-                  />
-                  <span class="course-code-tag">[{{ c.code }}]</span>
-                  <span class="course-name">{{ c.name }}</span>
-                </label>
-
-                <!-- SPINNER KHI CUỘN TẢI THÊM 10 ITEM -->
-                <div v-if="loadingMoreCourses" class="scroll-loading-more">
-                  <Loader2 :size="14" class="spinner" />
-                  <span>Đang tải thêm 10 khóa tiếp theo...</span>
-                </div>
-                <div v-else-if="!hasMoreCourses && programCourses.length > 0" class="scroll-end-hint">
-                  <span>Đã hiển thị {{ programCourses.length }} / {{ totalProgramCourses }} khóa học</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- BƯỚC 4: HÌNH THỨC ÁP DỤNG (DROPDOWN) -->
-          <div class="form-group">
-            <label for="grant-type-select">3. Hình thức áp dụng (*):</label>
-            <select
-              id="grant-type-select"
-              v-model="grantType"
-              class="form-control select-control"
-              required
-            >
-              <option value="MANDATORY">Bắt buộc hoàn thành</option>
-              <option value="OPTIONAL">Tự chọn / Tham khảo</option>
-            </select>
           </div>
 
           <!-- SUBMIT ACTION -->
@@ -373,7 +416,7 @@
             >
               <Loader2 v-if="saving" :size="16" class="spinner" />
               <Check :size="16" v-else />
-              <span>{{ saving ? "Đang lưu phân bổ..." : "Lưu Phân bổ cho Đơn vị" }}</span>
+              <span>{{ saving ? "Đang lưu phân bổ..." : "Xác nhận Lưu Phân bổ" }}</span>
             </button>
           </div>
         </form>
@@ -381,31 +424,94 @@
 
       <!-- RIGHT PANEL: CURRENT ALLOCATION MATRIX -->
       <section class="card matrix-panel">
-        <div class="panel-header">
-          <ListOrdered :size="18" class="panel-icon" />
-          <div class="header-titles">
-            <h3>Danh sách Đào tạo đã phân bổ</h3>
-            <span v-if="currentUnit" class="current-unit-title">
-              Đơn vị: <strong>{{ currentUnit.name }}</strong>
+        <div class="panel-header matrix-header">
+          <div class="matrix-header-main">
+            <div class="panel-header-title">
+              <ListOrdered :size="16" class="panel-icon" />
+              <h3>Danh sách Đào tạo đã phân bổ</h3>
+            </div>
+            <span v-if="currentUnit" class="current-unit-chip">
+              <Building2 :size="13" />
+              <span>{{ currentUnit.name }}</span>
+            </span>
+          </div>
+
+          <!-- KPI CHIPS (Impeccable Style) -->
+          <div v-if="selectedUnitId && assignedAllocations.length" class="kpi-chips-bar">
+            <span class="kpi-chip kpi-total">
+              <span class="kpi-label">Tổng số</span>
+              <strong class="kpi-val">{{ assignedAllocations.length }}</strong>
+            </span>
+            <span class="kpi-chip kpi-mandatory">
+              <span class="dot mandatory-dot"></span>
+              <span class="kpi-label">Bắt buộc</span>
+              <strong class="kpi-val">{{ mandatoryCount }}</strong>
+            </span>
+            <span class="kpi-chip kpi-optional">
+              <span class="dot optional-dot"></span>
+              <span class="kpi-label">Tự chọn</span>
+              <strong class="kpi-val">{{ optionalCount }}</strong>
             </span>
           </div>
         </div>
 
-        <div v-if="!selectedUnitId" class="empty-state select-unit-prompt">
-          <Building2 :size="48" class="empty-icon" />
-          <h4>Vui lòng chọn Đơn vị ở cột bên trái</h4>
-          <p>Chọn một Đơn vị để xem và quản lý các nội dung đào tạo đã được phân bổ cho đơn vị đó.</p>
+        <!-- QUICK FILTER BAR -->
+        <div v-if="selectedUnitId && assignedAllocations.length" class="matrix-filter-bar">
+          <div class="quick-filter-input-wrap">
+            <Search :size="14" class="quick-filter-icon" />
+            <input
+              type="text"
+              v-model="tableFilterQuery"
+              class="quick-filter-input"
+              placeholder="Lọc nhanh danh sách theo mã, tên nội dung đào tạo..."
+            />
+            <button
+              v-if="tableFilterQuery"
+              type="button"
+              class="btn-clear-filter"
+              @click="tableFilterQuery = ''"
+              title="Xóa lọc"
+            >
+              <X :size="12" />
+            </button>
+          </div>
+          <span v-if="tableFilterQuery" class="filter-count-badge">
+            Hiển thị {{ filteredAssignedAllocations.length }} / {{ assignedAllocations.length }}
+          </span>
         </div>
 
+        <!-- EMPTY STATE: CHƯA CHỌN ĐƠN VỊ -->
+        <div v-if="!selectedUnitId" class="empty-state select-unit-prompt">
+          <div class="empty-icon-ring">
+            <Building2 :size="32" class="empty-icon" />
+          </div>
+          <h4>Vui lòng chọn Đơn vị ở cột bên trái</h4>
+          <p>Chọn một Đơn vị / Chi nhánh để xem ma trận phân bổ các nội dung đào tạo đã áp dụng.</p>
+        </div>
+
+        <!-- EMPTY STATE: LOADING -->
         <div v-else-if="loading" class="empty-state">
-          <Loader2 :size="36" class="spinner" />
+          <Loader2 :size="32" class="spinner" />
           <p>Đang tải dữ liệu phân bổ...</p>
         </div>
 
+        <!-- EMPTY STATE: CHƯA CÓ PHÂN BỔ -->
         <div v-else-if="!assignedAllocations.length" class="empty-state">
-          <Inbox :size="48" class="empty-icon" />
+          <div class="empty-icon-ring">
+            <Inbox :size="32" class="empty-icon" />
+          </div>
           <h4>Chưa có phân bổ nào cho đơn vị này</h4>
-          <p>Sử dụng biểu mẫu bên trái để gán Lĩnh vực, Chương trình hoặc Khóa học cho đơn vị.</p>
+          <p>Sử dụng 4 bước biểu mẫu bên trái để gán Lĩnh vực, Chương trình hoặc Khóa học cho đơn vị.</p>
+        </div>
+
+        <!-- EMPTY STATE: LỌC KHÔNG RA KẾT QUẢ -->
+        <div v-else-if="!filteredAssignedAllocations.length" class="empty-state">
+          <Filter :size="32" class="empty-icon" />
+          <h4>Không tìm thấy nội dung phù hợp</h4>
+          <p>Không có phân bổ nào khớp với từ khóa "<strong>{{ tableFilterQuery }}</strong>".</p>
+          <button type="button" class="btn btn-secondary btn-sm" @click="tableFilterQuery = ''">
+            Xóa bộ lọc
+          </button>
         </div>
 
         <!-- ALLOCATION TABLE -->
@@ -413,23 +519,24 @@
           <table class="allocation-table">
             <thead>
               <tr>
-                <th>Cấp bậc</th>
-                <th>Mã</th>
+                <th style="width: 110px;">Cấp bậc</th>
+                <th style="width: 120px;">Mã nội dung</th>
                 <th>Tên Nội dung Đào tạo</th>
-                <th>Hình thức</th>
+                <th style="width: 140px;">Hình thức</th>
                 <th>Thuộc Chương trình</th>
-                <th class="actions-col">Thao tác</th>
+                <th class="actions-col" style="width: 80px;">Thao tác</th>
               </tr>
             </thead>
             <tbody>
               <tr
-                v-for="item in assignedAllocations"
+                v-for="item in filteredAssignedAllocations"
                 :key="`${item.type}_${item.id}`"
                 :class="{ 'highlight-row': item.type === 'course' }"
               >
                 <td>
                   <span class="type-pill" :class="item.type">
-                    {{ item.typeLabel }}
+                    <span class="pill-dot"></span>
+                    <span>{{ item.typeLabel }}</span>
                   </span>
                 </td>
                 <td class="code-col">
@@ -440,7 +547,8 @@
                 </td>
                 <td>
                   <span class="mode-badge" :class="item.grantType.toLowerCase()">
-                    {{ item.grantType === 'MANDATORY' ? 'Bắt buộc' : 'Tự chọn' }}
+                    <span class="dot" :class="item.grantType === 'MANDATORY' ? 'mandatory-dot' : 'optional-dot'"></span>
+                    <span>{{ item.grantType === 'MANDATORY' ? 'Bắt buộc' : 'Tự chọn' }}</span>
                   </span>
                 </td>
                 <td class="parent-col">
@@ -457,7 +565,7 @@
                     :disabled="deletingId === item.id"
                     @click="handleRemoveAllocation(item)"
                   >
-                    <Trash2 :size="14" />
+                    <Trash2 :size="13" />
                     <span>Gỡ</span>
                   </button>
                 </td>
@@ -485,7 +593,10 @@ import {
   Inbox,
   ListOrdered,
   ChevronDown,
+  ChevronRight,
   X,
+  Sparkles,
+  Filter,
 } from "lucide-vue-next";
 import { trainingApi } from "../api/trainingApi";
 import { axiosClient } from "../api/axiosClient";
@@ -938,6 +1049,29 @@ const assignedAllocations = computed<AllocationRow[]>(() => {
   return rows;
 });
 
+// Table quick filter & KPI metrics (Impeccable style)
+const tableFilterQuery = ref("");
+
+const filteredAssignedAllocations = computed(() => {
+  if (!tableFilterQuery.value.trim()) return assignedAllocations.value;
+  const q = tableFilterQuery.value.trim().toLowerCase();
+  return assignedAllocations.value.filter(
+    (item) =>
+      item.name.toLowerCase().includes(q) ||
+      item.code.toLowerCase().includes(q) ||
+      item.typeLabel.toLowerCase().includes(q) ||
+      (item.parentProgramName && item.parentProgramName.toLowerCase().includes(q))
+  );
+});
+
+const mandatoryCount = computed(() =>
+  assignedAllocations.value.filter((a) => a.grantType === "MANDATORY").length
+);
+
+const optionalCount = computed(() =>
+  assignedAllocations.value.filter((a) => a.grantType === "OPTIONAL").length
+);
+
 // Handle assign action
 async function handleAssignAllocation() {
   if (!selectedUnitId.value) {
@@ -1103,94 +1237,162 @@ async function handleRemoveAllocation(item: AllocationRow) {
 </script>
 
 <style scoped>
+/* ==========================================================================
+   IMPECCABLE DESIGN SYSTEM: ENTERPRISE OPERATE THEME
+   Deep Space Slate navy Ground, High Contrast, Micro-interactions
+   ========================================================================== */
+
 .unit-allocation-page {
-  padding: 1.5rem 2rem;
+  padding: 1.5rem 2rem 2.5rem;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  max-width: 1500px;
+  gap: 1.25rem;
+  max-width: 1600px;
   margin: 0 auto;
   width: 100%;
+  color: #e2e8f0;
 }
 
+/* BREADCRUMB BAR */
+.breadcrumb-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.crumb {
+  color: #94a3b8;
+  transition: color 0.15s ease;
+}
+
+.crumb-separator {
+  color: #475569;
+}
+
+.crumb.active {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+/* PAGE HEADER */
 .page-header {
   display: flex;
   justify-content: space-between;
+  align-items: flex-end;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 1.15rem;
+  gap: 1rem;
+}
+
+.title-with-badge {
+  display: flex;
   align-items: center;
-  border-bottom: 1px solid #1e293b;
-  padding-bottom: 1rem;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+  flex-wrap: wrap;
 }
 
 .header-left h2 {
   font-size: 1.45rem;
   font-weight: 700;
+  letter-spacing: -0.02em;
   color: #f8fafc;
-  margin: 0 0 0.35rem;
-}
-
-.subtitle {
-  font-size: 0.86rem;
-  color: #94a3b8;
   margin: 0;
 }
 
+.badge-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  background: rgba(56, 189, 248, 0.1);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  letter-spacing: 0.02em;
+}
+
+.subtitle {
+  font-size: 0.84rem;
+  color: #94a3b8;
+  margin: 0;
+  line-height: 1.45;
+}
+
+/* TWO-COLUMN LAYOUT */
 .allocation-layout {
   display: grid;
-  grid-template-columns: 460px 1fr;
+  grid-template-columns: 480px minmax(0, 1fr);
   gap: 1.5rem;
   align-items: start;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1100px) {
   .allocation-layout {
     grid-template-columns: 1fr;
   }
 }
 
+/* CARDS */
 .card {
   background: #0f172a;
-  border: 1px solid #1e293b;
-  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.45);
+  transition: border-color 0.2s ease;
+}
+
+.card:hover {
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .panel-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  padding: 0.95rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: #131d31;
+  gap: 0.75rem;
+}
+
+.panel-header-title {
+  display: flex;
+  align-items: center;
   gap: 0.6rem;
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid #1e293b;
-  background: rgba(30, 41, 59, 0.4);
 }
 
 .panel-header h3 {
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 600;
+  letter-spacing: -0.01em;
   color: #f1f5f9;
   margin: 0;
 }
 
 .panel-icon {
   color: #38bdf8;
+  flex-shrink: 0;
 }
 
-.header-titles {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.current-unit-title {
-  font-size: 0.78rem;
+.step-guide-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.06);
   color: #94a3b8;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-variant-numeric: tabular-nums;
 }
 
-.current-unit-title strong {
-  color: #38bdf8;
-}
-
-/* FORM STYLING */
+/* FORM PANEL */
 .allocation-form {
   padding: 1.25rem;
   display: flex;
@@ -1198,38 +1400,72 @@ async function handleRemoveAllocation(item: AllocationRow) {
   gap: 1.25rem;
 }
 
-.form-group {
+.step-group {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.55rem;
 }
 
-.form-group label {
-  font-size: 0.82rem;
+.step-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.step-number {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 4px;
+  padding: 0.08rem 0.35rem;
+  letter-spacing: 0.05em;
+}
+
+.step-header label {
+  font-size: 0.84rem;
   font-weight: 600;
-  color: #e2e8f0;
+  color: #f1f5f9;
 }
 
+.sub-label {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.sub-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+/* INPUTS & SELECTS */
 .form-control {
   width: 100%;
-  background: #1e293b;
-  border: 1px solid #334155;
+  background: #131d31;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   color: #f8fafc;
-  border-radius: 6px;
-  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  padding: 0.65rem 0.85rem;
   font-size: 0.84rem;
   outline: none;
-  transition: border-color 0.15s ease;
+  transition: all 0.15s ease;
 }
 
 .form-control:focus {
   border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+  background: #17243c;
 }
 
+/* CATEGORY SELECTOR (STEP 2) */
 .category-type-selector {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 0.5rem;
+  gap: 0.55rem;
 }
 
 .radio-card {
@@ -1237,15 +1473,16 @@ async function handleRemoveAllocation(item: AllocationRow) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  text-align: center;
   gap: 0.35rem;
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 6px;
-  padding: 0.65rem 0.4rem;
+  background: #131d31;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 0.75rem 0.5rem;
   cursor: pointer;
-  font-size: 0.8rem;
   color: #94a3b8;
-  transition: all 0.15s ease;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
 }
 
 .radio-card input {
@@ -1253,313 +1490,461 @@ async function handleRemoveAllocation(item: AllocationRow) {
 }
 
 .radio-card:hover {
-  background: #334155;
+  background: #1a2740;
+  border-color: rgba(255, 255, 255, 0.18);
   color: #f1f5f9;
+  transform: translateY(-1px);
 }
 
 .radio-card.active {
-  background: rgba(56, 189, 248, 0.15);
+  background: rgba(56, 189, 248, 0.12);
   border-color: #38bdf8;
   color: #38bdf8;
-  font-weight: 600;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.15);
 }
 
-/* Sub-courses picker inside Program */
-.sub-courses-picker {
-  margin-top: 0.75rem;
-  background: #09101d;
-  border: 1px solid #22334d;
-  border-radius: 6px;
-  padding: 0.85rem;
-  display: flex;
-  flex-direction: column;
+.radio-card-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: inherit;
+}
+
+.radio-card-sub {
+  font-size: 0.68rem;
+  color: #64748b;
+}
+
+.radio-card.active .radio-card-sub {
+  color: #7dd3fc;
+}
+
+/* STEP 4: GRANT MODE CARDS */
+.grant-mode-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 0.65rem;
 }
 
-.picker-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.course-count-badge {
-  font-size: 0.7rem;
-  background: rgba(56, 189, 248, 0.15);
-  color: #38bdf8;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
-}
-
-.all-courses-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: rgba(30, 41, 59, 0.7);
-  border: 1px solid #334155;
-  border-radius: 4px;
-  padding: 0.5rem 0.65rem;
-  cursor: pointer;
-}
-
-.all-courses-checkbox .all-text {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #93c5fd;
-}
-
-.courses-checkbox-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  max-height: 220px;
-  overflow-y: auto;
-  border-top: 1px dashed #334155;
-  padding-top: 0.5rem;
-}
-
-.select-hint {
-  font-size: 0.74rem;
-  color: #94a3b8;
-  margin: 0;
-}
-
-.course-checkbox-item {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-size: 0.78rem;
-  color: #cbd5e1;
-  padding: 0.35rem 0.5rem;
-  border-radius: 4px;
-  background: #111c2e;
-  cursor: pointer;
-}
-
-.course-checkbox-item:hover {
-  background: #1e293b;
-  color: #f8fafc;
-}
-
-.course-code-tag {
-  font-family: monospace;
-  color: #64748b;
-  font-size: 0.72rem;
-}
-
-/* Grant mode picker */
-.grant-mode-picker {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.6rem;
-}
-
-.mode-label {
+.grant-mode-card {
   display: flex;
   align-items: flex-start;
-  gap: 0.5rem;
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 6px;
-  padding: 0.6rem;
+  gap: 0.65rem;
+  background: #131d31;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 0.75rem;
   cursor: pointer;
   transition: all 0.15s ease;
+  user-select: none;
 }
 
-.mode-label input {
+.grant-mode-card input {
   display: none;
 }
 
-.mode-label div {
+.grant-mode-card:hover {
+  background: #1a2740;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.mode-card-radio {
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  border: 1.5px solid #475569;
+  margin-top: 2px;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.grant-mode-card.selected .mode-card-radio {
+  border-color: #38bdf8;
+  background: #38bdf8;
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.4);
+}
+
+.grant-mode-card.selected .mode-card-radio::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: #090e17;
+}
+
+.grant-mode-card.selected {
+  background: rgba(56, 189, 248, 0.06);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.mode-card-content {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.2rem;
 }
 
-.mode-label strong {
-  font-size: 0.8rem;
-  color: #e2e8f0;
+.mode-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #f1f5f9;
 }
 
-.mode-label small {
-  font-size: 0.68rem;
+.mode-card-desc {
+  font-size: 0.71rem;
   color: #94a3b8;
+  line-height: 1.35;
 }
 
-.mode-label.selected {
-  background: rgba(59, 130, 246, 0.15);
-  border-color: #3b82f6;
+/* DOT STATUS INDICATORS */
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  display: inline-block;
+  flex-shrink: 0;
 }
 
-.mode-label.selected strong {
-  color: #93c5fd;
+.mandatory-dot {
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
 }
 
-.form-actions {
-  margin-top: 0.5rem;
+.optional-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
 }
 
+/* BUTTONS */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
-  padding: 0.55rem 1rem;
+  gap: 0.45rem;
+  padding: 0.6rem 1rem;
   font-size: 0.82rem;
-  font-weight: 500;
-  border-radius: 6px;
-  border: none;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid transparent;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none;
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .btn-primary {
-  background: #00856a;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
   color: #ffffff;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.35);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #006b54;
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  box-shadow: 0 4px 14px rgba(56, 189, 248, 0.4);
+}
+
+.btn-secondary {
+  background: #131d31;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #1a2740;
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
 }
 
 .btn-submit {
   width: 100%;
   padding: 0.75rem;
   font-size: 0.88rem;
-  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
-.btn-secondary {
-  background: #1e293b;
-  border: 1px solid #334155;
-  color: #cbd5e1;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #334155;
-  color: #ffffff;
+.btn-sm {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.76rem;
 }
 
 .btn:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
+  transform: none !important;
 }
 
-/* MATRIX TABLE */
-.empty-state {
-  display: flex;
+/* RIGHT PANEL: MATRIX & HEADER */
+.matrix-header {
   flex-direction: column;
+  align-items: stretch;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem 0.85rem;
+}
+
+.matrix-header-main {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 4rem 2rem;
-  text-align: center;
-  color: #64748b;
-  gap: 0.6rem;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
-.empty-icon {
-  color: #334155;
-  margin-bottom: 0.5rem;
-}
-
-.empty-state h4 {
-  font-size: 1rem;
+.current-unit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.76rem;
   font-weight: 600;
-  color: #cbd5e1;
-  margin: 0;
+  background: rgba(56, 189, 248, 0.1);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.empty-state p {
-  font-size: 0.82rem;
+/* KPI SUMMARY CHIPS (Impeccable style) */
+.kpi-chips-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.kpi-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.74rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+  background: #090e17;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.kpi-label {
+  color: #94a3b8;
+}
+
+.kpi-val {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 700;
+  font-size: 0.78rem;
+  color: #f8fafc;
+}
+
+.kpi-total .kpi-val {
+  color: #38bdf8;
+}
+
+.kpi-mandatory .kpi-val {
+  color: #34d399;
+}
+
+.kpi-optional .kpi-val {
+  color: #fbbf24;
+}
+
+/* QUICK FILTER BAR */
+.matrix-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  background: #0c1322;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.quick-filter-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #131d31;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 0.4rem 0.65rem;
+  flex: 1;
+  max-width: 480px;
+  transition: border-color 0.15s ease;
+}
+
+.quick-filter-input-wrap:focus-within {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
+}
+
+.quick-filter-icon {
   color: #64748b;
-  max-width: 420px;
-  margin: 0;
+  flex-shrink: 0;
 }
 
+.quick-filter-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #f1f5f9;
+  font-size: 0.8rem;
+  width: 100%;
+}
+
+.quick-filter-input::placeholder {
+  color: #64748b;
+}
+
+.btn-clear-filter {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+}
+
+.btn-clear-filter:hover {
+  color: #f8fafc;
+}
+
+.filter-count-badge {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* TABLE STYLING */
 .allocation-table-wrapper {
   overflow-x: auto;
+  max-height: 650px;
 }
 
 .allocation-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 0.82rem;
   text-align: left;
 }
 
-.allocation-table th {
-  background: #111c2e;
+.allocation-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #131d31;
   color: #94a3b8;
-  font-weight: 600;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #1e293b;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   white-space: nowrap;
 }
 
-.allocation-table td {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid #1e293b;
-  color: #e2e8f0;
+.allocation-table tbody tr {
+  transition: background-color 0.12s ease;
 }
 
 .allocation-table tbody tr:hover {
-  background: rgba(30, 41, 59, 0.4);
+  background-color: rgba(56, 189, 248, 0.04);
 }
 
+.allocation-table td {
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: #cbd5e1;
+  vertical-align: middle;
+}
+
+/* TYPE PILL (Cấp bậc đào tạo) */
 .type-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   font-size: 0.7rem;
-  padding: 0.15rem 0.45rem;
-  border-radius: 4px;
   font-weight: 600;
+  padding: 0.18rem 0.5rem;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.pill-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
 }
 
 .type-pill.domain {
-  background: rgba(56, 189, 248, 0.15);
+  background: rgba(56, 189, 248, 0.1);
   color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.3);
+  border: 1px solid rgba(56, 189, 248, 0.25);
 }
+.type-pill.domain .pill-dot { background: #38bdf8; }
 
 .type-pill.program {
-  background: rgba(168, 85, 247, 0.15);
+  background: rgba(168, 85, 247, 0.12);
   color: #c084fc;
-  border: 1px solid rgba(168, 85, 247, 0.3);
+  border: 1px solid rgba(168, 85, 247, 0.25);
 }
+.type-pill.program .pill-dot { background: #c084fc; }
 
 .type-pill.course {
-  background: rgba(34, 197, 94, 0.15);
+  background: rgba(34, 197, 94, 0.12);
   color: #4ade80;
-  border: 1px solid rgba(34, 197, 94, 0.3);
+  border: 1px solid rgba(34, 197, 94, 0.25);
 }
+.type-pill.course .pill-dot { background: #4ade80; }
 
+/* CODE & NAME COLS */
 .code-col code {
-  font-size: 0.76rem;
-  background: #1e293b;
-  color: #cbd5e1;
-  padding: 0.15rem 0.35rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+  background: #131d31;
+  color: #93c5fd;
+  padding: 0.2rem 0.45rem;
   border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .name-col strong {
-  font-weight: 500;
+  font-weight: 600;
   color: #f8fafc;
 }
 
+/* MODE BADGE (Bắt buộc / Tự chọn) */
 .mode-badge {
-  font-size: 0.72rem;
-  padding: 0.15rem 0.45rem;
-  border-radius: 4px;
-  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  white-space: nowrap;
 }
 
 .mode-badge.mandatory {
-  background: rgba(59, 130, 246, 0.15);
-  color: #93c5fd;
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: rgba(16, 185, 129, 0.1);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.25);
 }
 
 .mode-badge.optional {
-  background: rgba(148, 163, 184, 0.15);
-  color: #94a3b8;
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(245, 158, 11, 0.1);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.25);
 }
 
 .parent-text {
@@ -1571,133 +1956,84 @@ async function handleRemoveAllocation(item: AllocationRow) {
   color: #475569;
 }
 
+/* ACTION BUTTON */
+.actions-col {
+  text-align: right;
+}
+
 .btn-remove-allocation {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.72rem;
+  gap: 0.3rem;
+  background: rgba(244, 63, 94, 0.1);
+  color: #fda4af;
+  border: 1px solid rgba(244, 63, 94, 0.25);
+  padding: 0.25rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: all 0.15s ease;
 }
 
 .btn-remove-allocation:hover:not(:disabled) {
-  background: #ef4444;
+  background: #f43f5e;
   color: #ffffff;
+  border-color: #f43f5e;
+  box-shadow: 0 0 10px rgba(244, 63, 94, 0.4);
 }
 
-.spinner {
-  animation: spin 1s linear infinite;
+.btn-remove-allocation:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
-.spin-icon {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.course-cascade-box {
+/* EMPTY STATES */
+.empty-state {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-}
-
-.sub-form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.sub-form-group label {
-  font-size: 0.8rem;
-  color: #94a3b8;
-  font-weight: 500;
-}
-
-
-.all-and-search-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.course-search-box {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  background: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 4px;
-  padding: 0.35rem 0.55rem;
-  flex: 1;
-}
-
-.course-search-box .search-icon {
-  color: #64748b;
-  flex-shrink: 0;
-}
-
-.course-search-input {
-  background: transparent;
-  border: none;
-  color: #f1f5f9;
-  font-size: 0.76rem;
-  width: 100%;
-  outline: none;
-}
-
-.course-search-input::placeholder {
-  color: #64748b;
-}
-
-
-.picker-loading {
-  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 1rem;
-  color: #94a3b8;
-  font-size: 0.78rem;
-}
-
-.scroll-loading-more {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  padding: 0.5rem;
-  font-size: 0.75rem;
-  color: #38bdf8;
-  background: rgba(15, 23, 42, 0.4);
-  border-radius: 4px;
-}
-
-.scroll-end-hint {
+  padding: 4.5rem 2rem;
   text-align: center;
-  padding: 0.45rem;
-  font-size: 0.72rem;
   color: #64748b;
-  border-top: 1px dashed #334155;
-  margin-top: 0.25rem;
+  gap: 0.65rem;
 }
 
-.search-spinner {
+.empty-icon-ring {
+  width: 64px;
+  height: 64px;
+  border-radius: 9999px;
+  background: #131d31;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.4);
+}
+
+.empty-icon {
   color: #38bdf8;
-  flex-shrink: 0;
+  opacity: 0.8;
 }
 
+.empty-state h4 {
+  font-size: 1.02rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  margin: 0;
+}
+
+.empty-state p {
+  font-size: 0.84rem;
+  color: #94a3b8;
+  max-width: 440px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* SEARCHABLE PROGRAM DROPDOWN (STEP 3) */
 .searchable-dropdown-wrapper {
   position: relative;
   width: 100%;
@@ -1710,12 +2046,12 @@ async function handleRemoveAllocation(item: AllocationRow) {
   width: 100%;
   text-align: left;
   cursor: pointer;
-  background: #0f172a;
-  border: 1px solid #334155;
+  background: #131d31;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   color: #94a3b8;
-  padding: 0.55rem 0.85rem;
-  border-radius: 6px;
-  font-size: 0.82rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.84rem;
   transition: all 0.15s ease;
 }
 
@@ -1725,7 +2061,8 @@ async function handleRemoveAllocation(item: AllocationRow) {
 
 .searchable-trigger.is-open {
   border-color: #38bdf8;
-  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+  background: #17243c;
 }
 
 .dropdown-chevron {
@@ -1741,14 +2078,14 @@ async function handleRemoveAllocation(item: AllocationRow) {
 
 .searchable-dropdown-menu {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 6px);
   left: 0;
   right: 0;
-  z-index: 60;
-  background: #1e293b;
-  border: 1px solid #475569;
-  border-radius: 6px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  z-index: 70;
+  background: #1a263d;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 8px;
+  box-shadow: 0 12px 30px -5px rgba(0, 0, 0, 0.7);
   overflow: hidden;
   animation: fadeInDown 0.15s ease;
 }
@@ -1767,10 +2104,10 @@ async function handleRemoveAllocation(item: AllocationRow) {
 .dropdown-search-box {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.45rem 0.65rem;
-  border-bottom: 1px solid #334155;
-  background: #0f172a;
+  gap: 0.45rem;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: #131d31;
 }
 
 .dropdown-search-input {
@@ -1778,22 +2115,8 @@ async function handleRemoveAllocation(item: AllocationRow) {
   border: none;
   outline: none;
   color: #f8fafc;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   width: 100%;
-}
-
-.btn-clear-search {
-  background: transparent;
-  border: none;
-  color: #64748b;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  padding: 2px;
-}
-
-.btn-clear-search:hover {
-  color: #f8fafc;
 }
 
 .dropdown-items-list {
@@ -1804,29 +2127,29 @@ async function handleRemoveAllocation(item: AllocationRow) {
 .dropdown-item {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.5rem 0.75rem;
+  gap: 0.5rem;
+  padding: 0.55rem 0.85rem;
   cursor: pointer;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   color: #cbd5e1;
   transition: background 0.12s;
 }
 
 .dropdown-item:hover {
-  background: #334155;
+  background: #243452;
   color: #f8fafc;
 }
 
 .dropdown-item.is-selected {
-  background: rgba(14, 165, 233, 0.15);
+  background: rgba(56, 189, 248, 0.15);
   color: #38bdf8;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .item-code {
   color: #38bdf8;
-  font-family: monospace;
-  font-size: 0.74rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
 }
 
 .item-name {
@@ -1842,26 +2165,193 @@ async function handleRemoveAllocation(item: AllocationRow) {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
-  padding: 0.65rem;
-  font-size: 0.74rem;
+  gap: 0.45rem;
+  padding: 0.75rem;
+  font-size: 0.76rem;
   color: #94a3b8;
 }
 
 .dropdown-state-row.empty-state-row {
   color: #64748b;
-  padding: 0.9rem;
+  padding: 1.1rem;
 }
 
 .dropdown-state-row.loading-more {
   color: #38bdf8;
-  border-top: 1px dashed #334155;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
 }
 
 .dropdown-state-row.end-hint {
   color: #64748b;
-  border-top: 1px dashed #334155;
-  font-size: 0.7rem;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+  font-size: 0.72rem;
 }
 
+/* SUB-COURSES PICKER (STEP 3C) */
+.sub-courses-picker {
+  margin-top: 0.5rem;
+  background: #090e17;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.picker-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.course-count-badge {
+  font-size: 0.72rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid rgba(56, 189, 248, 0.2);
+}
+
+.all-and-search-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.all-courses-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: #131d31;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 0.45rem 0.7rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.all-courses-checkbox .all-text {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #38bdf8;
+  letter-spacing: 0.02em;
+}
+
+.course-search-box {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #131d31;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 0.45rem 0.65rem;
+  flex: 1;
+}
+
+.course-search-input {
+  background: transparent;
+  border: none;
+  color: #f1f5f9;
+  font-size: 0.78rem;
+  width: 100%;
+  outline: none;
+}
+
+.course-search-input::placeholder {
+  color: #64748b;
+}
+
+.courses-checkbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 220px;
+  overflow-y: auto;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+  padding-top: 0.5rem;
+}
+
+.course-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #cbd5e1;
+  padding: 0.45rem 0.6rem;
+  border-radius: 6px;
+  background: #131d31;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.course-checkbox-item:hover {
+  background: #1a2740;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+}
+
+.course-code-tag {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: #38bdf8;
+  font-size: 0.74rem;
+}
+
+.picker-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+
+.scroll-loading-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  font-size: 0.75rem;
+  color: #38bdf8;
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 4px;
+}
+
+.scroll-end-hint {
+  text-align: center;
+  padding: 0.45rem;
+  font-size: 0.72rem;
+  color: #64748b;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+  margin-top: 0.25rem;
+}
+
+/* ANIMATIONS & UTILS */
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
 </style>

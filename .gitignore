@@ -78,3 +78,7 @@ buildNumber.properties
 .venv/
 __pycache__/
 *.py[cod]
+
+vendor/
+.gemini/
+.agent/
