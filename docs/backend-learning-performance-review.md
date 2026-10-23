@@ -14,6 +14,10 @@ Ngày 22/10/2026. Phạm vi: outline, chi tiết bài, ghi chú, lưu tiến đ�
 
 ## Kết quả sau sửa
 
+Bổ sung 23/10/2026: outline trả metadata tài liệu trong `chapters[].lessons[].documents` ngay từ đầu để sidebar hiển thị tài liệu của bài chưa chọn. Dữ liệu lấy bằng một truy vấn projection theo khóa, giữ lọc published/quyền editor và thứ tự tài liệu; không hydrate entity tài liệu hay tải nội dung file. Số SQL outline bên dưới là số đo trước bổ sung này.
+
+Kiểm chứng bổ sung: `LearningQueryAuditTest` đạt; outline dùng **14 / 14 SQL** với 4 / 12 bài, không hydrate entity nội dung/quiz/câu hỏi/bình luận/tài liệu. 16 kiểm thử frontend learning performance đạt, gồm hiển thị tài liệu từ outline trước khi tải detail bài đó.
+
 Cùng fixture H2 cold context, 2 chương, 4 hoặc 12 bài như phép đo ban đầu:
 
 | Luồng service | Trước: 4 / 12 bài | Sau: 4 / 12 bài | Entity nội dung sau sửa |

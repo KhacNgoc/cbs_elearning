@@ -10,7 +10,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/** One metadata batch for lessons; no detail mapper or per-lesson collection fetches. */
+/**
+ * One metadata batch for lessons; no detail mapper or per-lesson collection
+ * fetches.
+ */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -30,10 +33,16 @@ public class LearningOutlineService {
         User user = users.findByUsername(username).orElseThrow(() -> new ResourceNotFoundException("User"));
         boolean editor = access.requireCourse(user, course);
         List<Chapter> chapterList = chapters.findByCourseIdOrderByChapterOrderAscIdAsc(id).stream()
-            .filter(ch -> editor || "PUBLISHED".equals(ch.getStatus())).toList();
+                .filter(ch -> editor || "PUBLISHED".equals(ch.getStatus())).toList();
         List<LessonOutlineView> rows = lessons.findOutline(id, editor);
+        Map<String, List<LessonDocumentDto>> documentMetadata = documents.findOutlineDocuments(id, editor).stream()
+                .collect(Collectors.groupingBy(LessonDocumentRepository.OutlineDocument::getLessonId,
+                        Collectors.mapping(d -> new LessonDocumentDto(d.getId(), d.getName(), d.getDocumentType(),
+                                d.getFileUrl(), d.getOriginalFileName(), d.getFileSize(), d.getDocumentOrder()),
+                                Collectors.toList())));
         Set<String> completed = users.findCompletedLessonIds(user.getId(), id);
-        Map<String,List<LessonOutlineView>> grouped = rows.stream().collect(Collectors.groupingBy(LessonOutlineView::getChapterId));
+        Map<String, List<LessonOutlineView>> grouped = rows.stream()
+                .collect(Collectors.groupingBy(LessonOutlineView::getChapterId));
         Set<String> unlocked = new HashSet<>();
         List<TrainingStructureService.ChapterDto> result = new ArrayList<>();
         boolean precedingChaptersComplete = true;
@@ -43,79 +52,101 @@ public class LearningOutlineService {
             boolean done = !published.isEmpty() && published.stream().allMatch(l -> completed.contains(l.getId()));
             boolean precedingLessonsComplete = true;
             for (LessonOutlineView row : all) {
-                if (editor || precedingChaptersComplete && precedingLessonsComplete) unlocked.add(row.getId());
-                if ("PUBLISHED".equals(row.getStatus())) precedingLessonsComplete &= completed.contains(row.getId());
+                if (editor || precedingChaptersComplete && precedingLessonsComplete)
+                    unlocked.add(row.getId());
+                if ("PUBLISHED".equals(row.getStatus()))
+                    precedingLessonsComplete &= completed.contains(row.getId());
             }
-            result.add(new TrainingStructureService.ChapterDto(chapter.getId(), id, chapter.getCode(), chapter.getTitle(),
-                chapter.getDescription(), chapter.getChapterOrder(), chapter.getStatus(), chapter.getVersion(),
-                all.stream().map(this::lessonDto).toList(), !editor && !precedingChaptersComplete, done));
-            if ("PUBLISHED".equals(chapter.getStatus())) precedingChaptersComplete &= done;
+            result.add(new TrainingStructureService.ChapterDto(chapter.getId(), id, chapter.getCode(),
+                    chapter.getTitle(),
+                    chapter.getDescription(), chapter.getChapterOrder(), chapter.getStatus(), chapter.getVersion(),
+                    all.stream().map(row -> {
+                        LessonDto dto = lessonDto(row);
+                        dto.setDocuments(documentMetadata.getOrDefault(row.getId(), List.of()));
+                        return dto;
+                    }).toList(), !editor && !precedingChaptersComplete, done));
+            if ("PUBLISHED".equals(chapter.getStatus()))
+                precedingChaptersComplete &= done;
         }
         Set<String> publishedChapterIds = chapterList.stream().filter(ch -> "PUBLISHED".equals(ch.getStatus()))
-            .map(Chapter::getId).collect(Collectors.toSet());
+                .map(Chapter::getId).collect(Collectors.toSet());
         List<LessonOutlineView> publishedRows = rows.stream().filter(l -> publishedChapterIds.contains(l.getChapterId())
-            && "PUBLISHED".equals(l.getStatus())).toList();
+                && "PUBLISHED".equals(l.getStatus())).toList();
         var resume = resume(course, user, publishedRows, completed, unlocked);
         return new TrainingStructureService.OutlineDto(courseMetadata(course, editor,
-            questions.existsByCourseIdAndLessonIsNull(id)), result,
-            !result.isEmpty() && result.stream().allMatch(TrainingStructureService.ChapterDto::completed),
-            resume == null ? null : resume.lessonId(), resume);
+                questions.existsByCourseIdAndLessonIsNull(id)), result,
+                !result.isEmpty() && result.stream().allMatch(TrainingStructureService.ChapterDto::completed),
+                resume == null ? null : resume.lessonId(), resume);
     }
 
     public CourseDto courseMetadata(Course course, boolean editor, boolean hasCourseQuiz) {
         var program = course.getProgram();
         return CourseDto.builder().id(course.getId()).code(course.getCode()).name(course.getName())
-            .description(course.getDescription()).iconName(course.getIconName()).status(course.getStatus())
-            .version(course.getVersion()).thumbnail(course.getThumbnail()).businessModule(course.getBusinessModule())
-            .level(course.getLevel()).keywords(course.getKeywords()).completionDeadline(course.getCompletionDeadline())
-            .programId(program.getId()).programName(program.getName()).domainId(program.getDomain().getId())
-            .domainName(program.getDomain().getName()).canEdit(editor).hasQuiz(hasCourseQuiz)
-            .quizPassingScore(course.getQuizPassingScore()).lessons(List.of()).build();
+                .description(course.getDescription()).iconName(course.getIconName()).status(course.getStatus())
+                .version(course.getVersion()).thumbnail(course.getThumbnail())
+                .businessModule(course.getBusinessModule())
+                .level(course.getLevel()).keywords(course.getKeywords())
+                .completionDeadline(course.getCompletionDeadline())
+                .programId(program.getId()).programName(program.getName()).domainId(program.getDomain().getId())
+                .domainName(program.getDomain().getName()).canEdit(editor).hasQuiz(hasCourseQuiz)
+                .quizPassingScore(course.getQuizPassingScore()).lessons(List.of()).build();
     }
 
     public LessonDto lessonDto(LessonOutlineView row) {
         boolean quiz = Boolean.TRUE.equals(row.getHasQuiz());
         return LessonDto.builder().id(row.getId()).title(row.getTitle()).courseId(row.getCourseId())
-            .chapterId(row.getChapterId()).status(row.getStatus()).version(row.getVersion()).lessonOrder(row.getLessonOrder())
-            .hasQuiz(quiz).quizRequired(quiz && Boolean.TRUE.equals(row.getQuizRequired()))
-            .quizPassingScore(row.getQuizPassingScore()).documents(List.of()).procedureSteps(List.of()).comments(List.of()).build();
+                .chapterId(row.getChapterId()).status(row.getStatus()).version(row.getVersion())
+                .lessonOrder(row.getLessonOrder())
+                .hasQuiz(quiz).quizRequired(quiz && Boolean.TRUE.equals(row.getQuizRequired()))
+                .quizPassingScore(row.getQuizPassingScore()).documents(List.of()).procedureSteps(List.of())
+                .comments(List.of()).build();
     }
 
     private LearnerWorkspaceService.Resume resume(Course course, User user, List<LessonOutlineView> rows,
             Set<String> completed, Set<String> unlocked) {
-        Map<String,LessonProgress> history = progress.findByUserIdAndCourseId(user.getId(), course.getId()).stream()
-            .collect(Collectors.toMap(p -> p.getLesson().getId(), p -> p));
-        var eligible = rows.stream().filter(l -> !completed.contains(l.getId()) && unlocked.contains(l.getId())).toList();
+        Map<String, LessonProgress> history = progress.findByUserIdAndCourseId(user.getId(), course.getId()).stream()
+                .collect(Collectors.toMap(p -> p.getLesson().getId(), p -> p));
+        var eligible = rows.stream().filter(l -> !completed.contains(l.getId()) && unlocked.contains(l.getId()))
+                .toList();
         var selected = eligible.stream().filter(l -> history.containsKey(l.getId())).max(Comparator.comparing(
-            l -> history.get(l.getId()).getUpdatedAt(), Comparator.nullsFirst(Comparator.naturalOrder())))
-            .orElse(eligible.isEmpty() ? rows.stream().findFirst().orElse(null) : eligible.get(0));
-        if (selected == null) return null;
+                l -> history.get(l.getId()).getUpdatedAt(), Comparator.nullsFirst(Comparator.naturalOrder())))
+                .orElse(eligible.isEmpty() ? rows.stream().findFirst().orElse(null) : eligible.get(0));
+        if (selected == null)
+            return null;
         var saved = history.get(selected.getId());
         String type = saved == null ? null : saved.getContentType();
         Long documentId = saved == null ? null : saved.getDocumentId();
-        boolean requiredQuiz = Boolean.TRUE.equals(selected.getHasQuiz()) && Boolean.TRUE.equals(selected.getQuizRequired());
-        if (saved != null && saved.isContentCompleted() && requiredQuiz && !passed(user, selected)) type = "QUIZ";
-        else if ("DOCUMENT".equals(type) && (documentId == null || !documents.existsByIdAndLessonId(documentId, selected.getId()))) {
-            type = null; documentId = null;
-        } else if ("VIDEO".equals(type) && !Boolean.TRUE.equals(selected.getHasVideo())) type = null;
+        boolean requiredQuiz = Boolean.TRUE.equals(selected.getHasQuiz())
+                && Boolean.TRUE.equals(selected.getQuizRequired());
+        if (saved != null && saved.isContentCompleted() && requiredQuiz && !passed(user, selected))
+            type = "QUIZ";
+        else if ("DOCUMENT".equals(type)
+                && (documentId == null || !documents.existsByIdAndLessonId(documentId, selected.getId()))) {
+            type = null;
+            documentId = null;
+        } else if ("VIDEO".equals(type) && !Boolean.TRUE.equals(selected.getHasVideo()))
+            type = null;
         if (type == null) {
-            if (Boolean.TRUE.equals(selected.getHasVideo())) type = "VIDEO";
+            if (Boolean.TRUE.equals(selected.getHasVideo()))
+                type = "VIDEO";
             else {
                 documentId = documents.findFirstByLessonIdOrderByDocumentOrderAscIdAsc(selected.getId())
-                    .map(LessonDocumentRepository.IdOnly::getId).orElse(null);
+                        .map(LessonDocumentRepository.IdOnly::getId).orElse(null);
                 type = documentId == null ? "TEXT" : "DOCUMENT";
             }
         }
-        return new LearnerWorkspaceService.Resume(course.getId(), selected.getId(), selected.getTitle(), course.getName(),
-            type, documentId, saved == null || saved.getDocumentPage() == null ? 1 : saved.getDocumentPage(),
-            saved == null || saved.getScrollOffset() == null ? 0D : saved.getScrollOffset(),
-            saved == null || saved.getLastPositionSeconds() == null ? 0D : saved.getLastPositionSeconds(),
-            saved == null ? null : saved.getUpdatedAt());
+        return new LearnerWorkspaceService.Resume(course.getId(), selected.getId(), selected.getTitle(),
+                course.getName(),
+                type, documentId, saved == null || saved.getDocumentPage() == null ? 1 : saved.getDocumentPage(),
+                saved == null || saved.getScrollOffset() == null ? 0D : saved.getScrollOffset(),
+                saved == null || saved.getLastPositionSeconds() == null ? 0D : saved.getLastPositionSeconds(),
+                saved == null ? null : saved.getUpdatedAt());
     }
 
     private boolean passed(User user, LessonOutlineView lesson) {
         return scores.findByUserIdAndLessonId(user.getId(), lesson.getId())
-            .filter(s -> s.getTotal() != null && s.getTotal() > 0)
-            .map(s -> Math.round(s.getScore() * 100.0 / s.getTotal()) >= lesson.getQuizPassingScore()).orElse(false);
+                .filter(s -> s.getTotal() != null && s.getTotal() > 0)
+                .map(s -> Math.round(s.getScore() * 100.0 / s.getTotal()) >= lesson.getQuizPassingScore())
+                .orElse(false);
     }
 }

@@ -8,6 +8,7 @@ import { createAsyncResourceCache } from '../src/utils/asyncResourceCache.ts';
 import { createLessonProgressWriter } from '../src/utils/lessonProgressWriter.ts';
 import * as structure from '../src/utils/learningStructure.ts';
 import * as content from '../src/utils/lessonContent.ts';
+import { createDocumentProgressJournal } from '../src/utils/documentProgressJournal.ts';
 
 const dom = new JSDOM('<!doctype html><div id="app"></div>');
 for (const key of ['window', 'document', 'Element', 'HTMLElement', 'SVGElement', 'Node']) globalThis[key] = dom.window[key];
@@ -34,11 +35,12 @@ async function compile(path, modules) {
 const Stub = { render() { return vue.h('div', this.$slots.default?.()); } };
 const Link = { render() { return vue.h('a', this.$slots.default?.()); } };
 
-async function fixture({ save, notes, comments, lessonComments } = {}, view = 'LessonDetail') {
+async function fixture({ save, notes, comments, lessonComments, detail, realSidebar } = {}, view = 'LessonDetail') {
   const state = vue.reactive({ id: 'a', courseId: 'course' });
   const a = { id: 'a', courseId: 'course', chapterId: 'c1', title: 'Bài A', textBody: 'Văn bản A', videoUrl: '/a.mp4', documents: [], comments: [] };
   if (lessonComments) Object.assign(a, lessonComments);
   const b = { ...a, id: 'b', chapterId: 'c2', title: 'Bài B', videoUrl: '/b.mp4' };
+  b.documents = [{ id: 20, name: 'Tài liệu B', documentType: 'PDF', fileUrl: '/b.pdf', fileSize: 1024 }];
   const c = { ...a, id: 'c', title: 'Bài C' };
   const outline = {
     course: { id: 'course', name: 'Khóa học', lessons: [a, b, c] },
@@ -65,7 +67,11 @@ async function fixture({ save, notes, comments, lessonComments } = {}, view = 'L
   const cache = createAsyncResourceCache();
   const courses = vue.reactive({
     currentLesson: null, currentCourse: outline.course,
-    async fetchLessonDetail(id) { courses.currentLesson = id === 'a' ? a : b; return courses.currentLesson; },
+    async fetchLessonDetail(id) {
+      const result = id === 'a' ? a : b;
+      courses.currentLesson = detail ? await detail(id, result) : result;
+      return courses.currentLesson;
+    },
     fetchOutline(id, context, force) { return cache.get(id + context, async () => { calls.outlines++; return outline; }, force); },
     addComment: async () => {},
   });
@@ -76,8 +82,8 @@ async function fixture({ save, notes, comments, lessonComments } = {}, view = 'L
     setup(props, { emit }) { discussionEmit = emit; return () => vue.h("div", { id: "discussion", "data-more": String(props.hasMore) }, JSON.stringify(props.comments)); },
   };
   const Media = {
-    props: ['lesson', 'initialPositionSeconds'], emits: ['progress-update', 'pause'],
-    setup(props, { emit }) { mediaEmit = emit; return () => vue.h('div', { id: 'media', 'data-lesson': props.lesson.id, 'data-position': props.initialPositionSeconds }); },
+    props: ['lesson', 'initialPositionSeconds', 'initialDocumentPage', 'selectedDocument'], emits: ['progress-update', 'pause', 'document-position'],
+    setup(props, { emit }) { mediaEmit = emit; return () => vue.h('div', { id: 'media', 'data-lesson': props.lesson.id, 'data-position': props.initialPositionSeconds, 'data-page': props.initialDocumentPage, 'data-document': props.selectedDocument?.id }); },
   };
   const Notes = {
     props: ['notes', 'loading'],
@@ -92,6 +98,7 @@ async function fixture({ save, notes, comments, lessonComments } = {}, view = 'L
     '../utils/scrollWithin': { scrollWithin() {} },
     '../utils/learningStructure': structure,
     '../utils/lessonContent': content,
+    '../utils/documentProgressJournal': { createDocumentProgressJournal },
     '../utils/learning': { resumeRoute: () => '/lesson/a' },
     '../api/axiosClient': { axiosClient: {} },
     '../api/courseApi': { courseApi: { getComments: comments, getVideoNotes(id) { calls.notes.push(id); return notes ? notes(id) : Promise.resolve([]); } } },
@@ -100,6 +107,7 @@ async function fixture({ save, notes, comments, lessonComments } = {}, view = 'L
   };
   for (const name of ['LessonLearningHeader', 'LessonCourseSidebar', 'LessonMediaStage', 'LessonOverview', 'LessonReportForm', 'LessonDiscussion', 'LessonVideoNotes'])
     modules[`../components/lesson/${name}.vue`] = name === 'LessonMediaStage' ? Media : name === 'LessonVideoNotes' ? Notes : name === 'LessonDiscussion' ? Discussion : Stub;
+  if (realSidebar) modules['../components/lesson/LessonCourseSidebar.vue'] = await compile('../src/components/lesson/LessonCourseSidebar.vue', {});
   const Page = await compile(`../src/views/${view}.vue`, modules);
   const app = vue.createApp({ render: () => vue.h(Page, view === 'LessonDetail' ? { id: state.id } : {}) });
   app.component('RouterLink', Link);
@@ -107,6 +115,86 @@ async function fixture({ save, notes, comments, lessonComments } = {}, view = 'L
   await flush();
   return { app, state, user, calls, loadMoreComments: () => discussionEmit("load-more"), emit: (...args) => mediaEmit(...args) };
 }
+
+test('sidebar DOM and scroll survive a pending lesson switch and a failed load', async () => {
+  const pending = deferred();
+  const f = await fixture({ realSidebar: true, detail: (id, lesson) => id === 'b' ? pending.promise : lesson });
+  try {
+    f.user.completedLessons.push('gap');
+    await flush();
+    const sidebar = document.querySelector('.course-sidebar');
+    const list = sidebar.querySelector('.lesson-list');
+    list.scrollTop = 120;
+    const chapterToggle = sidebar.querySelector('.chapter-toggle');
+    // Navigate through the real sidebar rather than replacing the page component.
+    sidebar.querySelectorAll('.chapter-toggle')[1].click();
+    await flush();
+    [...sidebar.querySelectorAll('.lesson-row-copy')].find(button => button.textContent.includes('Bài B')).click();
+    await flush();
+    assert.equal(document.querySelector('.course-sidebar'), sidebar);
+    assert.equal(document.querySelector('#media'), null);
+    assert.match(document.querySelector('[role="status"]').textContent, /Đang tải/);
+    assert.equal(list.scrollTop, 120);
+    pending.resolve(null);
+    await flush();
+    assert.match(document.querySelector('[role="alert"]').textContent, /Không tải được/);
+    assert.equal(document.querySelector('.course-sidebar'), sidebar);
+    sidebar.querySelectorAll('.chapter-toggle')[0].click();
+    await flush();
+    sidebar.querySelector('.lesson-row-copy').click();
+    await flush();
+    assert.equal(document.querySelector('#media').dataset.lesson, 'a');
+    assert.equal(document.querySelector('.course-sidebar'), sidebar);
+    assert.equal(sidebar.querySelector('.chapter-toggle'), chapterToggle);
+    assert.equal(list.scrollTop, 120);
+  } finally { f.app.unmount(); }
+});
+
+test('sidebar shows outline documents before their lesson detail is requested', async () => {
+  const requested = [];
+  const f = await fixture({ realSidebar: true, detail: (id, lesson) => { requested.push(id); return lesson; } });
+  try {
+    document.querySelectorAll('.chapter-toggle')[1].click();
+    await flush();
+    const toggle = document.querySelector('.lesson-resources-toggle');
+    assert.match(toggle.textContent, /Tài liệu/);
+    assert.equal(toggle.querySelector('.resource-count').textContent, '1');
+    toggle.click();
+    await flush();
+    assert.match(document.querySelector('.lesson-document-select').textContent, /Tài liệu B/);
+    assert.deepEqual(requested, ['a']);
+  } finally { f.app.unmount(); }
+});
+
+test('switching documents saves the outgoing page and restores each document independently', async t => {
+  const documents = [1, 2].map(id => ({ id, name: `Doc ${id}`, documentType: 'PDF', fileUrl: `/${id}.pdf` }));
+  const f = await fixture({ realSidebar: true, lessonComments: { documents } });
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    document.querySelector('.lesson-resources-toggle').click(); await flush();
+    document.querySelectorAll('.lesson-document-select')[0].click(); await flush();
+    f.emit('document-position', { page: 7, scrollOffset: 0 });
+    document.querySelectorAll('.lesson-document-select')[1].click(); await flush();
+    assert.ok(f.calls.saves.some(call => call.request.documentId === 1 && call.request.documentPage === 7));
+    f.emit('document-position', { page: 3, scrollOffset: 0 });
+    t.mock.timers.tick(1000); await flush();
+    const count = f.calls.saves.length;
+    for (let i = 0; i < 10; i++) f.emit('document-position', { page: 3, scrollOffset: i * 10 });
+    t.mock.timers.tick(5000); await flush();
+    assert.equal(f.calls.saves.length, count);
+    document.querySelectorAll('.lesson-document-select')[0].click(); await flush();
+    assert.equal(document.querySelector('#media').dataset.page, '7');
+    document.querySelectorAll('.lesson-document-select')[1].click(); await flush();
+    assert.equal(document.querySelector('#media').dataset.page, '3');
+    document.querySelectorAll('.lesson-document-select')[0].click(); await flush();
+    f.emit('document-position', { page: 8, scrollOffset: 0 });
+    t.mock.timers.tick(1000); await flush();
+    const pageEightWrites = () => f.calls.saves.filter(call => call.request.documentId === 1 && call.request.documentPage === 8).length;
+    assert.equal(pageEightWrites(), 1);
+    document.querySelectorAll('.lesson-document-select')[1].click(); await flush();
+    assert.equal(pageEightWrites(), 1, 'leaving an already-saved page must not save it again');
+  } finally { f.app.unmount(); }
+});
 
 test('lesson content does not wait for notes or old progress writes; same-course outline is reused', async () => {
   const oldNotes = deferred();

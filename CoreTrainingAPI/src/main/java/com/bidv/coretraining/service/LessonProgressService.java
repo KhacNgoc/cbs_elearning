@@ -43,6 +43,17 @@ public class LessonProgressService {
         LessonProgress progress = progressRepository.findByUserIdAndLessonId(user.getId(), lessonId)
                 .orElseGet(() -> LessonProgress.builder().user(user).lesson(lesson).build());
 
+        // Preserve the single-document bookmark from records created before this
+        // feature.
+        if (progress.getDocumentId() != null) {
+            var positions = new LinkedHashMap<>(
+                    progress.getDocumentPositions() == null ? Map.of() : progress.getDocumentPositions());
+            positions.putIfAbsent(progress.getDocumentId().toString(), new LessonProgress.DocumentPosition(
+                    Math.max(1, progress.getDocumentPage() == null ? 1 : progress.getDocumentPage()),
+                    nonNegative(progress.getScrollOffset())));
+            progress.setDocumentPositions(positions);
+        }
+
         if (request.getLastPositionSeconds() != null)
             progress.setLastPositionSeconds(nonNegative(request.getLastPositionSeconds()));
         progress.setWatchedSeconds(Math.max(progress.getWatchedSeconds(), nonNegative(request.getWatchedSeconds())));
@@ -55,6 +66,14 @@ public class LessonProgressService {
             progress.setDocumentId("DOCUMENT".equals(request.getContentType()) ? request.getDocumentId() : null);
             progress.setDocumentPage(request.getDocumentPage());
             progress.setScrollOffset(request.getScrollOffset());
+            if ("DOCUMENT".equals(request.getContentType())) {
+                var positions = new LinkedHashMap<>(
+                        progress.getDocumentPositions() == null ? Map.of() : progress.getDocumentPositions());
+                positions.put(request.getDocumentId().toString(), new LessonProgress.DocumentPosition(
+                        Math.max(1, request.getDocumentPage() == null ? 1 : request.getDocumentPage()),
+                        nonNegative(request.getScrollOffset())));
+                progress.setDocumentPositions(positions);
+            }
         } else if (request.getLastPositionSeconds() != null)
             progress.setContentType("VIDEO");
         if (progress.getDurationSeconds() > 0 && progress.getWatchedSeconds() >= progress.getDurationSeconds() * 0.9)
@@ -110,6 +129,7 @@ public class LessonProgressService {
                 .updatedAt(progress.getUpdatedAt()).contentType(progress.getContentType())
                 .documentId(progress.getDocumentId())
                 .documentPage(progress.getDocumentPage()).scrollOffset(progress.getScrollOffset())
+                .documentPositions(progress.getDocumentPositions())
                 .contentCompleted(progress.isContentCompleted())
                 .build();
     }

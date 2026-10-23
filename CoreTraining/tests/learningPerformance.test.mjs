@@ -3,6 +3,39 @@ import assert from 'node:assert/strict';
 import { createAsyncResourceCache } from '../src/utils/asyncResourceCache.ts';
 import { createLessonProgressWriter } from '../src/utils/lessonProgressWriter.ts';
 import { chapterLearningState, outlineContext } from '../src/utils/learningStructure.ts';
+import { createDocumentProgressJournal } from '../src/utils/documentProgressJournal.ts';
+
+test('document journal survives a crash, isolates accounts and retains changes after an older acknowledgement', () => {
+  const data = new Map();
+  const storage = { getItem: key => data.get(key), setItem: (key, value) => data.set(key, value) };
+  const journal = createDocumentProgressJournal('alice', storage);
+  const snapshot = { contentType: 'DOCUMENT', documentId: 1, documentPage: 4, scrollOffset: 0 };
+  journal.record('lesson', snapshot);
+  const recovered = createDocumentProgressJournal('alice', storage);
+  assert.equal(recovered.pending('lesson')[0].request.documentPage, 4);
+  assert.equal(createDocumentProgressJournal('bob', storage).pending('lesson').length, 0);
+  recovered.record('lesson', { ...snapshot, documentPage: 5 });
+  recovered.acknowledge('lesson', snapshot);
+  assert.equal(recovered.pending('lesson').length, 1);
+  recovered.acknowledge('lesson', { ...snapshot, documentPage: 5 });
+  assert.equal(createDocumentProgressJournal('alice', storage).pending('lesson').length, 0);
+});
+
+test('queued updates to different documents do not overwrite each other', async () => {
+  const blocked = deferred();
+  const calls = [];
+  const writer = createLessonProgressWriter(async (id, request) => {
+    calls.push(request); if (calls.length === 1) await blocked.promise;
+    return { lessonId: id, ...request };
+  });
+  const first = writer.write('lesson', { contentType: 'DOCUMENT', documentId: 1, documentPage: 1 });
+  const a = writer.write('lesson', { contentType: 'DOCUMENT', documentId: 1, documentPage: 7 });
+  const b = writer.write('lesson', { contentType: 'DOCUMENT', documentId: 2, documentPage: 3 });
+  blocked.resolve(); await Promise.all([first, a, b]);
+  assert.deepEqual(calls.map(r => [r.documentId, r.documentPage]), [[1, 1], [1, 7], [2, 3]]);
+  await writer.write('lesson', { contentType: 'DOCUMENT', documentId: 2, documentPage: 3, scrollOffset: 100 });
+  assert.equal(calls.length, 3);
+});
 
 const deferred = () => {
   let resolve, reject;

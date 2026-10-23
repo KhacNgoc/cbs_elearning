@@ -1,11 +1,12 @@
 <template>
   <div
-    v-if="lesson && chapter && !lessonLoading"
+    v-if="outline"
     ref="learningPage"
     class="learning-page"
     :class="{ 'sidebar-visible': sidebarOpen }"
   >
     <LessonLearningHeader
+      v-if="lesson && chapter && !lessonLoading"
       :course-name="`${fullCourse?.name} / ${chapter?.title}`"
       :back-to="`/courses/${fullCourse?.id}`"
       :lesson-title="lesson.title"
@@ -23,6 +24,7 @@
     />
     <div class="learning-stage" :class="{ 'sidebar-hidden': !sidebarOpen }">
       <LessonMediaStage
+        v-if="lesson && chapter && !lessonLoading"
         ref="mediaStage"
         :lesson="lesson"
         :selected-document="selectedDocument"
@@ -33,16 +35,8 @@
           currentLessonProgress?.lastPositionSeconds || 0
         "
         :initial-watched-seconds="currentLessonProgress?.watchedSeconds || 0"
-        :initial-document-page="
-          currentLessonProgress?.documentId === selectedDocument?.id
-            ? currentLessonProgress?.documentPage || 1
-            : 1
-        "
-        :initial-scroll-offset="
-          currentLessonProgress?.documentId === selectedDocument?.id
-            ? currentLessonProgress?.scrollOffset || 0
-            : 0
-        "
+        :initial-document-page="documentInitialPosition.page"
+        :initial-scroll-offset="documentInitialPosition.scrollOffset"
         @document-position="handleDocumentPosition"
         @adjacent="goToAdjacentLesson"
         @time-update="currentVideoTime = $event"
@@ -51,10 +45,19 @@
         @pause="flushProgress"
         @add-note="openNoteComposer"
       />
+      <div v-else-if="lessonError" class="loading-state" role="alert">
+        {{ lessonError }}
+        <button class="btn btn-primary" @click="loadLessonData(props.id)">
+          Thử lại
+        </button>
+      </div>
+      <div v-else class="loading-state" role="status">
+        <span></span>Đang tải bài học...
+      </div>
       <LessonCourseSidebar
         :course="course"
         :chapters="outline?.chapters || []"
-        :active-lesson-id="lesson.id"
+        :active-lesson-id="props.id"
         :completed-lessons="userStore.completedLessons"
         :completed-count="completedCount"
         :progress="courseProgress"
@@ -87,7 +90,10 @@
       ></div>
     </div>
 
-    <section class="lesson-information">
+    <section
+      v-if="lesson && chapter && !lessonLoading"
+      class="lesson-information"
+    >
       <LessonOverview
         :lesson="lesson"
         :course-name="fullCourse?.name"
@@ -114,7 +120,10 @@
         />
         <LessonDiscussion
           :comments="lesson.comments"
-          :has-more="(lesson.commentCount ?? lesson.comments.length) > lesson.comments.length"
+          :has-more="
+            (lesson.commentCount ?? lesson.comments.length) >
+            lesson.comments.length
+          "
           :loading-more="commentsLoadingMore"
           @load-more="loadMoreComments"
           :current-username="userStore.username"
@@ -127,7 +136,10 @@
       </LessonOverview>
     </section>
 
-    <footer v-if="chapterComplete" class="chapter-completion-footer">
+    <footer
+      v-if="!lessonLoading && chapterComplete"
+      class="chapter-completion-footer"
+    >
       <span
         ><strong>{{
           nextChapter ? "Đã hoàn thành chương" : "Đã hoàn thành khóa học"
@@ -202,7 +214,9 @@
   </div>
   <div v-else-if="lessonError" class="loading-state" role="alert">
     {{ lessonError }}
-    <button class="btn btn-primary" @click="loadLessonData(props.id)">Thử lại</button>
+    <button class="btn btn-primary" @click="loadLessonData(props.id)">
+      Thử lại
+    </button>
   </div>
   <div v-else class="loading-state"><span></span>Đang tải bài học...</div>
 </template>
@@ -236,6 +250,7 @@ import LessonMediaStage from "../components/lesson/LessonMediaStage.vue";
 import LessonOverview from "../components/lesson/LessonOverview.vue";
 import LessonReportForm from "../components/lesson/LessonReportForm.vue";
 import { initialLessonContent } from "../utils/lessonContent";
+import { createDocumentProgressJournal } from "../utils/documentProgressJournal";
 import LessonDiscussion from "../components/lesson/LessonDiscussion.vue";
 import LessonVideoNotes from "../components/lesson/LessonVideoNotes.vue";
 
@@ -245,6 +260,32 @@ const route = useRoute();
 const bookmarkReady = ref(false);
 const courseStore = useCourseStore();
 const userStore = useUserStore();
+const documentJournal = createDocumentProgressJournal(userStore.username);
+const documentInitialPosition = ref({ page: 1, scrollOffset: 0 });
+const restoreDocumentPosition = (
+  lessonId: string,
+  document?: LessonDocument | null,
+) => {
+  const saved = userStore.getLatestLessonProgress(lessonId);
+  const local = document?.id
+    ? documentJournal.position(lessonId, document.id)
+    : undefined;
+  const remote = document?.id
+    ? saved?.documentPositions?.[document.id]
+    : undefined;
+  documentInitialPosition.value = {
+    page:
+      local?.documentPage ??
+      remote?.page ??
+      (saved?.documentId === document?.id ? saved?.documentPage : undefined) ??
+      1,
+    scrollOffset:
+      local?.scrollOffset ??
+      remote?.scrollOffset ??
+      (saved?.documentId === document?.id ? saved?.scrollOffset : undefined) ??
+      0,
+  };
+};
 const mediaStage = ref<InstanceType<typeof LessonMediaStage> | null>(null);
 const learningPage = ref<HTMLElement | null>(null);
 const videoNotesPanel = ref<InstanceType<typeof LessonVideoNotes> | null>(null);
@@ -284,10 +325,9 @@ const lesson = computed(() =>
   courseStore.currentLesson?.id === props.id ? courseStore.currentLesson : null,
 );
 const outline = ref<CourseOutline | null>(null);
-const fullCourse = computed(() =>
-  outline.value?.course.id === lesson.value?.courseId
-    ? outline.value?.course
-    : courseStore.currentCourse,
+// Keep the course shell stable while the requested lesson is loading.
+const fullCourse = computed(
+  () => outline.value?.course ?? courseStore.currentCourse,
 );
 const chapter = computed(() =>
   outline.value?.chapters.find((c) => c.id === lesson.value?.chapterId),
@@ -296,7 +336,7 @@ const course = computed(() =>
   fullCourse.value && outline.value
     ? {
         ...fullCourse.value,
-        lessons: outline.value.chapters.flatMap(item => item.lessons),
+        lessons: outline.value.chapters.flatMap((item) => item.lessons),
       }
     : fullCourse.value,
 );
@@ -358,27 +398,50 @@ const loadLessonData = async (lessonId: string) => {
       userStore.progressLoaded ? Promise.resolve() : userStore.fetchProgress(),
     ]);
     if (loadId !== lessonLoadId || disposed) return;
-    if (!loadedLesson) throw new Error("Không tải được bài học. Vui lòng thử lại.");
+    if (!loadedLesson)
+      throw new Error("Không tải được bài học. Vui lòng thử lại.");
     const context = outlineContext(userStore);
-    let loadedOutline = await courseStore.fetchOutline(loadedLesson.courseId, context);
+    let loadedOutline = await courseStore.fetchOutline(
+      loadedLesson.courseId,
+      context,
+    );
     if (loadId !== lessonLoadId || disposed) return;
     // A newly added/moved lesson may not exist in a still-fresh cached structure.
-    if (!loadedOutline.chapters.some(chapter =>
-      chapter.id === loadedLesson.chapterId && chapter.lessons.some(item => item.id === lessonId),
-    )) {
-      loadedOutline = await courseStore.fetchOutline(loadedLesson.courseId, context, true);
+    if (
+      !loadedOutline.chapters.some(
+        (chapter) =>
+          chapter.id === loadedLesson.chapterId &&
+          chapter.lessons.some((item) => item.id === lessonId),
+      )
+    ) {
+      loadedOutline = await courseStore.fetchOutline(
+        loadedLesson.courseId,
+        context,
+        true,
+      );
       if (loadId !== lessonLoadId || disposed) return;
     }
-    if (!loadedOutline.course.canEdit && !userStore.isCourseAccessible(loadedLesson.courseId)) {
+    if (
+      !loadedOutline.course.canEdit &&
+      !userStore.isCourseAccessible(loadedLesson.courseId)
+    ) {
       alert("Bạn cần đăng ký học khóa học nghiệp vụ này trước!");
       await router.push("/");
       return;
     }
     outline.value = loadedOutline;
-    const activeChapter = loadedOutline.chapters.find(c => c.id === loadedLesson.chapterId);
-    if (!activeChapter) throw new Error("Không tìm thấy chương của bài học. Vui lòng tải lại.");
-    const index = activeChapter.lessons.findIndex(item => item.id === lessonId);
-    if (index < 0) throw new Error("Bài học không còn trong cấu trúc khóa. Vui lòng tải lại.");
+    const activeChapter = loadedOutline.chapters.find(
+      (c) => c.id === loadedLesson.chapterId,
+    );
+    if (!activeChapter)
+      throw new Error("Không tìm thấy chương của bài học. Vui lòng tải lại.");
+    const index = activeChapter.lessons.findIndex(
+      (item) => item.id === lessonId,
+    );
+    if (index < 0)
+      throw new Error(
+        "Bài học không còn trong cấu trúc khóa. Vui lòng tải lại.",
+      );
     activeChapter.lessons[index] = loadedLesson;
 
     const progress = userStore.getLatestLessonProgress(lessonId);
@@ -389,10 +452,24 @@ const loadLessonData = async (lessonId: string) => {
       durationSeconds: progress?.durationSeconds || 0,
     };
     progressLessonId.value = lessonId;
-    const requestedDocument = pendingDocument.value?.lessonId === lessonId
-      ? pendingDocument.value.document : undefined;
+    const requestedDocument =
+      pendingDocument.value?.lessonId === lessonId
+        ? pendingDocument.value.document
+        : undefined;
     pendingDocument.value = null;
     selectInitialContent(requestedDocument);
+    // Replay crash/offline snapshots before touching the current content's resume order.
+    for (const entry of documentJournal.pending(lessonId)) {
+      if (
+        loadedLesson.documents?.some((d) => d.id === entry.request.documentId)
+      ) {
+        void userStore
+          .saveLessonProgress(lessonId, entry.request)
+          .then((result) => {
+            if (result) documentJournal.acknowledge(lessonId, entry.request);
+          });
+      }
+    }
     // Initial content restoration is not a user-initiated content switch.
     await nextTick();
     if (loadId !== lessonLoadId || disposed) return;
@@ -401,7 +478,8 @@ const loadLessonData = async (lessonId: string) => {
     void persistCurrentProgress(true);
   } catch (error) {
     if (loadId !== lessonLoadId || disposed) return;
-    lessonError.value = (error as Error).message || "Không thể tải bài học. Vui lòng thử lại.";
+    lessonError.value =
+      (error as Error).message || "Không thể tải bài học. Vui lòng thử lại.";
     lessonLoading.value = false;
   }
 };
@@ -415,9 +493,24 @@ const selectInitialContent = (requestedDocument?: LessonDocument) => {
       ? Number(route.query.documentId)
       : undefined;
   requestedDocument ||= documents.find((d) => d.id === requestedId);
+  if (!requestedDocument) {
+    const recovery = documentJournal.pending(lesson.value.id).at(-1);
+    requestedDocument = documents.find(
+      (d) => d.id === recovery?.request.documentId,
+    );
+  }
   const initial = initialLessonContent(lesson.value, saved, requestedDocument);
   primaryContent.value = initial.type === "VIDEO" ? "VIDEO" : "TEXT";
   selectedDocument.value = initial.document;
+  restoreDocumentPosition(lesson.value.id, initial.document);
+  if (initial.document) {
+    currentProgressSnapshot.value = {
+      ...currentProgressSnapshot.value,
+      documentId: initial.document.id,
+      documentPage: documentInitialPosition.value.page,
+      scrollOffset: documentInitialPosition.value.scrollOffset,
+    };
+  }
 };
 
 const loadVideoNotes = async (lessonId: string, loadId: number) => {
@@ -435,13 +528,16 @@ const loadVideoNotes = async (lessonId: string, loadId: number) => {
   }
 };
 
-const flushProgress = () => { void persistCurrentProgress(); };
+const flushProgress = () => {
+  void persistCurrentProgress();
+};
 const handleVisibilityChange = () => {
   if (document.visibilityState === "hidden") flushProgress();
 };
 onMounted(() => {
   document.addEventListener("visibilitychange", handleVisibilityChange);
   window.addEventListener("pagehide", flushProgress);
+  window.addEventListener("online", flushProgress);
   void loadLessonData(props.id);
 });
 
@@ -451,11 +547,12 @@ onBeforeUnmount(() => {
   lessonLoadId++;
   document.removeEventListener("visibilitychange", handleVisibilityChange);
   window.removeEventListener("pagehide", flushProgress);
+  window.removeEventListener("online", flushProgress);
 });
 
 watch(
   () => props.id,
-  newId => {
+  (newId) => {
     // Capture the old lesson's id and snapshot synchronously; network writes run in the background.
     void persistCurrentProgress();
     bookmarkReady.value = false;
@@ -486,7 +583,8 @@ const persistCurrentProgress = async (touch = false) => {
     progressSaveTimer = null;
   }
   if (!progressLessonId.value || !bookmarkReady.value) return null;
-  return userStore.saveLessonProgress(progressLessonId.value, {
+  const lessonId = progressLessonId.value;
+  const snapshot: LessonProgressRequest = {
     ...currentProgressSnapshot.value,
     contentType: activeContentType.value,
     documentId: selectedDocument.value?.id,
@@ -496,7 +594,13 @@ const persistCurrentProgress = async (touch = false) => {
     scrollOffset: selectedDocument.value
       ? currentProgressSnapshot.value.scrollOffset
       : undefined,
-  }, touch);
+  };
+  if (snapshot.contentType === "DOCUMENT")
+    documentJournal.record(lessonId, snapshot);
+  const result = await userStore.saveLessonProgress(lessonId, snapshot, touch);
+  if (result && snapshot.contentType === "DOCUMENT")
+    documentJournal.acknowledge(lessonId, snapshot);
+  return result;
 };
 const handleDocumentPosition = (position: {
   page: number;
@@ -510,22 +614,27 @@ const handleDocumentPosition = (position: {
     documentPage: position.page,
     scrollOffset: position.scrollOffset,
   };
-  scheduleProgressSave(1000);
+  if (progressLessonId.value) {
+    documentJournal.record(
+      progressLessonId.value,
+      currentProgressSnapshot.value,
+    );
+    if (documentJournal.pending(progressLessonId.value).length)
+      scheduleProgressSave(1000);
+  }
 };
 watch([selectedDocument, primaryContent], async ([document]) => {
   if (!bookmarkReady.value || !lesson.value) return;
   if (document) {
-    const saved = userStore.getLatestLessonProgress(lesson.value.id);
+    restoreDocumentPosition(lesson.value.id, document);
     currentProgressSnapshot.value = {
       ...currentProgressSnapshot.value,
       documentId: document.id,
-      documentPage:
-        saved && saved.documentId === document.id ? saved.documentPage : 1,
-      scrollOffset:
-        saved && saved.documentId === document.id ? saved.scrollOffset : 0,
+      documentPage: documentInitialPosition.value.page,
+      scrollOffset: documentInitialPosition.value.scrollOffset,
     };
   }
-  await persistCurrentProgress();
+  await persistCurrentProgress(true);
 });
 
 const handleVideoEnded = async (progress: LessonProgressRequest) => {
@@ -552,14 +661,18 @@ const handleVideoEnded = async (progress: LessonProgressRequest) => {
 
   if (promptForRequiredCourseQuiz(finishedLessonId)) return;
   const completed = await completeLessonWithFeedback(finishedLessonId);
-  if (completed && nextLesson && !disposed && lesson.value?.id === finishedLessonId) {
+  if (
+    completed &&
+    nextLesson &&
+    !disposed &&
+    lesson.value?.id === finishedLessonId
+  ) {
     await router.push(`/lesson/${nextLesson.id}`);
   }
 };
 
 const switchLesson = async (lessonId: string): Promise<boolean> => {
-  if (!lesson.value) return false;
-  if (lessonId === lesson.value.id) return true;
+  if (lessonId === props.id) return true;
   const index = course.value?.lessons.findIndex((l) => l.id === lessonId) ?? -1;
   if (index < 0) return false;
   if (
@@ -593,6 +706,7 @@ const showDocument = async (lessonId: string, document: LessonDocument) => {
     if (!switched) pendingDocument.value = null;
     return;
   }
+  void persistCurrentProgress();
   selectedDocument.value = document;
 };
 const showPrimaryContent = (type: "VIDEO" | "TEXT") => {
@@ -603,6 +717,7 @@ const showPrimaryContent = (type: "VIDEO" | "TEXT") => {
       : !lesson.value.textBody?.trim())
   )
     return;
+  void persistCurrentProgress();
   primaryContent.value = type;
   selectedDocument.value = null;
 };
@@ -835,11 +950,7 @@ const openNoteComposer = (seconds: number) => {
 };
 const submitFeedback = async () => {
   if (!commentText.value.trim() || !lesson.value) return;
-  await courseStore.addComment(
-    lesson.value.id,
-    null,
-    commentText.value,
-  );
+  await courseStore.addComment(lesson.value.id, null, commentText.value);
   commentText.value = "";
 };
 const submitReply = async (
@@ -869,7 +980,9 @@ const loadMoreComments = async () => {
     const page = await courseApi.getComments(id, commentPage.value + 1);
     if (disposed || loadId !== lessonLoadId || lesson.value?.id !== id) return;
     const ids = new Set(lesson.value.comments.map((comment) => comment.id));
-    lesson.value.comments.push(...page.content.filter((comment) => !ids.has(comment.id)));
+    lesson.value.comments.push(
+      ...page.content.filter((comment) => !ids.has(comment.id)),
+    );
     lesson.value.commentCount = page.totalElements;
     commentPage.value = page.page;
   } catch (error) {
@@ -886,7 +999,9 @@ const deleteComment = async (commentId: number) => {
   try {
     const id = lesson.value.id;
     const loadId = lessonLoadId;
-    const isRoot = lesson.value.comments.some((comment) => comment.id === commentId);
+    const isRoot = lesson.value.comments.some(
+      (comment) => comment.id === commentId,
+    );
     await courseStore.deleteComment(id, commentId);
     if (isRoot) {
       const page = await courseApi.getComments(id);
@@ -2343,7 +2458,9 @@ const deleteComment = async (commentId: number) => {
 }
 /* Lesson format controls in the learning header. */
 .learning-header .back-button,
-.learning-header .header-actions { flex-shrink: 0; }
+.learning-header .header-actions {
+  flex-shrink: 0;
+}
 .lesson-content-switch {
   display: flex;
   align-items: center;
@@ -2367,30 +2484,56 @@ const deleteComment = async (commentId: number) => {
   font: inherit;
   font-size: 0.85rem;
   font-weight: 600;
+  line-height: 1;
   white-space: nowrap;
   cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
 }
-.lesson-content-switch button:hover { background: rgba(255, 255, 255, 0.09); color: #fff; }
+.lesson-content-switch button > svg {
+  display: block;
+  flex-shrink: 0;
+}
+.lesson-content-switch button > span {
+  display: block;
+  line-height: 1;
+}
+.lesson-content-switch button:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: #fff;
+}
 .lesson-content-switch button[aria-pressed="true"] {
   background: #e7f2ee;
   color: #005b41;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
 }
-.lesson-content-switch button:focus-visible { outline: 2px solid #8ae2c2; outline-offset: 2px; }
-.learning-header .header-actions { gap: 0; }
+.lesson-content-switch button:focus-visible {
+  outline: 2px solid #8ae2c2;
+  outline-offset: 2px;
+}
+.learning-header .header-actions {
+  gap: 0;
+}
 .header-completion {
   flex: 0 0 auto;
   min-width: 0;
   overflow: hidden;
   opacity: 0;
   visibility: hidden;
-  transition: width var(--learning-motion), opacity 180ms ease, visibility 0s 320ms;
+  transition:
+    width var(--learning-motion),
+    opacity 180ms ease,
+    visibility 0s 320ms;
 }
 .header-completion.visible {
   opacity: 1;
   visibility: visible;
-  transition: width var(--learning-motion), opacity 220ms ease 70ms, visibility 0s;
+  transition:
+    width var(--learning-motion),
+    opacity 220ms ease 70ms,
+    visibility 0s;
 }
 .header-completion-content {
   display: inline-flex;
@@ -2400,11 +2543,25 @@ const deleteComment = async (commentId: number) => {
   width: max-content;
   white-space: nowrap;
 }
-.header-completion-content > * { flex-shrink: 0; }
-.learning-header .mobile-content-button { margin-left: 0.5rem; }
+.header-completion-content > * {
+  flex-shrink: 0;
+}
+.learning-header .mobile-content-button {
+  margin-left: 0.5rem;
+}
 @media (max-width: 1100px) {
-  .learning-header { flex-wrap: wrap; gap: 0.5rem 0.75rem; padding-top: 0.6rem; padding-bottom: 0.6rem; }
-  .learning-header .header-actions { flex-wrap: wrap; justify-content: flex-end; margin-left: auto; max-width: 100%; }
+  .learning-header {
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+    padding-top: 0.6rem;
+    padding-bottom: 0.6rem;
+  }
+  .learning-header .header-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    margin-left: auto;
+    max-width: 100%;
+  }
 }
 @media (max-width: 900px) {
   .learning-header {
@@ -2414,10 +2571,20 @@ const deleteComment = async (commentId: number) => {
     gap: 0.5rem;
     padding: 0.65rem 0.75rem;
   }
-  .learning-header .back-button { grid-column: 1; grid-row: 1; }
-  .learning-header .header-copy { grid-column: 2 / 4; grid-row: 1; }
-  .learning-header .header-copy h1 { font-size: 0.85rem; }
-  .learning-header .header-actions { display: contents; }
+  .learning-header .back-button {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .learning-header .header-copy {
+    grid-column: 2 / 4;
+    grid-row: 1;
+  }
+  .learning-header .header-copy h1 {
+    font-size: 0.85rem;
+  }
+  .learning-header .header-actions {
+    display: contents;
+  }
   .learning-header .mobile-content-button {
     grid-column: 4;
     grid-row: 1;
@@ -2440,31 +2607,53 @@ const deleteComment = async (commentId: number) => {
     justify-self: end;
     width: auto !important;
     max-width: 100%;
-    transition: opacity 180ms ease, visibility 0s 180ms;
+    transition:
+      opacity 180ms ease,
+      visibility 0s 180ms;
   }
   .learning-header .header-completion.visible {
-    transition: opacity 220ms ease, visibility 0s;
+    transition:
+      opacity 220ms ease,
+      visibility 0s;
   }
-  .header-completion-content { padding-left: 0; }
+  .header-completion-content {
+    padding-left: 0;
+  }
   .lesson-content-switch button {
     min-height: 34px;
     padding: 0 0.5rem;
     gap: 0.35rem;
     font-size: 0.78rem;
   }
-  .progress-summary { font-size: 0.7rem; gap: 0.3rem; }
+  .progress-summary {
+    font-size: 0.7rem;
+    gap: 0.3rem;
+  }
 }
 @media (max-width: 360px) {
-  .lesson-content-switch { gap: 2px; padding: 3px; }
-  .lesson-content-switch button { padding: 0 0.35rem; font-size: 0.75rem; }
-  .progress-summary { font-size: 0.65rem; }
-  .progress-summary svg { width: 14px; height: 14px; }
+  .lesson-content-switch {
+    gap: 2px;
+    padding: 3px;
+  }
+  .lesson-content-switch button {
+    padding: 0 0.35rem;
+    font-size: 0.75rem;
+  }
+  .progress-summary {
+    font-size: 0.65rem;
+  }
+  .progress-summary svg {
+    width: 14px;
+    height: 14px;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .learning-page,
   .course-sidebar,
   .lesson-content-switch button,
   .header-completion,
-  .header-completion.visible { transition: none; }
+  .header-completion.visible {
+    transition: none;
+  }
 }
 </style>

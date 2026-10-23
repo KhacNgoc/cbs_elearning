@@ -19,5 +19,6 @@ public class LessonProgressDto {
     private Long documentId;
     private Integer documentPage;
     private Double scrollOffset;
+    private java.util.Map<String, com.bidv.coretraining.entity.LessonProgress.DocumentPosition> documentPositions;
     private boolean contentCompleted;
 }

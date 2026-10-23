@@ -167,12 +167,13 @@ export interface LessonProgress {
   contentType?: "VIDEO" | "DOCUMENT" | "TEXT";
   documentId?: number;
   documentPage?: number;
+  documentPositions?: Record<string, { page: number; scrollOffset: number }>;
   scrollOffset?: number;
   contentCompleted?: boolean;
 }
 
 export type LessonProgressRequest = Partial<
-  Omit<LessonProgress, "lessonId" | "updatedAt" | "contentCompleted">
+  Omit<LessonProgress, "lessonId" | "updatedAt" | "contentCompleted" | "documentPositions">
 >;
 
 export interface ResumeTarget {

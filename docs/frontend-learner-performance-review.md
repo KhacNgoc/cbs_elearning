@@ -6,9 +6,26 @@ Phạm vi: Đăng nhập/đổi mật khẩu, Tổng quan, Cấu trúc khóa h�
 
 ## Cập nhật triển khai sau rà soát
 
+### Lưu trang tài liệu (23/10/2026)
+
+- Lưu snapshot tài liệu cũ trước khi đổi tài liệu/nội dung. Hàng đợi phân biệt từng tài liệu để các snapshot chờ của tài liệu A không bị tài liệu B thay thế; vẫn tuần tự hóa request để giữ thứ tự resume.
+- Vị trí đọc theo trang: gom request trong cửa sổ 1 giây, không ghi lại vì cuộn thêm trong cùng trang; chọn lại nội dung có thể ghi touch để cập nhật resume. Vị trí khởi tạo viewer được tách khỏi progress đang cập nhật.
+- Ghi journal localStorage đồng bộ khi đổi trang, theo tài khoản. Đóng trang/ẩn tab/rời bài cố gắng flush; mở lại bài thì khôi phục và gửi lại snapshot chưa được server xác nhận. Lỗi mạng giữ journal để thử lại; sự kiện online flush tài liệu hiện tại.
+- Backend trả `documentPositions` theo id tài liệu; tương thích bookmark một tài liệu của dữ liệu cũ. Schema bổ sung cột JSON `lesson_progress.document_positions`; có migration SQL tùy chọn cho PostgreSQL không dùng Hibernate update.
+- Crash không bảo đảm request mạng cuối hoàn tất. Phần chưa đồng bộ khôi phục trên cùng trình duyệt/tài khoản khi localStorage còn khả dụng; xóa dữ liệu trình duyệt hoặc storage bị chặn sẽ mất bản dự phòng. Độ chính xác lưu theo trang, không theo từng pixel cuộn.
+- Kiểm chứng: 19 kiểm thử frontend learning performance và 8 kiểm thử `LearningQueryAuditTest` đạt; TypeScript/Vite production build đạt. Có kiểm thử đổi tài liệu, không ghi trùng khi cuộn cùng trang, hàng đợi giữ snapshot của cả hai tài liệu, khôi phục journal sau tạo lại phiên và đọc lại JSON backend gồm dữ liệu cũ. Chưa kiểm chứng crash trình duyệt thật hay migration trên PostgreSQL production.
+
 Đã triển khai phần Học bài và Cấu trúc khóa học: tách tải ghi chú khỏi nội dung chính; dùng cache outline có giới hạn thời gian, theo tài khoản/quyền/tiến độ; lưu tiến độ nền có thứ tự và gộp snapshot chờ; lưu video theo chu kỳ và khi tạm dừng; bỏ prefetch outline bị lặp từ Tổng quan; chỉ mount danh sách bài của chương mở và tính khóa bài trong một lượt duyệt. Các phát hiện bên dưới mô tả hiện trạng **trước** đợt tối ưu này. Chưa triển khai tối ưu renderer PDF/Word/PowerPoint hoặc tách bundle trong đợt này.
 
 ## Kết quả đo bundle
+
+### Bổ sung ngày 23/10/2026: giữ sidebar khi chuyển bài
+
+Outline cũng được bổ sung metadata tài liệu theo lô để sidebar hiện mục Tài liệu/số lượng và danh sách file ngay khi mở chương, không cần chọn bài trước. Kiểm thử frontend xác nhận thao tác mở danh sách tài liệu không gọi tải detail của bài đó.
+
+`LessonDetail.vue` trước đây đặt toàn bộ trang dưới `v-if="lesson && chapter && !lessonLoading"`. Khi chuyển bài, điều kiện này gỡ rồi mount lại sidebar dù outline được cache, làm chạy lại animation và mất trạng thái cục bộ/vị trí cuộn. Đã giữ khung trang/sidebar theo outline; chỉ phần nội dung bài hiển thị trạng thái tải hoặc lỗi. Sidebar vẫn cập nhật bài đang chọn, chương hiện tại, tài liệu và tiến độ; có thể chọn bài khác sau lỗi tải. Metadata khóa lấy từ outline hiện có để không đổi nguồn trong lúc chờ detail.
+
+Kiểm chứng: 15 kiểm thử learning performance đạt, gồm kiểm thử sidebar thật giữ cùng DOM và vị trí cuộn khi request đang chờ, thất bại và chọn bài khác; TypeScript/Vite production build đạt. Chưa đo Performance trace trên trình duyệt thực.
 
 Chạy Vite production build với `write: false`, lần theo `imports` của entry và cộng kích thước UTF-8/gzip của các chunk được nhập tĩnh:
 
