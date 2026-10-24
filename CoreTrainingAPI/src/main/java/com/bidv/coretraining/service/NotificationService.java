@@ -14,6 +14,8 @@ public interface NotificationService {
             String message, String targetUrl);
 
     List<NotificationDto> getForUser(String username);
+    record NotificationPage(List<NotificationDto> content, Long nextBeforeId, boolean hasMore, long unreadCount) {}
+    NotificationPage getPageForUser(String username, Long beforeId, int size);
 
     NotificationDto markRead(Long id, String username);
 

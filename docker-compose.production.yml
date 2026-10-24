@@ -10,8 +10,6 @@ services:
         VITE_API_URL: ""
     ports: !override
       - "127.0.0.1:5173:80"
-  postgres:
-    ports: !override []
   pgadmin:
     profiles: ["db-tools"]
     ports: !override []

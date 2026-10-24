@@ -7,15 +7,13 @@ WORKDIR /app
 COPY pom.xml .
 
 # Cache Maven repository giữa các lần Docker build
-RUN --mount=type=cache,target=/root/.m2 \
-    mvn dependency:go-offline -B
+RUN mvn dependency:go-offline -B
 
 # Chỉ copy source sau khi dependency đã được cache
 COPY src ./src
 
 # Cache Maven repository cho bước package
-RUN --mount=type=cache,target=/root/.m2 \
-    mvn clean package -DskipTests -B
+RUN mvn clean package -DskipTests -B
 
 
 # Run stage

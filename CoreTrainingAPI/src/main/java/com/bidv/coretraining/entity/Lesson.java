@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "lessons", uniqueConstraints=@UniqueConstraint(columnNames={"chapter_id","lesson_order"}))
+@Table(name = "lessons", uniqueConstraints = @UniqueConstraint(columnNames = { "chapter_id", "lesson_order" }))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -32,28 +32,72 @@ public class Lesson {
     @Column(columnDefinition = "TEXT")
     private String hint;
 
-    @ManyToOne(fetch=FetchType.LAZY, optional=false)
-    @JoinColumn(name="chapter_id", nullable=false) private Chapter chapter;
-    @Builder.Default private String status = "DRAFT";
-    @Version private Long version;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "chapter_id", nullable = false)
+    private Chapter chapter;
+    @Builder.Default
+    private String status = "DRAFT";
+    @Version
+    private Long version;
     private java.time.LocalDateTime updatedAt;
-    @OneToOne(mappedBy="lesson", cascade=CascadeType.ALL, orphanRemoval=true)
+    @OneToOne(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true)
     private LessonContent content;
-    @OneToOne(mappedBy="lesson", cascade=CascadeType.ALL, orphanRemoval=true)
+    @OneToOne(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true)
     private Quiz quiz;
 
-    public String getVideoUrl() { return content == null ? null : content.getVideoUrl(); }
-    public VideoSource getVideoSource() { return content == null ? VideoSource.URL : content.getVideoSource(); }
-    public String getTextBody() { return content == null ? null : content.getTextBody(); }
-    public Integer getQuizPassingScore() { return quiz == null ? 80 : quiz.getPassingScore(); }
-    public boolean hasQuiz() { return quiz != null && !quiz.getQuestions().isEmpty(); }
-    public boolean isQuizRequired() { return hasQuiz() && quiz.isRequiredForProgress(); }
-    public void ensureContent() { if(content == null) content = LessonContent.builder().lesson(this).build(); }
-    public void setVideoUrl(String value) { ensureContent(); content.setVideoUrl(value); }
-    public void setVideoSource(VideoSource value) { ensureContent(); content.setVideoSource(value); }
-    public void setTextBody(String value) { ensureContent(); content.setTextBody(value); }
-    public void setQuizPassingScore(Integer value) { ensureQuiz(); quiz.setPassingScore(value); }
-    public void ensureQuiz() { if(quiz == null) quiz = Quiz.builder().lesson(this).title(title).build(); }
+    public String getVideoUrl() {
+        return content == null ? null : content.getVideoUrl();
+    }
+
+    public VideoSource getVideoSource() {
+        return content == null ? VideoSource.URL : content.getVideoSource();
+    }
+
+    public String getTextBody() {
+        return content == null ? null : content.getTextBody();
+    }
+
+    public Integer getQuizPassingScore() {
+        return quiz == null ? 80 : quiz.getPassingScore();
+    }
+
+    public boolean hasQuiz() {
+        return quiz != null && !quiz.getQuestions().isEmpty();
+    }
+
+    public boolean isQuizRequired() {
+        return hasQuiz() && quiz.isRequiredForProgress();
+    }
+
+    public void ensureContent() {
+        if (content == null)
+            content = LessonContent.builder().lesson(this).build();
+    }
+
+    public void setVideoUrl(String value) {
+        ensureContent();
+        content.setVideoUrl(value);
+    }
+
+    public void setVideoSource(VideoSource value) {
+        ensureContent();
+        content.setVideoSource(value);
+    }
+
+    public void setTextBody(String value) {
+        ensureContent();
+        content.setTextBody(value);
+    }
+
+    public void setQuizPassingScore(Integer value) {
+        ensureQuiz();
+        quiz.setPassingScore(value);
+    }
+
+    public void ensureQuiz() {
+        if (quiz == null)
+            quiz = Quiz.builder().lesson(this).title(title).build();
+    }
 
     @OneToMany(mappedBy = "lesson")
     @Builder.Default

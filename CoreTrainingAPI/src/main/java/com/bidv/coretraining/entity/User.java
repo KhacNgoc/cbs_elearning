@@ -19,7 +19,8 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     @Version
-    @Column(nullable = false, columnDefinition = "bigint default 0")
+    @Column(nullable = false)
+    @org.hibernate.annotations.ColumnDefault("0")
     private Long version;
 
     @Column(nullable = false, unique = true)
@@ -59,13 +60,16 @@ public class User {
     @Builder.Default
     private Set<String> scopeUnitIds = new HashSet<>();
 
-    @Column(nullable = false, columnDefinition = "varchar(32) default 'ACTIVE'")
+    @Column(nullable = false, length = 32)
+    @org.hibernate.annotations.ColumnDefault("'ACTIVE'")
     @Builder.Default
     private String status = "ACTIVE";
-    @Column(nullable = false, columnDefinition = "bigint default 0")
+    @Column(nullable = false)
+    @org.hibernate.annotations.ColumnDefault("0")
     @Builder.Default
     private long tokenVersion = 0;
-    @Column(name = "learner_type", columnDefinition = "varchar(255) default 'CURRENT_STAFF'")
+    @Column(name = "learner_type", length = 255)
+    @org.hibernate.annotations.ColumnDefault("'CURRENT_STAFF'")
     @Builder.Default
     private String learnerType = "CURRENT_STAFF";
 
@@ -73,7 +77,8 @@ public class User {
     @JoinTable(name = "user_access_roles", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "role_id"))
     @Builder.Default
     private Set<AccessRole> assignedRoles = new HashSet<>();
-    @Column(nullable = false, columnDefinition = "boolean default false")
+    @Column(nullable = false)
+    @org.hibernate.annotations.ColumnDefault("false")
     private boolean dynamicAccessInitialized;
     @Transient
     private java.util.List<com.bidv.coretraining.security.RolePolicy> policySnapshot;
@@ -95,7 +100,8 @@ public class User {
     }
     // e.g. "ROLE_USER", "ROLE_ADMIN"
 
-    @Column(name = "must_change_password", nullable = false, columnDefinition = "boolean default true")
+    @Column(name = "must_change_password", nullable = false)
+    @org.hibernate.annotations.ColumnDefault("true")
     @Builder.Default
     private boolean mustChangePassword = true;
 

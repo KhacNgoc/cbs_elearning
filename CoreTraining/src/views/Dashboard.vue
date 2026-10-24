@@ -39,7 +39,7 @@
           <button
             class="btn btn-primary"
             :disabled="!!opening"
-            @click="continueLearning(learning.workspace.resume)"
+            @click="openLearning(learning.workspace.resume, !!learning.workspace.resume.lastAccessedAt)"
           >
             {{
               learning.workspace.resume.lastAccessedAt
@@ -319,7 +319,6 @@ import {
 } from "lucide-vue-next";
 import { useUserStore } from "../stores/userStore";
 import { useLearningStore } from "../stores/learningStore";
-import { trainingApi } from "../api/trainingApi";
 import type { LearnerCourse, ResumeTarget } from "../types";
 import {
   deadlineState,
@@ -530,8 +529,12 @@ const resumeDescription = computed(() => {
         ? `Video · ${Math.floor((t.positionSeconds || 0) / 60)}:${String(Math.floor((t.positionSeconds || 0) % 60)).padStart(2, "0")}`
         : "Nội dung bài học";
 });
-async function continueLearning(target: ResumeTarget) {
-  await router.push(resumeRoute(target));
+async function openLearning(target: ResumeTarget, hasStarted = true) {
+  await router.push(
+    hasStarted
+      ? resumeRoute(target)
+      : `/courses/${encodeURIComponent(target.courseId)}`,
+  );
 }
 const registerTarget = ref<LearnerCourse | null>(null),
   registering = ref(false);
@@ -543,10 +546,9 @@ async function openCourse(item: LearnerCourse) {
   if (item.source === "PENDING") return;
   opening.value = item.course.id;
   try {
-    if (item.learningStatus !== "COMPLETED" && item.resume)
-      await continueLearning(item.resume);
+    if (item.learningStatus === "IN_PROGRESS" && item.resume)
+      await openLearning(item.resume);
     else {
-      await trainingApi.outline(item.course.id);
       await router.push(`/courses/${encodeURIComponent(item.course.id)}`);
     }
   } catch {

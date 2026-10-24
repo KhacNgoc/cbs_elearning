@@ -1,7 +1,11 @@
 import { defineStore } from "pinia";
-import type { Course, Lesson } from "../types";
+import type { Course, Lesson, CourseOutline } from "../types";
 import { courseApi } from "../api/courseApi";
 import { showToast } from "../utils/toast";
+import { trainingApi } from "../api/trainingApi";
+import { createAsyncResourceCache } from "../utils/asyncResourceCache";
+
+const outlineCaches = new WeakMap<object, ReturnType<typeof createAsyncResourceCache<CourseOutline>>>();
 
 let coursesRequest: Promise<void> | null = null;
 let lessonRequestId = 0;
@@ -31,6 +35,15 @@ export const useCourseStore = defineStore("course", {
   },
 
   actions: {
+    async fetchOutline(courseId: string, context: string, force = false) {
+      let cache = outlineCaches.get(this);
+      if (!cache) {
+        cache = createAsyncResourceCache<CourseOutline>();
+        outlineCaches.set(this, cache);
+      }
+      return cache.get(JSON.stringify([courseId, context]), () => trainingApi.outline(courseId), force);
+    },
+    clearOutlineCache() { outlineCaches.get(this)?.clear(); },
     async fetchCourses(force = false) {
       if (this.courses.length > 0 && !force) return;
       if (coursesRequest && !force) return coursesRequest;
@@ -77,6 +90,7 @@ export const useCourseStore = defineStore("course", {
             };
           }
         }
+        return lesson;
       } catch (error) {
         console.error(`Failed to load lesson detail for ${lessonId}:`, error);
         if (requestId === lessonRequestId) {
@@ -86,6 +100,7 @@ export const useCourseStore = defineStore("course", {
             "error",
           );
         }
+        return null;
       } finally {
         if (requestId === lessonRequestId) this.isLoading = false;
       }
@@ -100,6 +115,7 @@ export const useCourseStore = defineStore("course", {
         );
         if (this.currentLessonData && this.currentLessonData.id === lessonId) {
           this.currentLessonData.comments.unshift(newComment);
+          if (this.currentLessonData.commentCount != null) this.currentLessonData.commentCount++;
         }
       } catch (error) {
         console.error("Failed to add comment:", error);
@@ -139,6 +155,7 @@ export const useCourseStore = defineStore("course", {
         (comment) => comment.id === commentId,
       );
       if (isRootComment) {
+        if (this.currentLessonData.commentCount != null) this.currentLessonData.commentCount--;
         this.currentLessonData.comments =
           this.currentLessonData.comments.filter(
             (comment) => comment.id !== commentId,

@@ -7,6 +7,7 @@ import com.bidv.coretraining.entity.ProcedureSection;
 import com.bidv.coretraining.entity.Course;
 import com.bidv.coretraining.entity.VideoSource;
 import org.mapstruct.AfterMapping;
+import org.mapstruct.InheritConfiguration;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
@@ -18,6 +19,10 @@ import java.util.Comparator;
 @Mapper(componentModel = "spring")
 public interface CourseMapper {
 
+        // Authorization fields are populated by the service for the current user.
+        @Mapping(target = "allowedActions", ignore = true)
+        @Mapping(target = "adminActions", ignore = true)
+        @Mapping(target = "canEdit", ignore = true)
         @Mapping(target = "hasQuiz", expression = "java(course.getQuestions() != null && course.getQuestions().stream().anyMatch(question -> question.getLesson() == null))")
         @Mapping(source = "program.id", target = "programId")
         @Mapping(source = "program.name", target = "programName")
@@ -41,7 +46,15 @@ public interface CourseMapper {
         @Mapping(target = "quizRequired", expression = "java(lesson.getQuiz() != null && lesson.getQuiz().isRequiredForProgress())")
         @Mapping(target = "hasQuiz", expression = "java(lesson.hasQuiz())")
         @Mapping(target = "comments", qualifiedByName = "rootComments")
+        // The detail service supplies the total from its paginated comments query.
+        @Mapping(target = "commentCount", ignore = true)
         LessonDto toLessonDto(Lesson lesson);
+
+        @InheritConfiguration(name = "toLessonDto")
+        @Mapping(target = "comments", ignore = true)
+        @Mapping(target = "hasQuiz", ignore = true)
+        @Named("lessonDetail")
+        LessonDto toLessonDetailDto(Lesson lesson);
 
         @AfterMapping
         default void inferLegacyVideoSource(Lesson lesson, @MappingTarget LessonDto dto) {
@@ -69,6 +82,11 @@ public interface CourseMapper {
         @Mapping(source = "replyToUsername", target = "replyToUser")
         @Mapping(target = "replies", qualifiedByName = "allComments")
         CommentDto toCommentDto(Comment comment);
+
+        @InheritConfiguration(name = "toCommentDto")
+        @Mapping(target = "replies", ignore = true)
+        @Named("commentSummary")
+        CommentDto toCommentSummaryDto(Comment comment);
 
         @Named("allComments")
         List<CommentDto> toCommentDtoList(List<Comment> comments);

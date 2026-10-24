@@ -12,22 +12,58 @@
       <h1>{{ lessonTitle }}</h1>
     </div>
     <div class="header-actions">
-      <div class="progress-summary">
-        <Trophy :size="17" /><span
-          >{{ completedCount }}/{{ totalLessons }} bài hoàn thành</span
+      <div
+        v-if="hasText || hasVideo"
+        class="lesson-content-switch"
+        role="group"
+        aria-label="Chọn nội dung bài học"
+      >
+        <button
+          v-if="hasText"
+          type="button"
+          :aria-pressed="activeContent === 'TEXT'"
+          @click="$emit('select-content', 'TEXT')"
         >
+          <FileText :size="17" /><span>Văn bản</span>
+        </button>
+        <button
+          v-if="hasVideo"
+          type="button"
+          :aria-pressed="activeContent === 'VIDEO'"
+          @click="$emit('select-content', 'VIDEO')"
+        >
+          <PlayCircle :size="17" /><span>Video</span>
+        </button>
+      </div>
+      <div
+        class="header-completion"
+        :class="{ visible: !sidebarOpen }"
+        :style="{ width: sidebarOpen ? '0px' : `${completionWidth}px` }"
+        :aria-hidden="sidebarOpen"
+        :inert="sidebarOpen ? true : undefined"
+      >
+        <div ref="completionContent" class="header-completion-content">
+          <div class="progress-summary">
+            <Trophy :size="17" />
+            <span>{{ completedCount }}/{{ totalLessons }} bài hoàn thành</span>
+          </div>
+          <button
+            v-if="canComplete !== false"
+            class="outline-action"
+            :disabled="completed"
+            @click="$emit('complete')"
+          >
+            <CheckCircle2 :size="17" />
+            <span>{{ completed ? "Đã hoàn thành" : "Đánh dấu hoàn thành" }}</span>
+          </button>
+        </div>
       </div>
       <button
-        v-if="canComplete !== false"
-        class="outline-action"
-        :disabled="completed"
-        @click="$emit('complete')"
+        class="mobile-content-button"
+        aria-label="Mở nội dung chương"
+        :aria-expanded="sidebarOpen"
+        @click="$emit('open-content')"
       >
-        <CheckCircle2 :size="17" /><span>{{
-          completed ? "Đã hoàn thành" : "Đánh dấu hoàn thành"
-        }}</span>
-      </button>
-      <button class="mobile-content-button" @click="$emit('open-content')">
         <ListVideo :size="20" /><span>Nội dung</span>
       </button>
     </div>
@@ -35,8 +71,39 @@
 </template>
 
 <script setup lang="ts">
-import { ArrowLeft, CheckCircle2, ListVideo, Trophy } from "lucide-vue-next";
+import { onBeforeUnmount, onMounted, ref } from "vue";
+
+// Measure the natural width so neither text nor buttons shrink during the animation.
+const completionContent = ref<HTMLElement | null>(null);
+const completionWidth = ref(0);
+let completionObserver: ResizeObserver | undefined;
+onMounted(() => {
+  const content = completionContent.value;
+  if (!content) return;
+  const measure = () => {
+    completionWidth.value = content.getBoundingClientRect().width;
+  };
+  measure();
+  if (typeof ResizeObserver !== "undefined") {
+    completionObserver = new ResizeObserver(measure);
+    completionObserver.observe(content);
+  }
+});
+onBeforeUnmount(() => completionObserver?.disconnect());
+
+import {
+  ArrowLeft,
+  CheckCircle2,
+  FileText,
+  ListVideo,
+  PlayCircle,
+  Trophy,
+} from "lucide-vue-next";
 defineProps<{
+  sidebarOpen: boolean;
+  activeContent: "VIDEO" | "TEXT" | "DOCUMENT";
+  hasText: boolean;
+  hasVideo: boolean;
   courseName?: string;
   backTo?: string;
   lessonTitle: string;
@@ -45,5 +112,9 @@ defineProps<{
   completed: boolean;
   canComplete?: boolean;
 }>();
-defineEmits<{ complete: []; "open-content": [] }>();
+defineEmits<{
+  complete: [];
+  "open-content": [];
+  "select-content": [type: "VIDEO" | "TEXT"];
+}>();
 </script>

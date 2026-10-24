@@ -45,6 +45,20 @@ public class LessonProgress {
     private Integer documentPage;
     private Double scrollOffset;
 
+    public record DocumentPosition(Integer page, Double scrollOffset, Boolean completed) {
+        public DocumentPosition(Integer page, Double scrollOffset) { this(page, scrollOffset, false); }
+    }
+    @Builder.Default
+    @Column(nullable = false)
+    @org.hibernate.annotations.ColumnDefault("false")
+    private boolean textCompleted = false;
+    private Long completionVersion;
+
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "document_positions")
+    @Builder.Default
+    private java.util.Map<String, DocumentPosition> documentPositions = new java.util.LinkedHashMap<>();
+
     @Builder.Default
     @Column(nullable = false)
     private boolean contentCompleted = false;

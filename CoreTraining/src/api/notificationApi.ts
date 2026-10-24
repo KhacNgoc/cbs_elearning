@@ -18,8 +18,8 @@ export interface AppNotification {
 }
 
 export const notificationApi = {
-  async getNotifications(): Promise<AppNotification[]> {
-    return (await axiosClient.get<AppNotification[]>("/api/notifications"))
+  async getNotifications(beforeId?: number): Promise<NotificationPage> {
+    return (await axiosClient.get<NotificationPage>("/api/notifications", { params: { size: 6, beforeId } }))
       .data;
   },
   async markRead(id: number): Promise<AppNotification> {
@@ -31,3 +31,9 @@ export const notificationApi = {
     await axiosClient.patch("/api/notifications/read-all");
   },
 };
+export interface NotificationPage {
+  content: AppNotification[];
+  nextBeforeId: number | null;
+  hasMore: boolean;
+  unreadCount: number;
+}

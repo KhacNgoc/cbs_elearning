@@ -8,5 +8,10 @@ import java.util.List;
 
 @Repository
 public interface CommentRepository extends JpaRepository<Comment, Long> {
+    org.springframework.data.domain.Page<Comment> findByLessonIdAndParentIsNull(String lessonId,
+        org.springframework.data.domain.Pageable pageable);
+
+    List<Comment> findByParentIdInOrderByCreatedAtAscIdAsc(java.util.Collection<Long> parentIds);
+
     List<Comment> findByLessonIdOrderByCreatedAtDesc(String lessonId);
 }

@@ -32,7 +32,9 @@ public class TrainingStructureService {
     }
 
     @org.springframework.beans.factory.annotation.Autowired
-    private LearnerWorkspaceService workspace;
+    private LearningOutlineService learningOutline;
+    @org.springframework.beans.factory.annotation.Autowired
+    private LearningAccessService learningAccess;
 
     public record CourseRequest(String code, String name, String programId, String description, String iconName,
             Long version,
@@ -391,28 +393,14 @@ public class TrainingStructureService {
         return s == null || s.isBlank();
     }
 
+    @Transactional(readOnly = true)
     public OutlineDto outline(String id, String username) {
-        Course course = course(id);
-        User user = user(username);
-        LearningPolicy.assertCourseAccess(user, course);
-        List<Chapter> list = com.bidv.coretraining.security.AccessPolicy.canReadCourse(user, course)
-                ? course.getChapters()
-                : LearningPolicy.publishedChapters(course);
-        List<ChapterDto> dto = list.stream().map(ch -> chapterDto(ch, user)).toList();
-        String resume = list.stream().flatMap(ch -> LearningPolicy.publishedLessons(ch).stream())
-                .filter(l -> !LearningPolicy.completed(user, l) && LearningPolicy.lessonUnlocked(user, l))
-                .map(Lesson::getId).findFirst().orElse(null);
-        CourseDto courseDto = mapper.toCourseDto(course);
-        courseDto.setCanEdit(com.bidv.coretraining.security.AccessPolicy.canReadCourse(user, course));
-        if (!com.bidv.coretraining.security.AccessPolicy.canReadCourse(user, course))
-            courseDto.getLessons().forEach(TrainingStructureService::outlineOnly);
-        var target = workspace.resumeCourse(course, user);
-        return new OutlineDto(courseDto, dto, !dto.isEmpty() && dto.stream().allMatch(ChapterDto::completed),
-                target == null ? resume : target.lessonId(), target);
+        return learningOutline.outline(id, username);
     }
 
+    @Transactional(readOnly = true)
     public void requireLesson(String id, String username) {
-        LearningPolicy.assertLessonAccess(user(username), lesson(id));
+        learningAccess.requireLesson(username, id);
     }
 
     @Transactional(readOnly = true)

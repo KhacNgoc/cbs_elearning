@@ -38,8 +38,12 @@ test('search normalizes Vietnamese and deadlines use the end of the Vietnam day'
   assert.equal(deadlineState(item,Date.parse('2026-10-15T00:00:00+07:00')),'Quá hạn');
   assert.equal(deadlineState({...item,learningStatus:'COMPLETED'},Date.parse('2026-10-15')),'');
 });
-test('resume keeps document identity and routes required assessment to the lesson quiz',()=>{
+test('resume keeps document identity when opening the lesson',()=>{
   const target={courseId:'C',lessonId:'L',contentType:'DOCUMENT',documentId:12};
   assert.deepEqual(resumeRoute(target),{path:'/lesson/L',query:{documentId:'12'}});
-  assert.deepEqual(resumeRoute({...target,contentType:'QUIZ'}),{path:'/quiz/C',query:{lessonId:'L'}});
+});
+test('resume opens lesson content even when the required quiz is pending',()=>{
+  const target={courseId:'C',lessonId:'L',contentType:'QUIZ'};
+  assert.deepEqual(resumeRoute(target),{path:'/lesson/L',query:{}});
+  assert.deepEqual(resumeRoute({...target,lessonId:'L/1'}),{path:'/lesson/L%2F1',query:{}});
 });

@@ -30,4 +30,5 @@ public class LessonDto {
     private List<LessonDocumentDto> documents;
     private List<ProcedureSectionDto> procedureSteps;
     private List<CommentDto> comments;
+    private Long commentCount;
 }
