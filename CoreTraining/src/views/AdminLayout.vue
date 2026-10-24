@@ -95,6 +95,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useNavigationStore } from "../stores/navigationStore";
 import {
+  Layers,
   BookOpen,
   ClipboardCheck,
   FileText,
@@ -133,6 +134,7 @@ const learningNavigation = computed(() =>
     : [],
 );
 const iconRegistry = {
+  Layers,
   ChartNoAxesCombined,
   BookOpen,
   ClipboardCheck,
@@ -155,7 +157,7 @@ const groupDefinitions = [
     id: "training",
     label: "Đào tạo & tài liệu",
     icon: BookOpen,
-    ids: ["admin.catalog", "admin.courses", "admin.lessons", "admin.documents"],
+    ids: ["admin.courses", "admin.unit-allocation", "admin.documents"],
   },
   {
     id: "assessment",
@@ -237,7 +239,9 @@ const activeSection = computed(() =>
               ? "admin.roles"
               : route.path.startsWith("/admin/permissions")
                 ? "admin.permissions"
-                : route.path.startsWith("/admin/catalog")
+                : route.path.startsWith("/admin/unit-allocation")
+                  ? "admin.unit-allocation"
+                  : route.path.startsWith("/admin/curriculum") ? "admin.curriculum" : route.path.startsWith("/admin/catalog")
                   ? "admin.catalog"
                   : route.path.startsWith("/admin/courses") ||
                       route.path.endsWith("/edit")
@@ -349,6 +353,7 @@ onMounted(() => navigationStore.load());
 }
 
 .sidebar-item {
+  position: relative;
   display: flex;
   width: 100%;
   align-items: center;
@@ -356,34 +361,56 @@ onMounted(() => navigationStore.load());
   padding: 0.7rem 0.85rem;
   min-height: 42px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(255, 255, 255, 0.78);
   cursor: pointer;
   font-weight: 600;
   font-size: 0.85rem;
   line-height: 1.4;
   text-align: left;
   text-decoration: none;
+  transition: all 0.16s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .sidebar-item:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: white;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  transform: translateX(2px);
+}
+
+.sidebar-item:active {
+  transform: scale(0.99);
 }
 
 .sidebar-item.active {
   background: var(--surface-ffffff);
   color: var(--primary-ink);
+  font-weight: 700;
   box-shadow: var(--shadow-sm);
 }
 
+.sidebar-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3.5px;
+  border-radius: 0 4px 4px 0;
+  background: var(--accent-color);
+}
+
 .sidebar-item:focus-visible {
-  outline: 2px solid #c4e8da;
+  outline: 2px solid var(--accent-color);
   outline-offset: 2px;
 }
 .sidebar-item > svg {
   flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+.sidebar-item:hover > svg {
+  transform: scale(1.06);
 }
 .sidebar-item > span {
   min-width: 0;
@@ -397,7 +424,7 @@ onMounted(() => navigationStore.load());
 }
 .contains-active > .group-toggle,
 .is-open > .group-toggle {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
   color: white;
 }
 .group-chevron {
@@ -410,16 +437,29 @@ onMounted(() => navigationStore.load());
 .group-items {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
-  margin: 0.3rem 0.25rem 0.4rem 1.35rem;
+  gap: 0.2rem;
+  margin: 0.35rem 0.25rem 0.45rem 1.35rem;
   padding-left: 0.65rem;
-  border-left: 1px solid rgba(255, 255, 255, 0.22);
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
 }
 .group-item {
-  padding: 0.55rem 0.65rem;
+  padding: 0.55rem 0.7rem;
   min-height: 38px;
   font-size: 0.8125rem;
   font-weight: 500;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+}
+.group-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  transform: translateX(2px);
+}
+.group-item.active {
+  background: var(--surface-ffffff);
+  color: var(--primary-ink);
+  font-weight: 700;
+  box-shadow: var(--shadow-sm);
 }
 
 .admin-shell-footer {

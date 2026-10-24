@@ -33,6 +33,26 @@ public interface CourseMapper {
         List<CourseDto> toCourseDtoList(List<Course> courses);
 
         @AfterMapping
+        default void mapCourseUnitGrants(Course course, @MappingTarget CourseDto dto) {
+                java.util.Set<String> mandatory = new java.util.HashSet<>();
+                java.util.Set<String> optional = new java.util.HashSet<>();
+                if (course.getUnitGrants() != null) {
+                        for (var entry : course.getUnitGrants().entrySet()) {
+                                if ("MANDATORY".equalsIgnoreCase(entry.getValue())) {
+                                        mandatory.add(entry.getKey());
+                                } else {
+                                        optional.add(entry.getKey());
+                                }
+                        }
+                }
+                dto.setMandatoryUnitIds(mandatory);
+                dto.setOptionalUnitIds(optional);
+                java.util.Set<String> allUnits = new java.util.HashSet<>(mandatory);
+                allUnits.addAll(optional);
+                dto.setUnitIds(allUnits);
+        }
+
+        @AfterMapping
         default void chapterOrder(Course course, @MappingTarget CourseDto dto) {
                 dto.setLessons(toLessonDtoList(course.getChapters().stream()
                                 .sorted(Comparator.comparing(com.bidv.coretraining.entity.Chapter::getChapterOrder))

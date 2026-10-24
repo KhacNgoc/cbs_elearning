@@ -316,7 +316,7 @@ const successMessage = ref("");
 const isLoading = ref(false);
 
 // Login fields
-const username = ref("system"); // pre-fill for convenience
+const username = ref("admin"); // pre-fill for convenience
 const password = ref("");
 
 // Forgot password fields
@@ -344,7 +344,7 @@ const handleLogin = async () => {
   successMessage.value = "";
   try {
     await userStore.login({
-      username: username.value,
+      username: username.value.trim(),
       password: password.value,
     });
   } catch (err: any) {

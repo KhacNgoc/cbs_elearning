@@ -79,7 +79,7 @@ public class AdminServiceImpl implements AdminService {
     private com.bidv.coretraining.service.TrainingStructureService.CourseRequest courseRequest(CourseDto dto) {
         return new com.bidv.coretraining.service.TrainingStructureService.CourseRequest(dto.getCode(), dto.getName(),
                 dto.getProgramId(), dto.getDescription(), dto.getIconName(), dto.getVersion(), dto.getThumbnail(),
-                dto.getBusinessModule(), dto.getLevel(), dto.getKeywords(), dto.getCompletionDeadline());
+                dto.getBusinessModule(), dto.getLevel(), dto.getKeywords(), dto.getCompletionDeadline(), dto.getMandatoryUnitIds(), dto.getOptionalUnitIds(), dto.getUnitIds());
     }
 
     @Override
@@ -98,18 +98,52 @@ public class AdminServiceImpl implements AdminService {
         Chapter chapter = structure.chapter(lessonDto.getChapterId());
         Course course = chapter.getCourse();
         authorization.edit(course);
-        if (!"DRAFT".equals(course.getStatus()))
-            throw new BadRequestException("Chuyển khóa về bản nháp trước khi thêm bài");
-        if (lessonRepository.existsById(lessonDto.getId()))
-            throw new BadRequestException("Mã bài học đã tồn tại");
-        Lesson lesson = Lesson.builder()
-                .id(lessonDto.getId())
-                .title(lessonDto.getTitle())
-                .course(course)
-                .chapter(chapter)
-                .lessonOrder(chapter.getLessons().stream().mapToInt(Lesson::getLessonOrder).max().orElse(-1) + 1)
-                .hint(lessonDto.getHint())
-                .build();
+        if ("DELETED".equals(course.getStatus()))
+            throw new BadRequestException("Khóa học đã bị xóa");
+        String targetLessonId = lessonDto.getId().trim();
+        Lesson existing = lessonRepository.findById(targetLessonId).orElse(null);
+        Lesson lesson;
+        int nextOrder = chapter.getLessons().stream()
+                .filter(l -> !"DELETED".equals(l.getStatus()))
+                .mapToInt(l -> l.getLessonOrder() == null ? 0 : l.getLessonOrder())
+                .max().orElse(-1) + 1;
+        if (existing != null) {
+            if (!"DELETED".equals(existing.getStatus())) {
+                String basePrefix = targetLessonId.replaceAll("\\d+$", "");
+                int seq = 1;
+                while (lessonRepository.existsById(basePrefix + seq)) {
+                    seq++;
+                }
+                targetLessonId = basePrefix + seq;
+                lesson = Lesson.builder()
+                        .id(targetLessonId)
+                        .title(lessonDto.getTitle())
+                        .course(course)
+                        .chapter(chapter)
+                        .lessonOrder(nextOrder)
+                        .hint(lessonDto.getHint())
+                        .status("DRAFT")
+                        .build();
+            } else {
+                lesson = existing;
+                lesson.setTitle(lessonDto.getTitle());
+                lesson.setCourse(course);
+                lesson.setChapter(chapter);
+                lesson.setLessonOrder(nextOrder);
+                lesson.setHint(lessonDto.getHint());
+                lesson.setStatus("DRAFT");
+            }
+        } else {
+            lesson = Lesson.builder()
+                    .id(targetLessonId)
+                    .title(lessonDto.getTitle())
+                    .course(course)
+                    .chapter(chapter)
+                    .lessonOrder(nextOrder)
+                    .hint(lessonDto.getHint())
+                    .status("DRAFT")
+                    .build();
+        }
 
         lesson.ensureContent();
         assets.attach(normalizeUploadedPath(lessonDto.getVideoUrl()));
@@ -145,8 +179,8 @@ public class AdminServiceImpl implements AdminService {
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", id));
 
         authorization.edit(lesson.getCourse());
-        if (!"DRAFT".equals(lesson.getCourse().getStatus()))
-            throw new BadRequestException("Chuyển khóa về bản nháp trước khi sửa nội dung");
+        if ("DELETED".equals(lesson.getCourse().getStatus()))
+            throw new BadRequestException("Khóa học đã bị xóa");
         if (lessonDto.getVersion() != null && !java.util.Objects.equals(lesson.getVersion(), lessonDto.getVersion()))
             throw new org.springframework.web.server.ResponseStatusException(
                     org.springframework.http.HttpStatus.CONFLICT, "Bài học đã thay đổi. Tải lại trước khi lưu");
@@ -299,8 +333,8 @@ public class AdminServiceImpl implements AdminService {
         Lesson quizLesson = resolveQuestionLesson(questionDto, course);
         if (quizLesson == null)
             throw new BadRequestException("Bài kiểm tra phải thuộc một bài học");
-        if (!"DRAFT".equals(course.getStatus()))
-            throw new BadRequestException("Chuyển khóa về bản nháp trước khi soạn kiểm tra");
+        if ("DELETED".equals(course.getStatus()))
+            throw new BadRequestException("Khóa học đã bị xóa");
         quizLesson.ensureQuiz();
         lessonRepository.saveAndFlush(quizLesson);
         Question question = Question.builder()
@@ -334,8 +368,8 @@ public class AdminServiceImpl implements AdminService {
             question.setCourse(course);
         }
 
-        if (!"DRAFT".equals(question.getCourse().getStatus()))
-            throw new BadRequestException("Chuyển khóa về bản nháp trước khi sửa câu hỏi");
+        if ("DELETED".equals(question.getCourse().getStatus()))
+            throw new BadRequestException("Khóa học đã bị xóa");
         if (!java.util.Objects.equals(question.getLesson().getId(), questionDto.getLessonId()))
             throw new BadRequestException("Không đổi phạm vi câu hỏi");
         question.setText(questionDto.getText());
@@ -372,8 +406,8 @@ public class AdminServiceImpl implements AdminService {
         Question question = questionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Question", "id", id));
         authorization.edit(question.getCourse());
-        if (!"DRAFT".equals(question.getCourse().getStatus()))
-            throw new BadRequestException("Chuyển khóa về bản nháp trước khi xóa câu hỏi");
+        if ("DELETED".equals(question.getCourse().getStatus()))
+            throw new BadRequestException("Khóa học đã bị xóa");
         questionRepository.delete(question);
     }
 
@@ -458,8 +492,8 @@ public class AdminServiceImpl implements AdminService {
         if (!lesson.getCourse().getId().equals(settings.getCourseId()))
             throw new BadRequestException("Bài không thuộc khóa");
         authorization.edit(lesson.getCourse());
-        if (!"DRAFT".equals(lesson.getCourse().getStatus()))
-            throw new BadRequestException("Chuyển khóa về bản nháp trước khi đổi kiểm tra");
+        if ("DELETED".equals(lesson.getCourse().getStatus()))
+            throw new BadRequestException("Khóa học đã bị xóa");
         if (!lesson.hasQuiz())
             throw new BadRequestException("Thêm ít nhất một câu hỏi trước khi lưu cấu hình bài kiểm tra");
         lesson.getQuiz().setPassingScore(passingScore);
@@ -479,8 +513,8 @@ public class AdminServiceImpl implements AdminService {
         if (!lesson.getCourse().getId().equals(courseId))
             throw new BadRequestException("Bài không thuộc khóa");
         authorization.edit(lesson.getCourse());
-        if (!"DRAFT".equals(lesson.getCourse().getStatus()))
-            throw new BadRequestException("Chuyển khóa về bản nháp trước khi xóa kiểm tra");
+        if ("DELETED".equals(lesson.getCourse().getStatus()))
+            throw new BadRequestException("Khóa học đã bị xóa");
         questionRepository.deleteByLessonId(lessonId);
         questionRepository.flush();
         lesson.setQuiz(null);

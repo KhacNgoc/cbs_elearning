@@ -16,6 +16,7 @@ import com.bidv.coretraining.repository.QuestionRepository;
 import com.bidv.coretraining.repository.UserRepository;
 import com.bidv.coretraining.repository.UserQuizScoreRepository;
 import com.bidv.coretraining.repository.CourseEnrollmentRequestRepository;
+import com.bidv.coretraining.service.LearningPolicy;
 import com.bidv.coretraining.service.UserService;
 import com.bidv.coretraining.service.NotificationService;
 import com.bidv.coretraining.service.LessonProgressService;
@@ -198,7 +199,7 @@ public class UserServiceImpl implements UserService {
                 if (!com.bidv.coretraining.security.AccessPolicy.visible(actor, target))
                         throw new org.springframework.security.access.AccessDeniedException(
                                         "Bạn chưa có quyền truy cập khóa học này. Vui lòng liên hệ quản trị viên.");
-                if (!"PUBLISHED".equals(target.getStatus()))
+                if (!LearningPolicy.isLearnableStatus(target.getStatus()))
                         throw new org.springframework.security.access.AccessDeniedException(
                                         "Khóa học chưa được xuất bản hoặc đã ngừng sử dụng nên không thể đăng ký.");
                 User user = userRepository.findByUsername(username)
@@ -258,7 +259,7 @@ public class UserServiceImpl implements UserService {
                                 .map(Course::getId).distinct().collect(Collectors.toCollection(ArrayList::new));
 
                 courseRepository.findAll().stream()
-                                .filter(c -> "PUBLISHED".equals(c.getStatus())
+                                .filter(c -> LearningPolicy.isLearnableStatus(c.getStatus())
                                                 && com.bidv.coretraining.security.AccessPolicy.visible(user, c)
                                                 && com.bidv.coretraining.security.AccessPolicy.mandatory(user, c))
                                 .map(Course::getId).forEach(mandatoryCourses::add);

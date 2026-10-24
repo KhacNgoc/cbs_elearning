@@ -45,7 +45,7 @@ public class AuthorizationService {
     }
 
     public void permission(String permission) {
-        AccessPolicy.require(AccessPolicy.permissions(current()).contains(permission));
+        AccessPolicy.require(AccessPolicy.system(current()) || AccessPolicy.permissions(current()).contains(permission));
         var op = AdminOperation.current("unknown", "denied");
         if (!op.page().equals("unknown"))
             AccessPolicy.require(AccessPolicy.has(current(), op.permission()));

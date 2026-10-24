@@ -13,6 +13,7 @@ import com.bidv.coretraining.repository.CourseRepository;
 import com.bidv.coretraining.repository.UserRepository;
 import com.bidv.coretraining.repository.VideoNoteRepository;
 import com.bidv.coretraining.service.CourseService;
+import com.bidv.coretraining.service.LearningPolicy;
 import com.bidv.coretraining.service.NotificationService;
 import com.bidv.coretraining.entity.NotificationType;
 import org.springframework.stereotype.Service;
@@ -60,7 +61,7 @@ public class CourseServiceImpl implements CourseService {
         User user = authorization.current();
         List<Course> courses = courseRepository.findAll().stream()
                 .filter(c -> com.bidv.coretraining.security.AccessPolicy.canReadCourse(user, c)
-                        || "PUBLISHED".equals(c.getStatus())
+                        || LearningPolicy.isLearnableStatus(c.getStatus())
                                 && com.bidv.coretraining.security.AccessPolicy.visible(user, c))
                 .toList();
         // Keep the full editing DTO for editors; learners only need published metadata.
@@ -106,7 +107,7 @@ public class CourseServiceImpl implements CourseService {
                 .orElseThrow(() -> new ResourceNotFoundException("Course", "id", id));
         User user = authorization.current();
         boolean editor = com.bidv.coretraining.security.AccessPolicy.canReadCourse(user, course);
-        com.bidv.coretraining.security.AccessPolicy.require(editor || "PUBLISHED".equals(course.getStatus())
+        com.bidv.coretraining.security.AccessPolicy.require(editor || LearningPolicy.isLearnableStatus(course.getStatus())
                 && com.bidv.coretraining.security.AccessPolicy.visible(user, course));
         CourseDto result = editor ? courseMapper.toCourseDto(course)
             : learningOutline.courseMetadata(course, false, questions.existsByCourseIdAndLessonIsNull(id));

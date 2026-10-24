@@ -38,6 +38,7 @@ public class NavigationDataInitializer implements ApplicationRunner {
                 seed("admin.enrollments", "Duyệt đăng ký", "/admin?tab=enrollments", "ClipboardCheck", "ADMIN", 120,
                                 true,
                                 "ROLE_ADMIN");
+                seed("admin.curriculum", "Cấu trúc đào tạo (7 Cấp)", "/admin/curriculum", "Layers", "ADMIN", 104, true, "ROLE_ADMIN");
                 seed("admin.catalog", "Danh mục đào tạo", "/admin/catalog", "BookOpen", "ADMIN", 105, true,
                                 "ROLE_ADMIN");
                 seed("admin.courses", "Khóa học", "/admin/courses", "BookOpen", "ADMIN", 106, true, "ROLE_ADMIN");

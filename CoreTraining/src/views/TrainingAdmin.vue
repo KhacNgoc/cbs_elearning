@@ -4,13 +4,30 @@
       <div class="heading-with-back">
         <AdminBackButton v-if="backTo" :to="backTo" :label="backLabel" />
         <div class="heading-copy">
-          <nav class="breadcrumb" aria-label="Đường dẫn">
-            <RouterLink to="/admin/courses">Khóa học</RouterLink
-            ><template v-if="course">
-              /
-              <RouterLink :to="`/admin/courses/${course.id}`">{{
-                course.name
-              }}</RouterLink></template
+          <div class="view-mode-tabs" v-if="!chapter">
+            <button
+              type="button"
+              class="view-tab-btn"
+              :class="{ active: viewType === 'tree' }"
+              @click="viewType = 'tree'"
+            >
+              <Layers :size="15" /> Cây cấu trúc (Interactive Tree)
+            </button>
+            <button
+              type="button"
+              class="view-tab-btn"
+              :class="{ active: viewType === 'table' }"
+              @click="viewType = 'table'"
+            >
+              <Table :size="15" /> Bảng quản lý truyền thống
+            </button>
+          </div>
+          <nav v-if="course" class="breadcrumb" aria-label="Đường dẫn">
+            <RouterLink to="/admin/courses">Danh mục đào tạo</RouterLink>
+            /
+            <RouterLink :to="`/admin/courses/${course.id}`">{{
+              course.name
+            }}</RouterLink
             ><span v-if="chapter"> / {{ chapter.title }}</span>
           </nav>
           <h1>{{ title }}</h1>
@@ -64,7 +81,10 @@
       </button>
     </header>
 
-    <div v-if="mode === 'catalog'" class="catalog-layout">
+    <div v-if="!chapter && viewType === 'tree'" class="tree-studio-wrapper">
+      <CurriculumTreeStudio :initial-course-id="course?.id" @refresh="load" />
+    </div>
+    <div v-else-if="mode === 'catalog'" class="catalog-layout">
       <section class="card catalog-domains">
         <div class="section-heading">
           <h2>Lĩnh vực đào tạo</h2>
@@ -270,8 +290,8 @@
         <button
           v-if="
             (!course && accessUser.can('courses', 'create')) ||
-            (course?.status === 'DRAFT' &&
-              !!course.allowedActions?.includes('create'))
+            (course?.status !== 'ARCHIVED' &&
+              !!course?.allowedActions?.includes('create'))
           "
           class="btn btn-primary"
           @click="openForm(chapter ? 'lesson' : course ? 'chapter' : 'course')"
@@ -290,12 +310,12 @@
         :expanded-ids="expandedChapterIds"
         :can-edit="canEditCourse"
         :can-create="
-          course?.status === 'DRAFT' &&
+          course?.status !== 'ARCHIVED' &&
           accessUser.can('courses', 'create') &&
           !!course?.allowedActions?.includes('create')
         "
         :can-delete="
-          course?.status === 'DRAFT' &&
+          course?.status !== 'ARCHIVED' &&
           accessUser.can('courses', 'delete') &&
           !!course?.allowedActions?.includes('delete')
         "
@@ -624,6 +644,7 @@ import type {
 import ConfirmModal from "../components/ConfirmModal.vue";
 import AdminBackButton from "../components/AdminBackButton.vue";
 import ChapterTreeTable from "../components/ChapterTreeTable.vue";
+import CurriculumTreeStudio from "../components/CurriculumTreeStudio.vue";
 import OrganizationMultiTreeSelect from "../components/OrganizationMultiTreeSelect.vue";
 import type { OrganizationUnit } from "../types/organization";
 import { axiosClient } from "../api/axiosClient";
@@ -635,6 +656,7 @@ type Row = Course | Chapter | Lesson;
 type FormKind = "domain" | "program" | "course" | "chapter" | "lesson";
 const route = useRoute(),
   router = useRouter();
+const viewType = ref<"tree" | "table">("tree");
 const loading = ref(false),
   busy = ref(false);
 const domains = ref<TrainingDomain[]>([]),
@@ -677,10 +699,10 @@ const backTo = computed(() =>
 const backLabel = computed(() =>
   mode.value === "chapter"
     ? "Quay lại khóa học"
-    : "Quay lại danh sách khóa học",
+    : "Quay lại danh mục đào tạo",
 );
 const title = computed(() =>
-  mode.value === "catalog"
+  mode.value === "catalog" || mode.value === "list"
     ? "Danh mục đào tạo"
     : chapter.value?.title || course.value?.name || "Khóa học",
 );
@@ -689,13 +711,15 @@ const rows = computed<Row[]>(
     chapter.value?.lessons || (course.value ? chapters.value : courses.value),
 );
 const canEditCourse = computed(
-  () => course.value?.status === "DRAFT" && managesCourses.value,
+  () => course.value?.status !== "ARCHIVED" && course.value?.status !== "DELETED" && managesCourses.value,
 );
 const canEditRow = (row: Row) =>
   course.value
-    ? course.value.status === "DRAFT" &&
+    ? course.value.status !== "ARCHIVED" &&
+      course.value.status !== "DELETED" &&
       course.value.allowedActions?.some((a) => a === "update" || a === "delete")
-    : row.status === "DRAFT" &&
+    : row.status !== "ARCHIVED" &&
+      row.status !== "DELETED" &&
       (row as Course).allowedActions?.some(
         (a) => a === "update" || a === "delete",
       );
@@ -835,7 +859,10 @@ async function load() {
     domains.value = catalog.domains;
     programs.value = catalog.programs;
     domainId.value ||= domains.value[0]?.id || "";
-    courses.value = mode.value === "catalog" ? [] : await trainingApi.courses();
+    const needsAllCourses =
+      mode.value !== "catalog" &&
+      (viewType.value === "table" || !!route.params.courseId || !!route.params.chapterId);
+    courses.value = needsAllCourses ? await trainingApi.courses() : [];
     course.value =
       courses.value.find((item) => item.id === route.params.courseId) || null;
     chapter.value = null;
@@ -874,6 +901,13 @@ watch(
   },
   { immediate: true },
 );
+watch(viewType, async (nextView) => {
+  if (nextView === "table" && mode.value !== "catalog" && !courses.value.length) {
+    try {
+      courses.value = await trainingApi.courses();
+    } catch (e) {}
+  }
+});
 const formKind = ref<FormKind | null>(null);
 const form = ref({
   id: "",
@@ -1676,5 +1710,46 @@ button:disabled {
   .heading-with-back {
     gap: 0.75rem;
   }
+}
+</style>
+
+<style scoped>
+.view-mode-tabs {
+  display: inline-flex;
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 0.25rem;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+.view-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.view-tab-btn:hover {
+  color: var(--primary-ink);
+  background: var(--primary-light);
+}
+.view-tab-btn.active {
+  color: #ffffff;
+  background: var(--primary-color);
+  box-shadow: var(--shadow-sm);
+}
+.tree-studio-wrapper {
+  flex: 1;
+  min-height: 650px;
+  display: flex;
+  flex-direction: column;
 }
 </style>

@@ -23,6 +23,7 @@ public class CourseDto {
     private String domainId;
     private String thumbnail;
     private String businessModule;
+    private Integer seqNumber;
     private String level;
     private String keywords;
     private java.time.LocalDate completionDeadline;
@@ -34,4 +35,7 @@ public class CourseDto {
     private Boolean hasQuiz;
     private Integer quizPassingScore;
     private List<LessonDto> lessons;
+    private java.util.Set<String> mandatoryUnitIds;
+    private java.util.Set<String> optionalUnitIds;
+    private java.util.Set<String> unitIds;
 }

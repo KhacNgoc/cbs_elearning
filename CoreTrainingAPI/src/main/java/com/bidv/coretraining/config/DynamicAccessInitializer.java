@@ -58,12 +58,26 @@ public class DynamicAccessInitializer {
                     key = "courses";
                 if (key.equals("access"))
                     key = "permissions";
+                if (key.equals("unit-allocation"))
+                    key = "courses";
+                if (key.equals("curriculum"))
+                    key = "courses";
                 n.setPermissionPage(key);
+                if (n.getId().equals("admin.courses")) {
+                    n.setLabel("Danh mục đào tạo");
+                }
+                if (n.getId().equals("admin.curriculum") || n.getId().equals("admin.catalog")) {
+                    n.setVisible(false);
+                }
                 navigation.save(n);
             }
         if (!navigation.existsById("admin.roles"))
             navigation.save(NavigationItem.builder().id("admin.roles").label("Quản lý role").route("/admin/roles")
                     .icon("UsersRound").area("ADMIN").sortOrder(113).visible(true).permissionPage("roles").build());
+        if (!navigation.existsById("admin.unit-allocation"))
+            navigation.save(NavigationItem.builder().id("admin.unit-allocation").label("Phân bổ theo đơn vị")
+                    .route("/admin/unit-allocation").icon("Building2").area("ADMIN").sortOrder(107).visible(true)
+                    .permissionPage("courses").build());
         // Only derive programme ownership on first migration; never overwrite later
         // manual choices.
         for (TrainingProgram p : programs.findAll())

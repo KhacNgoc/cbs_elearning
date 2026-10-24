@@ -22,6 +22,13 @@ public class TrainingStructureController {
         return service.catalog();
     }
 
+    @GetMapping("/admin/training/next-code")
+    public Map<String, Object> nextCode(
+            @RequestParam(defaultValue = "program") String type,
+            @RequestParam String module) {
+        return service.getNextCode(type, module);
+    }
+
     @PostMapping("/admin/training-domains")
     public DomainDto domain(@RequestBody DomainDto r) {
         return service.saveDomain(null, r);
@@ -30,6 +37,11 @@ public class TrainingStructureController {
     @PutMapping("/admin/training-domains/{id}")
     public DomainDto domain(@PathVariable String id, @RequestBody DomainDto r) {
         return service.saveDomain(id, r);
+    }
+
+    @DeleteMapping("/admin/training-domains/{id}")
+    public void deleteDomain(@PathVariable String id) {
+        service.deleteDomain(id);
     }
 
     @PostMapping("/admin/training-programs")
@@ -42,9 +54,110 @@ public class TrainingStructureController {
         return service.saveProgram(id, r);
     }
 
+    @DeleteMapping("/admin/training-programs/{id}")
+    public void deleteProgram(@PathVariable String id) {
+        service.deleteProgram(id);
+    }
+
     @GetMapping("/admin/courses")
     public List<CourseDto> courses() {
         return service.adminCourses();
+    }
+
+    public record BatchCourseAllocationRequest(
+            String unitId,
+            String grantType,
+            String programId,
+            boolean allInProgram,
+            List<String> courseIds
+    ) {}
+
+    public record UnitAllocationAssignRequest(
+            String unitId,
+            String categoryType,
+            String grantType,
+            String domainId,
+            String programId,
+            boolean allInProgram,
+            List<String> courseIds
+    ) {}
+
+    public record UnitAllocationToggleRequest(
+            String unitId,
+            String categoryType,
+            String targetId,
+            String grantType
+    ) {}
+
+    @PostMapping("/admin/unit-allocations/assign")
+    public Map<String, Object> assignUnitAllocation(@RequestBody UnitAllocationAssignRequest request) {
+        return service.assignUnitAllocation(
+                request.unitId(),
+                request.categoryType(),
+                request.grantType(),
+                request.domainId(),
+                request.programId(),
+                request.allInProgram(),
+                request.courseIds()
+        );
+    }
+
+    @PatchMapping("/admin/unit-allocations/grant-type")
+    public Map<String, Object> toggleUnitAllocationGrantType(@RequestBody UnitAllocationToggleRequest request) {
+        return service.toggleUnitAllocationGrantType(
+                request.unitId(),
+                request.categoryType(),
+                request.targetId(),
+                request.grantType()
+        );
+    }
+
+    @DeleteMapping("/admin/unit-allocations")
+    public Map<String, Object> removeUnitAllocation(
+            @RequestParam String unitId,
+            @RequestParam String categoryType,
+            @RequestParam String targetId) {
+        return service.removeUnitAllocation(unitId, categoryType, targetId);
+    }
+
+    @GetMapping({"/admin/programs/paged", "/admin/programs/by-domain"})
+    public java.util.Map<String, Object> programsPaged(
+            @RequestParam(required = false) String domainId,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return service.adminProgramsPaged(domainId, search, page, size);
+    }
+
+    @GetMapping({"/admin/programs/{programId}/courses", "/admin/courses/by-program/{programId}"})
+    public Object coursesByProgram(
+            @PathVariable String programId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String search) {
+        if (page != null) {
+            int pageSize = (size != null && size > 0) ? size : 10;
+            return service.adminCoursesByProgramPaged(programId, search, page, pageSize);
+        }
+        return service.adminCoursesByProgram(programId);
+    }
+
+    @PostMapping("/admin/courses/batch-allocate")
+    public org.springframework.http.ResponseEntity<Void> batchAllocateCourses(
+            @RequestBody BatchCourseAllocationRequest request) {
+        service.allocateCoursesToUnit(
+                request.unitId(),
+                request.grantType(),
+                request.programId(),
+                request.allInProgram(),
+                request.courseIds()
+        );
+        return org.springframework.http.ResponseEntity.ok().build();
+    }
+
+    @GetMapping({"/admin/units/{unitId}/courses", "/admin/courses/by-unit/{unitId}"})
+    public List<CourseDto> coursesByUnit(@PathVariable String unitId) {
+        return service.adminCoursesByUnit(unitId);
     }
 
     @GetMapping("/admin/courses/{id}/chapters")
