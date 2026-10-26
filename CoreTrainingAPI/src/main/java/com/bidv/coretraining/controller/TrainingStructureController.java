@@ -22,6 +22,15 @@ public class TrainingStructureController {
         return service.catalog();
     }
 
+    @GetMapping("/admin/catalog/units/staff-count")
+    public Map<String, Object> countActiveStaffInUnits(
+            @RequestParam(name = "unitIds", required = false) Set<String> unitIds) {
+        long count = (unitIds == null || unitIds.isEmpty())
+                ? 0L
+                : service.countActiveStaffInUnitsNative(unitIds);
+        return Map.of("count", count);
+    }
+
     @GetMapping("/admin/training/next-code")
     public Map<String, Object> nextCode(
             @RequestParam(defaultValue = "program") String type,

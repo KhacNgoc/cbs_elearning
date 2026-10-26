@@ -304,7 +304,48 @@
           </div>
         </div>
       </div>
-      <footer v-if="!readOnly" class="modal-buttons lesson-modal-footer">
+              <!-- KHỐI THÔNG BÁO CẬP NHẬT KIẾN THỨC CHO HỌC VIÊN ĐÃ HOÀN THÀNH -->
+        <div v-if="lessonModal.isEdit && !readOnly" class="change-notify-card">
+          <div class="change-notify-header">
+            <label class="notify-checkbox-label">
+              <input type="checkbox" v-model="notifyLearners" />
+              <span class="notify-checkbox-title">Bắn thông báo cập nhật cho cán bộ đã học xong bài này</span>
+            </label>
+            <span v-if="completedLearnersCount > 0" class="badge-learners-warning">
+              <ShieldAlert :size="13" />
+              {{ completedLearnersCount }} cán bộ đã hoàn thành
+            </span>
+            <span v-else class="badge-learners-empty">
+              (Chưa có cán bộ nào hoàn thành bài này)
+            </span>
+          </div>
+
+          <div v-if="notifyLearners" class="change-notify-body">
+            <div class="summary-label-row">
+              <label>Tóm tắt nội dung thay đổi (*):</label>
+              <button
+                type="button"
+                class="btn-ai-diff"
+                :disabled="generatingAiSummary"
+                @click="generateAiChangeSummary"
+                title="Sử dụng Trợ lý AI để tự động phát hiện thay đổi và tóm tắt ngắn gọn"
+              >
+                <Sparkles :size="13" />
+                <span>{{ generatingAiSummary ? "AI đang phân tích..." : "AI Tóm tắt thay đổi" }}</span>
+              </button>
+            </div>
+            <textarea
+              v-model="changeSummary"
+              rows="2"
+              class="form-control notify-summary-input"
+              placeholder="Nhập ghi chú tóm tắt hoặc bấm 'AI Tóm tắt thay đổi' để hệ thống tự động sinh..."
+            ></textarea>
+            <small class="summary-hint">
+              Thông báo sẽ gửi đến quả chuông và popup của các cán bộ đã hoàn thành bài học này.
+            </small>
+          </div>
+        </div>
+        <footer v-if="!readOnly" class="modal-buttons lesson-modal-footer">
         <button type="button" class="btn btn-secondary" @click="emit('cancel')">
           Hủy
         </button>
@@ -318,7 +359,9 @@
 <script setup lang="ts">
 import { scrollWithin } from "../utils/scrollWithin";
 import { ref, computed, nextTick, watch, defineAsyncComponent } from "vue";
-import { Upload, Link2, Plus, FileText, X, Trash2 } from "lucide-vue-next";
+import { Upload, Link2, Plus, FileText, X, Trash2, Sparkles, ShieldAlert } from "lucide-vue-next";
+import { axiosClient } from "../api/axiosClient";
+import { onMounted } from "vue";
 import { useCourseStore } from "../stores/courseStore";
 import { adminApi, VIDEO_UPLOAD_MAX_BYTES } from "../api/adminApi";
 import { validateVideoUpload } from "../utils/videoAccess";
@@ -457,6 +500,50 @@ const removeLessonDocument = (index: number) => {
   lessonForm.value.documents.splice(index, 1);
 };
 
+const generatingAiSummary = ref(false);
+const notifyLearners = ref(false);
+const changeSummary = ref("");
+const completedLearnersCount = ref(0);
+
+async function loadCompletedLearnersCount() {
+  if (!props.lesson?.id) return;
+  try {
+    const res = await axiosClient.get(`/api/admin/lessons/${props.lesson.id}/completed-learners-count`);
+    completedLearnersCount.value = res.data?.count || 0;
+    if (completedLearnersCount.value > 0) {
+      notifyLearners.value = true;
+    }
+  } catch (e) {
+    console.warn("Could not load completed learners count:", e);
+  }
+}
+
+async function generateAiChangeSummary() {
+  if (generatingAiSummary.value) return;
+  generatingAiSummary.value = true;
+  try {
+    const oldContent = (props.lesson as any).textBody || "";
+    const newContent = lessonForm.value.textBody || "";
+    const res = await axiosClient.post(`/api/admin/lessons/${props.lesson.id}/ai-summarize-changes`, {
+      oldContent,
+      newContent,
+    });
+    if (res.data?.summary) {
+      changeSummary.value = res.data.summary;
+      showToast("AI đã tạo tóm tắt thay đổi thành công!", "success");
+    }
+  } catch (err) {
+    console.warn("AI diff error:", err);
+    changeSummary.value = `Cập nhật nội dung bài học và tài liệu mới cho bài "${lessonForm.value.title}".`;
+  } finally {
+    generatingAiSummary.value = false;
+  }
+}
+
+onMounted(() => {
+  void loadCompletedLearnersCount();
+});
+
 const saveLesson = async () => {
   if (loading.value || props.readOnly) return;
   loading.value = true;
@@ -511,6 +598,19 @@ const saveLesson = async () => {
       })),
     };
     await nextTick();
+        if (lessonModal.value.isEdit && (notifyLearners.value || changeSummary.value)) {
+      try {
+        const notifyRes = await axiosClient.post(`/api/admin/lessons/${lessonForm.value.id}/changelog-notify`, {
+          changeSummary: changeSummary.value,
+          notifyLearners: notifyLearners.value,
+        });
+        if (notifyLearners.value && (notifyRes.data?.notifiedCount || 0) > 0) {
+          showToast(`Đã gửi thông báo cập nhật kiến thức tới ${notifyRes.data.notifiedCount} cán bộ đã hoàn thành bài!`, "success");
+        }
+      } catch (notifyErr) {
+        console.warn("Could not send lesson change notification:", notifyErr);
+      }
+    }
     emit("saved");
     emit("dirty", false);
     showToast(
@@ -2090,4 +2190,90 @@ textarea {
     padding: 1rem;
   }
 }
+
+/* CHANGELOG & NOTIFICATION CARD */
+.change-notify-card {
+  margin: 1.25rem 0;
+  padding: 1rem 1.25rem;
+  background: rgba(245, 158, 11, 0.05);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 10px;
+}
+.change-notify-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.notify-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-main);
+  font-size: 0.88rem;
+}
+.badge-learners-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  background: rgba(245, 158, 11, 0.16);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.badge-learners-empty {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.change-notify-body {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px dashed rgba(245, 158, 11, 0.25);
+}
+.summary-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.4rem;
+}
+.summary-label-row label {
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: var(--text-main);
+}
+.btn-ai-diff {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  border: none;
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-ai-diff:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+.notify-summary-input {
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+.summary-hint {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
 </style>

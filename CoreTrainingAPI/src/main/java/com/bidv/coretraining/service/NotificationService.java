@@ -13,6 +13,10 @@ public interface NotificationService {
     void createForUnitAdmins(com.bidv.coretraining.entity.OrganizationUnit unit, NotificationType type, String title,
             String message, String targetUrl);
 
+    int notifyLessonUpdateToCompletedLearners(String lessonId, String title, String message, String targetUrl);
+
+    int countCompletedLearners(String lessonId);
+
     List<NotificationDto> getForUser(String username);
 
     NotificationDto markRead(Long id, String username);

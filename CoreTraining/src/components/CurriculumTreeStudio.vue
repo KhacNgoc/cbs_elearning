@@ -261,8 +261,8 @@
                         <ShieldCheck :size="11" />
                         {{ getCourseMandatoryUnits(course).length }} ĐV Bắt buộc
                       </span>
-                      <span class="status-pill" :class="course.status === 'PUBLISHED' ? 'published' : 'draft'">
-                        {{ course.status === 'PUBLISHED' ? 'Đã xuất bản' : 'Bản nháp' }}
+                      <span v-if="course.status === 'DRAFT'" class="status-pill draft">
+                        Bản nháp
                       </span>
                     </div>
 
@@ -769,16 +769,6 @@
                   :class="{ 'is-auto': addModal.autoCode }"
                 />
                 <button
-                  v-if="addModal.autoCode"
-                  type="button"
-                  class="re-generate-btn"
-                  @click="reGenerateCode"
-                  title="Tạo lại mã tự động"
-                >
-                  <Sparkles :size="13" />
-                  <span>Sinh lại</span>
-                </button>
-                <button
                   type="button"
                   class="manual-edit-btn"
                   @click="toggleAutoCode"
@@ -1031,7 +1021,6 @@ import {
   ExternalLink,
   FolderTree,
   Loader2,
-  Sparkles,
   Lock,
   Unlock,
   Building2,
@@ -1086,7 +1075,7 @@ const TRAINING_LEVELS = [
 const loading = ref(false);
 const submitting = ref(false);
 const searchQuery = ref("");
-const expandAll = ref(true);
+const expandAll = ref(false);
 const selectedId = ref<string>("");
 const expandedIds = ref<Set<string>>(new Set());
 
@@ -1665,15 +1654,9 @@ async function ensureModalAuxiliaryDataLoaded() {
   if (auxiliaryModalLoaded.value) return;
   auxiliaryModalLoaded.value = true;
   try {
-    const [optionsRes, allUsers] = await Promise.allSettled([
-      axiosClient.get("/api/admin/options/catalog"),
-      adminApi.getAllUsers(),
-    ]);
-    if (optionsRes.status === "fulfilled" && optionsRes.value.data?.units) {
-      unitsList.value = optionsRes.value.data.units;
-    }
-    if (allUsers.status === "fulfilled" && Array.isArray(allUsers.value)) {
-      systemUsers.value = allUsers.value;
+    const res = await axiosClient.get("/api/admin/options/catalog");
+    if (res.data?.units) {
+      unitsList.value = res.data.units;
     }
   } catch (e) {
     console.warn("Could not lazy-load auxiliary modal data:", e);
@@ -1897,12 +1880,6 @@ async function loadTreeData(expandTarget?: { type: string; id?: string; parentId
     } else if (expandTarget) {
       expandedIds.value.clear();
       expandOperatingBranch(expandTarget.type, expandTarget.id, expandTarget.parentId);
-    } else if (expandedIds.value.size === 0) {
-      // First initial load: only expand the first domain (zero course/chapter calls until program is expanded!)
-      const firstActiveDomain = domains.value.find((d) => d.status !== "DELETED");
-      if (firstActiveDomain) {
-        expandedIds.value.add(firstActiveDomain.id);
-      }
     }
   } catch (error) {
     console.error("Lỗi khi tải cấu trúc đào tạo:", error);
@@ -3795,7 +3772,17 @@ watch(
   font-weight: 600;
 }
 
-.badge-mandatory,
+.badge-mandatory {
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: rgba(245, 158, 11, 0.16);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  padding: 0.12rem 0.55rem;
+  border-radius: 9999px;
+  letter-spacing: 0.02em;
+}
+
 .badge-optional {
   font-size: 0.7rem;
   font-weight: 600;
@@ -3823,7 +3810,12 @@ watch(
   font-weight: 600;
 }
 
-.unit-chip.mandatory-chip,
+.unit-chip.mandatory-chip {
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #f59e0b;
+}
+
 .unit-chip.optional-chip {
   background: var(--primary-light);
   border: 1px solid var(--success-border);

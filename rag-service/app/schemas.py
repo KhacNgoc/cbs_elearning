@@ -158,3 +158,13 @@ class QuizGenerationResponse(BaseModel):
     questions: list[GeneratedQuizQuestion]
     sources: list[QuizGenerationSource]
     warnings: list[str] = Field(default_factory=list)
+
+
+class LessonDiffSummaryRequest(BaseModel):
+    lesson_title: str = Field(default="", max_length=500)
+    old_content: str = Field(default="", max_length=50000)
+    new_content: str = Field(default="", max_length=50000)
+
+
+class LessonDiffSummaryResponse(BaseModel):
+    summary: str

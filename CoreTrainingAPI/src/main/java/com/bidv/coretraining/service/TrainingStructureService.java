@@ -106,6 +106,8 @@ public class TrainingStructureService {
     private AuthorizationService authorization;
     @org.springframework.beans.factory.annotation.Autowired
     private OrganizationUnitRepository organizationUnits;
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate namedParameterJdbcTemplate;
     private final TrainingDomainRepository domains;
     private final TrainingProgramRepository programs;
     private final CourseRepository courses;
@@ -200,9 +202,13 @@ public class TrainingStructureService {
 
     private boolean canUpdateDomain(TrainingDomain d) {
         var u = authorization.current();
+        if (com.bidv.coretraining.security.AccessPolicy.system(u)) {
+            return true;
+        }
         return com.bidv.coretraining.security.AccessPolicy.has(u, "catalog:update")
-                && programs.findAll().stream().filter(p -> p.getDomain().getId().equals(d.getId())).allMatch(
-                        p -> com.bidv.coretraining.security.AccessPolicy.allowsProgram(u, "catalog:update", p));
+                && programs.findByDomainId(d.getId()).stream()
+                        .filter(p -> !"DELETED".equals(p.getStatus()))
+                        .allMatch(p -> com.bidv.coretraining.security.AccessPolicy.allowsProgram(u, "catalog:update", p));
     }
 
     private DomainDto domainDto(TrainingDomain d) {
@@ -426,6 +432,96 @@ public class TrainingStructureService {
         return programDto(p);
     }
 
+    public int enrollStaffForCoursesNative(Collection<String> courseIds, Collection<String> unitIds) {
+        if (courseIds == null || courseIds.isEmpty() || unitIds == null || unitIds.isEmpty()) {
+            return 0;
+        }
+        String sql = """
+            WITH RECURSIVE target_units AS (
+                SELECT id FROM organization_units WHERE id IN (:unitIds)
+                UNION ALL
+                SELECT ou.id FROM organization_units ou INNER JOIN target_units tu ON ou.parent_id = tu.id
+            )
+            INSERT INTO user_registered_courses (user_id, course_id)
+            SELECT u.id, c.id
+            FROM users u
+            CROSS JOIN courses c
+            WHERE u.status = 'ACTIVE'
+              AND u.unit_id IN (SELECT id FROM target_units)
+              AND c.id IN (:courseIds)
+            ON CONFLICT (user_id, course_id) DO NOTHING
+            """;
+        org.springframework.jdbc.core.namedparam.MapSqlParameterSource params =
+                new org.springframework.jdbc.core.namedparam.MapSqlParameterSource();
+        params.addValue("unitIds", unitIds);
+        params.addValue("courseIds", courseIds);
+        return namedParameterJdbcTemplate.update(sql, params);
+    }
+
+    public int unenrollUnstartedStaffForCoursesNative(Collection<String> courseIds) {
+        if (courseIds == null || courseIds.isEmpty()) {
+            return 0;
+        }
+        String sql = """
+            DELETE FROM user_registered_courses urc
+            WHERE urc.course_id IN (:courseIds)
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM user_completed_lessons ucl
+                  JOIN lessons l ON ucl.lesson_id = l.id
+                  WHERE ucl.user_id = urc.user_id AND l.course_id = urc.course_id
+              )
+            """;
+        return namedParameterJdbcTemplate.update(sql, Map.of("courseIds", courseIds));
+    }
+
+    public int unenrollUnstartedStaffForCoursesNative(Collection<String> courseIds, Collection<String> unitIds) {
+        if (courseIds == null || courseIds.isEmpty() || unitIds == null || unitIds.isEmpty()) {
+            return 0;
+        }
+        String sql = """
+            WITH RECURSIVE target_units AS (
+                SELECT id FROM organization_units WHERE id IN (:unitIds)
+                UNION ALL
+                SELECT ou.id FROM organization_units ou INNER JOIN target_units tu ON ou.parent_id = tu.id
+            )
+            DELETE FROM user_registered_courses urc
+            USING users u
+            WHERE urc.user_id = u.id
+              AND urc.course_id IN (:courseIds)
+              AND u.unit_id IN (SELECT id FROM target_units)
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM user_completed_lessons ucl
+                  JOIN lessons l ON ucl.lesson_id = l.id
+                  WHERE ucl.user_id = u.id AND l.course_id = urc.course_id
+              )
+            """;
+        org.springframework.jdbc.core.namedparam.MapSqlParameterSource params =
+                new org.springframework.jdbc.core.namedparam.MapSqlParameterSource();
+        params.addValue("unitIds", unitIds);
+        params.addValue("courseIds", courseIds);
+        return namedParameterJdbcTemplate.update(sql, params);
+    }
+
+    public int countActiveStaffInUnitsNative(Collection<String> unitIds) {
+        if (unitIds == null || unitIds.isEmpty()) return 0;
+        String sql = """
+            WITH RECURSIVE target_units AS (
+                SELECT id FROM organization_units WHERE id IN (:unitIds)
+                UNION ALL
+                SELECT ou.id FROM organization_units ou INNER JOIN target_units tu ON ou.parent_id = tu.id
+            )
+            SELECT COUNT(*) FROM users u
+            WHERE u.status = 'ACTIVE'
+              AND u.unit_id IN (SELECT id FROM target_units)
+            """;
+        org.springframework.jdbc.core.namedparam.MapSqlParameterSource params =
+                new org.springframework.jdbc.core.namedparam.MapSqlParameterSource("unitIds", unitIds);
+        Integer count = namedParameterJdbcTemplate.queryForObject(sql, params, Integer.class);
+        return count != null ? count : 0;
+    }
+
     private void enrollStaffForMandatoryUnits(TrainingProgram p, Set<String> mandatoryUnitIds) {
         List<Course> programCourses = courses.findAll().stream()
                 .filter(c -> c.getProgram() != null && c.getProgram().getId().equals(p.getId()) && !"DELETED".equals(c.getStatus()))
@@ -436,45 +532,22 @@ public class TrainingStructureService {
                 c.getUnitGrants().put(uId, "MANDATORY");
             }
             courses.save(c);
-            enrollStaffForCourse(c, mandatoryUnitIds);
+        }
+        if (!programCourses.isEmpty()) {
+            List<String> cIds = programCourses.stream().map(Course::getId).toList();
+            enrollStaffForCoursesNative(cIds, mandatoryUnitIds);
         }
     }
 
-    private List<User> findActiveStaffInUnits(Set<String> rootUnitIds) {
-        if (rootUnitIds == null || rootUnitIds.isEmpty()) return List.of();
-        return users.findAll().stream()
-                .filter(User::activeAccount)
-                .filter(u -> u.getOrganizationUnit() != null
-                        && com.bidv.coretraining.security.AccessPolicy.ancestors(u.getOrganizationUnit())
-                                .stream().anyMatch(rootUnitIds::contains))
-                .toList();
-    }
-
     private void enrollStaffForCourse(Course course, Set<String> mandatoryUnitIds) {
-        List<User> staff = findActiveStaffInUnits(mandatoryUnitIds);
-        for (User u : staff) {
-            if (!u.getRegisteredCourses().contains(course)) {
-                u.getRegisteredCourses().add(course);
-                users.save(u);
-            }
+        if (course != null && course.getId() != null) {
+            enrollStaffForCoursesNative(List.of(course.getId()), mandatoryUnitIds);
         }
     }
 
     private void unenrollUnstartedStaffForCourse(Course course, Set<String> unitIds) {
-        List<User> staff = findActiveStaffInUnits(unitIds);
-        Set<String> courseLessonIds = course.getChapters().stream()
-                .flatMap(ch -> ch.getLessons().stream())
-                .map(Lesson::getId)
-                .collect(java.util.stream.Collectors.toSet());
-        for (User u : staff) {
-            if (u.getRegisteredCourses().contains(course)) {
-                boolean hasCompletedAnyLesson = u.getCompletedLessons().stream()
-                        .anyMatch(l -> courseLessonIds.contains(l.getId()));
-                if (!hasCompletedAnyLesson) {
-                    u.getRegisteredCourses().remove(course);
-                    users.save(u);
-                }
-            }
+        if (course != null && course.getId() != null) {
+            unenrollUnstartedStaffForCoursesNative(List.of(course.getId()), unitIds);
         }
     }
 
@@ -788,30 +861,20 @@ public class TrainingStructureService {
             courses.save(c);
         }
 
-        List<User> staffInUnit = findActiveStaffInUnits(Set.of(unit.getId()));
+        List<String> targetCourseIds = targetCourses.stream().map(Course::getId).toList();
+        int unitUsersCount = countActiveStaffInUnitsNative(Set.of(unit.getId()));
         int enrolledUsersCount = 0;
 
         if ("MANDATORY".equals(normalizedGrant)) {
-            // Bắt buộc: Tự động đăng ký toàn bộ khóa học cho tất cả nhân sự trong phòng ban (vào thẳng "Khóa học của tôi")
-            for (User u : staffInUnit) {
-                boolean changed = false;
-                for (Course c : targetCourses) {
-                    if (!u.getRegisteredCourses().contains(c)) {
-                        u.getRegisteredCourses().add(c);
-                        changed = true;
-                    }
-                }
-                if (changed) {
-                    users.save(u);
-                }
-                if (!targetCourses.isEmpty()) {
-                    enrolledUsersCount++;
-                }
+            // Bắt buộc: Tự động ghi danh tức thì toàn bộ nhân sự phòng ban (và phòng ban con) qua 1 câu Native SQL duy nhất
+            if (!targetCourseIds.isEmpty()) {
+                enrollStaffForCoursesNative(targetCourseIds, Set.of(unit.getId()));
+                enrolledUsersCount = unitUsersCount;
             }
         } else {
-            // Tự chọn (OPTIONAL): Không tự động đăng ký, để hiển thị ở ngoài ("Khám phá & đăng ký") cho nhân sự tự đăng ký học
-            for (Course c : targetCourses) {
-                unenrollUnstartedStaffForCourse(c, Set.of(unit.getId()));
+            // Tự chọn (OPTIONAL): Rút đăng ký những người chưa bắt đầu học qua 1 câu Native SQL duy nhất
+            if (!targetCourseIds.isEmpty()) {
+                unenrollUnstartedStaffForCoursesNative(targetCourseIds, Set.of(unit.getId()));
             }
         }
 
@@ -821,7 +884,7 @@ public class TrainingStructureService {
         result.put("categoryType", type);
         result.put("grantType", normalizedGrant);
         result.put("allocatedCoursesCount", targetCourses.size());
-        result.put("unitUsersCount", staffInUnit.size());
+        result.put("unitUsersCount", unitUsersCount);
         result.put("enrolledUsersCount", enrolledUsersCount);
         return result;
     }
@@ -885,7 +948,10 @@ public class TrainingStructureService {
                 c.getUnitGrants().remove(unitId);
                 courses.save(c);
             }
-            unenrollUnstartedStaffForCourse(c, Set.of(unitId));
+        }
+        if (!affectedCourses.isEmpty()) {
+            List<String> cIds = affectedCourses.stream().map(Course::getId).toList();
+            unenrollUnstartedStaffForCoursesNative(cIds, Set.of(unitId));
         }
 
         return Map.of(
@@ -1011,18 +1077,61 @@ public class TrainingStructureService {
         TrainingDomain d = domains.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Domain", "id", id));
         String suffix = "_DEL_" + (System.currentTimeMillis() % 100000);
-        d.setStatus("DELETED");
-        if (d.getCode() != null && !d.getCode().contains("_DEL_")) {
-            d.setCode(d.getCode() + suffix);
-        }
-        domains.saveAndFlush(d);
+        int negBase = -Math.abs((int) (System.currentTimeMillis() % 900000) + 1000);
 
-        List<TrainingProgram> childPrograms = programs.findAll().stream()
-                .filter(p -> p.getDomain() != null && id.equals(p.getDomain().getId()) && !"DELETED".equals(p.getStatus()))
-                .toList();
-        for (TrainingProgram p : childPrograms) {
-            deleteProgramInternal(p, suffix);
+        Map<String, Object> params = Map.of(
+                "domainId", id,
+                "suffix", suffix,
+                "negBase", negBase
+        );
+
+        // 1. Un-enroll unstarted staff from all child courses
+        List<String> childCourseIds = namedParameterJdbcTemplate.queryForList(
+                "SELECT c.id FROM courses c JOIN training_programs p ON c.program_id = p.id WHERE p.domain_id = :domainId",
+                params, String.class);
+        if (!childCourseIds.isEmpty()) {
+            unenrollUnstartedStaffForCoursesNative(new HashSet<>(childCourseIds));
         }
+
+        // 2. Bulk soft delete lessons
+        namedParameterJdbcTemplate.update(
+                "WITH numbered AS (" +
+                "  SELECT l.id, ROW_NUMBER() OVER () as rn " +
+                "  FROM lessons l JOIN courses c ON l.course_id = c.id JOIN training_programs p ON c.program_id = p.id " +
+                "  WHERE p.domain_id = :domainId AND l.status <> 'DELETED'" +
+                ") " +
+                "UPDATE lessons l SET status = 'DELETED', lesson_order = :negBase - numbered.rn " +
+                "FROM numbered WHERE l.id = numbered.id", params);
+
+        // 3. Bulk soft delete chapters
+        namedParameterJdbcTemplate.update(
+                "WITH numbered AS (" +
+                "  SELECT ch.id, ROW_NUMBER() OVER () as rn " +
+                "  FROM chapters ch JOIN courses c ON ch.course_id = c.id JOIN training_programs p ON c.program_id = p.id " +
+                "  WHERE p.domain_id = :domainId AND ch.status <> 'DELETED'" +
+                ") " +
+                "UPDATE chapters ch SET status = 'DELETED', " +
+                "code = CASE WHEN ch.code NOT LIKE '%_DEL_%' THEN ch.code || :suffix ELSE ch.code END, " +
+                "chapter_order = :negBase - numbered.rn " +
+                "FROM numbered WHERE ch.id = numbered.id", params);
+
+        // 4. Bulk soft delete courses
+        namedParameterJdbcTemplate.update(
+                "UPDATE courses SET status = 'DELETED', " +
+                "code = CASE WHEN code NOT LIKE '%_DEL_%' THEN code || :suffix ELSE code END " +
+                "WHERE program_id IN (SELECT id FROM training_programs WHERE domain_id = :domainId) AND status <> 'DELETED'", params);
+
+        // 5. Bulk soft delete programs
+        namedParameterJdbcTemplate.update(
+                "UPDATE training_programs SET status = 'DELETED', " +
+                "code = CASE WHEN code NOT LIKE '%_DEL_%' THEN code || :suffix ELSE code END " +
+                "WHERE domain_id = :domainId AND status <> 'DELETED'", params);
+
+        // 6. Soft delete domain
+        namedParameterJdbcTemplate.update(
+                "UPDATE training_domains SET status = 'DELETED', " +
+                "code = CASE WHEN code NOT LIKE '%_DEL_%' THEN code || :suffix ELSE code END " +
+                "WHERE id = :domainId", params);
     }
 
     public void deleteProgram(String id) {
@@ -1030,20 +1139,55 @@ public class TrainingStructureService {
         TrainingProgram p = programs.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Program", "id", id));
         String suffix = "_DEL_" + (System.currentTimeMillis() % 100000);
-        deleteProgramInternal(p, suffix);
-    }
+        int negBase = -Math.abs((int) (System.currentTimeMillis() % 900000) + 1000);
 
-    private void deleteProgramInternal(TrainingProgram p, String suffix) {
-        p.setStatus("DELETED");
-        if (p.getCode() != null && !p.getCode().contains("_DEL_")) {
-            p.setCode(p.getCode() + suffix);
-        }
-        programs.saveAndFlush(p);
+        Map<String, Object> params = Map.of(
+                "programId", id,
+                "suffix", suffix,
+                "negBase", negBase
+        );
 
-        List<Course> childCourses = courses.findByProgramIdAndStatusNot(p.getId(), "DELETED");
-        for (Course c : childCourses) {
-            deleteCourseInternal(c, suffix);
+        // 1. Un-enroll unstarted staff
+        List<String> childCourseIds = namedParameterJdbcTemplate.queryForList(
+                "SELECT id FROM courses WHERE program_id = :programId",
+                params, String.class);
+        if (!childCourseIds.isEmpty()) {
+            unenrollUnstartedStaffForCoursesNative(new HashSet<>(childCourseIds));
         }
+
+        // 2. Bulk soft delete lessons
+        namedParameterJdbcTemplate.update(
+                "WITH numbered AS (" +
+                "  SELECT l.id, ROW_NUMBER() OVER () as rn " +
+                "  FROM lessons l JOIN courses c ON l.course_id = c.id " +
+                "  WHERE c.program_id = :programId AND l.status <> 'DELETED'" +
+                ") " +
+                "UPDATE lessons l SET status = 'DELETED', lesson_order = :negBase - numbered.rn " +
+                "FROM numbered WHERE l.id = numbered.id", params);
+
+        // 3. Bulk soft delete chapters
+        namedParameterJdbcTemplate.update(
+                "WITH numbered AS (" +
+                "  SELECT ch.id, ROW_NUMBER() OVER () as rn " +
+                "  FROM chapters ch JOIN courses c ON ch.course_id = c.id " +
+                "  WHERE c.program_id = :programId AND ch.status <> 'DELETED'" +
+                ") " +
+                "UPDATE chapters ch SET status = 'DELETED', " +
+                "code = CASE WHEN ch.code NOT LIKE '%_DEL_%' THEN ch.code || :suffix ELSE ch.code END, " +
+                "chapter_order = :negBase - numbered.rn " +
+                "FROM numbered WHERE ch.id = numbered.id", params);
+
+        // 4. Bulk soft delete courses
+        namedParameterJdbcTemplate.update(
+                "UPDATE courses SET status = 'DELETED', " +
+                "code = CASE WHEN code NOT LIKE '%_DEL_%' THEN code || :suffix ELSE code END " +
+                "WHERE program_id = :programId AND status <> 'DELETED'", params);
+
+        // 5. Soft delete program
+        namedParameterJdbcTemplate.update(
+                "UPDATE training_programs SET status = 'DELETED', " +
+                "code = CASE WHEN code NOT LIKE '%_DEL_%' THEN code || :suffix ELSE code END " +
+                "WHERE id = :programId", params);
     }
 
     public void deleteChapter(String id) {
@@ -1079,29 +1223,44 @@ public class TrainingStructureService {
         Course c = course(id);
         authorization.edit(c);
         String suffix = "_DEL_" + (System.currentTimeMillis() % 100000);
-        deleteCourseInternal(c, suffix);
-    }
-
-    private void deleteCourseInternal(Course c, String suffix) {
-        c.setStatus("DELETED");
-        if (c.getCode() != null && !c.getCode().contains("_DEL_")) {
-            c.setCode(c.getCode() + suffix);
-        }
         int negBase = -Math.abs((int) (System.currentTimeMillis() % 900000) + 1000);
-        int chIdx = 1;
-        for (Chapter ch : c.getChapters()) {
-            ch.setStatus("DELETED");
-            if (ch.getCode() != null && !ch.getCode().contains("_DEL_")) {
-                ch.setCode(ch.getCode() + suffix);
-            }
-            ch.setChapterOrder(negBase - (chIdx++));
-            int lIdx = 1;
-            for (Lesson l : ch.getLessons()) {
-                l.setStatus("DELETED");
-                l.setLessonOrder(negBase - (chIdx * 100) - (lIdx++));
-            }
-        }
-        courses.saveAndFlush(c);
+
+        Map<String, Object> params = Map.of(
+                "courseId", id,
+                "suffix", suffix,
+                "negBase", negBase
+        );
+
+        // 1. Un-enroll unstarted staff
+        unenrollUnstartedStaffForCoursesNative(Set.of(id));
+
+        // 2. Bulk soft delete lessons
+        namedParameterJdbcTemplate.update(
+                "WITH numbered AS (" +
+                "  SELECT id, ROW_NUMBER() OVER () as rn " +
+                "  FROM lessons " +
+                "  WHERE course_id = :courseId AND status <> 'DELETED'" +
+                ") " +
+                "UPDATE lessons l SET status = 'DELETED', lesson_order = :negBase - numbered.rn " +
+                "FROM numbered WHERE l.id = numbered.id", params);
+
+        // 3. Bulk soft delete chapters
+        namedParameterJdbcTemplate.update(
+                "WITH numbered AS (" +
+                "  SELECT id, ROW_NUMBER() OVER () as rn " +
+                "  FROM chapters " +
+                "  WHERE course_id = :courseId AND status <> 'DELETED'" +
+                ") " +
+                "UPDATE chapters ch SET status = 'DELETED', " +
+                "code = CASE WHEN ch.code NOT LIKE '%_DEL_%' THEN ch.code || :suffix ELSE ch.code END, " +
+                "chapter_order = :negBase - numbered.rn " +
+                "FROM numbered WHERE ch.id = numbered.id", params);
+
+        // 4. Soft delete course
+        namedParameterJdbcTemplate.update(
+                "UPDATE courses SET status = 'DELETED', " +
+                "code = CASE WHEN code NOT LIKE '%_DEL_%' THEN code || :suffix ELSE code END " +
+                "WHERE id = :courseId", params);
     }
 
     public void reorderChapters(String id, List<String> ids) {
