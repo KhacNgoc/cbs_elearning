@@ -1,0 +1,333 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "title": "Tổng số Logs (Khoảng thời gian)",
+      "type": "stat",
+      "datasource": {
+        "type": "loki",
+        "uid": "Loki"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "Loki"
+          },
+          "editorMode": "code",
+          "expr": "sum(count_over_time({job=\"backend\"}[$__range]))",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 8,
+        "y": 0
+      },
+      "id": 2,
+      "title": "Cảnh báo (Warnings)",
+      "type": "stat",
+      "datasource": {
+        "type": "loki",
+        "uid": "Loki"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "Loki"
+          },
+          "editorMode": "code",
+          "expr": "sum(count_over_time({job=\"backend\"} |= \"WARN\" [$__range]))",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "id": 3,
+      "title": "Lỗi (Errors)",
+      "type": "stat",
+      "datasource": {
+        "type": "loki",
+        "uid": "Loki"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "Loki"
+          },
+          "editorMode": "code",
+          "expr": "sum(count_over_time({job=\"backend\"} |= \"ERROR\" [$__range]))",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "id": 4,
+      "title": "Mật độ Logs theo thời gian",
+      "type": "timeseries",
+      "datasource": {
+        "type": "loki",
+        "uid": "Loki"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "Loki"
+          },
+          "editorMode": "code",
+          "expr": "sum by (level) (count_over_time({job=\"backend\"}[$__interval]))",
+          "legendFormat": "{{level}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisPlacement": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "ERROR" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "WARN" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "INFO" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 14,
+        "w": 24,
+        "x": 0,
+        "y": 11
+      },
+      "id": 5,
+      "title": "Nhật ký Backend Trực tiếp (Live Backend Logs)",
+      "type": "logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "Loki"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "Loki"
+          },
+          "editorMode": "code",
+          "expr": "{job=\"backend\"} |~ \"(?i)$search\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showLabels": true,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none"
+      }
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["cbs-elearning", "backend", "logs"],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "value": ""
+        },
+        "hide": 0,
+        "label": "Tìm kiếm Log",
+        "name": "search",
+        "options": [
+          {
+            "selected": true,
+            "value": ""
+          }
+        ],
+        "query": "",
+        "skipUrlSync": false,
+        "type": "textbox"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m"
+    ]
+  },
+  "timezone": "browser",
+  "title": "CBS E-Learning - Backend Logs",
+  "uid": "cbs-backend-logs",
+  "version": 1
+}
