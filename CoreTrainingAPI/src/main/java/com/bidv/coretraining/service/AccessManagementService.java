@@ -69,12 +69,29 @@ public class AccessManagementService {
                 u.isActive(), actions("units", u));
     }
 
+    private String generateUnitId() {
+        for (int i = 0; i < 20; i++) {
+            String candidate = "UNIT_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT);
+            if (!units.existsById(candidate)) {
+                return candidate;
+            }
+        }
+        return "UNIT_" + System.currentTimeMillis();
+    }
+
     public UnitDto saveUnit(String id, UnitDto r) {
         auth.permission("ORG_MANAGE");
-        if (r.id() == null || r.id().isBlank() || r.name() == null || r.name().isBlank()
-                || !Set.of("UNIT", "DEPARTMENT").contains(r.type()))
+        String unitId;
+        if (id == null) {
+            unitId = (r.id() == null || r.id().isBlank()) ? generateUnitId() : r.id().trim();
+        } else {
+            unitId = id;
+        }
+        String type = (r.type() == null || r.type().isBlank()) ? "UNIT" : r.type();
+        if (unitId.isBlank() || r.name() == null || r.name().isBlank()
+                || !Set.of("UNIT", "DEPARTMENT").contains(type))
             throw new BadRequestException("Mã, tên và loại đơn vị không hợp lệ");
-        OrganizationUnit u = id == null ? OrganizationUnit.builder().id(r.id().trim()).build() : auth.unit(id);
+        OrganizationUnit u = id == null ? OrganizationUnit.builder().id(unitId).build() : auth.unit(id);
         if (id == null && units.existsById(u.getId()))
             throw new BadRequestException("Mã đơn vị đã tồn tại");
         OrganizationUnit parent = r.parentId() == null || r.parentId().isBlank() ? null : auth.unit(r.parentId());
@@ -89,7 +106,7 @@ public class AccessManagementService {
         }
         u.setParent(parent);
         u.setName(r.name().trim());
-        u.setType(r.type());
+        u.setType(type);
         u.setActive(r.active());
         cache.invalidateAfterCommit();
         return dto(units.save(u));
@@ -108,11 +125,27 @@ public class AccessManagementService {
                 actions("groups", g.getOrganizationUnit()), users.countByUserGroupsId(g.getId()));
     }
 
+    private String generateGroupId() {
+        for (int i = 0; i < 20; i++) {
+            String candidate = "GRP_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT);
+            if (!groups.existsById(candidate)) {
+                return candidate;
+            }
+        }
+        return "GRP_" + System.currentTimeMillis();
+    }
+
     public GroupDto saveGroup(String id, GroupDto r) {
         auth.permission("GROUP_MANAGE");
-        if (r.id() == null || r.id().isBlank() || r.name() == null || r.name().isBlank())
+        String groupId;
+        if (id == null) {
+            groupId = (r.id() == null || r.id().isBlank()) ? generateGroupId() : r.id().trim();
+        } else {
+            groupId = id;
+        }
+        if (groupId.isBlank() || r.name() == null || r.name().isBlank())
             throw new BadRequestException("Mã và tên nhóm không được để trống");
-        UserGroup g = id == null ? UserGroup.builder().id(r.id().trim()).build()
+        UserGroup g = id == null ? UserGroup.builder().id(groupId).build()
                 : groups.findById(id).orElseThrow(() -> new ResourceNotFoundException("Group"));
         if (id == null && groups.existsById(g.getId()))
             throw new BadRequestException("Mã nhóm đã tồn tại");

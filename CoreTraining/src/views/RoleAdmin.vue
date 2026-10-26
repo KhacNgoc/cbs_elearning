@@ -154,16 +154,20 @@
       @submit="save"
       @close="editor = ''"
     >
-      <div class="admin-form-grid">
+      <div v-if="form.id" class="admin-form-grid">
         <label class="admin-form-field"
-          >Mã role *<input
-            v-model="form.code"
-            required
-            pattern="[A-Za-z0-9_-]{2,80}" /></label
+          >Mã role<input
+            :value="form.code"
+            disabled
+            readonly
+          /></label
         ><label class="admin-form-field"
           >Tên role *<input v-model="form.name" required
         /></label>
       </div>
+      <label v-else class="admin-form-field"
+        >Tên role *<input v-model="form.name" required
+      /></label>
       <label class="admin-form-field"
         >Mô tả<textarea v-model="form.description" rows="3" />
       </label>
@@ -428,6 +432,7 @@ async function save() {
   try {
     await roleApi.save({
       ...form.value,
+      code: form.value.id ? form.value.code : (form.value.code || undefined),
       learningEnabled: form.value.learnerRole || form.value.learningEnabled,
     });
     editor.value = "";

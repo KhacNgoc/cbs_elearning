@@ -90,11 +90,9 @@ test('learner role hides detailed permissions and saves the learner toggle; mana
     assert.ok(document.querySelector('[aria-label="Cho phép tham gia học tập"]'));
     document.querySelector('[aria-label="Role học viên"]').click(); await nextTick();
     const form = document.querySelector('.admin-modal-dialog');
-    const inputs = form.querySelectorAll('input');
-    for (const [index, value] of ['LEARN_NEW', 'Học viên mới'].entries()) {
-      inputs[index].value = value;
-      inputs[index].dispatchEvent(new Event('input', { bubbles: true }));
-    }
+    const nameInput = form.querySelector('input');
+    nameInput.value = 'Học viên mới';
+    nameInput.dispatchEvent(new Event('input', { bubbles: true }));
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await settle();
     assert.equal(saved[0].learnerRole, true);

@@ -176,13 +176,11 @@
       @submit="save"
     >
       <div class="bank-form-grid">
-        <label
+        <label v-if="form.id"
           >Mã câu hỏi<input
-            v-model="form.code"
-            maxlength="80"
-            pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,79}"
-            required
-            placeholder="VD: TD-CN-001" /></label
+            :value="form.code"
+            disabled
+            readonly /></label
         ><label
           >Khóa học quản lý<select
             v-model="form.courseId"
@@ -424,7 +422,11 @@ async function save() {
   saving.value = true;
   formError.value = "";
   try {
-    await contentToolsApi.saveBank(form.value);
+    const payload = {
+      ...form.value,
+      code: form.value.id ? form.value.code : (form.value.code || ""),
+    };
+    await contentToolsApi.saveBank(payload);
     formOpen.value = false;
     showToast("Đã lưu câu hỏi ngân hàng.");
     await load();
