@@ -5,6 +5,8 @@ import lombok.Data;
 
 @Data
 public class LessonProgressRequest {
+    private Boolean textCompleted;
+    private Boolean documentCompleted;
     @PositiveOrZero
     private Double lastPositionSeconds;
 

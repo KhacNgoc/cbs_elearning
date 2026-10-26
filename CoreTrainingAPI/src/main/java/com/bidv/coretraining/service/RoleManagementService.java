@@ -99,6 +99,16 @@ public class RoleManagementService {
                 .toList();
     }
 
+    private String generateRoleCode() {
+        for (int i = 0; i < 20; i++) {
+            String candidate = "ROLE_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase(Locale.ROOT);
+            if (roles.findByCode(candidate).isEmpty()) {
+                return candidate;
+            }
+        }
+        return "ROLE_" + System.currentTimeMillis();
+    }
+
     public RoleDto save(String id, RoleRequest request) {
         auth.requireOperation("roles", id == null ? "create" : "update");
         AccessRole r = id == null ? AccessRole.builder().build() : role(id);
@@ -106,10 +116,20 @@ public class RoleManagementService {
             mutate(r);
             checkVersion(r, request.version());
         }
-        if (request.code() == null || !request.code().matches("[A-Za-z0-9_\\-]{2,80}") || request.name() == null
-                || request.name().isBlank())
-            throw new BadRequestException("Mã role gồm 2–80 chữ, số, dấu gạch; tên không được để trống");
-        String code = request.code().trim().toUpperCase(Locale.ROOT);
+        String code;
+        if (id == null) {
+            code = (request.code() == null || request.code().isBlank())
+                    ? generateRoleCode()
+                    : request.code().trim().toUpperCase(Locale.ROOT);
+        } else {
+            code = (request.code() == null || request.code().isBlank())
+                    ? r.getCode()
+                    : request.code().trim().toUpperCase(Locale.ROOT);
+        }
+        if (!code.matches("[A-Za-z0-9_\\-]{2,80}"))
+            throw new BadRequestException("Mã role gồm 2–80 chữ, số, dấu gạch");
+        if (request.name() == null || request.name().isBlank())
+            throw new BadRequestException("Tên role không được để trống");
         roles.findByCode(code).ifPresent(other -> {
             if (!other.getId().equals(r.getId()))
                 throw new BadRequestException("Mã role đã tồn tại");
@@ -142,6 +162,8 @@ public class RoleManagementService {
         checkVersion(r, request.version());
         Set<String> p = new HashSet<>(request.permissions() == null ? Set.of() : request.permissions()),
                 scope = new HashSet<>(request.unitIds() == null ? Set.of() : request.unitIds());
+        if (scope.isEmpty())
+            throw new BadRequestException("Phạm vi quản trị dữ liệu bắt buộc chọn ít nhất 1 đơn vị");
         Set<String> valid = pages.findAll().stream()
                 .flatMap(page -> page.getActions().stream().map(action -> page.getId() + ":" + action))
                 .collect(Collectors.toSet());

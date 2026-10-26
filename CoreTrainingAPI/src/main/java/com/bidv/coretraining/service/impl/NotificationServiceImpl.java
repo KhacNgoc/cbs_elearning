@@ -154,6 +154,21 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public NotificationPage getPageForUser(String username, Long beforeId, int size) {
+        int limit = Math.max(1, Math.min(size, 50));
+        Notification before = beforeId == null ? null : repository.findByIdAndRecipientUsername(beforeId, username)
+            .orElseThrow(() -> new ResourceNotFoundException("Notification", "id", beforeId));
+        var pageable = org.springframework.data.domain.PageRequest.of(0, limit + 1);
+        var rows = before == null ? repository.findByRecipientUsernameOrderByCreatedAtDescIdDesc(username, pageable)
+            : repository.findOlder(username, before.getCreatedAt(), beforeId, pageable);
+        boolean hasMore = rows.size() > limit;
+        var content = rows.stream().limit(limit).map(this::toDto).toList();
+        return new NotificationPage(content, hasMore ? content.get(content.size() - 1).getId() : null,
+            hasMore, repository.countByRecipientUsernameAndReadFalse(username));
+    }
+
+    @Override
     @Transactional
     public NotificationDto markRead(Long id, String username) {
         Notification notification = repository.findByIdAndRecipientUsername(id, username)
@@ -165,9 +180,7 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     @Transactional
     public void markAllRead(String username) {
-        repository.findTop50ByRecipientUsernameOrderByCreatedAtDesc(username).stream()
-                .filter(notification -> !notification.isRead())
-                .forEach(notification -> notification.setRead(true));
+        repository.markAllRead(username);
     }
 
     private NotificationDto toDto(Notification notification) {

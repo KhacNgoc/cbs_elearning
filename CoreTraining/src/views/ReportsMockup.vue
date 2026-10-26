@@ -251,7 +251,13 @@ async function printReport(){printing.value=true;await nextTick();window.print()
 <style scoped src="../assets/styles/reporting-mockup.css"></style>
 <style scoped>
 .report-pagination{margin-top:0;padding:16px 20px}
-@media(max-width:600px){.report-pagination{padding:12px}}
+@media(max-width:600px){
+  .report-pagination{padding:12px}
+  .heading-actions,.drill-actions{flex-wrap:wrap;min-width:0}
+  .heading-actions .r-button{flex:1 1 8rem}
+  .drill-actions .r-button{white-space:normal;text-align:left}
+  .filters{grid-template-columns:minmax(0,1fr)}
+}
 </style>
 
 

@@ -27,6 +27,12 @@ import java.util.List;
 public class CourseServiceImpl implements CourseService {
     @org.springframework.beans.factory.annotation.Autowired
     private com.bidv.coretraining.service.AuthorizationService authorization;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bidv.coretraining.service.LearningAccessService learningAccess;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bidv.coretraining.repository.QuestionRepository questions;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bidv.coretraining.service.LearningOutlineService learningOutline;
 
     private final CourseRepository courseRepository;
     private final LessonRepository lessonRepository;
@@ -58,7 +64,23 @@ public class CourseServiceImpl implements CourseService {
                         || LearningPolicy.isLearnableStatus(c.getStatus())
                                 && com.bidv.coretraining.security.AccessPolicy.visible(user, c))
                 .toList();
-        List<CourseDto> result = courseMapper.toCourseDtoList(courses);
+        // Keep the full editing DTO for editors; learners only need published metadata.
+        var learnerCourseIds = courses.stream()
+            .filter(c -> !com.bidv.coretraining.security.AccessPolicy.canReadCourse(user, c))
+            .map(Course::getId).toList();
+        var summaries = learnerCourseIds.isEmpty() ? java.util.Map.<String, List<com.bidv.coretraining.repository.LessonOutlineView>>of()
+            : lessonRepository.findOutlines(learnerCourseIds, false).stream()
+                .collect(java.util.stream.Collectors.groupingBy(com.bidv.coretraining.repository.LessonOutlineView::getCourseId));
+        var quizCourses = learnerCourseIds.isEmpty() ? java.util.Set.<String>of() : questions.findCourseIdsWithQuiz(learnerCourseIds);
+        List<CourseDto> result = new java.util.ArrayList<>();
+        for (Course course : courses) {
+            boolean editor = com.bidv.coretraining.security.AccessPolicy.canReadCourse(user, course);
+            CourseDto dto = editor ? courseMapper.toCourseDto(course)
+                : learningOutline.courseMetadata(course, false, quizCourses.contains(course.getId()));
+            if (!editor) dto.setLessons(summaries.getOrDefault(course.getId(), List.of()).stream()
+                .map(learningOutline::lessonDto).toList());
+            result.add(dto);
+        }
         for (int i = 0; i < courses.size(); i++) {
             boolean editor = com.bidv.coretraining.security.AccessPolicy.canReadCourse(user, courses.get(i));
             result.get(i).setCanEdit(editor);
@@ -87,7 +109,9 @@ public class CourseServiceImpl implements CourseService {
         boolean editor = com.bidv.coretraining.security.AccessPolicy.canReadCourse(user, course);
         com.bidv.coretraining.security.AccessPolicy.require(editor || LearningPolicy.isLearnableStatus(course.getStatus())
                 && com.bidv.coretraining.security.AccessPolicy.visible(user, course));
-        CourseDto result = courseMapper.toCourseDto(course);
+        CourseDto result = editor ? courseMapper.toCourseDto(course)
+            : learningOutline.courseMetadata(course, false, questions.existsByCourseIdAndLessonIsNull(id));
+        if (!editor) result.setLessons(lessonRepository.findOutline(id, false).stream().map(learningOutline::lessonDto).toList());
         result.setCanEdit(editor);
         if (!editor)
             result.getLessons().forEach(com.bidv.coretraining.service.TrainingStructureService::outlineOnly);
@@ -97,9 +121,45 @@ public class CourseServiceImpl implements CourseService {
     @Override
     @Transactional(readOnly = true)
     public LessonDto getLessonById(String id) {
+        learningAccess.requireLesson(authorization.current(), id);
         Lesson lesson = lessonRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", id));
-        return courseMapper.toLessonDto(lesson);
+        LessonDto result = courseMapper.toLessonDetailDto(lesson);
+        boolean hasQuiz = questions.existsByLessonId(id);
+        result.setHasQuiz(hasQuiz);
+        result.setQuizRequired(hasQuiz && lesson.getQuiz() != null && lesson.getQuiz().isRequiredForProgress());
+        var comments = loadComments(id, 0, 20);
+        result.setComments(comments.content());
+        result.setCommentCount(comments.totalElements());
+        return result;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CommentPageDto getComments(String id, int page, int size) {
+        learningAccess.requireLesson(authorization.current(), id);
+        return loadComments(id, page, size);
+    }
+
+    private CommentPageDto loadComments(String id, int page, int size) {
+        var request = org.springframework.data.domain.PageRequest.of(Math.max(0, page), Math.max(1, Math.min(50, size)),
+            org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Order.desc("createdAt"),
+                org.springframework.data.domain.Sort.Order.desc("id")));
+        var roots = commentRepository.findByLessonIdAndParentIsNull(id, request);
+        java.util.Map<Long, CommentDto> mapped = new java.util.LinkedHashMap<>();
+        for (var root : roots) {
+            CommentDto dto = courseMapper.toCommentSummaryDto(root);
+            dto.setReplies(new java.util.ArrayList<>());
+            mapped.put(dto.getId(), dto);
+        }
+        if (!mapped.isEmpty()) {
+            for (var reply : commentRepository.findByParentIdInOrderByCreatedAtAscIdAsc(mapped.keySet())) {
+                CommentDto dto = courseMapper.toCommentSummaryDto(reply);
+                dto.setReplies(List.of());
+                mapped.get(dto.getParentId()).getReplies().add(dto);
+            }
+        }
+        return new CommentPageDto(List.copyOf(mapped.values()), roots.getNumber(), roots.isLast(), roots.getTotalElements());
     }
 
     @Override
@@ -193,10 +253,6 @@ public class CourseServiceImpl implements CourseService {
     @Transactional(readOnly = true)
     public List<VideoNoteDto> getVideoNotes(String lessonId, String username) {
         requireInteraction(lessonId, username);
-        if (!lessonRepository.existsById(lessonId)) {
-            throw new ResourceNotFoundException("Lesson", "id", lessonId);
-        }
-
         return videoNoteRepository
                 .findAllByLessonIdAndUserUsernameOrderByTimestampSecondsAscCreatedAtAsc(lessonId, username)
                 .stream()
@@ -251,9 +307,7 @@ public class CourseServiceImpl implements CourseService {
     }
 
     private void requireInteraction(String lessonId, String username) {
-        Lesson lesson = lessonRepository.findById(lessonId).orElseThrow(() -> new ResourceNotFoundException("Lesson"));
-        User user = userRepository.findByUsername(username).orElseThrow(() -> new ResourceNotFoundException("User"));
-        com.bidv.coretraining.service.LearningPolicy.assertLessonAccess(user, lesson);
+        learningAccess.requireLesson(username, lessonId);
     }
 
     private VideoNoteDto toVideoNoteDto(VideoNote note) {

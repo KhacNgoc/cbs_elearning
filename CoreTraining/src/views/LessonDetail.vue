@@ -1,14 +1,20 @@
 <template>
   <div
-    v-if="lesson && chapter"
+    v-if="outline"
     ref="learningPage"
     class="learning-page"
     :class="{ 'sidebar-visible': sidebarOpen }"
   >
     <LessonLearningHeader
+      v-if="lesson && chapter && !lessonLoading"
       :course-name="`${fullCourse?.name} / ${chapter?.title}`"
       :back-to="`/courses/${fullCourse?.id}`"
       :lesson-title="lesson.title"
+      :sidebar-open="sidebarOpen"
+      :active-content="activeContentType"
+      :has-text="Boolean(lesson.textBody?.trim())"
+      :has-video="Boolean(lesson.videoUrl?.trim())"
+      @select-content="showPrimaryContent"
       :completed-count="completedCount"
       :total-lessons="course?.lessons.length || 0"
       :completed="isCompleted"
@@ -40,6 +46,7 @@
     </div>
     <div class="learning-stage" :class="{ 'sidebar-hidden': !sidebarOpen }">
       <LessonMediaStage
+        v-if="lesson && chapter && !lessonLoading"
         ref="mediaStage"
         :lesson="lesson"
         :selected-document="selectedDocument"
@@ -47,31 +54,32 @@
         :current-index="currentLessonIndex"
         :total-lessons="course?.lessons.length || 0"
         :initial-position-seconds="
-          currentLessonProgress?.lastPositionSeconds || 0
+          videoInitialPosition.lastPositionSeconds || 0
         "
-        :initial-watched-seconds="currentLessonProgress?.watchedSeconds || 0"
-        :initial-document-page="
-          currentLessonProgress?.documentId === selectedDocument?.id
-            ? currentLessonProgress?.documentPage || 1
-            : 1
-        "
-        :initial-scroll-offset="
-          currentLessonProgress?.documentId === selectedDocument?.id
-            ? currentLessonProgress?.scrollOffset || 0
-            : 0
-        "
-        @document-position="handleDocumentPosition"
+        :initial-watched-seconds="videoInitialPosition.watchedSeconds || 0"
+        :initial-document-page="documentInitialPosition.page"
+        :initial-scroll-offset="documentInitialPosition.scrollOffset"
+        @document-position="handleDocumentPosition" @text-completed="handleTextCompleted"
         @adjacent="goToAdjacentLesson"
-        @select-content="showPrimaryContent"
-        @download-document="downloadDocument"
         @time-update="currentVideoTime = $event"
         @progress-update="handleVideoProgress"
         @video-ended="handleVideoEnded"
+        @pause="flushProgress"
         @add-note="openNoteComposer"
       />
+      <div v-else-if="lessonError" class="loading-state" role="alert">
+        {{ lessonError }}
+        <button class="btn btn-primary" @click="loadLessonData(props.id)">
+          Thử lại
+        </button>
+      </div>
+      <div v-else class="loading-state" role="status">
+        <span></span>Đang tải bài học...
+      </div>
       <LessonCourseSidebar
         :course="course"
-        :active-lesson-id="lesson.id"
+        :chapters="outline?.chapters || []"
+        :active-lesson-id="props.id"
         :completed-lessons="userStore.completedLessons"
         :completed-count="completedCount"
         :progress="courseProgress"
@@ -82,9 +90,10 @@
         :course-quiz-scores="userStore.quizScores"
         :course-quiz-totals="userStore.quizTotals"
         @close="sidebarOpen = false"
-        @select="switchLesson"
+        @select="openLessonContent"
         @toggle-completion="toggleLessonCompletion"
         @select-document="showDocument"
+        @download-document="downloadDocument"
         @quiz="startQuiz"
         @course-quiz="startCourseQuiz"
       />
@@ -103,7 +112,10 @@
       ></div>
     </div>
 
-    <section class="lesson-information">
+    <section
+      v-if="lesson && chapter && !lessonLoading"
+      class="lesson-information"
+    >
       <LessonOverview
         :lesson="lesson"
         :course-name="fullCourse?.name"
@@ -130,6 +142,12 @@
         />
         <LessonDiscussion
           :comments="lesson.comments"
+          :has-more="
+            (lesson.commentCount ?? lesson.comments.length) >
+            lesson.comments.length
+          "
+          :loading-more="commentsLoadingMore"
+          @load-more="loadMoreComments"
           :current-username="userStore.username"
           :is-admin="Boolean(fullCourse?.canEdit)"
           v-model:comment="commentText"
@@ -140,7 +158,10 @@
       </LessonOverview>
     </section>
 
-    <footer v-if="chapterComplete" class="chapter-completion-footer">
+    <footer
+      v-if="!lessonLoading && chapterComplete"
+      class="chapter-completion-footer"
+    >
       <span
         ><strong>{{
           nextChapter ? "Đã hoàn thành chương" : "Đã hoàn thành khóa học"
@@ -213,6 +234,12 @@
       </div>
     </Transition>
   </div>
+  <div v-else-if="lessonError" class="loading-state" role="alert">
+    {{ lessonError }}
+    <button class="btn btn-primary" @click="loadLessonData(props.id)">
+      Thử lại
+    </button>
+  </div>
   <div v-else class="loading-state"><span></span>Đang tải bài học...</div>
 </template>
 
@@ -231,7 +258,7 @@ import { AlertTriangle, ChevronLeft, ChevronRight, X, Sparkles } from "lucide-vu
 import { useCourseStore } from "../stores/courseStore";
 import { useUserStore } from "../stores/userStore";
 import { axiosClient } from "../api/axiosClient";
-import { trainingApi } from "../api/trainingApi";
+import { outlineContext } from "../utils/learningStructure";
 import { courseApi } from "../api/courseApi";
 import type {
   CourseOutline,
@@ -245,6 +272,8 @@ import LessonMediaStage from "../components/lesson/LessonMediaStage.vue";
 import LessonOverview from "../components/lesson/LessonOverview.vue";
 import LessonReportForm from "../components/lesson/LessonReportForm.vue";
 import { initialLessonContent } from "../utils/lessonContent";
+import { createDocumentProgressJournal } from "../utils/documentProgressJournal";
+import { createVideoProgressJournal } from "../utils/videoProgressJournal";
 import LessonDiscussion from "../components/lesson/LessonDiscussion.vue";
 import LessonVideoNotes from "../components/lesson/LessonVideoNotes.vue";
 
@@ -272,6 +301,63 @@ const route = useRoute();
 const bookmarkReady = ref(false);
 const courseStore = useCourseStore();
 const userStore = useUserStore();
+const documentJournal = createDocumentProgressJournal(userStore.username);
+const videoJournal = createVideoProgressJournal(userStore.username);
+const videoInitialPosition = ref<LessonProgressRequest>({});
+const retryJobs = new Map<string, { lessonId: string; snapshot: LessonProgressRequest; attempts: number }>();
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+const retryKey = (id: string, snapshot: LessonProgressRequest) => JSON.stringify([id, snapshot.contentType, snapshot.documentId]);
+function scheduleRetry() {
+  if (disposed || retryTimer || !retryJobs.size) return;
+  const eligible = [...retryJobs.values()].filter(job => job.attempts < 5);
+  if (!eligible.length) return;
+  const attempts = Math.max(...eligible.map(job => job.attempts));
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    for (const job of retryJobs.values()) if (job.attempts < 5) void sendProgress(job.lessonId, job.snapshot, false, job.attempts + 1);
+  }, Math.min(60000, 2000 * 2 ** attempts));
+}
+async function sendProgress(lessonId: string, snapshot: LessonProgressRequest, touch = false, attempts = 0) {
+  const key = retryKey(lessonId, snapshot);
+  const previous = retryJobs.get(key)?.snapshot;
+  snapshot = { ...snapshot };
+  if (previous?.documentCompleted) snapshot.documentCompleted = true;
+  if (previous?.textCompleted) snapshot.textCompleted = true;
+  const job = { lessonId, snapshot: { ...snapshot }, attempts };
+  retryJobs.set(key, job);
+  const result = await userStore.saveLessonProgress(lessonId, snapshot, touch);
+  if (result) {
+    if (snapshot.contentType === 'DOCUMENT') documentJournal.acknowledge(lessonId, snapshot);
+    if (snapshot.contentType === 'VIDEO') videoJournal.acknowledge(lessonId, snapshot);
+    if (retryJobs.get(key) === job) retryJobs.delete(key);
+  } else if (retryJobs.get(key) === job && userStore.canLearn && userStore.isAuthenticated) scheduleRetry();
+  return result;
+}
+const documentInitialPosition = ref({ page: 1, scrollOffset: 0 });
+const restoreDocumentPosition = (
+  lessonId: string,
+  document?: LessonDocument | null,
+) => {
+  const saved = userStore.getLatestLessonProgress(lessonId);
+  const local = document?.id
+    ? documentJournal.position(lessonId, document.id)
+    : undefined;
+  const remote = document?.id
+    ? saved?.documentPositions?.[document.id]
+    : undefined;
+  documentInitialPosition.value = {
+    page:
+      local?.documentPage ??
+      remote?.page ??
+      (saved?.documentId === document?.id ? saved?.documentPage : undefined) ??
+      1,
+    scrollOffset:
+      local?.scrollOffset ??
+      remote?.scrollOffset ??
+      (saved?.documentId === document?.id ? saved?.scrollOffset : undefined) ??
+      0,
+  };
+};
 const mediaStage = ref<InstanceType<typeof LessonMediaStage> | null>(null);
 const learningPage = ref<HTMLElement | null>(null);
 const videoNotesPanel = ref<InstanceType<typeof LessonVideoNotes> | null>(null);
@@ -285,7 +371,14 @@ const pendingDocument = ref<{
   document: LessonDocument;
 } | null>(null);
 const commentText = ref("");
-const sidebarOpen = ref(true);
+const commentPage = ref(0);
+const commentsLoadingMore = ref(false);
+const sidebarOpen = ref(window.innerWidth > 900);
+const lessonLoading = ref(true);
+const lessonError = ref("");
+const progressLessonId = ref<string | null>(null);
+let lessonLoadId = 0;
+let disposed = false;
 const currentVideoTime = ref(0);
 const videoNotes = ref<VideoNote[]>([]);
 const notesLoading = ref(false);
@@ -300,19 +393,22 @@ const currentProgressSnapshot = ref<LessonProgressRequest>({
 });
 let progressSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
-const lesson = computed(() => courseStore.currentLesson);
+const lesson = computed(() =>
+  courseStore.currentLesson?.id === props.id ? courseStore.currentLesson : null,
+);
 const outline = ref<CourseOutline | null>(null);
-const fullCourse = computed(() => courseStore.currentCourse);
+// Keep the course shell stable while the requested lesson is loading.
+const fullCourse = computed(
+  () => outline.value?.course ?? courseStore.currentCourse,
+);
 const chapter = computed(() =>
   outline.value?.chapters.find((c) => c.id === lesson.value?.chapterId),
 );
 const course = computed(() =>
-  fullCourse.value && chapter.value
+  fullCourse.value && outline.value
     ? {
         ...fullCourse.value,
-        name: chapter.value.title,
-        lessons: chapter.value.lessons,
-        hasQuiz: false,
+        lessons: outline.value.chapters.flatMap((item) => item.lessons),
       }
     : fullCourse.value,
 );
@@ -333,9 +429,6 @@ const quizPromptLesson = computed(
     course.value?.lessons.find(
       (item) => item.id === quizPromptLessonId.value,
     ) || lesson.value,
-);
-const currentLessonProgress = computed(() =>
-  lesson.value ? userStore.lessonProgress?.[lesson.value.id] : undefined,
 );
 const isCompleted = computed(() =>
   lesson.value ? userStore.completedLessons.includes(lesson.value.id) : false,
@@ -358,123 +451,228 @@ const currentLessonIndex = computed(
 );
 
 const loadLessonData = async (lessonId: string) => {
+  const loadId = ++lessonLoadId;
+  commentPage.value = 0;
+  commentsLoadingMore.value = false;
   bookmarkReady.value = false;
+  lessonLoading.value = true;
+  lessonError.value = "";
   currentVideoTime.value = 0;
   videoNotes.value = [];
-  await Promise.all([
-    courseStore.fetchLessonDetail(lessonId),
-    loadVideoNotes(lessonId),
-  ]);
-
-  if (lesson.value) {
-    outline.value = await trainingApi.outline(lesson.value.courseId);
-    const activeChapter = outline.value.chapters.find(
-      (c) => c.id === lesson.value?.chapterId,
+  // Notes are independent of the content and must not delay the lesson viewer.
+  void loadVideoNotes(lessonId, loadId);
+  try {
+    const [loadedLesson] = await Promise.all([
+      courseStore.fetchLessonDetail(lessonId),
+      userStore.progressLoaded ? Promise.resolve() : userStore.fetchProgress(),
+    ]);
+    if (loadId !== lessonLoadId || disposed) return;
+    if (!loadedLesson)
+      throw new Error("Không tải được bài học. Vui lòng thử lại.");
+    const context = outlineContext(userStore);
+    let loadedOutline = await courseStore.fetchOutline(
+      loadedLesson.courseId,
+      context,
     );
-    const activeIndex =
-      activeChapter?.lessons.findIndex((l) => l.id === lesson.value?.id) ?? -1;
-    if (activeChapter && activeIndex >= 0)
-      activeChapter.lessons[activeIndex] = lesson.value;
-  }
+    if (loadId !== lessonLoadId || disposed) return;
+    // A newly added/moved lesson may not exist in a still-fresh cached structure.
+    if (
+      !loadedOutline.chapters.some(
+        (chapter) =>
+          chapter.id === loadedLesson.chapterId &&
+          chapter.lessons.some((item) => item.id === lessonId),
+      )
+    ) {
+      loadedOutline = await courseStore.fetchOutline(
+        loadedLesson.courseId,
+        context,
+        true,
+      );
+      if (loadId !== lessonLoadId || disposed) return;
+    }
+    if (
+      !loadedOutline.course.canEdit &&
+      !userStore.isCourseAccessible(loadedLesson.courseId)
+    ) {
+      alert("Bạn cần đăng ký học khóa học nghiệp vụ này trước!");
+      await router.push("/");
+      return;
+    }
+    outline.value = loadedOutline;
+    const activeChapter = loadedOutline.chapters.find(
+      (c) => c.id === loadedLesson.chapterId,
+    );
+    if (!activeChapter)
+      throw new Error("Không tìm thấy chương của bài học. Vui lòng tải lại.");
+    const index = activeChapter.lessons.findIndex(
+      (item) => item.id === lessonId,
+    );
+    if (index < 0)
+      throw new Error(
+        "Bài học không còn trong cấu trúc khóa. Vui lòng tải lại.",
+      );
+    activeChapter.lessons[index] = loadedLesson;
 
-  // Guard check: course accessibility
-  if (
-    course.value &&
-    !outline.value?.course.canEdit &&
-    !userStore.isCourseAccessible(course.value.id)
-  ) {
-    alert("Bạn cần đăng ký học khóa học nghiệp vụ này trước!");
-    router.push("/");
-    return;
+    const progress = { ...userStore.getLatestLessonProgress(lessonId), ...videoJournal.pending(lessonId) };
+    videoInitialPosition.value = { ...progress };
+    currentProgressSnapshot.value = {
+      ...progress,
+      lastPositionSeconds: progress?.lastPositionSeconds || 0,
+      watchedSeconds: progress?.watchedSeconds || 0,
+      durationSeconds: progress?.durationSeconds || 0,
+    };
+    progressLessonId.value = lessonId;
+    const requestedDocument =
+      pendingDocument.value?.lessonId === lessonId
+        ? pendingDocument.value.document
+        : undefined;
+    pendingDocument.value = null;
+    selectInitialContent(requestedDocument);
+    const recoveredVideo = videoJournal.pending(lessonId);
+    if (recoveredVideo && loadedLesson.videoUrl?.trim() && activeContentType.value !== 'VIDEO')
+      void sendProgress(lessonId, recoveredVideo);
+    // Replay crash/offline snapshots before touching the current content's resume order.
+    for (const entry of documentJournal.pending(lessonId)) {
+      if (
+        loadedLesson.documents?.some((d) => d.id === entry.request.documentId)
+      ) {
+        void sendProgress(lessonId, entry.request);
+      }
+    }
+    // Initial content restoration is not a user-initiated content switch.
+    await nextTick();
+    if (loadId !== lessonLoadId || disposed) return;
+    bookmarkReady.value = true;
+    lessonLoading.value = false;
+    void persistCurrentProgress(true);
+  } catch (error) {
+    if (loadId !== lessonLoadId || disposed) return;
+    lessonError.value =
+      (error as Error).message || "Không thể tải bài học. Vui lòng thử lại.";
+    lessonLoading.value = false;
   }
-  const progress = userStore.lessonProgress?.[lessonId];
-  currentProgressSnapshot.value = {
-    ...progress,
-    lastPositionSeconds: progress?.lastPositionSeconds || 0,
-    watchedSeconds: progress?.watchedSeconds || 0,
-    durationSeconds: progress?.durationSeconds || 0,
-  };
 };
 
 const selectInitialContent = (requestedDocument?: LessonDocument) => {
   if (!lesson.value) return;
   const documents = lesson.value.documents || [];
-  const saved = userStore.lessonProgress?.[lesson.value.id];
+  const saved = userStore.getLatestLessonProgress(lesson.value.id);
   const requestedId =
     typeof route.query.documentId === "string"
       ? Number(route.query.documentId)
       : undefined;
   requestedDocument ||= documents.find((d) => d.id === requestedId);
+  if (!requestedDocument) {
+    const recovery = documentJournal.pending(lesson.value.id).at(-1);
+    requestedDocument = documents.find(
+      (d) => d.id === recovery?.request.documentId,
+    );
+  }
   const initial = initialLessonContent(lesson.value, saved, requestedDocument);
   primaryContent.value = initial.type === "VIDEO" ? "VIDEO" : "TEXT";
   selectedDocument.value = initial.document;
-};
-
-const loadVideoNotes = async (lessonId: string) => {
-  notesLoading.value = true;
-  try {
-    const notes = await courseApi.getVideoNotes(lessonId);
-    if (courseStore.currentLessonId === lessonId) videoNotes.value = notes;
-  } catch (error) {
-    console.error("Failed to load video notes:", error);
-    videoNotes.value = [];
-  } finally {
-    notesLoading.value = false;
+  restoreDocumentPosition(lesson.value.id, initial.document);
+  if (initial.document) {
+    currentProgressSnapshot.value = {
+      ...currentProgressSnapshot.value,
+      documentId: initial.document.id,
+      documentCompleted: false,
+      documentPage: documentInitialPosition.value.page,
+      scrollOffset: documentInitialPosition.value.scrollOffset,
+    };
   }
 };
 
-onMounted(async () => {
-  await Promise.all([
-    userStore.mandatoryCourses.length === 0
-      ? userStore.fetchProgress()
-      : Promise.resolve(),
-    courseStore.fetchCourses(),
-  ]);
-  await loadLessonData(props.id);
-  selectInitialContent();
-  bookmarkReady.value = true;
-  await persistCurrentProgress();
-  sidebarOpen.value = window.innerWidth > 900;
+const loadVideoNotes = async (lessonId: string, loadId: number) => {
+  notesLoading.value = true;
+  try {
+    const notes = await courseApi.getVideoNotes(lessonId);
+    if (loadId === lessonLoadId && !disposed) videoNotes.value = notes;
+  } catch (error) {
+    if (loadId === lessonLoadId && !disposed) {
+      console.error("Failed to load video notes:", error);
+      videoNotes.value = [];
+    }
+  } finally {
+    if (loadId === lessonLoadId && !disposed) notesLoading.value = false;
+  }
+};
+
+const flushProgress = () => {
+  void persistCurrentProgress();
+};
+const handleOnline = () => {
+  if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+  for (const job of retryJobs.values()) void sendProgress(job.lessonId, job.snapshot);
+  flushProgress();
+};
+const handleVisibilityChange = () => {
+  if (document.visibilityState === "hidden") flushProgress();
+};
+onMounted(() => {
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+  window.addEventListener("pagehide", flushProgress);
+  window.addEventListener("online", handleOnline);
+  void loadLessonData(props.id);
 });
 
 onBeforeUnmount(() => {
-  if (progressSaveTimer) clearTimeout(progressSaveTimer);
   void persistCurrentProgress();
+  disposed = true;
+  if (retryTimer) clearTimeout(retryTimer);
+  lessonLoadId++;
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
+  window.removeEventListener("pagehide", flushProgress);
+  window.removeEventListener("online", handleOnline);
 });
 
 watch(
   () => props.id,
-  async (newId) => {
+  (newId) => {
     void loadLatestChangelog();
-    await persistCurrentProgress();
+    // Capture the old lesson's id and snapshot synchronously; network writes run in the background.
+    void persistCurrentProgress();
+    bookmarkReady.value = false;
     selectedDocument.value = null;
-    await loadLessonData(newId);
-    const requestedDocument =
-      pendingDocument.value?.lessonId === newId
-        ? pendingDocument.value.document
-        : undefined;
-    pendingDocument.value = null;
-    selectInitialContent(requestedDocument);
-    bookmarkReady.value = true;
-    await persistCurrentProgress();
     if (window.innerWidth <= 900) sidebarOpen.value = false;
+    void loadLessonData(newId);
   },
 );
 
-const handleVideoProgress = (progress: LessonProgressRequest) => {
-  if (activeContentType.value !== "VIDEO") return;
-  currentProgressSnapshot.value = { ...progress, contentType: "VIDEO" };
-  if (progressSaveTimer) clearTimeout(progressSaveTimer);
-  progressSaveTimer = setTimeout(() => void persistCurrentProgress(), 5000);
+const scheduleProgressSave = (delay: number) => {
+  // Throttle rather than debounce: continuous playback/scrolling still saves regularly.
+  if (progressSaveTimer) return;
+  progressSaveTimer = setTimeout(() => {
+    progressSaveTimer = null;
+    void persistCurrentProgress();
+  }, delay);
 };
 
-const persistCurrentProgress = async () => {
-  if (!lesson.value || !bookmarkReady.value) return null;
+const handleTextCompleted = () => {
+  if (!bookmarkReady.value || activeContentType.value !== "TEXT") return;
+  currentProgressSnapshot.value = { ...currentProgressSnapshot.value, textCompleted: true };
+  void persistCurrentProgress();
+};
+const handleVideoProgress = (progress: LessonProgressRequest) => {
+  if (!bookmarkReady.value || activeContentType.value !== "VIDEO") return;
+  const wasComplete = (currentProgressSnapshot.value.durationSeconds || 0) > 0
+    && (currentProgressSnapshot.value.watchedSeconds || 0) >= currentProgressSnapshot.value.durationSeconds! * 0.9;
+  currentProgressSnapshot.value = { ...progress, contentType: "VIDEO" };
+  if (progressLessonId.value) videoJournal.record(progressLessonId.value, currentProgressSnapshot.value);
+  if (!wasComplete && (progress.durationSeconds || 0) > 0 && (progress.watchedSeconds || 0) >= progress.durationSeconds! * 0.9) {
+    void persistCurrentProgress(); return;
+  }
+  scheduleProgressSave(20000);
+};
+
+const persistCurrentProgress = async (touch = false) => {
   if (progressSaveTimer) {
     clearTimeout(progressSaveTimer);
     progressSaveTimer = null;
   }
-  return userStore.saveLessonProgress(lesson.value.id, {
+  if (!progressLessonId.value || !bookmarkReady.value) return null;
+  const lessonId = progressLessonId.value;
+  const snapshot: LessonProgressRequest = {
     ...currentProgressSnapshot.value,
     contentType: activeContentType.value,
     documentId: selectedDocument.value?.id,
@@ -484,11 +682,15 @@ const persistCurrentProgress = async () => {
     scrollOffset: selectedDocument.value
       ? currentProgressSnapshot.value.scrollOffset
       : undefined,
-  });
+  };
+  if (snapshot.contentType === "DOCUMENT")
+    documentJournal.record(lessonId, snapshot);
+  if (snapshot.contentType === "VIDEO") videoJournal.record(lessonId, snapshot, true);
+  return sendProgress(lessonId, snapshot, touch);
 };
 const handleDocumentPosition = (position: {
   page: number;
-  scrollOffset: number;
+  scrollOffset: number; completed?: boolean;
 }) => {
   if (!selectedDocument.value || !bookmarkReady.value) return;
   currentProgressSnapshot.value = {
@@ -496,25 +698,32 @@ const handleDocumentPosition = (position: {
     contentType: "DOCUMENT",
     documentId: selectedDocument.value.id,
     documentPage: position.page,
+    documentCompleted: position.completed === true,
     scrollOffset: position.scrollOffset,
   };
-  if (progressSaveTimer) clearTimeout(progressSaveTimer);
-  progressSaveTimer = setTimeout(() => void persistCurrentProgress(), 1000);
+  if (progressLessonId.value) {
+    documentJournal.record(
+      progressLessonId.value,
+      currentProgressSnapshot.value,
+    );
+    if (position.completed) { void persistCurrentProgress(); return; }
+    if (documentJournal.pending(progressLessonId.value).length)
+      scheduleProgressSave(5000);
+  }
 };
 watch([selectedDocument, primaryContent], async ([document]) => {
   if (!bookmarkReady.value || !lesson.value) return;
   if (document) {
-    const saved = userStore.lessonProgress?.[lesson.value.id];
+    restoreDocumentPosition(lesson.value.id, document);
     currentProgressSnapshot.value = {
       ...currentProgressSnapshot.value,
       documentId: document.id,
-      documentPage:
-        saved && saved.documentId === document.id ? saved.documentPage : 1,
-      scrollOffset:
-        saved && saved.documentId === document.id ? saved.scrollOffset : 0,
+      documentCompleted: false,
+      documentPage: documentInitialPosition.value.page,
+      scrollOffset: documentInitialPosition.value.scrollOffset,
     };
   }
-  await persistCurrentProgress();
+  await persistCurrentProgress(true);
 });
 
 const handleVideoEnded = async (progress: LessonProgressRequest) => {
@@ -523,33 +732,14 @@ const handleVideoEnded = async (progress: LessonProgressRequest) => {
     clearTimeout(progressSaveTimer);
     progressSaveTimer = null;
   }
-  const finishedLessonId = lesson.value.id;
-  const hasQuiz = Boolean(lesson.value.hasQuiz && lesson.value.quizRequired);
-  const nextLesson = course.value?.lessons[currentLessonIndex.value + 1];
-  const wasCompleted = userStore.completedLessons.includes(finishedLessonId);
   currentProgressSnapshot.value = progress;
-  await userStore.saveLessonProgress(finishedLessonId, progress);
-
-  if (wasCompleted) return;
-
-  if (hasQuiz) {
-    quizPromptKind.value = "lesson";
-    quizPromptLessonId.value = finishedLessonId;
-    quizGateOpen.value = true;
-    return;
-  }
-
-  if (promptForRequiredCourseQuiz(finishedLessonId)) return;
-  const completed = await completeLessonWithFeedback(finishedLessonId);
-  if (completed && nextLesson) {
-    await router.push(`/lesson/${nextLesson.id}`);
-  }
+  await persistCurrentProgress();
 };
 
 const switchLesson = async (lessonId: string): Promise<boolean> => {
-  if (!lesson.value) return false;
-  if (lessonId === lesson.value.id) return true;
+  if (lessonId === props.id) return true;
   const index = course.value?.lessons.findIndex((l) => l.id === lessonId) ?? -1;
+  if (index < 0) return false;
   if (
     !fullCourse.value?.canEdit &&
     !userStore.systemAdmin &&
@@ -560,9 +750,19 @@ const switchLesson = async (lessonId: string): Promise<boolean> => {
     alert("Hoàn thành các bài trước và kiểm tra bắt buộc để tiếp tục");
     return false;
   }
-  await persistCurrentProgress();
   await router.push(`/lesson/${lessonId}`);
   return true;
+};
+const openLessonContent = async (lessonId: string) => {
+  if (lessonId === lesson.value?.id && selectedDocument.value) {
+    showPrimaryContent(
+      primaryContent.value === "TEXT" && !lesson.value.textBody?.trim()
+        ? "VIDEO"
+        : primaryContent.value,
+    );
+    return;
+  }
+  await switchLesson(lessonId);
 };
 const showDocument = async (lessonId: string, document: LessonDocument) => {
   if (lessonId !== lesson.value?.id) {
@@ -571,6 +771,7 @@ const showDocument = async (lessonId: string, document: LessonDocument) => {
     if (!switched) pendingDocument.value = null;
     return;
   }
+  void persistCurrentProgress();
   selectedDocument.value = document;
 };
 const showPrimaryContent = (type: "VIDEO" | "TEXT") => {
@@ -581,6 +782,11 @@ const showPrimaryContent = (type: "VIDEO" | "TEXT") => {
       : !lesson.value.textBody?.trim())
   )
     return;
+  void persistCurrentProgress();
+  if (type === 'VIDEO' && lesson.value) videoInitialPosition.value = {
+    ...userStore.getLatestLessonProgress(lesson.value.id), ...currentProgressSnapshot.value,
+    ...videoJournal.pending(lesson.value.id),
+  };
   primaryContent.value = type;
   selectedDocument.value = null;
 };
@@ -712,8 +918,7 @@ const startQuiz = (lessonId = lesson.value?.id) => {
     router.push(`/quiz/${course.value.id}`);
   }
 };
-const advanceChapter = async () => {
-  await persistCurrentProgress();
+const advanceChapter = () => {
   if (nextChapter.value) {
     const target =
       nextChapter.value.lessons.find(
@@ -814,11 +1019,7 @@ const openNoteComposer = (seconds: number) => {
 };
 const submitFeedback = async () => {
   if (!commentText.value.trim() || !lesson.value) return;
-  await courseStore.addComment(
-    lesson.value.id,
-    null,
-    commentText.value,
-  );
+  await courseStore.addComment(lesson.value.id, null, commentText.value);
   commentText.value = "";
 };
 const submitReply = async (
@@ -839,10 +1040,46 @@ const submitReply = async (
     alert("Không thể gửi phản hồi. Vui lòng thử lại.");
   }
 };
+const loadMoreComments = async () => {
+  if (!lesson.value || commentsLoadingMore.value) return;
+  const id = lesson.value.id;
+  const loadId = lessonLoadId;
+  commentsLoadingMore.value = true;
+  try {
+    const page = await courseApi.getComments(id, commentPage.value + 1);
+    if (disposed || loadId !== lessonLoadId || lesson.value?.id !== id) return;
+    const ids = new Set(lesson.value.comments.map((comment) => comment.id));
+    lesson.value.comments.push(
+      ...page.content.filter((comment) => !ids.has(comment.id)),
+    );
+    lesson.value.commentCount = page.totalElements;
+    commentPage.value = page.page;
+  } catch (error) {
+    if (!disposed && loadId === lessonLoadId) {
+      console.error("Failed to load comments:", error);
+      alert("Không thể tải thêm thảo luận. Vui lòng thử lại.");
+    }
+  } finally {
+    if (loadId === lessonLoadId) commentsLoadingMore.value = false;
+  }
+};
 const deleteComment = async (commentId: number) => {
   if (!lesson.value) return;
   try {
-    await courseStore.deleteComment(lesson.value.id, commentId);
+    const id = lesson.value.id;
+    const loadId = lessonLoadId;
+    const isRoot = lesson.value.comments.some(
+      (comment) => comment.id === commentId,
+    );
+    await courseStore.deleteComment(id, commentId);
+    if (isRoot) {
+      const page = await courseApi.getComments(id);
+      if (!disposed && loadId === lessonLoadId && lesson.value?.id === id) {
+        lesson.value.comments = page.content;
+        lesson.value.commentCount = page.totalElements;
+        commentPage.value = 0;
+      }
+    }
   } catch (error) {
     console.error("Failed to delete comment:", error);
     alert("Không thể gỡ bình luận. Vui lòng thử lại.");
@@ -856,7 +1093,8 @@ const deleteComment = async (commentId: number) => {
   background: var(--bg-main);
   min-height: calc(100vh - 73px);
   color: var(--text-main);
-  transition: padding-right 0.25s ease;
+  --learning-motion: 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: padding-right var(--learning-motion);
 }
 .learning-page.sidebar-visible {
   padding-right: 370px;
@@ -1161,7 +1399,7 @@ const deleteComment = async (commentId: number) => {
   flex-direction: column;
   overflow: hidden;
   box-shadow: -8px 0 24px rgba(9, 31, 24, 0.08);
-  transition: transform 0.25s ease;
+  transition: transform var(--learning-motion);
   z-index: 90;
 }
 .sidebar-hidden .course-sidebar {
@@ -1311,7 +1549,7 @@ const deleteComment = async (commentId: number) => {
 .sidebar-reopen {
   position: fixed;
   right: 0;
-  top: 45%;
+  top: 165px;
   width: 35px;
   height: 52px;
   border: 0;
@@ -1841,9 +2079,6 @@ const deleteComment = async (commentId: number) => {
     width: 320px;
     min-width: 320px;
   }
-  .progress-summary {
-    display: none;
-  }
 }
 @media (max-width: 900px) {
   .learning-page {
@@ -1853,9 +2088,7 @@ const deleteComment = async (commentId: number) => {
     padding-right: 0;
   }
   .learning-header {
-    position: sticky;
-    top: 65px;
-    z-index: 82;
+    position: static;
   }
   .header-separator,
   .course-name,
@@ -1950,7 +2183,6 @@ const deleteComment = async (commentId: number) => {
   .learning-header {
     min-height: 58px;
     padding: 0 0.7rem;
-    top: 64px;
   }
   .content-tabs {
     top: 122px;
@@ -2050,15 +2282,24 @@ const deleteComment = async (commentId: number) => {
   border-bottom: 0;
 }
 .lesson-entry:hover {
-  background: rgba(239, 246, 243, 0.8);
+  background: var(--surface-f4f8f6);
+}
+.lesson-entry.active:hover {
+  background: var(--primary-light);
 }
 .lesson-entry.completed .lesson-check {
   background: var(--primary-color);
   border-color: var(--primary-color);
   color: white;
 }
+.lesson-content-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0 0.75rem 0.7rem 2.7rem;
+}
 .lesson-resources-toggle {
-  margin: 0 0.75rem 0.65rem auto;
   padding: 0.35rem 0.5rem;
   display: flex;
   align-items: center;
@@ -2075,6 +2316,10 @@ const deleteComment = async (commentId: number) => {
 .lesson-resources-toggle.expanded {
   background: var(--surface-e7f2ee);
   border-color: rgba(0, 91, 65, 0.4);
+}
+.lesson-content-actions button:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
 }
 .lesson-resources-toggle > svg:last-child {
   transition: transform 0.2s ease;
@@ -2100,7 +2345,13 @@ const deleteComment = async (commentId: number) => {
   gap: 0.2rem;
   border-left: 2px solid var(--line-b8d4ca);
 }
-.lesson-documents button {
+.lesson-document-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border-radius: 6px;
+}
+.lesson-documents .lesson-document-select {
   width: 100%;
   padding: 0.5rem 0.55rem;
   display: grid;
@@ -2113,14 +2364,41 @@ const deleteComment = async (commentId: number) => {
   color: var(--ink-42534c);
   text-align: left;
   cursor: pointer;
+  flex: 1;
+  min-width: 0;
 }
-.lesson-documents button:hover,
-.lesson-documents button.selected {
+.lesson-document-row:hover,
+.lesson-document-row.selected {
   background: var(--surface-ffffff);
   color: var(--primary-ink);
   box-shadow: 0 1px 4px rgba(11, 42, 32, 0.09);
 }
-.lesson-documents button > span {
+.lesson-document-row:hover .lesson-document-select,
+.lesson-document-row.selected .lesson-document-select {
+  color: var(--primary-ink);
+}
+.lesson-documents .lesson-document-download {
+  display: grid;
+  place-items: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  margin-right: 0.2rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--primary-ink);
+  cursor: pointer;
+}
+.lesson-documents .lesson-document-download:hover {
+  background: var(--primary-light);
+}
+.lesson-documents button:focus-visible {
+  outline: 2px solid var(--primary-ink);
+  outline-offset: -2px;
+}
+.lesson-document-select > span {
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -2128,6 +2406,7 @@ const deleteComment = async (commentId: number) => {
 .lesson-documents strong {
   font-size: 0.75rem;
   line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 .lesson-documents small {
   margin-top: 0.15rem;
@@ -2157,7 +2436,7 @@ const deleteComment = async (commentId: number) => {
   border: 0;
   background: var(--surface-ffffff);
 }
-.selected-document-preview > .word-preview,
+.selected-document-preview > .word-preview-shell,
 .selected-document-preview > .powerpoint-preview {
   flex: 1;
   min-height: 0;
@@ -2299,4 +2578,204 @@ const deleteComment = async (commentId: number) => {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Lesson format controls in the learning header. */
+.learning-header .back-button,
+.learning-header .header-actions {
+  flex-shrink: 0;
+}
+.lesson-content-switch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(138, 226, 194, 0.28);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.12);
+}
+.lesson-content-switch button {
+  min-height: 36px;
+  padding: 0 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #dbe7e3;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+.lesson-content-switch button > svg {
+  display: block;
+  flex-shrink: 0;
+}
+.lesson-content-switch button > span {
+  display: block;
+  line-height: 1;
+}
+.lesson-content-switch button:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: #fff;
+}
+.lesson-content-switch button[aria-pressed="true"] {
+  background: #e7f2ee;
+  color: #005b41;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+.lesson-content-switch button:focus-visible {
+  outline: 2px solid #8ae2c2;
+  outline-offset: 2px;
+}
+.learning-header .header-actions {
+  gap: 0;
+}
+.header-completion {
+  flex: 0 0 auto;
+  min-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    width var(--learning-motion),
+    opacity 180ms ease,
+    visibility 0s 320ms;
+}
+.header-completion.visible {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    width var(--learning-motion),
+    opacity 220ms ease 70ms,
+    visibility 0s;
+}
+.header-completion-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-left: 0.5rem;
+  width: max-content;
+  white-space: nowrap;
+}
+.header-completion-content > * {
+  flex-shrink: 0;
+}
+.learning-header .mobile-content-button {
+  margin-left: 0.5rem;
+}
+@media (max-width: 1100px) {
+  .learning-header {
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+    padding-top: 0.6rem;
+    padding-bottom: 0.6rem;
+  }
+  .learning-header .header-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    margin-left: auto;
+    max-width: 100%;
+  }
+}
+@media (max-width: 900px) {
+  .learning-header {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) auto 40px;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 0.75rem;
+  }
+  .learning-header .back-button {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .learning-header .header-copy {
+    grid-column: 2 / 4;
+    grid-row: 1;
+  }
+  .learning-header .header-copy h1 {
+    font-size: 0.85rem;
+  }
+  .learning-header .header-actions {
+    display: contents;
+  }
+  .learning-header .mobile-content-button {
+    grid-column: 4;
+    grid-row: 1;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    margin: 0;
+  }
+  .learning-header .lesson-content-switch {
+    grid-column: 1 / 3;
+    grid-row: 2;
+    justify-self: start;
+    margin: 0;
+    max-width: 100%;
+  }
+  .learning-header .header-completion {
+    grid-column: 3 / 5;
+    grid-row: 2;
+    justify-self: end;
+    width: auto !important;
+    max-width: 100%;
+    transition:
+      opacity 180ms ease,
+      visibility 0s 180ms;
+  }
+  .learning-header .header-completion.visible {
+    transition:
+      opacity 220ms ease,
+      visibility 0s;
+  }
+  .header-completion-content {
+    padding-left: 0;
+  }
+  .lesson-content-switch button {
+    min-height: 34px;
+    padding: 0 0.5rem;
+    gap: 0.35rem;
+    font-size: 0.78rem;
+  }
+  .progress-summary {
+    font-size: 0.7rem;
+    gap: 0.3rem;
+  }
+}
+@media (max-width: 360px) {
+  .lesson-content-switch {
+    gap: 2px;
+    padding: 3px;
+  }
+  .lesson-content-switch button {
+    padding: 0 0.35rem;
+    font-size: 0.75rem;
+  }
+  .progress-summary {
+    font-size: 0.65rem;
+  }
+  .progress-summary svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .learning-page,
+  .course-sidebar,
+  .lesson-content-switch button,
+  .header-completion,
+  .header-completion.visible {
+    transition: none;
+  }
+}
 </style>

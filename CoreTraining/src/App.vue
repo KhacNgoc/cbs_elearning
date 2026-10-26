@@ -3,11 +3,25 @@
     <!-- Navbar Header (only when logged in and not on change-password page) -->
     <nav
       class="navbar"
-      :class="{ 'learner-navbar': !userStore.hasAdminAccess }"
+      :class="{
+        'learner-navbar': !userStore.hasAdminAccess,
+        'lesson-navbar': isLessonPage && !userStore.hasAdminAccess,
+      }"
       aria-label="Điều hướng chính"
       v-if="userStore.isAuthenticated && route.name !== 'ChangePassword'"
     >
       <div class="nav-brand-group">
+        <button
+          v-if="isLessonPage && !userStore.hasAdminAccess"
+          type="button"
+          class="lesson-navigation-toggle"
+          aria-label="Điều hướng học viên"
+          :aria-expanded="lessonNavigationOpen"
+          aria-controls="learner-navigation"
+          @click="lessonNavigationOpen = !lessonNavigationOpen"
+        >
+          <component :is="lessonNavigationOpen ? X : Menu" :size="20" />
+        </button>
         <button
           v-if="showAdminSidebar"
           type="button"
@@ -38,7 +52,9 @@
 
       <div
         v-if="!userStore.hasAdminAccess"
+        id="learner-navigation"
         class="nav-links"
+        :class="{ 'lesson-navigation-open': lessonNavigationOpen }"
         aria-label="Điều hướng học viên"
       >
         <router-link
@@ -107,6 +123,8 @@ import {
   HelpCircle,
   Home,
   LogOut,
+  Menu,
+  X,
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
@@ -116,6 +134,12 @@ import {
 } from "lucide-vue-next";
 
 const route = useRoute();
+const isLessonPage = computed(() => route.name === "LessonDetail");
+const lessonNavigationOpen = ref(false);
+watch(
+  () => route.fullPath,
+  () => { lessonNavigationOpen.value = false; },
+);
 const userStore = useUserStore();
 const courseStore = useCourseStore();
 const navigationStore = useNavigationStore();
@@ -393,6 +417,67 @@ onMounted(async () => {
 @media (max-width: 360px) {
   .learner-navbar .nav-brand-short {
     display: none;
+  }
+}
+.lesson-navigation-toggle { display: none; }
+@media (max-width: 900px) {
+  .navbar.lesson-navbar {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0 8px;
+    min-height: 60px;
+    padding: 8px 12px;
+  }
+  .lesson-navbar .nav-brand-group { gap: 8px; }
+  .lesson-navbar .nav-brand-full,
+  .lesson-navbar .nav-brand-short { display: none; }
+  .lesson-navigation-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-main);
+    background: transparent;
+    cursor: pointer;
+  }
+  .lesson-navigation-toggle:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+  .lesson-navbar .nav-links { display: none; }
+  .lesson-navbar .nav-links.lesson-navigation-open {
+    display: flex;
+    margin-top: 8px;
+  }
+  .lesson-navbar .nav-user-menu { gap: 4px; min-width: 0; }
+  .lesson-navbar .theme-toggle,
+  .lesson-navbar .notification-trigger,
+  .lesson-navbar .nav-user,
+  .lesson-navbar .btn-logout,
+  .lesson-navbar .chat-launcher {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+  .lesson-navbar .chat-launcher span { display: none; }
+}
+@media (max-width: 360px) {
+  .lesson-navbar .lesson-navigation-toggle,
+  .lesson-navbar .theme-toggle,
+  .lesson-navbar .notification-trigger,
+  .lesson-navbar .nav-user,
+  .lesson-navbar .btn-logout,
+  .lesson-navbar .chat-launcher {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
   }
 }
 </style>

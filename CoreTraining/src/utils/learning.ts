@@ -91,11 +91,6 @@ export function competencyScores(
   });
 }
 export function resumeRoute(target: ResumeTarget) {
-  if (target.contentType === "QUIZ")
-    return {
-      path: `/quiz/${encodeURIComponent(target.courseId)}`,
-      query: { lessonId: target.lessonId },
-    };
   return {
     path: `/lesson/${encodeURIComponent(target.lessonId)}`,
     query: target.documentId ? { documentId: String(target.documentId) } : {},

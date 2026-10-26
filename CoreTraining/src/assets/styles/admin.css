@@ -3,3 +3,48 @@
 .admin-status{white-space:nowrap}.account-table td:nth-child(3){min-width:140px}
 
 .admin-row-edit{border:1px solid var(--primary-color);background:var(--surface-ffffff)}.admin-row-delete{border:1px solid var(--line-f0b7b7);background:var(--surface-ffffff)}.admin-data-table th{white-space:nowrap}
+
+.admin-page-heading > div,
+.admin-section-heading > *,
+.admin-form-grid > *,
+.admin-form-field,
+.admin-search-box input {
+  min-width: 0;
+}
+.admin-search-box > svg,
+.admin-row-actions button > svg {
+  flex-shrink: 0;
+}
+.admin-row-actions {
+  flex-wrap: wrap;
+}
+.admin-page-heading h1,
+.admin-section-heading h2,
+.admin-choice-row > * {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 768px) {
+  .admin-section-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .admin-section-heading > .admin-row-actions {
+    width: 100%;
+  }
+  .admin-table-toolbar {
+    align-items: stretch;
+    gap: .75rem;
+  }
+  .admin-table-toolbar > .admin-search-box,
+  .admin-table-toolbar > select,
+  .admin-table-toolbar > .admin-form-field {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .admin-choice-row {
+    flex-wrap: wrap;
+  }
+}

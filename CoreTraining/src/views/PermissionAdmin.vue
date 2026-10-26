@@ -176,7 +176,16 @@
         >
           <header>
             <div>
-              <h2>Phạm vi quản trị dữ liệu</h2>
+              <h2>
+                Phạm vi quản trị dữ liệu
+                <span
+                  v-if="selected && !selected.protectedRole"
+                  class="required-mark"
+                  title="Bắt buộc"
+                  aria-hidden="true"
+                  >*</span
+                >
+              </h2>
               <small>{{
                 selected?.protectedRole
                   ? "Toàn hệ thống"
@@ -200,19 +209,27 @@
             />
             <p
               v-if="!scope.length && selected && !selected.protectedRole"
-              class="scope-empty"
+              class="scope-empty is-error"
             >
-              Chưa chọn đơn vị: các quyền quản trị chưa có phạm vi dữ liệu để áp dụng.
+              Bắt buộc chọn ít nhất 1 đơn vị: các quyền quản trị phải có phạm vi dữ liệu áp dụng để lưu phân quyền.
             </p>
           </div>
         </section>
       </div>
     </div>
     <footer v-if="selected" class="permission-footer">
-      <span
-        >{{ dirty ? "Có thay đổi chưa lưu" : "Cấu hình đã lưu" }} ·
-        {{ grants.length }} quyền</span
-      >
+      <div class="permission-footer-status">
+        <span
+          >{{ dirty ? "Có thay đổi chưa lưu" : "Cấu hình đã lưu" }} ·
+          {{ grants.length }} quyền</span
+        >
+        <span
+          v-if="!selected.protectedRole && !scope.length"
+          class="scope-warning-text"
+        >
+          · Bắt buộc chọn ít nhất 1 đơn vị
+        </span>
+      </div>
       <div class="admin-row-actions">
         <button
           class="btn btn-secondary"
@@ -223,7 +240,12 @@
         ><button
           v-if="user.can('permissions', 'update')"
           class="btn btn-primary"
-          :disabled="readonly || !dirty"
+          :disabled="readonly || !dirty || !hasScope"
+          :title="
+            !hasScope
+              ? 'Phạm vi quản trị dữ liệu bắt buộc chọn ít nhất 1 đơn vị'
+              : undefined
+          "
           @click="save"
         >
           {{ busy ? "Đang lưu…" : "Lưu phân quyền" }}
@@ -295,6 +317,9 @@ const readonly = computed(
     !selected.value ||
     selected.value.protectedRole ||
     !user.can("permissions", "update"),
+);
+const hasScope = computed(
+  () => !!selected.value?.protectedRole || scope.value.length > 0,
 );
 const allPages = computed(
   () => !!pages.value.length && pages.value.every(pageChecked),
@@ -382,6 +407,13 @@ async function load() {
 }
 async function save() {
   if (!selected.value) return;
+  if (!selected.value.protectedRole && !scope.value.length) {
+    showToast(
+      "Phạm vi quản trị dữ liệu bắt buộc chọn ít nhất 1 đơn vị.",
+      "error",
+    );
+    return;
+  }
   busy.value = true;
   try {
     const r = await roleApi.grants(selected.value, grants.value, scope.value);
@@ -612,6 +644,15 @@ onMounted(load);
   font-size: 0.8rem;
   color: var(--ink-8b681c);
 }
+.scope-empty.is-error {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+.required-mark {
+  color: #dc2626;
+  margin-left: 2px;
+}
 .permission-footer {
   position: sticky;
   bottom: 0;
@@ -624,6 +665,20 @@ onMounted(load);
   margin-top: 18px;
   gap: 10px;
   z-index: 2;
+}
+.permission-footer-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.permission-footer-status > span {
+  color: var(--text-muted);
+  font-size: 0.83rem;
+}
+.permission-footer-status .scope-warning-text {
+  color: #dc2626;
+  font-weight: 500;
 }
 .permission-footer > span {
   color: var(--text-muted);

@@ -1,25 +1,30 @@
 <template>
-  <div ref="scrollContainer" class="word-preview" @scroll="savePosition">
-    <div v-if="loading" class="word-preview-state">
-      <LoaderCircle class="word-preview-spinner" :size="32" /><span
-        >Đang tải tài liệu Word...</span
-      >
+  <div class="word-preview-shell">
+    <DocumentZoomControls v-if="!loading && !error" v-model="zoom" />
+    <div ref="scrollContainer" class="word-preview" @scroll="savePosition">
+      <div v-if="loading" class="word-preview-state">
+        <LoaderCircle class="word-preview-spinner" :size="32" /><span
+          >Đang tải tài liệu Word...</span
+        >
+      </div>
+      <div v-else-if="error" class="word-preview-state word-preview-error">
+        <FileWarning :size="38" /><strong>Không thể preview tài liệu</strong>
+        <p>{{ error }}</p>
+      </div>
+      <div
+        v-show="!loading && !error"
+        ref="previewContainer"
+        class="word-preview-content"
+        :style="{ zoom: (fitScale * zoom) / 100 }"
+      ></div>
     </div>
-    <div v-else-if="error" class="word-preview-state word-preview-error">
-      <FileWarning :size="38" /><strong>Không thể preview tài liệu</strong>
-      <p>{{ error }}</p>
-    </div>
-    <div
-      v-show="!loading && !error"
-      ref="previewContainer"
-      class="word-preview-content"
-    ></div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, ref, watch } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { FileWarning, LoaderCircle } from "lucide-vue-next";
+import DocumentZoomControls from "./DocumentZoomControls.vue";
 import { axiosClient } from "../../api/axiosClient";
 
 const props = defineProps<{
@@ -29,8 +34,24 @@ const props = defineProps<{
   initialPage?: number;
 }>();
 const emit = defineEmits<{
-  "position-change": [value: { page: number; scrollOffset: number }];
+  "position-change": [
+    value: { page: number; scrollOffset: number; completed?: boolean },
+  ];
 }>();
+const zoom = ref(100);
+const fitScale = ref(1);
+let observer: ResizeObserver | null = null;
+let resizeFrame = 0;
+function fitDocument() {
+  const page =
+    previewContainer.value?.querySelector<HTMLElement>("section.docx-page");
+  if (!page || !scrollContainer.value) return;
+  fitScale.value = Math.min(
+    1,
+    Math.max(1, scrollContainer.value.clientWidth - 48) /
+      (page.offsetWidth + 40),
+  );
+}
 const scrollContainer = ref<HTMLElement | null>(null);
 function savePosition() {
   if (loading.value || !scrollContainer.value) return;
@@ -45,6 +66,7 @@ function savePosition() {
   emit("position-change", {
     page,
     scrollOffset: scrollContainer.value.scrollTop,
+    completed: pages.length > 0 && page === pages.length,
   });
 }
 const previewContainer = ref<HTMLElement | null>(null);
@@ -61,6 +83,7 @@ const renderDocument = async () => {
     return;
   }
 
+  zoom.value = 100;
   loading.value = true;
   error.value = "";
   previewContainer.value.innerHTML = "";
@@ -79,6 +102,8 @@ const renderDocument = async () => {
         ignoreHeight: false,
       });
       loading.value = false;
+      await nextTick();
+      fitDocument();
       await nextTick();
       if (scrollContainer.value) {
         const pages = Array.from(
@@ -105,14 +130,37 @@ const renderDocument = async () => {
       "Không tải được nội dung tài liệu. Bạn vẫn có thể sử dụng nút Tải xuống.";
   } finally {
     loading.value = false;
+    if (!error.value) savePosition();
   }
 };
 
-onMounted(renderDocument);
+onMounted(() => {
+  observer = new ResizeObserver(() => {
+    cancelAnimationFrame(resizeFrame);
+    resizeFrame = requestAnimationFrame(fitDocument);
+  });
+  if (scrollContainer.value) observer.observe(scrollContainer.value);
+  void renderDocument();
+});
+onBeforeUnmount(() => {
+  observer?.disconnect();
+  cancelAnimationFrame(resizeFrame);
+});
+watch(zoom, () => {
+  if (zoom.value === 100 && scrollContainer.value)
+    scrollContainer.value.scrollLeft = 0;
+});
 watch(() => props.url, renderDocument);
 </script>
 
 <style scoped>
+.word-preview-shell {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  padding-bottom: 52px;
+  background: var(--surface-e8eeec);
+}
 .word-preview {
   height: 100%;
   overflow: auto;
@@ -121,6 +169,8 @@ watch(() => props.url, renderDocument);
 }
 .word-preview-content {
   min-height: 100%;
+  width: max-content;
+  min-width: 100%;
 }
 .word-preview-content :deep(.docx-wrapper) {
   padding: 20px;
@@ -157,9 +207,6 @@ watch(() => props.url, renderDocument);
 @media (max-width: 600px) {
   .word-preview {
     padding: 0.5rem;
-  }
-  .word-preview-content :deep(.docx-wrapper) {
-    padding: 0;
   }
 }
 </style>

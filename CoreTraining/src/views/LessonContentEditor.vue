@@ -2141,8 +2141,11 @@ textarea {
 }
 .embedded-content .form-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
+}
+.embedded-content .form-row > .col {
+  min-width: 0;
 }
 .supporting-section {
   border: 1px solid var(--border-color);
@@ -2184,7 +2187,7 @@ textarea {
     padding: 1rem;
   }
   .embedded-content .form-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .supporting-section {
     padding: 1rem;

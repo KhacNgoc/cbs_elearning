@@ -3,7 +3,7 @@ import type { Question } from "../types";
 export interface BankQuestion {
   id?: number;
   version?: number;
-  code: string;
+  code?: string;
   courseId: string;
   courseName?: string;
   lessonId?: string;

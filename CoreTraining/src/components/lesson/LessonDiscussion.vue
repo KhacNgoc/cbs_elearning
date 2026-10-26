@@ -129,6 +129,9 @@
         </div>
       </article>
     </div>
+    <button v-if="hasMore" class="btn btn-outline" :disabled="loadingMore" @click="emit('load-more')">
+      {{ loadingMore ? "Đang tải…" : "Xem thêm thảo luận" }}
+    </button>
     <ConfirmModal
       :open="commentToDelete !== null"
       title="Gỡ bình luận?"
@@ -149,6 +152,8 @@ import StarRating from "../StarRating.vue";
 
 const props = defineProps<{
   comments: Comment[];
+  hasMore?: boolean;
+  loadingMore?: boolean;
   comment: string;
   currentUsername: string;
   isAdmin: boolean;
@@ -156,6 +161,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   "update:comment": [value: string];
   submit: [];
+  "load-more": [];
   reply: [rootCommentId: number, replyToCommentId: number, content: string];
   delete: [commentId: number];
 }>();

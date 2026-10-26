@@ -35,7 +35,7 @@
         @ended="onVideoEnded"
         @error="onVideoError"
         @play="isPlaying = true"
-        @pause="isPlaying = false"
+        @pause="onPause"
         preload="metadata"
       ></video>
 
@@ -225,6 +225,7 @@ import { axiosClient } from "../api/axiosClient";
 import type { LessonProgressRequest } from "../types";
 
 const emit = defineEmits<{
+  pause: [];
   "time-update": [seconds: number];
   "progress-update": [progress: LessonProgressRequest];
   ended: [progress: LessonProgressRequest];
@@ -483,10 +484,16 @@ const onLoadedMetadata = () => {
   }
 };
 
+const onPause = () => {
+  isPlaying.value = false;
+  if (restoring) return;
+  if (videoElement.value) currentTime.value = videoElement.value.currentTime;
+  emit("progress-update", progressSnapshot());
+  emit("pause");
+};
 const onVideoEnded = () => {
   isPlaying.value = false;
   currentTime.value = duration.value;
-  watchedSeconds.value = Math.max(watchedSeconds.value, duration.value);
   const progress = progressSnapshot();
   emit("progress-update", progress);
   emit("ended", progress);

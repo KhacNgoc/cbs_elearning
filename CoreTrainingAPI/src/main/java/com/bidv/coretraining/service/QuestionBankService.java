@@ -44,6 +44,16 @@ public class QuestionBankService {
                 .sorted(Comparator.comparing(BankQuestion::getUpdatedAt).reversed()).map(this::dto).toList();
     }
 
+    private String generateQuestionCode() {
+        for (int i = 0; i < 20; i++) {
+            String candidate = "Q_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase(Locale.ROOT);
+            if (!bank.existsByCodeIgnoreCaseAndIdNot(candidate, -1L)) {
+                return candidate;
+            }
+        }
+        return "Q_" + System.currentTimeMillis();
+    }
+
     public BankQuestionDto save(Long id, BankQuestionDto request) {
         BankQuestion q = id == null ? new BankQuestion() : entry(id);
         if (id != null) {
@@ -55,7 +65,16 @@ public class QuestionBankService {
         Course course = courses.findById(request.courseId() == null ? "" : request.courseId())
                 .orElseThrow(() -> new BadRequestException("Chọn khóa học quản lý câu hỏi"));
         require(course, id == null ? "create" : "update");
-        String code = request.code() == null ? "" : request.code().trim().toUpperCase(Locale.ROOT);
+        String code;
+        if (id == null) {
+            code = (request.code() == null || request.code().isBlank())
+                    ? generateQuestionCode()
+                    : request.code().trim().toUpperCase(Locale.ROOT);
+        } else {
+            code = (request.code() == null || request.code().isBlank())
+                    ? q.getCode()
+                    : request.code().trim().toUpperCase(Locale.ROOT);
+        }
         if (!code.matches("[A-Z0-9][A-Z0-9_-]{0,79}"))
             throw new BadRequestException("Mã câu hỏi gồm chữ, số, dấu gạch ngang hoặc gạch dưới, tối đa 80 ký tự");
         if (bank.existsByCodeIgnoreCaseAndIdNot(code, id == null ? -1L : id))

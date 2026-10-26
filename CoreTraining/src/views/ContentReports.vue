@@ -350,6 +350,12 @@ onMounted(load);
   color: var(--text-muted);
 }
 @media (max-width: 650px) {
+  .reports-filters > input,
+  .reports-filters > select {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+  }
   .reports-page {
     padding: 1rem;
   }

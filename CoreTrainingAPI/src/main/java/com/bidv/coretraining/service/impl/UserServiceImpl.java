@@ -142,12 +142,7 @@ public class UserServiceImpl implements UserService {
                                                         + "% bài kiểm tra của bài học");
                 }
 
-                if (!user.getCompletedLessons().contains(lesson)) {
-                        user.getCompletedLessons().add(lesson);
-                        user.setPoints(user.getPoints() + 100);
-                        com.bidv.coretraining.service.LearningPolicy.recordCourseCompletion(user, lesson.getCourse());
-                        user = userRepository.save(user);
-                }
+                lessonProgressService.recordCompletion(user, lesson);
 
                 return buildUserProgressDto(user);
         }

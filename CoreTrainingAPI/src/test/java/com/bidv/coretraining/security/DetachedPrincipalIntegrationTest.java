@@ -145,6 +145,31 @@ class DetachedPrincipalIntegrationTest {
         mvc.perform(get("/uploads/documents/"+id("file0.pdf")).cookie(cookie(id("learner")))).andExpect(status().isOk());
     }
 
+    @Test void learningMetadataAndDiscussionKeepAccessChecksWithoutOpenSessionInView() throws Exception {
+        var jwt = cookie(id("learner"));
+        mvc.perform(get("/api/courses/" + id("C") + "/outline").cookie(jwt))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.course.lessons").isEmpty())
+            .andExpect(jsonPath("$.chapters[0].lessons.length()").value(2))
+            .andExpect(jsonPath("$.chapters[0].lessons[0].textBody").doesNotExist());
+        mvc.perform(get("/api/lessons/" + id("L0")).cookie(jwt))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.textBody").value("Content"))
+            .andExpect(jsonPath("$.commentCount").value(0));
+        mvc.perform(get("/api/lessons/" + id("L0") + "/comments").cookie(jwt))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.content").isEmpty());
+        for (String suffix : List.of("", "/comments", "/notes"))
+            mvc.perform(get("/api/lessons/" + id("L1") + suffix).cookie(jwt)).andExpect(status().isForbidden());
+        tx().executeWithoutResult(s -> users.findById(learnerId).orElseThrow().getRegisteredCourses().clear());
+        mvc.perform(get("/api/lessons/" + id("L0") + "/comments").cookie(jwt)).andExpect(status().isForbidden());
+        tx().executeWithoutResult(s -> {
+            User user = users.findById(learnerId).orElseThrow();
+            var group = UserGroup.builder().id(id("G")).name("Mandatory group").organizationUnit(user.getOrganizationUnit()).build();
+            group.getMandatoryCourses().add(courses.findById(id("C")).orElseThrow());
+            user.getUserGroups().add(groups.save(group));
+        });
+        mvc.perform(get("/api/courses/" + id("C") + "/outline").cookie(jwt)).andExpect(status().isOk());
+        mvc.perform(get("/api/lessons/" + id("L0")).cookie(jwt)).andExpect(status().isOk());
+    }
+
     @Test void stalePrincipalCannotKeepAccessAfterAccountIsLocked() {
         var principal=principal(id("learner"));
         SecurityContextHolder.getContext().setAuthentication(authentication(principal));

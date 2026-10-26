@@ -7,8 +7,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
 @RestController
 @RequestMapping("/api/notifications")
 public class NotificationController {
@@ -19,9 +17,11 @@ public class NotificationController {
     }
 
     @GetMapping
-    public ResponseEntity<List<NotificationDto>> getNotifications(
+    public ResponseEntity<NotificationService.NotificationPage> getNotifications(
+            @RequestParam(required = false) Long beforeId,
+            @RequestParam(defaultValue = "6") int size,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
-        return ResponseEntity.ok(notificationService.getForUser(userDetails.getUsername()));
+        return ResponseEntity.ok(notificationService.getPageForUser(userDetails.getUsername(), beforeId, size));
     }
 
     @PatchMapping("/{id}/read")

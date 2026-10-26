@@ -6,6 +6,7 @@ import "./assets/styles/admin.css";
 import "./assets/styles/tables.css";
 import "./assets/styles/theme-palette.css";
 import "./assets/styles/theme.css";
+import "./assets/styles/forms.css";
 import App from "./App.vue";
 import { initializeTheme } from "./composables/useTheme";
 import { Chart } from "chart.js";

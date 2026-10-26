@@ -1,5 +1,17 @@
 <template>
   <div class="powerpoint-preview">
+    <DocumentZoomControls
+      v-if="pageCount && !error"
+      v-model="zoom"
+      :disabled="loading"
+    />
+    <DocumentPageNavigation
+      v-if="pageCount && !error"
+      :page="page"
+      :total="pageCount"
+      :disabled="loading || turningPage"
+      @go="go"
+    />
     <div v-if="loading" class="powerpoint-preview-state">
       <LoaderCircle class="powerpoint-preview-spinner" :size="32" />
       <span>Đang tải bản trình chiếu PowerPoint...</span>
@@ -16,9 +28,10 @@
       v-show="!loading && !error"
       ref="scrollContainer"
       class="powerpoint-preview-scroll"
-      @scroll="savePosition"
     >
-      <div ref="previewContainer" class="powerpoint-preview-content"></div>
+      <div class="powerpoint-page-surface">
+        <div ref="previewContainer" class="powerpoint-preview-content"></div>
+      </div>
     </div>
   </div>
 </template>
@@ -26,6 +39,8 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { FileWarning, LoaderCircle } from "lucide-vue-next";
+import DocumentZoomControls from "./DocumentZoomControls.vue";
+import DocumentPageNavigation from "./DocumentPageNavigation.vue";
 import { axiosClient } from "../../api/axiosClient";
 import type { PptxViewer } from "@aiden0z/pptx-renderer";
 
@@ -36,14 +51,55 @@ const props = defineProps<{
   initialPage?: number;
 }>();
 const emit = defineEmits<{
-  "position-change": [value: { page: number; scrollOffset: number }];
+  "position-change": [
+    value: { page: number; scrollOffset: number; completed?: boolean },
+  ];
 }>();
 function savePosition() {
-  if (loading.value || !scrollContainer.value) return;
   emit("position-change", {
-    page: (viewer?.currentSlideIndex || 0) + 1,
-    scrollOffset: scrollContainer.value.scrollTop,
+    page: page.value,
+    scrollOffset: 0,
+    completed: page.value === pageCount.value,
   });
+}
+const zoom = ref(100);
+const page = ref(1);
+const pageCount = ref(0);
+const turningPage = ref(false);
+let observer: ResizeObserver | null = null;
+let resizeFrame = 0;
+function fitSlide() {
+  if (!viewer || !scrollContainer.value || !previewContainer.value) return;
+  const area = scrollContainer.value;
+  const width = Math.max(1, area.clientWidth - 104);
+  const height = Math.max(1, area.clientHeight - 64);
+  previewContainer.value.style.width = `${(Math.min(width, (height * viewer.slideWidth) / viewer.slideHeight) * zoom.value) / 100}px`;
+}
+async function go(value: number) {
+  const activeViewer = viewer;
+  const currentRequest = requestId;
+  if (
+    !activeViewer ||
+    loading.value ||
+    turningPage.value ||
+    !Number.isFinite(value)
+  )
+    return;
+  const next = Math.min(Math.max(1, Math.floor(value)), pageCount.value);
+  turningPage.value = true;
+  try {
+    await activeViewer.goToSlide(next - 1);
+    if (viewer !== activeViewer || currentRequest !== requestId) return;
+    page.value = next;
+    savePosition();
+  } catch (cause) {
+    if (currentRequest === requestId) {
+      console.error("Failed to change PowerPoint slide:", cause);
+      error.value = "Không hiển thị được trang PowerPoint. Vui lòng tải lại.";
+    }
+  } finally {
+    if (currentRequest === requestId) turningPage.value = false;
+  }
 }
 const previewContainer = ref<HTMLElement | null>(null);
 const scrollContainer = ref<HTMLElement | null>(null);
@@ -61,6 +117,10 @@ const destroyViewer = () => {
 const renderDocument = async () => {
   const currentRequest = ++requestId;
   destroyViewer();
+  pageCount.value = 0;
+  zoom.value = 100;
+  page.value = 1;
+  turningPage.value = false;
 
   const fileName = (props.originalFileName || props.url).toLowerCase();
   if (!fileName.endsWith(".pptx")) {
@@ -89,8 +149,7 @@ const renderDocument = async () => {
         zipLimits: RECOMMENDED_ZIP_LIMITS,
         lazySlides: true,
         lazyMedia: true,
-        scrollContainer: scrollContainer.value || undefined,
-        listOptions: { windowed: true, initialSlides: 3, batchSize: 3 },
+        renderMode: "slide",
       },
     );
     if (currentRequest !== requestId) {
@@ -98,15 +157,15 @@ const renderDocument = async () => {
       return;
     }
     viewer = opened;
+    pageCount.value = viewer.slideCount;
+    fitSlide();
+    page.value = Math.min(Math.max(1, props.initialPage || 1), pageCount.value);
+    await viewer.goToSlide(page.value - 1);
+    if (currentRequest !== requestId) return;
     loading.value = false;
     await nextTick();
-    if (props.initialPage && props.initialPage > 1)
-      await viewer.goToSlide(
-        Math.min(props.initialPage - 1, viewer.slideCount - 1),
-        { behavior: "instant" },
-      );
-    else if (scrollContainer.value)
-      scrollContainer.value.scrollTop = props.initialScrollOffset || 0;
+    fitSlide();
+    savePosition();
   } catch (cause) {
     console.error("Failed to preview PowerPoint document:", cause);
     if (currentRequest === requestId) {
@@ -118,16 +177,33 @@ const renderDocument = async () => {
   }
 };
 
-onMounted(renderDocument);
+onMounted(() => {
+  observer = new ResizeObserver(() => {
+    cancelAnimationFrame(resizeFrame);
+    resizeFrame = requestAnimationFrame(fitSlide);
+  });
+  if (scrollContainer.value) observer.observe(scrollContainer.value);
+  void renderDocument();
+});
 watch(() => props.url, renderDocument);
+watch(zoom, () => {
+  fitSlide();
+  if (zoom.value === 100 && scrollContainer.value) {
+    scrollContainer.value.scrollTop = 0;
+    scrollContainer.value.scrollLeft = 0;
+  }
+});
 onBeforeUnmount(() => {
   requestId += 1;
+  observer?.disconnect();
+  cancelAnimationFrame(resizeFrame);
   destroyViewer();
 });
 </script>
 
 <style scoped>
 .powerpoint-preview {
+  position: relative;
   height: 100%;
   min-height: 0;
   background: #111827;
@@ -135,16 +211,22 @@ onBeforeUnmount(() => {
 .powerpoint-preview-scroll {
   height: 100%;
   overflow: auto;
-  padding: 1.25rem;
+  padding: 12px 52px 52px;
+}
+.powerpoint-page-surface {
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+  display: flex;
 }
 .powerpoint-preview-content {
   width: min(100%, 1180px);
-  min-height: 100%;
-  margin: 0 auto;
+  flex-shrink: 0;
+  margin: auto;
 }
 .powerpoint-preview-content :deep(.pptx-viewer-slide),
 .powerpoint-preview-content :deep([data-slide-index]) {
-  margin: 0 auto 1.25rem;
+  margin: 0 auto;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
 }
 .powerpoint-preview-state {
@@ -170,11 +252,6 @@ onBeforeUnmount(() => {
 @keyframes powerpoint-spin {
   to {
     transform: rotate(360deg);
-  }
-}
-@media (max-width: 600px) {
-  .powerpoint-preview-scroll {
-    padding: 0.5rem;
   }
 }
 </style>

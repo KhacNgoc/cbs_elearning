@@ -76,10 +76,10 @@
         <div class="admin-table-scroll">
           <table class="admin-data-table account-table">
             <colgroup>
-              <col style="width: 25%" />
-              <col style="width: 23%" />
+              <col style="width: 24%" />
               <col style="width: 22%" />
-              <col style="width: 12%" />
+              <col style="width: 21%" />
+              <col style="width: 15%" />
               <col style="width: 18%" />
             </colgroup>
             <thead>
@@ -433,12 +433,12 @@
         />
       </template>
       <template v-else-if="editor === 'unit'">
-        <div class="admin-form-grid">
-          <label class="admin-form-field"
-            >Mã đơn vị *<input
-              v-model="unitForm.id"
-              :disabled="!!editingId"
-              required /></label
+        <div :class="{ 'admin-form-grid': !!editingId }">
+          <label v-if="editingId" class="admin-form-field"
+            >Mã đơn vị<input
+              :value="unitForm.id"
+              disabled
+              readonly /></label
           ><label class="admin-form-field"
             >Tên đơn vị / phòng *<input v-model="unitForm.name" required
           /></label>
@@ -463,12 +463,12 @@
         />
       </template>
       <template v-else-if="editor === 'group'">
-        <div class="admin-form-grid">
-          <label class="admin-form-field"
-            >Mã nhóm *<input
-              v-model="groupForm.id"
-              :disabled="!!editingId"
-              required /></label
+        <div :class="{ 'admin-form-grid': !!editingId }">
+          <label v-if="editingId" class="admin-form-field"
+            >Mã nhóm<input
+              :value="groupForm.id"
+              disabled
+              readonly /></label
           ><label class="admin-form-field"
             >Tên nhóm *<input v-model="groupForm.name" required
           /></label>
@@ -1113,8 +1113,18 @@ async function saveEditor() {
       editor.value === "user"
         ? userForm.value
         : editor.value === "unit"
-          ? unitForm.value
-          : groupForm.value;
+          ? {
+              ...unitForm.value,
+              id: editingId.value
+                ? unitForm.value.id
+                : unitForm.value.id || undefined,
+            }
+          : {
+              ...groupForm.value,
+              id: editingId.value
+                ? groupForm.value.id
+                : groupForm.value.id || undefined,
+            };
     await axiosClient.request({
       method: editingId.value ? "put" : "post",
       url: `/api/admin/${endpoint}${editingId.value ? "/" + encodeURIComponent(String(editingId.value)) : ""}`,

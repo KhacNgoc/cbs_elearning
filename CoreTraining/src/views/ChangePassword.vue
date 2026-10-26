@@ -407,4 +407,12 @@ const handleLogout = () => {
     transform: rotate(360deg);
   }
 }
+@media (max-width: 560px) {
+  .change-password-container {
+    padding: 0;
+  }
+  .login-card {
+    padding: 1.25rem;
+  }
+}
 </style>

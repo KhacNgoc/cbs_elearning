@@ -643,4 +643,12 @@ const handleForgotPassword = async () => {
     transform: rotate(360deg);
   }
 }
+@media (max-width: 560px) {
+  .login-view-container {
+    padding: 0;
+  }
+  .login-card {
+    padding: 1.25rem;
+  }
+}
 </style>

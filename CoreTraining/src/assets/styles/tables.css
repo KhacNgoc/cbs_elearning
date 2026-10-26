@@ -18,3 +18,25 @@
 .admin-table .enrollment-actions {
   flex-wrap: wrap;
 }
+
+/* Match the organization tree: scroll the table, never squeeze its columns. */
+.admin-table-scroll,
+.table-scroll {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.admin-table-scroll > .admin-data-table,
+.table-scroll > .admin-table {
+  min-width: 620px;
+}
+
+.admin-table-scroll > .admin-data-table:has(tr > th:nth-child(5)),
+.table-scroll > .admin-table:has(tr > th:nth-child(4)) {
+  min-width: 960px;
+}
+
+.table-scroll > .results-table {
+  min-width: 640px;
+}
