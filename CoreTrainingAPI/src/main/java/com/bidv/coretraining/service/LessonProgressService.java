@@ -46,10 +46,12 @@ public class LessonProgressService {
         boolean videoWasComplete = videoComplete(progress);
         boolean textWasComplete = progress.isTextCompleted();
         boolean documentWasComplete = request.getDocumentId() != null && progress.getDocumentPositions() != null
-            && progress.getDocumentPositions().get(request.getDocumentId().toString()) != null
-            && Boolean.TRUE.equals(progress.getDocumentPositions().get(request.getDocumentId().toString()).completed());
+                && progress.getDocumentPositions().get(request.getDocumentId().toString()) != null
+                && Boolean.TRUE
+                        .equals(progress.getDocumentPositions().get(request.getDocumentId().toString()).completed());
         boolean lessonCompleted = userRepository.hasCompletedLesson(user.getId(), lessonId);
-        boolean versionChanged = !java.util.Objects.equals(progress.getCompletionVersion(), authorized.lesson().getVersion());
+        boolean versionChanged = !java.util.Objects.equals(progress.getCompletionVersion(),
+                authorized.lesson().getVersion());
 
         // Preserve the single-document bookmark from records created before this
         // feature.
@@ -89,28 +91,31 @@ public class LessonProgressService {
         if ("TEXT".equals(request.getContentType()) && Boolean.TRUE.equals(request.getTextCompleted()))
             progress.setTextCompleted(true);
         boolean importantChange = !textWasComplete && progress.isTextCompleted()
-            || !videoWasComplete && videoComplete(progress)
-            || !documentWasComplete && "DOCUMENT".equals(request.getContentType()) && Boolean.TRUE.equals(request.getDocumentCompleted());
+                || !videoWasComplete && videoComplete(progress)
+                || !documentWasComplete && "DOCUMENT".equals(request.getContentType())
+                        && Boolean.TRUE.equals(request.getDocumentCompleted());
         if (!lessonCompleted && (versionChanged || importantChange)) {
             var documentIds = documents.findAllByLessonId(lessonId);
             boolean hasText = Boolean.TRUE.equals(authorized.lesson().getHasText());
             boolean hasVideo = Boolean.TRUE.equals(authorized.lesson().getHasVideo());
             progress.setContentCompleted((hasText || hasVideo || !documentIds.isEmpty())
-                && (!hasText || progress.isTextCompleted())
-                && (!hasVideo || progress.getDurationSeconds() > 0
-                        && progress.getWatchedSeconds() >= progress.getDurationSeconds() * 0.9)
-                && documentIds.stream().allMatch(d -> progress.getDocumentPositions() != null
-                        && progress.getDocumentPositions().get(d.getId().toString()) != null
-                        && Boolean.TRUE.equals(progress.getDocumentPositions().get(d.getId().toString()).completed())));
+                    && (!hasText || progress.isTextCompleted())
+                    && (!hasVideo || progress.getDurationSeconds() > 0
+                            && progress.getWatchedSeconds() >= progress.getDurationSeconds() * 0.9)
+                    && documentIds.stream().allMatch(d -> progress.getDocumentPositions() != null
+                            && progress.getDocumentPositions().get(d.getId().toString()) != null
+                            && Boolean.TRUE
+                                    .equals(progress.getDocumentPositions().get(d.getId().toString()).completed())));
             if (progress.isContentCompleted() && !lesson.isQuizRequired()) {
                 recordCompletion(user, lesson);
                 lessonCompleted = true;
             }
         }
         progress.setCompletionVersion(authorized.lesson().getVersion());
-        // Do not force an UPDATE for identical bookmarks. Access-only touches are bounded.
+        // Do not force an UPDATE for identical bookmarks. Access-only touches are
+        // bounded.
         if (versionChanged || !before.equals(toDto(progress)) || progress.getUpdatedAt() == null
-            || progress.getUpdatedAt().isBefore(LocalDateTime.now().minusSeconds(60))) {
+                || progress.getUpdatedAt().isBefore(LocalDateTime.now().minusSeconds(60))) {
             progress.setUpdatedAt(LocalDateTime.now());
             progressRepository.save(progress);
         }
@@ -184,6 +189,7 @@ public class LessonProgressService {
     private double nonNegative(Double value) {
         return value == null ? 0D : Math.max(0D, value);
     }
+
     private boolean videoComplete(LessonProgress progress) {
         return progress.getDurationSeconds() > 0 && progress.getWatchedSeconds() >= progress.getDurationSeconds() * 0.9;
     }
