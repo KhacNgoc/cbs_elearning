@@ -9,14 +9,14 @@
           </div>
           <div class="header-titles">
             <div class="title-row">
-              <h3>PhÃ¢n bá»• ÄÃ o táº¡o</h3>
+              <h3>Phân bổ Đào tạo</h3>
               <span class="target-unit-pill">
-                {{ unit?.name || "ÄÆ¡n vá»‹ Ä‘Æ°á»£c chá»n" }}
+                {{ unit?.name || "Đơn vị được chọn" }}
               </span>
             </div>
           </div>
         </div>
-        <button type="button" class="btn-close-modal" @click="handleClose" title="ÄÃ³ng modal">
+        <button type="button" class="btn-close-modal" @click="handleClose" title="Đóng modal">
           <X :size="18" />
         </button>
       </header>
@@ -28,7 +28,7 @@
           <input
             type="text"
             v-model="searchQuery"
-            placeholder="TÃ¬m nhanh LÄ©nh vá»±c, ChÆ°Æ¡ng trÃ¬nh, KhÃ³a há»c theo tÃªn hoáº·c mÃ£..."
+            placeholder="Tìm nhanh Lĩnh vực, Chương trình, Khóa học theo tên hoặc mã..."
             class="search-input"
           />
           <button v-if="searchQuery" type="button" class="btn-clear-search" @click="searchQuery = ''">
@@ -40,11 +40,11 @@
             type="button"
             class="btn btn-ghost btn-sm btn-toggle-expand"
             @click="toggleExpandAll"
-            :title="isAnyExpanded ? 'Thu gá»n táº¥t cáº£ cÃ¡c cáº¥p' : 'Má»Ÿ rá»™ng táº¥t cáº£ cÃ¡c cáº¥p'"
+            :title="isAnyExpanded ? 'Thu gọn tất cả các cấp' : 'Mở rộng tất cả các cấp'"
           >
             <ChevronUp v-if="isAnyExpanded" :size="14" />
             <ChevronDown v-else :size="14" />
-            <span>{{ isAnyExpanded ? "Thu gá»n táº¥t cáº£" : "Má»Ÿ rá»™ng táº¥t cáº£" }}</span>
+            <span>{{ isAnyExpanded ? "Thu gọn tất cả" : "Mở rộng tất cả" }}</span>
           </button>
         </div>
       </div>
@@ -53,13 +53,13 @@
       <div class="batch-modal-body">
         <div v-if="loadingTree" class="loading-state">
           <Loader2 :size="28" class="spin-icon" />
-          <p>Äang táº£i cáº¥u trÃºc dá»¯ liá»‡u Ä‘Ã o táº¡o...</p>
+          <p>Đang tải cấu trúc dữ liệu đào tạo...</p>
         </div>
 
         <div v-else-if="visibleTree.length === 0" class="empty-tree-state">
           <AlertCircle :size="28" class="empty-icon" />
-          <p v-if="searchQuery">KhÃ´ng tÃ¬m tháº¥y LÄ©nh vá»±c, ChÆ°Æ¡ng trÃ¬nh hay KhÃ³a há»c nÃ o khá»›p vá»›i tá»« khÃ³a "{{ searchQuery }}"</p>
-          <p v-else>ChÆ°a cÃ³ dá»¯ liá»‡u Ä‘Ã o táº¡o.</p>
+          <p v-if="searchQuery">Không tìm thấy Lĩnh vực, Chương trình hay Khóa học nào khớp với từ khóa "{{ searchQuery }}"</p>
+          <p v-else>Chưa có dữ liệu đào tạo.</p>
         </div>
 
         <div v-else class="tree-container">
@@ -76,7 +76,7 @@
                   type="button"
                   class="custom-check-btn"
                   @click.stop="toggleDomain(dn.domain.id)"
-                  :title="domainState(dn.domain.id) === 'full' ? 'Bá» chá»n LÄ©nh vá»±c' : 'Chá»n toÃ n bá»™ LÄ©nh vá»±c'"
+                  :title="domainState(dn.domain.id) === 'full' ? 'Bỏ chọn Lĩnh vực' : 'Chọn toàn bộ Lĩnh vực'"
                 >
                   <div class="check-box" :class="checkClass(domainState(dn.domain.id))">
                     <Check v-if="domainState(dn.domain.id) === 'full'" :size="12" />
@@ -93,9 +93,9 @@
                 <span class="node-name">{{ dn.domain.name }}</span>
                 <span class="node-count">
                   <template v-if="domainState(dn.domain.id) === 'partial'">
-                    ({{ domainSelectedCourseCount(dn.domain.id) }}/{{ domainCourseTotal(dn.domain.id) }} khÃ³a há»c)
+                    ({{ domainSelectedCourseCount(dn.domain.id) }}/{{ domainCourseTotal(dn.domain.id) }} khóa học)
                   </template>
-                  <template v-else>({{ programsOf(dn.domain.id).length }} chÆ°Æ¡ng trÃ¬nh)</template>
+                  <template v-else>({{ programsOf(dn.domain.id).length }} chương trình)</template>
                 </span>
               </div>
 
@@ -106,7 +106,7 @@
                     class="btn-grant-toggle"
                     :class="grantClass(domainGrant(dn.domain.id))"
                     @click="cycleDomainGrant(dn.domain.id)"
-                    title="Báº¥m Ä‘á»ƒ Ä‘á»•i hÃ¬nh thá»©c cho toÃ n bá»™ LÄ©nh vá»±c"
+                    title="Bấm để đổi hình thức cho toàn bộ Lĩnh vực"
                   >
                     <span class="dot"></span>
                     <span>{{ grantLabel(domainGrant(dn.domain.id)) }}</span>
@@ -129,7 +129,7 @@
                       type="button"
                       class="custom-check-btn"
                       @click.stop="toggleProgram(pn.program.id)"
-                      :title="programState(pn.program.id) === 'full' ? 'Bá» chá»n ChÆ°Æ¡ng trÃ¬nh' : 'Chá»n toÃ n bá»™ ChÆ°Æ¡ng trÃ¬nh'"
+                      :title="programState(pn.program.id) === 'full' ? 'Bỏ chọn Chương trình' : 'Chọn toàn bộ Chương trình'"
                     >
                       <div class="check-box" :class="checkClass(programState(pn.program.id))">
                         <Check v-if="programState(pn.program.id) === 'full'" :size="12" />
@@ -146,9 +146,9 @@
                     <span class="node-name">{{ pn.program.name }}</span>
                     <span class="node-count">
                       <template v-if="programState(pn.program.id) === 'partial'">
-                        ({{ programSelectedCount(pn.program.id) }}/{{ coursesOf(pn.program.id).length }} khÃ³a há»c)
+                        ({{ programSelectedCount(pn.program.id) }}/{{ coursesOf(pn.program.id).length }} khóa học)
                       </template>
-                      <template v-else>({{ coursesOf(pn.program.id).length }} khÃ³a há»c)</template>
+                      <template v-else>({{ coursesOf(pn.program.id).length }} khóa học)</template>
                     </span>
                   </div>
 
@@ -159,7 +159,7 @@
                         class="btn-grant-toggle"
                         :class="grantClass(programGrant(pn.program.id))"
                         @click="cycleProgramGrant(pn.program.id)"
-                        title="Báº¥m Ä‘á»ƒ Ä‘á»•i hÃ¬nh thá»©c cho toÃ n bá»™ ChÆ°Æ¡ng trÃ¬nh"
+                        title="Bấm để đổi hình thức cho toàn bộ Chương trình"
                       >
                         <span class="dot"></span>
                         <span>{{ grantLabel(programGrant(pn.program.id)) }}</span>
@@ -182,7 +182,7 @@
                           type="button"
                           class="custom-check-btn"
                           @click.stop="toggleCourse(c.id)"
-                          :title="courseSel.has(c.id) ? 'Bá» chá»n KhÃ³a há»c' : 'Chá»n KhÃ³a há»c'"
+                          :title="courseSel.has(c.id) ? 'Bỏ chọn Khóa học' : 'Chọn Khóa học'"
                         >
                           <div class="check-box" :class="{ checked: courseSel.has(c.id) }">
                             <Check v-if="courseSel.has(c.id)" :size="12" />
@@ -200,7 +200,7 @@
                             class="btn-grant-toggle"
                             :class="grantClass(courseSel.get(c.id)!)"
                             @click="toggleCourseGrant(c.id)"
-                            title="Báº¥m Ä‘á»ƒ chuyá»ƒn giá»¯a Báº¯t buá»™c vÃ  Tá»± chá»n"
+                            title="Bấm để chuyển giữa Bắt buộc và Tự chọn"
                           >
                             <span class="dot"></span>
                             <span>{{ grantLabel(courseSel.get(c.id)!) }}</span>
@@ -216,18 +216,18 @@
                     class="btn-show-more"
                     @click="showMoreCourses(pn.program.id)"
                   >
-                    Xem thÃªm {{ Math.min(COURSE_PAGE_SIZE, pn.courses.length - courseLimit(pn.program.id)) }} khÃ³a há»c
-                    (cÃ²n {{ pn.courses.length - courseLimit(pn.program.id) }})
+                    Xem thêm {{ Math.min(COURSE_PAGE_SIZE, pn.courses.length - courseLimit(pn.program.id)) }} khóa học
+                    (còn {{ pn.courses.length - courseLimit(pn.program.id) }})
                   </button>
 
                   <div v-if="pn.courses.length === 0" class="empty-child-hint">
-                    ChÆ°a cÃ³ khÃ³a há»c nÃ o trong chÆ°Æ¡ng trÃ¬nh nÃ y.
+                    Chưa có khóa học nào trong chương trình này.
                   </div>
                 </div>
               </div>
 
               <div v-if="dn.programs.length === 0" class="empty-child-hint">
-                ChÆ°a cÃ³ chÆ°Æ¡ng trÃ¬nh nÃ o trong lÄ©nh vá»±c nÃ y.
+                Chưa có chương trình nào trong lĩnh vực này.
               </div>
             </div>
           </div>
@@ -237,7 +237,7 @@
       <!-- TREE PAGINATION -->
       <div v-if="!loadingTree && totalPages > 1" class="tree-pagination">
         <span class="pagination-summary">
-          LÄ©nh vá»±c {{ (page - 1) * DOMAIN_PAGE_SIZE + 1 }}â€“{{ Math.min(page * DOMAIN_PAGE_SIZE, visibleTree.length) }}
+          Lĩnh vực {{ (page - 1) * DOMAIN_PAGE_SIZE + 1 }}–{{ Math.min(page * DOMAIN_PAGE_SIZE, visibleTree.length) }}
           / {{ visibleTree.length }}
         </span>
         <div class="pagination-buttons">
@@ -260,22 +260,22 @@
               class="switch-btn"
               :class="{ 'is-active': hasSelection }"
               @click="toggleSelectAll"
-              :title="hasSelection ? 'Bá» chá»n táº¥t cáº£' : 'Chá»n táº¥t cáº£'"
+              :title="hasSelection ? 'Bỏ chọn tất cả' : 'Chọn tất cả'"
             >
               <span class="switch-track">
                 <span class="switch-thumb"></span>
               </span>
               <span class="switch-label">
-                {{ hasSelection ? "Bá» chá»n táº¥t cáº£" : "Chá»n táº¥t cáº£" }}
+                {{ hasSelection ? "Bỏ chọn tất cả" : "Chọn tất cả" }}
               </span>
             </button>
           </div>
 
           <div class="summary-badge">
             <span class="summary-text">
-              ÄÃ£ chá»n: <strong>{{ selectedCourseCount }}</strong> khÃ³a há»c
+              Đã chọn: <strong>{{ selectedCourseCount }}</strong> khóa học
               <span v-if="hasSelection" class="summary-breakdown">
-                (thuá»™c {{ touchedProgramCount }} ChÆ°Æ¡ng trÃ¬nh, {{ touchedDomainCount }} LÄ©nh vá»±c)
+                (thuộc {{ touchedProgramCount }} Chương trình, {{ touchedDomainCount }} Lĩnh vực)
               </span>
             </span>
           </div>
@@ -283,7 +283,7 @@
 
         <div class="footer-buttons">
           <button type="button" class="btn btn-secondary" @click="handleClose" :disabled="submitting">
-            Há»§y
+            Hủy
           </button>
           <button
             type="button"
@@ -292,7 +292,7 @@
             @click="handleSubmitBatch"
           >
             <Loader2 v-if="submitting" :size="15" class="spin-icon" />
-            <span>{{ submitting ? "Äang phÃ¢n bá»•..." : "PhÃ¢n bá»•" }}</span>
+            <span>{{ submitting ? "Đang phân bổ..." : "Phân bổ" }}</span>
           </button>
         </div>
       </footer>
@@ -400,8 +400,8 @@ async function loadTreeData() {
     expandedDomainIds.value = new Set(allDomains.value.map((d) => d.id));
     expandedProgramIds.value = new Set();
   } catch (err) {
-    console.error("Lá»—i táº£i cÃ¢y dá»¯ liá»‡u Ä‘Ã o táº¡o:", err);
-    showToast("KhÃ´ng thá»ƒ táº£i danh má»¥c Ä‘Ã o táº¡o", "error");
+    console.error("Lỗi tải cây dữ liệu đào tạo:", err);
+    showToast("Không thể tải danh mục đào tạo", "error");
   } finally {
     loadingTree.value = false;
   }
@@ -719,8 +719,8 @@ function grantClass(g: GrantState) {
 }
 
 function grantLabel(g: GrantState) {
-  if (g === "MIXED") return "Há»—n há»£p";
-  return g === "MANDATORY" ? "Báº¯t buá»™c" : "Tá»± chá»n";
+  if (g === "MIXED") return "Hỗn hợp";
+  return g === "MANDATORY" ? "Bắt buộc" : "Tự chọn";
 }
 
 // ---------------- Minimal payload ----------------
@@ -759,24 +759,24 @@ function buildPayloadItems() {
 
 async function handleSubmitBatch() {
   if (!props.unit?.id) {
-    showToast("Vui lÃ²ng chá»n Ä‘Æ¡n vá»‹ Ã¡p dá»¥ng", "warning");
+    showToast("Vui lòng chọn đơn vị áp dụng", "warning");
     return;
   }
   const items = buildPayloadItems();
   if (items.length === 0) {
-    showToast("Vui lÃ²ng chá»n Ã­t nháº¥t 1 ná»™i dung Ä‘á»ƒ phÃ¢n bá»•", "warning");
+    showToast("Vui lòng chọn ít nhất 1 nội dung để phân bổ", "warning");
     return;
   }
 
   submitting.value = true;
   try {
     await axiosClient.post("/api/admin/unit-allocations/batch-assign", { unitId: props.unit.id, items });
-    showToast(`PhÃ¢n bá»• thÃ nh cÃ´ng cho ${props.unit.name}!`, "success");
+    showToast(`Phân bổ thành công cho ${props.unit.name}!`, "success");
     emit("saved");
     emit("close");
   } catch (err: any) {
-    console.error("Lá»—i khi gá»­i phÃ¢n bá»• batch:", err);
-    const msg = err.response?.data?.message || err.message || "Lá»—i khi phÃ¢n bá»• Ä‘Ã o táº¡o";
+    console.error("Lỗi khi gửi phân bổ batch:", err);
+    const msg = err.response?.data?.message || err.message || "Lỗi khi phân bổ đào tạo";
     showToast(msg, "error");
   } finally {
     submitting.value = false;
@@ -787,7 +787,6 @@ function handleClose() {
   if (!submitting.value) emit("close");
 }
 </script>
-
 
 <style scoped>
 .batch-modal-overlay {
