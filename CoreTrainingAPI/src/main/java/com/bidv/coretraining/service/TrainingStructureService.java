@@ -891,6 +891,150 @@ public class TrainingStructureService {
         return result;
     }
 
+    @org.springframework.transaction.annotation.Transactional
+    public Map<String, Object> batchAssignUnitAllocation(
+            String unitId,
+            List<com.bidv.coretraining.controller.TrainingStructureController.BatchAllocationItem> items) {
+        authorization.permission("CATALOG_MANAGE");
+        OrganizationUnit unit = authorization.unit(required(unitId, "Đơn vị áp dụng"));
+        authorization.scope(unit);
+        if (!com.bidv.coretraining.security.AccessPolicy.activeUnit(unit)) {
+            throw new BadRequestException("Đơn vị " + unit.getName() + " đã ngừng hoạt động");
+        }
+
+        if (items == null || items.isEmpty()) {
+            throw new BadRequestException("Vui lòng chọn ít nhất 1 nội dung để phân bổ");
+        }
+
+        Set<String> mandatoryCourseIds = new HashSet<>();
+        Set<String> optionalCourseIds = new HashSet<>();
+        Map<String, Course> coursesToSave = new HashMap<>();
+        Map<String, TrainingProgram> programsToSave = new HashMap<>();
+        Map<String, TrainingDomain> domainsToSave = new HashMap<>();
+
+        int domainsCount = 0;
+        int programsCount = 0;
+        int coursesCount = 0;
+
+        for (com.bidv.coretraining.controller.TrainingStructureController.BatchAllocationItem item : items) {
+            if (item == null || item.categoryType() == null || item.targetId() == null) continue;
+            String type = item.categoryType().trim().toLowerCase();
+            String grant = "MANDATORY".equalsIgnoreCase(item.grantType()) ? "MANDATORY" : "OPTIONAL";
+            String targetId = item.targetId();
+
+            if ("domain".equals(type)) {
+                TrainingDomain d = domainsToSave.computeIfAbsent(targetId, id ->
+                        domains.findById(id).orElseThrow(() -> new ResourceNotFoundException("Domain", "id", id)));
+                d.getUnits().add(unit);
+                if (d.getUnitGrants() == null) d.setUnitGrants(new HashMap<>());
+                d.getUnitGrants().put(unit.getId(), grant);
+                domainsCount++;
+
+                List<TrainingProgram> domainPrograms = programs.findAll().stream()
+                        .filter(p -> p.getDomain() != null && p.getDomain().getId().equals(d.getId()) && !"DELETED".equals(p.getStatus()))
+                        .toList();
+                for (TrainingProgram p : domainPrograms) {
+                    TrainingProgram pToSave = programsToSave.computeIfAbsent(p.getId(), pid -> p);
+                    pToSave.getUnits().add(unit);
+                    if (pToSave.getUnitGrants() == null) pToSave.setUnitGrants(new HashMap<>());
+                    pToSave.getUnitGrants().put(unit.getId(), grant);
+
+                    List<Course> pCourses = courses.findByProgramIdAndStatusNot(p.getId(), "DELETED");
+                    for (Course c : pCourses) {
+                        Course cToSave = coursesToSave.computeIfAbsent(c.getId(), cid -> c);
+                        if (cToSave.getUnitGrants() == null) cToSave.setUnitGrants(new HashMap<>());
+                        cToSave.getUnitGrants().put(unit.getId(), grant);
+                        if ("MANDATORY".equals(grant)) {
+                            mandatoryCourseIds.add(cToSave.getId());
+                            optionalCourseIds.remove(cToSave.getId());
+                        } else {
+                            optionalCourseIds.add(cToSave.getId());
+                            mandatoryCourseIds.remove(cToSave.getId());
+                        }
+                    }
+                }
+            } else if ("program".equals(type)) {
+                TrainingProgram p = programsToSave.computeIfAbsent(targetId, id ->
+                        programs.findById(id).orElseThrow(() -> new ResourceNotFoundException("Program", "id", id)));
+                p.getUnits().add(unit);
+                if (p.getUnitGrants() == null) p.setUnitGrants(new HashMap<>());
+                p.getUnitGrants().put(unit.getId(), grant);
+                if (p.getDomain() != null) {
+                    TrainingDomain d = domainsToSave.computeIfAbsent(p.getDomain().getId(), did -> p.getDomain());
+                    d.getUnits().add(unit);
+                }
+                programsCount++;
+
+                List<Course> pCourses = courses.findByProgramIdAndStatusNot(p.getId(), "DELETED");
+                for (Course c : pCourses) {
+                    Course cToSave = coursesToSave.computeIfAbsent(c.getId(), cid -> c);
+                    if (cToSave.getUnitGrants() == null) cToSave.setUnitGrants(new HashMap<>());
+                    cToSave.getUnitGrants().put(unit.getId(), grant);
+                    if ("MANDATORY".equals(grant)) {
+                        mandatoryCourseIds.add(cToSave.getId());
+                        optionalCourseIds.remove(cToSave.getId());
+                    } else {
+                        optionalCourseIds.add(cToSave.getId());
+                        mandatoryCourseIds.remove(cToSave.getId());
+                    }
+                }
+            } else if ("course".equals(type)) {
+                Course c = coursesToSave.computeIfAbsent(targetId, id ->
+                        courses.findById(id).orElseThrow(() -> new ResourceNotFoundException("Course", "id", id)));
+                if (!"DELETED".equals(c.getStatus())) {
+                    if (c.getUnitGrants() == null) c.setUnitGrants(new HashMap<>());
+                    c.getUnitGrants().put(unit.getId(), grant);
+                    if (c.getProgram() != null) {
+                        TrainingProgram p = programsToSave.computeIfAbsent(c.getProgram().getId(), pid -> c.getProgram());
+                        p.getUnits().add(unit);
+                        if (p.getDomain() != null) {
+                            TrainingDomain d = domainsToSave.computeIfAbsent(p.getDomain().getId(), did -> p.getDomain());
+                            d.getUnits().add(unit);
+                        }
+                    }
+                    coursesCount++;
+                    if ("MANDATORY".equals(grant)) {
+                        mandatoryCourseIds.add(c.getId());
+                        optionalCourseIds.remove(c.getId());
+                    } else {
+                        optionalCourseIds.add(c.getId());
+                        mandatoryCourseIds.remove(c.getId());
+                    }
+                }
+            }
+        }
+
+        domains.saveAll(domainsToSave.values());
+        programs.saveAll(programsToSave.values());
+        for (Course c : coursesToSave.values()) {
+            ensureCourseLearnableWhenAllocated(c);
+        }
+        courses.saveAll(coursesToSave.values());
+
+        int unitUsersCount = countActiveStaffInUnitsNative(Set.of(unit.getId()));
+        int enrolledUsersCount = 0;
+
+        if (!mandatoryCourseIds.isEmpty()) {
+            enrollStaffForCoursesNative(new ArrayList<>(mandatoryCourseIds), Set.of(unit.getId()));
+            enrolledUsersCount = unitUsersCount;
+        }
+        if (!optionalCourseIds.isEmpty()) {
+            unenrollUnstartedStaffForCoursesNative(new ArrayList<>(optionalCourseIds), Set.of(unit.getId()));
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("unitId", unit.getId());
+        result.put("unitName", unit.getName());
+        result.put("domainsCount", domainsCount);
+        result.put("programsCount", programsCount);
+        result.put("coursesCount", coursesCount);
+        result.put("totalAffectedCourses", coursesToSave.size());
+        result.put("unitUsersCount", unitUsersCount);
+        result.put("enrolledUsersCount", enrolledUsersCount);
+        result.put("status", "SUCCESS");
+        return result;
+    }
+
     public Map<String, Object> toggleUnitAllocationGrantType(
             String unitId,
             String categoryType,
