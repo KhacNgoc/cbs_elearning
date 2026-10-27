@@ -3268,19 +3268,11 @@ async function handleExecuteBatchSync() {
   color: #f7ce79;
 }
 
-:root[data-theme="dark"] .stat-domain {
-  background: #19382f;
-  color: #7cddba;
-}
-
-:root[data-theme="dark"] .stat-program {
-  background: #20344d;
-  color: #9ecaff;
-}
-
+:root[data-theme="dark"] .stat-domain,
+:root[data-theme="dark"] .stat-program,
 :root[data-theme="dark"] .stat-course {
-  background: #332747;
-  color: #d4b4ff;
+  background: transparent;
+  color: var(--text-main);
 }
 
 :root[data-theme="dark"] .badge-allocation-status.allocated {
