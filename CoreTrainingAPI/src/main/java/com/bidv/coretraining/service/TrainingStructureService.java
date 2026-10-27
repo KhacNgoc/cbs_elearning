@@ -746,6 +746,40 @@ public class TrainingStructureService {
                 .toList();
     }
 
+    public Map<String, Object> adminDomainsPaged(String search, int page, int size) {
+        String query = (search != null && !search.isBlank()) ? search.trim() : null;
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+        org.springframework.data.domain.Page<TrainingDomain> result = domains.findByFilter(query, pageable);
+        List<Map<String, Object>> items = result.getContent().stream()
+                .map(d -> {
+                    DomainDto dto = this.domainDto(d);
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("id", dto.id());
+                    m.put("code", dto.code());
+                    m.put("name", dto.name());
+                    m.put("description", dto.description());
+                    m.put("status", dto.status());
+                    m.put("allowedActions", dto.allowedActions());
+                    m.put("businessModule", dto.businessModule());
+                    m.put("seqNumber", dto.seqNumber());
+                    m.put("unitIds", dto.unitIds());
+                    m.put("mandatoryUnitIds", dto.mandatoryUnitIds());
+                    m.put("optionalUnitIds", dto.optionalUnitIds());
+                    m.put("programsCount", programs.countByDomainIdAndStatusNot(d.getId(), "DELETED"));
+                    return m;
+                })
+                .toList();
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("items", items);
+        res.put("page", result.getNumber());
+        res.put("size", result.getSize());
+        res.put("totalElements", result.getTotalElements());
+        res.put("totalPages", result.getTotalPages());
+        res.put("hasNext", result.hasNext());
+        return res;
+    }
+
     public Map<String, Object> adminCoursesByProgramPaged(String programId, String search, int page, int size) {
         String query = (search != null && !search.isBlank()) ? search.trim() : null;
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
@@ -769,8 +803,27 @@ public class TrainingStructureService {
         String dId = (domainId != null && !domainId.isBlank()) ? domainId.trim() : null;
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
         org.springframework.data.domain.Page<TrainingProgram> result = programs.findByDomainIdWithFilter(dId, query, pageable);
-        List<ProgramDto> dtos = result.getContent().stream()
-                .map(this::programDto)
+        List<Map<String, Object>> dtos = result.getContent().stream()
+                .map(p -> {
+                    ProgramDto dto = this.programDto(p);
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("id", dto.id());
+                    m.put("domainId", dto.domainId());
+                    m.put("code", dto.code());
+                    m.put("name", dto.name());
+                    m.put("description", dto.description());
+                    m.put("status", dto.status());
+                    m.put("unitIds", dto.unitIds());
+                    m.put("allowedActions", dto.allowedActions());
+                    m.put("businessModule", dto.businessModule());
+                    m.put("level", dto.level());
+                    m.put("mandatoryUnitIds", dto.mandatoryUnitIds());
+                    m.put("optionalUnitIds", dto.optionalUnitIds());
+                    m.put("autoEnrollStaff", dto.autoEnrollStaff());
+                    m.put("seqNumber", dto.seqNumber());
+                    m.put("coursesCount", courses.countByProgramIdAndStatusNot(p.getId(), "DELETED"));
+                    return m;
+                })
                 .toList();
 
         Map<String, Object> res = new HashMap<>();

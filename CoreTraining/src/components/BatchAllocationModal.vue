@@ -1,40 +1,45 @@
 <template>
-  <div v-if="show" class="batch-modal-overlay" @click.self="handleClose">
-    <div class="batch-modal-container" role="dialog" aria-modal="true">
+  <div v-if="show" class="batch-modal-overlay" @click.self="$emit('close')">
+    <div class="batch-modal-card" role="dialog" aria-modal="true">
       <!-- HEADER -->
       <header class="batch-modal-header">
         <div class="header-left">
-          <div class="header-icon-wrap">
-            <Building2 :size="20" class="header-icon" />
+          <div class="modal-badge-icon">
+            <Building2 :size="20" />
           </div>
-          <div class="header-titles">
-            <div class="title-row">
-              <h3>Phân bổ Đào tạo</h3>
-              <span class="target-unit-pill">
-                {{ unit?.name || "Đơn vị được chọn" }}
-              </span>
-            </div>
+          <div>
+            <h3>Phân bổ nội dung đào tạo</h3>
+            <p v-if="unit">
+              Áp dụng cho: <strong>{{ unit.name }}</strong>
+            </p>
           </div>
         </div>
-        <button type="button" class="btn-close-modal" @click="handleClose" title="Đóng modal">
-          <X :size="18" />
+        <button type="button" class="btn-close" @click="$emit('close')" title="Đóng">
+          <X :size="20" />
         </button>
       </header>
 
-      <!-- TOOLBAR: SEARCH & EXPAND -->
-      <div class="batch-toolbar">
-        <div class="search-wrap">
-          <Search :size="15" class="search-icon" />
+      <!-- TOOLBAR: SEARCH & EXPAND CONTROLS -->
+      <div class="batch-modal-toolbar">
+        <div class="toolbar-search">
+          <Search :size="16" class="search-icon" />
           <input
+            v-model="searchInput"
             type="text"
-            v-model="searchQuery"
-            placeholder="Tìm nhanh Lĩnh vực, Chương trình, Khóa học theo tên hoặc mã..."
+            placeholder="Tìm kiếm Lĩnh vực, Chương trình, Khóa học (theo tên hoặc mã)..."
             class="search-input"
           />
-          <button v-if="searchQuery" type="button" class="btn-clear-search" @click="searchQuery = ''">
+          <button
+            v-if="searchInput"
+            type="button"
+            class="search-clear-btn"
+            @click="searchInput = ''"
+            title="Xóa tìm kiếm"
+          >
             <X :size="14" />
           </button>
         </div>
+
         <div class="toolbar-actions">
           <button
             type="button"
@@ -56,196 +61,212 @@
           <p>Đang tải cấu trúc dữ liệu đào tạo...</p>
         </div>
 
-        <div v-else-if="visibleTree.length === 0" class="empty-tree-state">
+        <div v-else-if="pagedDomains.length === 0" class="empty-tree-state">
           <AlertCircle :size="28" class="empty-icon" />
-          <p v-if="searchQuery">Không tìm thấy Lĩnh vực, Chương trình hay Khóa học nào khớp với từ khóa "{{ searchQuery }}"</p>
+          <p v-if="debouncedSearch">Không tìm thấy Lĩnh vực, Chương trình hay Khóa học nào khớp với từ khóa "{{ debouncedSearch }}"</p>
           <p v-else>Chưa có dữ liệu đào tạo.</p>
         </div>
 
         <div v-else class="tree-container">
           <!-- DOMAIN NODE (LEVEL 1) -->
           <div
-            v-for="dn in pagedTree"
-            :key="dn.domain.id"
+            v-for="d in pagedDomains"
+            :key="d.id"
             class="tree-node domain-node"
-            :class="stateClass(domainState(dn.domain.id))"
+            :class="stateClass(domainState(d.id))"
           >
-            <div class="node-row domain-row" @click="toggleDomainExpand(dn.domain.id)">
+            <div class="node-row domain-row" @click="toggleDomainExpand(d.id)">
               <div class="node-left">
                 <button
                   type="button"
                   class="custom-check-btn"
-                  @click.stop="toggleDomain(dn.domain.id)"
-                  :title="domainState(dn.domain.id) === 'full' ? 'Bỏ chọn Lĩnh vực' : 'Chọn toàn bộ Lĩnh vực'"
+                  @click.stop="toggleDomain(d.id)"
+                  :title="domainState(d.id) === 'full' ? 'Bỏ chọn Lĩnh vực' : 'Chọn toàn bộ Lĩnh vực'"
                 >
-                  <div class="check-box" :class="checkClass(domainState(dn.domain.id))">
-                    <Check v-if="domainState(dn.domain.id) === 'full'" :size="12" />
-                    <Minus v-else-if="domainState(dn.domain.id) === 'partial'" :size="12" />
+                  <div class="check-box" :class="checkClass(domainState(d.id))">
+                    <Check v-if="domainState(d.id) === 'full'" :size="12" />
+                    <Minus v-else-if="domainState(d.id) === 'partial'" :size="12" />
                   </div>
                 </button>
 
-                <button type="button" class="btn-expand" @click.stop="toggleDomainExpand(dn.domain.id)">
-                  <ChevronDown v-if="expandedDomainIds.has(dn.domain.id)" :size="16" />
+                <button type="button" class="btn-expand" @click.stop="toggleDomainExpand(d.id)">
+                  <Loader2 v-if="loadingProgramsByDomain.has(d.id)" :size="14" class="spin-icon" />
+                  <ChevronDown v-else-if="expandedDomainIds.has(d.id)" :size="16" />
                   <ChevronRight v-else :size="16" />
                 </button>
 
                 <Globe :size="16" class="node-icon domain-icon" />
-                <span class="node-name">{{ dn.domain.name }}</span>
+                <span class="node-name">{{ d.name }}</span>
                 <span class="node-count">
-                  <template v-if="domainState(dn.domain.id) === 'partial'">
-                    ({{ domainSelectedCourseCount(dn.domain.id) }}/{{ domainCourseTotal(dn.domain.id) }} khóa học)
+                  <template v-if="domainState(d.id) === 'partial'">
+                    ({{ domainSelectedCourseCount(d.id) }}/{{ domainCourseTotal(d.id) }} khóa học)
                   </template>
-                  <template v-else>({{ programsOf(dn.domain.id).length }} chương trình)</template>
+                  <template v-else>({{ d.programsCount ?? programsOf(d.id).length }} chương trình)</template>
                 </span>
               </div>
 
               <div class="node-right" @click.stop>
-                <div v-if="domainState(dn.domain.id) === 'full'" class="grant-toggle-wrapper">
+                <div v-if="domainState(d.id) === 'full'" class="grant-toggle-wrapper">
                   <button
                     type="button"
                     class="btn-grant-toggle"
-                    :class="grantClass(domainGrant(dn.domain.id))"
-                    @click="cycleDomainGrant(dn.domain.id)"
+                    :class="grantClass(domainGrant(d.id))"
+                    @click="cycleDomainGrant(d.id)"
                     title="Bấm để đổi hình thức cho toàn bộ Lĩnh vực"
                   >
                     <span class="dot"></span>
-                    <span>{{ grantLabel(domainGrant(dn.domain.id)) }}</span>
+                    <span>{{ grantLabel(domainGrant(d.id)) }}</span>
                   </button>
                 </div>
               </div>
             </div>
 
             <!-- PROGRAMS LIST (LEVEL 2) -->
-            <div v-if="expandedDomainIds.has(dn.domain.id)" class="children-container program-children">
-              <div
-                v-for="pn in dn.programs"
-                :key="pn.program.id"
-                class="tree-node program-node"
-                :class="stateClass(programState(pn.program.id))"
-              >
-                <div class="node-row program-row" @click="toggleProgramExpand(pn.program.id)">
-                  <div class="node-left">
-                    <button
-                      type="button"
-                      class="custom-check-btn"
-                      @click.stop="toggleProgram(pn.program.id)"
-                      :title="programState(pn.program.id) === 'full' ? 'Bỏ chọn Chương trình' : 'Chọn toàn bộ Chương trình'"
-                    >
-                      <div class="check-box" :class="checkClass(programState(pn.program.id))">
-                        <Check v-if="programState(pn.program.id) === 'full'" :size="12" />
-                        <Minus v-else-if="programState(pn.program.id) === 'partial'" :size="12" />
-                      </div>
-                    </button>
-
-                    <button type="button" class="btn-expand" @click.stop="toggleProgramExpand(pn.program.id)">
-                      <ChevronDown v-if="expandedProgramIds.has(pn.program.id)" :size="15" />
-                      <ChevronRight v-else :size="15" />
-                    </button>
-
-                    <Folder :size="15" class="node-icon program-icon" />
-                    <span class="node-name">{{ pn.program.name }}</span>
-                    <span class="node-count">
-                      <template v-if="programState(pn.program.id) === 'partial'">
-                        ({{ programSelectedCount(pn.program.id) }}/{{ coursesOf(pn.program.id).length }} khóa học)
-                      </template>
-                      <template v-else>({{ coursesOf(pn.program.id).length }} khóa học)</template>
-                    </span>
-                  </div>
-
-                  <div class="node-right" @click.stop>
-                    <div v-if="programState(pn.program.id) === 'full'" class="grant-toggle-wrapper">
+            <div v-if="expandedDomainIds.has(d.id)" class="children-container program-children">
+              <div v-if="loadingProgramsByDomain.has(d.id)" class="loading-child-inline">
+                <Loader2 :size="16" class="spin-icon" />
+                <span>Đang tải danh sách chương trình...</span>
+              </div>
+              <template v-else>
+                <div
+                  v-for="p in programsOf(d.id)"
+                  :key="p.id"
+                  class="tree-node program-node"
+                  :class="stateClass(programState(p.id, d.id))"
+                >
+                  <div class="node-row program-row" @click="toggleProgramExpand(p.id)">
+                    <div class="node-left">
                       <button
                         type="button"
-                        class="btn-grant-toggle"
-                        :class="grantClass(programGrant(pn.program.id))"
-                        @click="cycleProgramGrant(pn.program.id)"
-                        title="Bấm để đổi hình thức cho toàn bộ Chương trình"
+                        class="custom-check-btn"
+                        @click.stop="toggleProgram(p.id, d.id)"
+                        :title="programState(p.id, d.id) === 'full' ? 'Bỏ chọn Chương trình' : 'Chọn toàn bộ Chương trình'"
                       >
-                        <span class="dot"></span>
-                        <span>{{ grantLabel(programGrant(pn.program.id)) }}</span>
+                        <div class="check-box" :class="checkClass(programState(p.id, d.id))">
+                          <Check v-if="programState(p.id, d.id) === 'full'" :size="12" />
+                          <Minus v-else-if="programState(p.id, d.id) === 'partial'" :size="12" />
+                        </div>
                       </button>
-                    </div>
-                  </div>
-                </div>
 
-                <!-- COURSES LIST (LEVEL 3) -->
-                <div v-if="expandedProgramIds.has(pn.program.id)" class="children-container course-children">
-                  <div
-                    v-for="c in limitedCourses(pn.program.id, pn.courses)"
-                    :key="c.id"
-                    class="tree-node course-node"
-                    :class="{ 'is-selected': courseSel.has(c.id) }"
-                  >
-                    <div class="node-row course-row" @click="toggleCourse(c.id)">
-                      <div class="node-left">
+                      <button type="button" class="btn-expand" @click.stop="toggleProgramExpand(p.id)">
+                        <Loader2 v-if="loadingCoursesByProgram.has(p.id)" :size="14" class="spin-icon" />
+                        <ChevronDown v-else-if="expandedProgramIds.has(p.id)" :size="15" />
+                        <ChevronRight v-else :size="15" />
+                      </button>
+
+                      <Folder :size="15" class="node-icon program-icon" />
+                      <span class="node-name">{{ p.name }}</span>
+                      <span class="node-count">
+                        <template v-if="programState(p.id, d.id) === 'partial'">
+                          ({{ programSelectedCount(p.id, d.id) }}/{{ coursesOf(p.id).length }} khóa học)
+                        </template>
+                        <template v-else>({{ p.coursesCount ?? coursesOf(p.id).length }} khóa học)</template>
+                      </span>
+                    </div>
+
+                    <div class="node-right" @click.stop>
+                      <div v-if="programState(p.id, d.id) === 'full'" class="grant-toggle-wrapper">
                         <button
                           type="button"
-                          class="custom-check-btn"
-                          @click.stop="toggleCourse(c.id)"
-                          :title="courseSel.has(c.id) ? 'Bỏ chọn Khóa học' : 'Chọn Khóa học'"
+                          class="btn-grant-toggle"
+                          :class="grantClass(programGrant(p.id, d.id))"
+                          @click="cycleProgramGrant(p.id, d.id)"
+                          title="Bấm để đổi hình thức cho toàn bộ Chương trình"
                         >
-                          <div class="check-box" :class="{ checked: courseSel.has(c.id) }">
-                            <Check v-if="courseSel.has(c.id)" :size="12" />
-                          </div>
+                          <span class="dot"></span>
+                          <span>{{ grantLabel(programGrant(p.id, d.id)) }}</span>
                         </button>
-
-                        <BookOpen :size="14" class="node-icon course-icon" />
-                        <span class="node-name">{{ c.name }}</span>
-                      </div>
-
-                      <div class="node-right" @click.stop>
-                        <div v-if="courseSel.has(c.id)" class="grant-toggle-wrapper">
-                          <button
-                            type="button"
-                            class="btn-grant-toggle"
-                            :class="grantClass(courseSel.get(c.id)!)"
-                            @click="toggleCourseGrant(c.id)"
-                            title="Bấm để chuyển giữa Bắt buộc và Tự chọn"
-                          >
-                            <span class="dot"></span>
-                            <span>{{ grantLabel(courseSel.get(c.id)!) }}</span>
-                          </button>
-                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <button
-                    v-if="pn.courses.length > courseLimit(pn.program.id)"
-                    type="button"
-                    class="btn-show-more"
-                    @click="showMoreCourses(pn.program.id)"
-                  >
-                    Xem thêm {{ Math.min(COURSE_PAGE_SIZE, pn.courses.length - courseLimit(pn.program.id)) }} khóa học
-                    (còn {{ pn.courses.length - courseLimit(pn.program.id) }})
-                  </button>
+                  <!-- COURSES LIST (LEVEL 3) -->
+                  <div v-if="expandedProgramIds.has(p.id)" class="children-container course-children">
+                    <div v-if="loadingCoursesByProgram.has(p.id) && coursesOf(p.id).length === 0" class="loading-child-inline">
+                      <Loader2 :size="15" class="spin-icon" />
+                      <span>Đang tải danh sách khóa học...</span>
+                    </div>
+                    <template v-else>
+                      <div
+                        v-for="c in coursesOf(p.id)"
+                        :key="c.id"
+                        class="tree-node course-node"
+                        :class="{ 'is-selected': isCourseSelected(c.id, p.id, d.id) }"
+                      >
+                        <div class="node-row course-row" @click="toggleCourse(c.id, p.id, d.id)">
+                          <div class="node-left">
+                            <button
+                              type="button"
+                              class="custom-check-btn"
+                              @click.stop="toggleCourse(c.id, p.id, d.id)"
+                              :title="isCourseSelected(c.id, p.id, d.id) ? 'Bỏ chọn Khóa học' : 'Chọn Khóa học'"
+                            >
+                              <div class="check-box" :class="{ checked: isCourseSelected(c.id, p.id, d.id) }">
+                                <Check v-if="isCourseSelected(c.id, p.id, d.id)" :size="12" />
+                              </div>
+                            </button>
 
-                  <div v-if="pn.courses.length === 0" class="empty-child-hint">
-                    Chưa có khóa học nào trong chương trình này.
+                            <BookOpen :size="14" class="node-icon course-icon" />
+                            <span class="node-name">{{ c.name }}</span>
+                          </div>
+
+                          <div class="node-right" @click.stop>
+                            <div v-if="isCourseSelected(c.id, p.id, d.id)" class="grant-toggle-wrapper">
+                              <button
+                                type="button"
+                                class="btn-grant-toggle"
+                                :class="grantClass(courseGrant(c.id, p.id, d.id))"
+                                @click="toggleCourseGrant(c.id, p.id, d.id)"
+                                title="Bấm để chuyển giữa Bắt buộc và Tự chọn"
+                              >
+                                <span class="dot"></span>
+                                <span>{{ grantLabel(courseGrant(c.id, p.id, d.id)) }}</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div v-if="coursesHasNext(p.id)" class="show-more-row">
+                        <button
+                          type="button"
+                          class="btn-show-more"
+                          :disabled="loadingCoursesByProgram.has(p.id)"
+                          @click.stop="loadMoreCourses(p.id)"
+                        >
+                          <Loader2 v-if="loadingCoursesByProgram.has(p.id)" :size="13" class="spin-icon" />
+                          <span>Tải thêm khóa học tiếp theo...</span>
+                        </button>
+                      </div>
+
+                      <div v-if="coursesOf(p.id).length === 0" class="empty-child-hint">
+                        Chưa có khóa học nào trong chương trình này.
+                      </div>
+                    </template>
                   </div>
                 </div>
-              </div>
 
-              <div v-if="dn.programs.length === 0" class="empty-child-hint">
-                Chưa có chương trình nào trong lĩnh vực này.
-              </div>
+                <div v-if="programsOf(d.id).length === 0" class="empty-child-hint">
+                  Chưa có chương trình nào trong lĩnh vực này.
+                </div>
+              </template>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- TREE PAGINATION -->
+      <!-- TREE PAGINATION (SERVER-SIDE) -->
       <div v-if="!loadingTree && totalPages > 1" class="tree-pagination">
         <span class="pagination-summary">
-          Lĩnh vực {{ (page - 1) * DOMAIN_PAGE_SIZE + 1 }}–{{ Math.min(page * DOMAIN_PAGE_SIZE, visibleTree.length) }}
-          / {{ visibleTree.length }}
+          Lĩnh vực {{ (page - 1) * DOMAIN_PAGE_SIZE + 1 }}–{{ Math.min(page * DOMAIN_PAGE_SIZE, totalDomainElements) }}
+          / {{ totalDomainElements }}
         </span>
         <div class="pagination-buttons">
-          <button type="button" class="page-nav-btn" :disabled="page === 1" @click="page--">
+          <button type="button" class="page-nav-btn" :disabled="page <= 1" @click="changePage(page - 1)">
             <ChevronLeft :size="14" />
           </button>
           <span class="page-current">{{ page }} / {{ totalPages }}</span>
-          <button type="button" class="page-nav-btn" :disabled="page === totalPages" @click="page++">
+          <button type="button" class="page-nav-btn" :disabled="page >= totalPages" @click="changePage(page + 1)">
             <ChevronRight :size="14" />
           </button>
         </div>
@@ -266,23 +287,26 @@
                 <span class="switch-thumb"></span>
               </span>
               <span class="switch-label">
-                {{ hasSelection ? "Bỏ chọn tất cả" : "Chọn tất cả" }}
+                {{ hasSelection ? "Bỏ chọn tất cả" : "Chọn tất cả trang này" }}
               </span>
             </button>
           </div>
 
-          <div class="summary-badge">
-            <span class="summary-text">
-              Đã chọn: <strong>{{ selectedCourseCount }}</strong> khóa học
-              <span v-if="hasSelection" class="summary-breakdown">
-                (thuộc {{ touchedProgramCount }} Chương trình, {{ touchedDomainCount }} Lĩnh vực)
-              </span>
+          <div class="selected-stats">
+            <span class="stat-pill">
+              <strong>{{ selectedCourseCount }}</strong> khóa học được chọn
+            </span>
+            <span v-if="selectedProgramCount > 0" class="stat-sub">
+              ({{ selectedProgramCount }} chương trình)
+            </span>
+            <span v-if="selectedDomainCount > 0" class="stat-sub">
+              ({{ selectedDomainCount }} lĩnh vực)
             </span>
           </div>
         </div>
 
-        <div class="footer-buttons">
-          <button type="button" class="btn btn-secondary" @click="handleClose" :disabled="submitting">
+        <div class="footer-actions">
+          <button type="button" class="btn btn-secondary" :disabled="submitting" @click="$emit('close')">
             Hủy
           </button>
           <button
@@ -292,7 +316,8 @@
             @click="handleSubmitBatch"
           >
             <Loader2 v-if="submitting" :size="15" class="spin-icon" />
-            <span>{{ submitting ? "Đang phân bổ..." : "Phân bổ" }}</span>
+            <Check v-else :size="15" />
+            <span>{{ submitting ? "Đang lưu..." : "Phân bổ nội dung đã chọn" }}</span>
           </button>
         </div>
       </footer>
@@ -328,15 +353,6 @@ type Grant = "MANDATORY" | "OPTIONAL";
 type GrantState = Grant | "MIXED";
 type NodeState = "none" | "partial" | "full";
 
-interface ProgramNode {
-  program: TrainingProgram;
-  courses: Course[];
-}
-interface DomainNode {
-  domain: TrainingDomain;
-  programs: ProgramNode[];
-}
-
 const DOMAIN_PAGE_SIZE = 10;
 const COURSE_PAGE_SIZE = 20;
 
@@ -353,86 +369,131 @@ const emit = defineEmits<{
 // ---------------- State ----------------
 const loadingTree = ref(false);
 const submitting = ref(false);
-const searchQuery = ref("");
-const page = ref(1);
+const searchInput = ref("");
+const debouncedSearch = ref("");
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
-const allDomains = ref<TrainingDomain[]>([]);
-const allPrograms = ref<TrainingProgram[]>([]);
-const allCourses = ref<Course[]>([]);
+const page = ref(1);
+const totalPages = ref(1);
+const totalDomainElements = ref(0);
+
+const pagedDomains = ref<(TrainingDomain & { programsCount?: number })[]>([]);
+const programsByDomain = ref<Map<string, (TrainingProgram & { coursesCount?: number })[]>>(new Map());
+const coursesByProgram = ref<Map<string, Course[]>>(new Map());
+
+const loadingProgramsByDomain = ref<Set<string>>(new Set());
+const loadingCoursesByProgram = ref<Set<string>>(new Set());
+const coursesPageByProgram = ref<Map<string, number>>(new Map());
+const coursesHasNextByProgram = ref<Map<string, boolean>>(new Map());
 
 const expandedDomainIds = ref<Set<string>>(new Set());
 const expandedProgramIds = ref<Set<string>>(new Set());
-const courseLimits = ref<Map<string, number>>(new Map());
 
-/**
- * Selection is stored at the leaf level:
- *  - courseSel: selected courses with their grant type.
- *  - emptyProgramSel: programs without any course (selectable as a whole).
- *  - emptyDomainSel: domains without any program (selectable as a whole).
- * Parent states (none / partial / full) are derived from their children.
- */
+// ---------------- Selection Maps ----------------
+// Stored per level to allow whole-branch selection even before children are fetched!
+const domainSel = ref<Map<string, Grant>>(new Map());
+const programSel = ref<Map<string, Grant>>(new Map());
 const courseSel = ref<Map<string, Grant>>(new Map());
-const emptyProgramSel = ref<Map<string, Grant>>(new Map());
-const emptyDomainSel = ref<Map<string, Grant>>(new Map());
+
+// Keep track of partially deselecting children from a full parent
+const unselectedProgramIds = ref<Set<string>>(new Set());
+const unselectedCourseIds = ref<Set<string>>(new Set());
 
 watch(
   () => props.show,
   async (open) => {
     if (open) {
       clearAllSelection();
-      searchQuery.value = "";
+      searchInput.value = "";
+      debouncedSearch.value = "";
       page.value = 1;
-      courseLimits.value = new Map();
-      await loadTreeData();
+      await loadDomains();
     }
   }
 );
 
-async function loadTreeData() {
+watch(searchInput, (val) => {
+  if (searchTimer) clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    debouncedSearch.value = val.trim();
+    page.value = 1;
+    loadDomains();
+  }, 300);
+});
+
+async function loadDomains() {
   loadingTree.value = true;
   try {
-    const [catalog, coursesList] = await Promise.all([trainingApi.catalog(), trainingApi.courses()]);
-    allDomains.value = (catalog.domains || []).filter((d) => d.status !== "DELETED");
-    allPrograms.value = (catalog.programs || []).filter((p) => p.status !== "DELETED");
-    allCourses.value = (coursesList || []).filter((c) => c.status !== "DELETED");
+    const res = await trainingApi.domainsPaged({
+      search: debouncedSearch.value || undefined,
+      page: page.value - 1,
+      size: DOMAIN_PAGE_SIZE,
+    });
+    pagedDomains.value = res.items || [];
+    totalPages.value = Math.max(1, res.totalPages || 1);
+    totalDomainElements.value = res.totalElements || 0;
 
-    // Default to completely collapsed
-    expandedDomainIds.value = new Set();
-    expandedProgramIds.value = new Set();
+    // If searching, auto-expand matching domains and lazy-fetch programs
+    if (debouncedSearch.value) {
+      for (const d of pagedDomains.value) {
+        expandedDomainIds.value.add(d.id);
+        fetchPrograms(d.id, true);
+      }
+    }
   } catch (err) {
-    console.error("Lỗi tải cây dữ liệu đào tạo:", err);
+    console.error("Lỗi tải danh mục lĩnh vực:", err);
     showToast("Không thể tải danh mục đào tạo", "error");
   } finally {
     loadingTree.value = false;
   }
 }
 
-// ---------------- Indexes (O(1) lookup) ----------------
-const programsByDomain = computed(() => {
-  const map = new Map<string, TrainingProgram[]>();
-  for (const p of allPrograms.value) {
-    if (!p.domainId) continue;
-    const list = map.get(p.domainId) ?? [];
-    list.push(p);
-    map.set(p.domainId, list);
+async function fetchPrograms(domainId: string, autoExpandChild = false) {
+  if (loadingProgramsByDomain.value.has(domainId)) return;
+  loadingProgramsByDomain.value.add(domainId);
+  try {
+    const res = await trainingApi.programsPaged({
+      domainId,
+      search: debouncedSearch.value || undefined,
+      page: 0,
+      size: 100,
+    });
+    programsByDomain.value.set(domainId, res.items || []);
+
+    if (autoExpandChild && debouncedSearch.value) {
+      for (const p of res.items || []) {
+        expandedProgramIds.value.add(p.id);
+        fetchCourses(p.id, 0);
+      }
+    }
+  } catch (err) {
+    console.error(`Lỗi tải chương trình của lĩnh vực ${domainId}:`, err);
+  } finally {
+    loadingProgramsByDomain.value.delete(domainId);
   }
-  return map;
-});
+}
 
-const coursesByProgram = computed(() => {
-  const map = new Map<string, Course[]>();
-  for (const c of allCourses.value) {
-    if (!c.programId) continue;
-    const list = map.get(c.programId) ?? [];
-    list.push(c);
-    map.set(c.programId, list);
+async function fetchCourses(programId: string, pageNum = 0) {
+  if (loadingCoursesByProgram.value.has(programId)) return;
+  loadingCoursesByProgram.value.add(programId);
+  try {
+    const res = await trainingApi.coursesByProgramPaged(programId, {
+      search: debouncedSearch.value || undefined,
+      page: pageNum,
+      size: COURSE_PAGE_SIZE,
+    });
+    const current = pageNum === 0 ? [] : coursesByProgram.value.get(programId) ?? [];
+    coursesByProgram.value.set(programId, [...current, ...(res.items || [])]);
+    coursesPageByProgram.value.set(programId, pageNum);
+    coursesHasNextByProgram.value.set(programId, !!res.hasNext);
+  } catch (err) {
+    console.error(`Lỗi tải khóa học của chương trình ${programId}:`, err);
+  } finally {
+    loadingCoursesByProgram.value.delete(programId);
   }
-  return map;
-});
+}
 
-const programById = computed(() => new Map(allPrograms.value.map((p) => [p.id, p])));
-
-function programsOf(domainId: string): TrainingProgram[] {
+function programsOf(domainId: string): (TrainingProgram & { coursesCount?: number })[] {
   return programsByDomain.value.get(domainId) ?? [];
 }
 
@@ -440,240 +501,264 @@ function coursesOf(programId: string): Course[] {
   return coursesByProgram.value.get(programId) ?? [];
 }
 
-// ---------------- Search-filtered tree ----------------
-function matches(q: string, name?: string, code?: string) {
-  return (name ?? "").toLowerCase().includes(q) || (code ?? "").toLowerCase().includes(q);
+function coursesHasNext(programId: string): boolean {
+  return coursesHasNextByProgram.value.get(programId) ?? false;
 }
 
-const visibleTree = computed<DomainNode[]>(() => {
-  const q = searchQuery.value.trim().toLowerCase();
-  const result: DomainNode[] = [];
-  for (const d of allDomains.value) {
-    const programs = programsOf(d.id);
-    if (!q || matches(q, d.name, d.code)) {
-      result.push({ domain: d, programs: programs.map((p) => ({ program: p, courses: coursesOf(p.id) })) });
-      continue;
-    }
-    const pNodes: ProgramNode[] = [];
-    for (const p of programs) {
-      const courses = coursesOf(p.id);
-      if (matches(q, p.name, p.code)) {
-        pNodes.push({ program: p, courses });
-      } else {
-        const hit = courses.filter((c) => matches(q, c.name, c.code));
-        if (hit.length) pNodes.push({ program: p, courses: hit });
-      }
-    }
-    if (pNodes.length) result.push({ domain: d, programs: pNodes });
-  }
-  return result;
-});
-
-const totalPages = computed(() => Math.max(1, Math.ceil(visibleTree.value.length / DOMAIN_PAGE_SIZE)));
-
-const pagedTree = computed(() => {
-  const start = (page.value - 1) * DOMAIN_PAGE_SIZE;
-  return visibleTree.value.slice(start, start + DOMAIN_PAGE_SIZE);
-});
-
-watch(searchQuery, (q) => {
-  page.value = 1;
-  if (q.trim()) {
-    // Auto-expand every branch that contains a match
-    expandedDomainIds.value = new Set(visibleTree.value.map((dn) => dn.domain.id));
-    expandedProgramIds.value = new Set(visibleTree.value.flatMap((dn) => dn.programs.map((pn) => pn.program.id)));
-  }
-});
-
-watch(totalPages, (n) => {
-  if (page.value > n) page.value = n;
-});
+function loadMoreCourses(programId: string) {
+  const curPage = coursesPageByProgram.value.get(programId) ?? 0;
+  fetchCourses(programId, curPage + 1);
+}
 
 // ---------------- Expand / Collapse ----------------
 const isAnyExpanded = computed(() => expandedDomainIds.value.size > 0 || expandedProgramIds.value.size > 0);
 
 function toggleExpandAll() {
   if (isAnyExpanded.value) {
-    expandedDomainIds.value = new Set();
-    expandedProgramIds.value = new Set();
+    expandedDomainIds.value.clear();
+    expandedProgramIds.value.clear();
   } else {
-    expandedDomainIds.value = new Set(visibleTree.value.map((dn) => dn.domain.id));
-    expandedProgramIds.value = new Set(visibleTree.value.flatMap((dn) => dn.programs.map((pn) => pn.program.id)));
+    for (const d of pagedDomains.value) {
+      expandedDomainIds.value.add(d.id);
+      if (!programsByDomain.value.has(d.id)) {
+        fetchPrograms(d.id);
+      }
+      for (const p of programsOf(d.id)) {
+        expandedProgramIds.value.add(p.id);
+        if (!coursesByProgram.value.has(p.id)) {
+          fetchCourses(p.id, 0);
+        }
+      }
+    }
   }
 }
 
-function toggleSetItem(set: Set<string>, id: string) {
-  if (set.has(id)) set.delete(id);
-  else set.add(id);
+function toggleDomainExpand(domainId: string) {
+  if (expandedDomainIds.value.has(domainId)) {
+    expandedDomainIds.value.delete(domainId);
+  } else {
+    expandedDomainIds.value.add(domainId);
+    if (!programsByDomain.value.has(domainId)) {
+      fetchPrograms(domainId);
+    }
+  }
 }
 
-function toggleDomainExpand(id: string) {
-  toggleSetItem(expandedDomainIds.value, id);
+function toggleProgramExpand(programId: string) {
+  if (expandedProgramIds.value.has(programId)) {
+    expandedProgramIds.value.delete(programId);
+  } else {
+    expandedProgramIds.value.add(programId);
+    if (!coursesByProgram.value.has(programId)) {
+      fetchCourses(programId, 0);
+    }
+  }
 }
 
-function toggleProgramExpand(id: string) {
-  toggleSetItem(expandedProgramIds.value, id);
+function changePage(p: number) {
+  if (p < 1 || p > totalPages.value) return;
+  page.value = p;
+  loadDomains();
 }
 
-function courseLimit(programId: string) {
-  return courseLimits.value.get(programId) ?? COURSE_PAGE_SIZE;
+// ---------------- Tri-state & Selection ----------------
+function isCourseSelected(courseId: string, programId: string, domainId: string): boolean {
+  if (unselectedCourseIds.value.has(courseId)) return false;
+  if (courseSel.value.has(courseId)) return true;
+  if (programSel.value.has(programId) && !unselectedProgramIds.value.has(programId)) return true;
+  if (domainSel.value.has(domainId)) return true;
+  return false;
 }
 
-function limitedCourses(programId: string, courses: Course[]) {
-  return courses.slice(0, courseLimit(programId));
+function courseGrant(courseId: string, programId: string, domainId: string): Grant {
+  return (
+    courseSel.value.get(courseId) ??
+    programSel.value.get(programId) ??
+    domainSel.value.get(domainId) ??
+    "MANDATORY"
+  );
 }
 
-function showMoreCourses(programId: string) {
-  courseLimits.value.set(programId, courseLimit(programId) + COURSE_PAGE_SIZE);
-}
-
-// ---------------- Derived node states ----------------
-function programSelectedCount(programId: string): number {
-  let n = 0;
-  for (const c of coursesOf(programId)) if (courseSel.value.has(c.id)) n++;
-  return n;
-}
-
-function programState(programId: string): NodeState {
+function programState(programId: string, domainId: string): NodeState {
+  if (unselectedProgramIds.value.has(programId)) return "none";
   const courses = coursesOf(programId);
-  if (courses.length === 0) return emptyProgramSel.value.has(programId) ? "full" : "none";
-  const n = programSelectedCount(programId);
-  if (n === 0) return "none";
-  return n === courses.length ? "full" : "partial";
+  if (courses.length === 0) {
+    if (programSel.value.has(programId) || domainSel.value.has(domainId)) return "full";
+    return "none";
+  }
+  let selected = 0;
+  for (const c of courses) {
+    if (isCourseSelected(c.id, programId, domainId)) selected++;
+  }
+  if (selected === 0) return "none";
+  if (selected === courses.length) return "full";
+  return "partial";
+}
+
+function programGrant(programId: string, domainId: string): GrantState {
+  const pGrant = programSel.value.get(programId) ?? domainSel.value.get(domainId);
+  const courses = coursesOf(programId);
+  if (courses.length === 0) return pGrant ?? "MANDATORY";
+  const grants = courses
+    .filter((c) => isCourseSelected(c.id, programId, domainId))
+    .map((c) => courseGrant(c.id, programId, domainId));
+  if (grants.length === 0) return pGrant ?? "MANDATORY";
+  return grants.every((g) => g === grants[0]) ? grants[0]! : "MIXED";
 }
 
 function domainState(domainId: string): NodeState {
   const programs = programsOf(domainId);
-  if (programs.length === 0) return emptyDomainSel.value.has(domainId) ? "full" : "none";
-  let full = 0;
-  let none = 0;
-  for (const p of programs) {
-    const s = programState(p.id);
-    if (s === "full") full++;
-    else if (s === "none") none++;
+  if (programs.length === 0) {
+    return domainSel.value.has(domainId) ? "full" : "none";
   }
-  if (full === programs.length) return "full";
-  if (none === programs.length) return "none";
-  return "partial";
+  let fullCount = 0;
+  let partialCount = 0;
+  for (const p of programs) {
+    const s = programState(p.id, domainId);
+    if (s === "full") fullCount++;
+    else if (s === "partial") partialCount++;
+  }
+  if (fullCount === programs.length) return "full";
+  if (fullCount > 0 || partialCount > 0) return "partial";
+  return domainSel.value.has(domainId) ? "full" : "none";
+}
+
+function domainGrant(domainId: string): GrantState {
+  const dGrant = domainSel.value.get(domainId);
+  const programs = programsOf(domainId);
+  if (programs.length === 0) return dGrant ?? "MANDATORY";
+  const grants: Grant[] = [];
+  for (const p of programs) {
+    for (const c of coursesOf(p.id)) {
+      if (isCourseSelected(c.id, p.id, domainId)) {
+        grants.push(courseGrant(c.id, p.id, domainId));
+      }
+    }
+  }
+  if (grants.length === 0) return dGrant ?? "MANDATORY";
+  return grants.every((g) => g === grants[0]) ? grants[0]! : "MIXED";
+}
+
+function programSelectedCount(programId: string, domainId: string): number {
+  return coursesOf(programId).filter((c) => isCourseSelected(c.id, programId, domainId)).length;
+}
+
+function domainSelectedCourseCount(domainId: string): number {
+  let count = 0;
+  for (const p of programsOf(domainId)) {
+    count += programSelectedCount(p.id, domainId);
+  }
+  return count;
 }
 
 function domainCourseTotal(domainId: string): number {
   return programsOf(domainId).reduce((sum, p) => sum + coursesOf(p.id).length, 0);
 }
 
-function domainSelectedCourseCount(domainId: string): number {
-  return programsOf(domainId).reduce((sum, p) => sum + programSelectedCount(p.id), 0);
-}
-
-function combineGrants(grants: Grant[]): GrantState {
-  if (grants.length === 0) return "MANDATORY";
-  return grants.every((g) => g === grants[0]) ? grants[0]! : "MIXED";
-}
-
-function programGrants(programId: string): Grant[] {
-  const courses = coursesOf(programId);
-  if (courses.length === 0) {
-    const g = emptyProgramSel.value.get(programId);
-    return g ? [g] : [];
-  }
-  return courses.map((c) => courseSel.value.get(c.id)).filter((g): g is Grant => !!g);
-}
-
-function programGrant(programId: string): GrantState {
-  return combineGrants(programGrants(programId));
-}
-
-function domainGrants(domainId: string): Grant[] {
-  const programs = programsOf(domainId);
-  if (programs.length === 0) {
-    const g = emptyDomainSel.value.get(domainId);
-    return g ? [g] : [];
-  }
-  return programs.flatMap((p) => programGrants(p.id));
-}
-
-function domainGrant(domainId: string): GrantState {
-  return combineGrants(domainGrants(domainId));
-}
-
-// ---------------- Selection actions ----------------
-function setProgram(programId: string, grant: Grant | null) {
-  const courses = coursesOf(programId);
-  if (courses.length === 0) {
-    if (grant) emptyProgramSel.value.set(programId, grant);
-    else emptyProgramSel.value.delete(programId);
-    return;
-  }
-  for (const c of courses) {
-    if (grant) courseSel.value.set(c.id, grant);
-    else courseSel.value.delete(c.id);
-  }
-}
-
-function setDomain(domainId: string, grant: Grant | null) {
-  const programs = programsOf(domainId);
-  if (programs.length === 0) {
-    if (grant) emptyDomainSel.value.set(domainId, grant);
-    else emptyDomainSel.value.delete(domainId);
-    return;
-  }
-  for (const p of programs) setProgram(p.id, grant);
-}
-
+// ---------------- Toggle Actions ----------------
 function toggleDomain(domainId: string) {
-  // full -> none ; none/partial -> full (MANDATORY)
-  setDomain(domainId, domainState(domainId) === "full" ? null : "MANDATORY");
+  const currentState = domainState(domainId);
+  if (currentState === "full") {
+    domainSel.value.delete(domainId);
+    for (const p of programsOf(domainId)) {
+      programSel.value.delete(p.id);
+      unselectedProgramIds.value.delete(p.id);
+      for (const c of coursesOf(p.id)) {
+        courseSel.value.delete(c.id);
+        unselectedCourseIds.value.delete(c.id);
+      }
+    }
+  } else {
+    domainSel.value.set(domainId, "MANDATORY");
+    for (const p of programsOf(domainId)) {
+      unselectedProgramIds.value.delete(p.id);
+      for (const c of coursesOf(p.id)) {
+        unselectedCourseIds.value.delete(c.id);
+      }
+    }
+  }
 }
 
-function toggleProgram(programId: string) {
-  setProgram(programId, programState(programId) === "full" ? null : "MANDATORY");
+function toggleProgram(programId: string, domainId: string) {
+  const currentState = programState(programId, domainId);
+  if (currentState === "full") {
+    programSel.value.delete(programId);
+    if (domainSel.value.has(domainId)) {
+      unselectedProgramIds.value.add(programId);
+    }
+    for (const c of coursesOf(programId)) {
+      courseSel.value.delete(c.id);
+      unselectedCourseIds.value.delete(c.id);
+    }
+  } else {
+    programSel.value.set(programId, "MANDATORY");
+    unselectedProgramIds.value.delete(programId);
+    for (const c of coursesOf(programId)) {
+      unselectedCourseIds.value.delete(c.id);
+    }
+  }
 }
 
-function toggleCourse(courseId: string) {
-  if (courseSel.value.has(courseId)) courseSel.value.delete(courseId);
-  else courseSel.value.set(courseId, "MANDATORY");
+function toggleCourse(courseId: string, programId: string, domainId: string) {
+  const selected = isCourseSelected(courseId, programId, domainId);
+  if (selected) {
+    courseSel.value.delete(courseId);
+    if (programSel.value.has(programId) || domainSel.value.has(domainId)) {
+      unselectedCourseIds.value.add(courseId);
+    }
+  } else {
+    courseSel.value.set(courseId, "MANDATORY");
+    unselectedCourseIds.value.delete(courseId);
+  }
 }
 
-function nextGrant(current: GrantState): Grant {
-  return current === "MANDATORY" ? "OPTIONAL" : "MANDATORY";
+function nextGrant(g: GrantState): Grant {
+  return g === "MANDATORY" ? "OPTIONAL" : "MANDATORY";
 }
 
 function cycleDomainGrant(domainId: string) {
-  setDomain(domainId, nextGrant(domainGrant(domainId)));
-}
-
-function cycleProgramGrant(programId: string) {
-  setProgram(programId, nextGrant(programGrant(programId)));
-}
-
-function toggleCourseGrant(courseId: string) {
-  const g = courseSel.value.get(courseId);
-  if (g) courseSel.value.set(courseId, nextGrant(g));
-}
-
-// ---------------- Select all / clear ----------------
-const hasSelection = computed(
-  () => courseSel.value.size > 0 || emptyProgramSel.value.size > 0 || emptyDomainSel.value.size > 0
-);
-
-function selectAll() {
-  // Applies to the whole (search-filtered) result set, not only the current page
-  for (const dn of visibleTree.value) {
-    if (dn.programs.length === 0 && programsOf(dn.domain.id).length === 0) {
-      emptyDomainSel.value.set(dn.domain.id, "MANDATORY");
-      continue;
-    }
-    for (const pn of dn.programs) {
-      if (coursesOf(pn.program.id).length === 0) emptyProgramSel.value.set(pn.program.id, "MANDATORY");
-      for (const c of pn.courses) if (!courseSel.value.has(c.id)) courseSel.value.set(c.id, "MANDATORY");
+  const cur = domainGrant(domainId);
+  const next = nextGrant(cur);
+  domainSel.value.set(domainId, next);
+  for (const p of programsOf(domainId)) {
+    if (programSel.value.has(p.id)) programSel.value.set(p.id, next);
+    for (const c of coursesOf(p.id)) {
+      if (courseSel.value.has(c.id)) courseSel.value.set(c.id, next);
     }
   }
 }
 
+function cycleProgramGrant(programId: string, domainId: string) {
+  const cur = programGrant(programId, domainId);
+  const next = nextGrant(cur);
+  programSel.value.set(programId, next);
+  for (const c of coursesOf(programId)) {
+    if (courseSel.value.has(c.id)) courseSel.value.set(c.id, next);
+  }
+}
+
+function toggleCourseGrant(courseId: string, programId: string, domainId: string) {
+  const cur = courseGrant(courseId, programId, domainId);
+  courseSel.value.set(courseId, nextGrant(cur));
+}
+
+// ---------------- Select all / Clear ----------------
+const hasSelection = computed(() => {
+  return domainSel.value.size > 0 || programSel.value.size > 0 || courseSel.value.size > 0;
+});
+
 function clearAllSelection() {
+  domainSel.value.clear();
+  programSel.value.clear();
   courseSel.value.clear();
-  emptyProgramSel.value.clear();
-  emptyDomainSel.value.clear();
+  unselectedProgramIds.value.clear();
+  unselectedCourseIds.value.clear();
+}
+
+function selectAll() {
+  for (const d of pagedDomains.value) {
+    domainSel.value.set(d.id, "MANDATORY");
+  }
 }
 
 function toggleSelectAll() {
@@ -682,29 +767,26 @@ function toggleSelectAll() {
 }
 
 // ---------------- Counters ----------------
-const selectedCourseCount = computed(() => courseSel.value.size);
-
-const touchedProgramCount = computed(() => {
-  const ids = new Set<string>(emptyProgramSel.value.keys());
-  for (const c of allCourses.value) if (courseSel.value.has(c.id) && c.programId) ids.add(c.programId);
-  return ids.size;
+const selectedDomainCount = computed(() => domainSel.value.size);
+const selectedProgramCount = computed(() => {
+  let count = programSel.value.size;
+  for (const d of pagedDomains.value) {
+    if (domainSel.value.has(d.id)) {
+      count += (d.programsCount ?? programsOf(d.id).length);
+    }
+  }
+  return count;
+});
+const selectedCourseCount = computed(() => {
+  let count = courseSel.value.size;
+  for (const [pid] of programSel.value) {
+    const p = [...programsByDomain.value.values()].flat().find((item) => item.id === pid);
+    if (p?.coursesCount) count += p.coursesCount;
+  }
+  return count;
 });
 
-const touchedDomainCount = computed(() => {
-  const ids = new Set<string>(emptyDomainSel.value.keys());
-  for (const c of allCourses.value) {
-    if (!courseSel.value.has(c.id) || !c.programId) continue;
-    const d = programById.value.get(c.programId)?.domainId;
-    if (d) ids.add(d);
-  }
-  for (const pid of emptyProgramSel.value.keys()) {
-    const d = programById.value.get(pid)?.domainId;
-    if (d) ids.add(d);
-  }
-  return ids.size;
-});
-
-// ---------------- UI helpers ----------------
+// ---------------- UI Helpers ----------------
 function stateClass(state: NodeState) {
   return { "is-selected": state === "full", "is-partial": state === "partial" };
 }
@@ -723,37 +805,52 @@ function grantLabel(g: GrantState) {
   return g === "MANDATORY" ? "Bắt buộc" : "Tự chọn";
 }
 
-// ---------------- Minimal payload ----------------
-/**
- * Sends the user's intent with as few items as possible:
- *  - Whole domain with a uniform grant -> 1 domain item
- *  - Whole program with a uniform grant -> 1 program item
- *  - Otherwise -> individual course items
- */
+// ---------------- Payload Builder ----------------
 function buildPayloadItems() {
   const items: { categoryType: "domain" | "program" | "course"; targetId: string; grantType: Grant }[] = [];
-  for (const d of allDomains.value) {
-    const dState = domainState(d.id);
-    if (dState === "none") continue;
-    const dGrant = domainGrant(d.id);
-    if (dState === "full" && dGrant !== "MIXED") {
-      items.push({ categoryType: "domain", targetId: d.id, grantType: dGrant });
+
+  // 1. Domains that are fully selected
+  for (const d of pagedDomains.value) {
+    const s = domainState(d.id);
+    if (s === "full") {
+      const g = domainGrant(d.id);
+      items.push({ categoryType: "domain", targetId: d.id, grantType: g === "MIXED" ? "MANDATORY" : g });
       continue;
     }
+    // If domain is partial or not fully selected, check its programs
     for (const p of programsOf(d.id)) {
-      const pState = programState(p.id);
-      if (pState === "none") continue;
-      const pGrant = programGrant(p.id);
-      if (pState === "full" && pGrant !== "MIXED") {
-        items.push({ categoryType: "program", targetId: p.id, grantType: pGrant });
+      const ps = programState(p.id, d.id);
+      if (ps === "full") {
+        const pg = programGrant(p.id, d.id);
+        items.push({ categoryType: "program", targetId: p.id, grantType: pg === "MIXED" ? "MANDATORY" : pg });
         continue;
       }
+      // Check courses under program
       for (const c of coursesOf(p.id)) {
-        const g = courseSel.value.get(c.id);
-        if (g) items.push({ categoryType: "course", targetId: c.id, grantType: g });
+        if (isCourseSelected(c.id, p.id, d.id)) {
+          items.push({ categoryType: "course", targetId: c.id, grantType: courseGrant(c.id, p.id, d.id) });
+        }
       }
     }
   }
+
+  // Also include any standalone selections outside current view
+  for (const [did, g] of domainSel.value) {
+    if (!items.some((i) => i.targetId === did)) {
+      items.push({ categoryType: "domain", targetId: did, grantType: g });
+    }
+  }
+  for (const [pid, g] of programSel.value) {
+    if (!items.some((i) => i.targetId === pid)) {
+      items.push({ categoryType: "program", targetId: pid, grantType: g });
+    }
+  }
+  for (const [cid, g] of courseSel.value) {
+    if (!items.some((i) => i.targetId === cid)) {
+      items.push({ categoryType: "course", targetId: cid, grantType: g });
+    }
+  }
+
   return items;
 }
 
@@ -771,20 +868,15 @@ async function handleSubmitBatch() {
   submitting.value = true;
   try {
     await axiosClient.post("/api/admin/unit-allocations/batch-assign", { unitId: props.unit.id, items });
-    showToast(`Phân bổ thành công cho ${props.unit.name}!`, "success");
+    showToast(`Đã phân bổ thành công cho đơn vị ${props.unit.name}`, "success");
     emit("saved");
     emit("close");
   } catch (err: any) {
-    console.error("Lỗi khi gửi phân bổ batch:", err);
-    const msg = err.response?.data?.message || err.message || "Lỗi khi phân bổ đào tạo";
-    showToast(msg, "error");
+    console.error("Lỗi khi lưu phân bổ hàng loạt:", err);
+    showToast(err?.response?.data?.message || "Không thể lưu phân bổ", "error");
   } finally {
     submitting.value = false;
   }
-}
-
-function handleClose() {
-  if (!submitting.value) emit("close");
 }
 </script>
 
@@ -1772,4 +1864,39 @@ function handleClose() {
 :root[data-theme="dark"] .btn-primary.btn-submit-batch:hover:not(:disabled) {
   background: var(--primary-hover);
 }
+
+.loading-child-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+.show-more-row {
+  padding: 6px 12px;
+}
+.btn-show-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+  border: 1px dashed rgba(59, 130, 246, 0.3);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-show-more:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: #3b82f6;
+}
+.btn-show-more:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 </style>

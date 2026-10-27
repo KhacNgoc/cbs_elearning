@@ -162,6 +162,14 @@ public class TrainingStructureController {
         return service.removeUnitAllocation(unitId, categoryType, targetId);
     }
 
+    @GetMapping({"/admin/domains/paged", "/admin/domains"})
+    public java.util.Map<String, Object> domainsPaged(
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return service.adminDomainsPaged(search, page, size);
+    }
+
     @GetMapping({"/admin/programs/paged", "/admin/programs/by-domain"})
     public java.util.Map<String, Object> programsPaged(
             @RequestParam(required = false) String domainId,
