@@ -23,6 +23,12 @@ public class LessonDocument {
     @Column(name = "document_type", nullable = false, length = 20)
     private DocumentType documentType;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @org.hibernate.annotations.ColumnDefault("'SUPPORTING'")
+    @Builder.Default
+    private DocumentPurpose purpose = DocumentPurpose.SUPPORTING;
+
     @Column(name = "file_url", nullable = false, columnDefinition = "TEXT")
     private String fileUrl;
 

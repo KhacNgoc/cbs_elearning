@@ -11,9 +11,10 @@
       :back-to="`/courses/${fullCourse?.id}`"
       :lesson-title="lesson.title"
       :sidebar-open="sidebarOpen"
-      :active-content="activeContentType"
+      :active-content="selectedDocument?.purpose === 'SLIDE' ? 'SLIDE' : activeContentType"
       :has-text="Boolean(lesson.textBody?.trim())"
       :has-video="Boolean(lesson.videoUrl?.trim())"
+      :has-slides="lesson.documents.some(document => document.purpose === 'SLIDE')"
       @select-content="showPrimaryContent"
       :completed-count="completedCount"
       :total-lessons="course?.lessons.length || 0"
@@ -147,7 +148,9 @@
             lesson.comments.length
           "
           :loading-more="commentsLoadingMore"
+          :reply-page-states="courseStore.replyPageStates"
           @load-more="loadMoreComments"
+          @load-more-replies="loadMoreReplies"
           :current-username="userStore.username"
           :is-admin="Boolean(fullCourse?.canEdit)"
           v-model:comment="commentText"
@@ -565,7 +568,7 @@ const selectInitialContent = (requestedDocument?: LessonDocument) => {
   if (!requestedDocument) {
     const recovery = documentJournal.pending(lesson.value.id).at(-1);
     requestedDocument = documents.find(
-      (d) => d.id === recovery?.request.documentId,
+      (d) => d.purpose === "SLIDE" && d.id === recovery?.request.documentId,
     );
   }
   const initial = initialLessonContent(lesson.value, saved, requestedDocument);
@@ -755,11 +758,10 @@ const switchLesson = async (lessonId: string): Promise<boolean> => {
 };
 const openLessonContent = async (lessonId: string) => {
   if (lessonId === lesson.value?.id && selectedDocument.value) {
-    showPrimaryContent(
-      primaryContent.value === "TEXT" && !lesson.value.textBody?.trim()
-        ? "VIDEO"
-        : primaryContent.value,
-    );
+    void persistCurrentProgress();
+    const initial = initialLessonContent(lesson.value);
+    primaryContent.value = initial.type === 'VIDEO' ? 'VIDEO' : 'TEXT';
+    selectedDocument.value = initial.document;
     return;
   }
   await switchLesson(lessonId);
@@ -774,7 +776,12 @@ const showDocument = async (lessonId: string, document: LessonDocument) => {
   void persistCurrentProgress();
   selectedDocument.value = document;
 };
-const showPrimaryContent = (type: "VIDEO" | "TEXT") => {
+const showPrimaryContent = (type: "VIDEO" | "TEXT" | "SLIDE") => {
+  if (type === 'SLIDE') {
+    const slide = lesson.value?.documents.find(document => document.purpose === 'SLIDE');
+    if (slide && lesson.value) void showDocument(lesson.value.id, slide);
+    return;
+  }
   if (
     !lesson.value ||
     (type === "VIDEO"
@@ -1063,6 +1070,10 @@ const loadMoreComments = async () => {
     if (loadId === lessonLoadId) commentsLoadingMore.value = false;
   }
 };
+const loadMoreReplies = async (rootCommentId: number) => {
+  if (!lesson.value || disposed) return;
+  await courseStore.loadMoreReplies(lesson.value.id, rootCommentId);
+};
 const deleteComment = async (commentId: number) => {
   if (!lesson.value) return;
   try {
@@ -1321,7 +1332,6 @@ const deleteComment = async (commentId: number) => {
   min-height: 0;
   padding: 0;
 }
-.viewer-shell .video-title-bar,
 .viewer-shell .video-footer-info,
 .viewer-shell .viewer-header {
   margin: 0;
@@ -2210,7 +2220,6 @@ const deleteComment = async (commentId: number) => {
   .viewer-shell .slide-viewer {
     min-height: 300px;
   }
-  .viewer-shell .video-title-bar,
   .viewer-shell .video-footer-info,
   .viewer-shell .viewer-header {
     display: none;

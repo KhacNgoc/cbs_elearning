@@ -1,12 +1,14 @@
 <template>
-  <AdminPortal v-if="legacySection" />
+  <AdminExamList v-if="route.query.tab === 'exams'" />
+  <AdminPortal v-else-if="legacySection" />
   <div v-else class="admin-reports-overview"><ReportsMockup /></div>
 </template>
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, defineAsyncComponent } from 'vue';
 import { useRoute } from 'vue-router';
-import AdminPortal from './AdminPortal.vue';
-import ReportsMockup from './ReportsMockup.vue';
+const AdminPortal = defineAsyncComponent(() => import('./AdminPortal.vue'));
+const ReportsMockup = defineAsyncComponent(() => import('./ReportsMockup.vue'));
+const AdminExamList = defineAsyncComponent(() => import('./AdminExamList.vue'));
 const route = useRoute();
 // Preserve existing enrollment and exam management URLs while replacing overview.
 const legacySection = computed(() => typeof route.query.tab === 'string' && route.query.tab !== 'overview');

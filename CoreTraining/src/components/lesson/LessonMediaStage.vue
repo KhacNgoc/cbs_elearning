@@ -54,7 +54,7 @@
       <div v-else class="empty-lesson-media">
         <FileText :size="34" />
         <strong>Bài học chưa có nội dung</strong>
-        <span>Video hoặc tài liệu sẽ được cập nhật sau.</span>
+        <span>Nội dung văn bản, video hoặc Slide chưa được cập nhật. Vui lòng liên hệ quản trị viên.</span>
       </div>
     </div>
     <div class="viewer-navigation">

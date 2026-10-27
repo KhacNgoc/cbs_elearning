@@ -38,7 +38,7 @@ public class LearningOutlineService {
         Map<String, List<LessonDocumentDto>> documentMetadata = documents.findOutlineDocuments(id, editor).stream()
                 .collect(Collectors.groupingBy(LessonDocumentRepository.OutlineDocument::getLessonId,
                         Collectors.mapping(d -> new LessonDocumentDto(d.getId(), d.getName(), d.getDocumentType(),
-                                d.getFileUrl(), d.getOriginalFileName(), d.getFileSize(), d.getDocumentOrder()),
+                                d.getFileUrl(), d.getOriginalFileName(), d.getFileSize(), d.getDocumentOrder(), d.getPurpose()),
                                 Collectors.toList())));
         Set<String> completed = users.findCompletedLessonIds(user.getId(), id);
         Map<String, List<LessonOutlineView>> grouped = rows.stream()
@@ -72,7 +72,7 @@ public class LearningOutlineService {
                 .map(Chapter::getId).collect(Collectors.toSet());
         List<LessonOutlineView> publishedRows = rows.stream().filter(l -> publishedChapterIds.contains(l.getChapterId())
                 && "PUBLISHED".equals(l.getStatus())).toList();
-        var resume = resume(course, user, publishedRows, completed, unlocked);
+        var resume = resume(course, user, publishedRows, completed, unlocked, documentMetadata);
         return new TrainingStructureService.OutlineDto(courseMetadata(course, editor,
                 questions.existsByCourseIdAndLessonIsNull(id)), result,
                 !result.isEmpty() && result.stream().allMatch(TrainingStructureService.ChapterDto::completed),
@@ -103,7 +103,7 @@ public class LearningOutlineService {
     }
 
     private LearnerWorkspaceService.Resume resume(Course course, User user, List<LessonOutlineView> rows,
-            Set<String> completed, Set<String> unlocked) {
+            Set<String> completed, Set<String> unlocked, Map<String, List<LessonDocumentDto>> documentMetadata) {
         Map<String, LessonProgress> history = progress.findByUserIdAndCourseId(user.getId(), course.getId()).stream()
                 .collect(Collectors.toMap(p -> p.getLesson().getId(), p -> p));
         var eligible = rows.stream().filter(l -> !completed.contains(l.getId()) && unlocked.contains(l.getId()))
@@ -118,20 +118,25 @@ public class LearningOutlineService {
         Long documentId = saved == null ? null : saved.getDocumentId();
         boolean requiredQuiz = Boolean.TRUE.equals(selected.getHasQuiz())
                 && Boolean.TRUE.equals(selected.getQuizRequired());
-        if (saved != null && saved.isContentCompleted() && requiredQuiz && !passed(user, selected))
+        var slideIds = documentMetadata.getOrDefault(selected.getId(), List.of()).stream()
+                .filter(d -> d.getPurpose() == DocumentPurpose.SLIDE).map(LessonDocumentDto::getId).toList();
+        boolean contentComplete = LessonContentPolicy.complete(Boolean.TRUE.equals(selected.getHasText()),
+                Boolean.TRUE.equals(selected.getHasVideo()), slideIds, saved);
+        if (contentComplete && requiredQuiz && !passed(user, selected))
             type = "QUIZ";
         else if ("DOCUMENT".equals(type)
-                && (documentId == null || !documents.existsByIdAndLessonId(documentId, selected.getId()))) {
+                && (documentId == null || !slideIds.contains(documentId))) {
             type = null;
             documentId = null;
-        } else if ("VIDEO".equals(type) && !Boolean.TRUE.equals(selected.getHasVideo()))
+        } else if ("VIDEO".equals(type) && !Boolean.TRUE.equals(selected.getHasVideo())
+                || "TEXT".equals(type) && !Boolean.TRUE.equals(selected.getHasText()))
             type = null;
         if (type == null) {
             if (Boolean.TRUE.equals(selected.getHasVideo()))
                 type = "VIDEO";
+            else if (Boolean.TRUE.equals(selected.getHasText())) type = "TEXT";
             else {
-                documentId = documents.findFirstByLessonIdOrderByDocumentOrderAscIdAsc(selected.getId())
-                        .map(LessonDocumentRepository.IdOnly::getId).orElse(null);
+                documentId = slideIds.stream().findFirst().orElse(null);
                 type = documentId == null ? "TEXT" : "DOCUMENT";
             }
         }

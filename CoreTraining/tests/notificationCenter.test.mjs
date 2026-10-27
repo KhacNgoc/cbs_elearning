@@ -70,3 +70,17 @@ test('failed load can retry the same cursor and mark-all covers a page already i
     assert.equal(document.querySelector('.notification-badge'), null);
   } finally { f.app.unmount(); }
 });
+
+test('rejected enrollment uses an X icon while approved enrollment keeps its check icon', async () => {
+  const f = await fixture(() => ({ content: [
+    { ...item(3), type: 'ENROLLMENT_REJECTED' },
+    { ...item(2), type: 'ENROLLMENT_APPROVED' },
+    item(1),
+  ], hasMore: false, nextBeforeId: null, unreadCount: 3 }));
+  try {
+    assert.ok(document.querySelector('.notification-icon.ENROLLMENT_REJECTED .lucide-user-round-x'));
+    assert.equal(document.querySelector('.notification-icon.ENROLLMENT_REJECTED .lucide-user-round-check'), null);
+    assert.ok(document.querySelector('.notification-icon.ENROLLMENT_APPROVED .lucide-user-round-check'));
+    assert.ok(document.querySelector('.notification-icon.COMMENT_REPLY .lucide-message-circle-reply'));
+  } finally { f.app.unmount(); }
+});

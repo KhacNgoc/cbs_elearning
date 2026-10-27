@@ -120,6 +120,14 @@ public class LessonReportService {
                 .sorted(Comparator.comparing(LessonReport::getCreatedAt).reversed()).map(r -> dto(r, actor)).toList();
     }
 
+    @Transactional(readOnly = true)
+    public LessonReportDto detail(Long id) {
+        LessonReport r = report(id);
+        User actor = auth.current();
+        AccessPolicy.require(actor.activeAccount() && actor.getId().equals(r.getReporter().getId()));
+        return dto(r, actor);
+    }
+
     public LessonReportDto review(Long id, Long version, LessonReport.Status status, String resolution) {
         LessonReport r = report(id);
         User actor = auth.current();
@@ -133,11 +141,17 @@ public class LessonReportService {
         if (note.length() > 5000 || ((status == LessonReport.Status.RESOLVED || status == LessonReport.Status.DISMISSED)
                 && note.isBlank()))
             throw new BadRequestException("Khi đóng báo cáo cần ghi kết quả xử lý (tối đa 5.000 ký tự)");
+        boolean replyChanged = !note.isBlank() && !Objects.equals(note, r.getResolution());
         r.setStatus(status);
         r.setResolution(note);
         r.setReviewer(actor);
         r.setReviewedAt(LocalDateTime.now());
         reports.flush();
+        if (replyChanged)
+            notifications.create(r.getReporter().getUsername(), NotificationType.LESSON_REPORT,
+                    "Phản hồi báo cáo nội dung bài học",
+                    "Báo cáo của bạn về bài học " + r.getLesson().getTitle() + " đã có phản hồi.",
+                    "/lesson-reports/" + r.getId());
         return dto(r, actor);
     }
 

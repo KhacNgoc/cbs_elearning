@@ -170,7 +170,7 @@
     <AdminModal
       :open="formOpen"
       :title="form.id ? 'Sửa câu hỏi ngân hàng' : 'Thêm câu hỏi vào ngân hàng'"
-      :busy="saving"
+      :busy="saving || lessonsLoading"
       :width="820"
       @close="formOpen = false"
       @submit="save"
@@ -193,16 +193,16 @@
             </option>
           </select></label
         ><label
-          >Bài học liên quan<select v-model="form.lessonId">
+          >Bài học liên quan<select v-model="form.lessonId" :disabled="lessonsLoading || !!lessonsError">
             <option value="">Theo lĩnh vực của khóa học</option>
             <option
-              v-for="l in relatedCourse?.lessons"
+              v-for="l in lessonOptions"
               :key="l.id"
               :value="l.id"
             >
               {{ l.title }}
             </option>
-          </select></label
+          </select><small v-if="lessonsLoading" role="status">Đang tải bài học...</small><small v-if="lessonsError" role="alert">{{ lessonsError }} <button type="button" @click="loadLessonOptions">Thử lại</button></small></label
         ><label
           >Lĩnh vực liên quan<input
             :value="
@@ -293,8 +293,8 @@
   </section>
 </template>
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
-import { axiosClient } from "../api/axiosClient";
+import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
+import { getQuizCourses, getQuizContext, type QuizCourseContext, type QuizLessonContext } from "../api/quizContextApi";
 import {
   contentToolsApi,
   contentToolsError,
@@ -302,7 +302,6 @@ import {
   difficultyLabel,
   type BankQuestion,
 } from "../api/contentToolsApi";
-import type { Course } from "../types";
 import AdminModal from "./AdminModal.vue";
 import TablePagination from "./TablePagination.vue";
 import { useTablePagination } from "../composables/useTablePagination";
@@ -314,7 +313,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ added: [] }>();
 const items = ref<BankQuestion[]>([]),
-  courses = ref<Course[]>([]),
+  courses = ref<QuizCourseContext[]>([]),
   loading = ref(false),
   saving = ref(false),
   error = ref(""),
@@ -338,6 +337,27 @@ const blank = (): BankQuestion => ({
   status: "DRAFT",
 });
 const form = ref<BankQuestion>(blank());
+const lessonOptions = ref<QuizLessonContext[]>([]);
+const lessonsLoading = ref(false);
+const lessonsError = ref('');
+let lessonRequestId = 0;
+async function loadLessonOptions() {
+  const id = ++lessonRequestId;
+  lessonOptions.value = [];
+  lessonsError.value = '';
+  if (!formOpen.value || !form.value.courseId) { lessonsLoading.value = false; return; }
+  lessonsLoading.value = true;
+  try {
+    const context = await getQuizContext({ courseId: form.value.courseId });
+    if (id === lessonRequestId) lessonOptions.value = context.lessons;
+  } catch {
+    if (id === lessonRequestId) lessonsError.value = 'Không thể tải bài học. Vui lòng thử lại.';
+  } finally {
+    if (id === lessonRequestId) lessonsLoading.value = false;
+  }
+}
+watch([() => form.value.courseId, formOpen], loadLessonOptions);
+onBeforeUnmount(() => { ++lessonRequestId; });
 const writableCourses = computed(() =>
   courses.value.filter((c) => c.adminActions?.exams?.includes("create")),
 );
@@ -373,12 +393,10 @@ async function load() {
   try {
     const results = await Promise.all([
       contentToolsApi.bank(),
-      axiosClient.get<Course[]>("/api/admin/courses", {
-        params: { page: "exams" },
-      }),
+      getQuizCourses(),
     ]);
     items.value = results[0];
-    courses.value = results[1].data;
+    courses.value = results[1];
     selected.value = selected.value.filter((id) =>
       items.value.some((q) => q.id === id && q.status === "ACTIVE"),
     );
@@ -418,7 +436,7 @@ function removeOption(index: number) {
     .map((i) => (i > index ? i - 1 : i));
 }
 async function save() {
-  if (saving.value) return;
+  if (saving.value || lessonsLoading.value || lessonsError.value) return;
   saving.value = true;
   formError.value = "";
   try {

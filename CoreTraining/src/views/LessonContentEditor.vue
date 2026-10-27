@@ -1,10 +1,10 @@
 <template>
   <section class="card embedded-content">
     <form class="lesson-modal-form" @submit.prevent="saveLesson">
-      <div ref="lessonModalBodyRef" class="lesson-modal-body">
+      <div ref="lessonModalBodyRef" class="lesson-modal-body lesson-authoring-fields">
         <div class="form-row">
           <div class="form-group col">
-            <label>Khóa học trực thuộc</label>
+            <label>Khóa học trực thuộc <span class="required-mark" aria-hidden="true">*</span></label>
             <select
               v-model="lessonForm.courseId"
               class="form-control"
@@ -21,7 +21,7 @@
             </select>
           </div>
           <div class="form-group col">
-            <label>Mã bài học (Ví dụ: 'LN03', 'CIF05')</label>
+            <label>Mã bài học (Ví dụ: 'LN03', 'CIF05') <span class="required-mark" aria-hidden="true">*</span></label>
             <input
               v-model="lessonForm.id"
               type="text"
@@ -33,7 +33,7 @@
         </div>
 
         <div class="form-group">
-          <label>Tiêu đề bài học</label>
+          <label>Tiêu đề bài học <span class="required-mark" aria-hidden="true">*</span></label>
           <input
             v-model="lessonForm.title"
             type="text"
@@ -43,7 +43,7 @@
         </div>
 
         <div class="form-group">
-          <label>Gợi ý nghiệp vụ nhanh (Hint)</label>
+          <label>Gợi ý nghiệp vụ nhanh (Hint) <span class="required-mark" aria-hidden="true">*</span></label>
           <input
             v-model="lessonForm.hint"
             type="text"
@@ -52,8 +52,9 @@
           />
         </div>
 
-        <div class="form-group video-source-group">
-          <label id="video-source-label">Nguồn video bài học</label>
+        <LessonContentSelection v-model="selectedContentTypes" v-model:documents="lessonForm.documents" :read-only="readOnly || loading" />
+        <div v-if="selectedContentTypes.includes('VIDEO')" class="form-group video-source-group">
+          <label id="video-source-label">Nguồn video bài học <span class="required-mark" aria-hidden="true">*</span></label>
           <div
             class="video-source-options"
             role="radiogroup"
@@ -157,6 +158,7 @@
         </div>
 
         <LessonTextEditor
+          v-if="selectedContentTypes.includes('TEXT')"
           v-model="lessonForm.textBody"
           :read-only="readOnly || loading"
           @attach="addLessonDocument"
@@ -234,11 +236,11 @@
               <Plus :size="15" /> Thêm tài liệu
             </button>
           </div>
-          <div v-if="lessonForm.documents.length === 0" class="empty-state-box">
+          <div v-if="!lessonForm.documents.some(document => document.purpose !== 'SLIDE')" class="empty-state-box">
             Bài học chưa có tài liệu đính kèm.
           </div>
           <div
-            v-for="(document, index) in lessonForm.documents"
+            v-for="{ document, index } in lessonForm.documents.map((document, index) => ({ document, index })).filter(({ document }) => document.purpose !== 'SLIDE')"
             :key="index"
             class="document-form-card"
           >
@@ -247,7 +249,7 @@
             </div>
             <div class="document-form-fields">
               <div class="form-group">
-                <label>Tên hiển thị</label>
+                <label>Tên hiển thị <span class="required-mark" aria-hidden="true">*</span></label>
                 <input
                   v-model="document.name"
                   class="form-control"
@@ -256,7 +258,7 @@
                 />
               </div>
               <div class="form-group document-file-field">
-                <label>Chọn file PDF, Word hoặc PowerPoint</label>
+                <label>Chọn file PDF, Word hoặc PowerPoint <span class="required-mark" aria-hidden="true">*</span></label>
                 <div class="file-upload-control">
                   <label v-if="!readOnly" class="file-picker">
                     <Upload :size="18" />
@@ -357,6 +359,9 @@
   </section>
 </template>
 <script setup lang="ts">
+import '../assets/styles/lesson-authoring.css';
+import LessonContentSelection from '../components/lesson/LessonContentSelection.vue';
+import { lessonContentTypes, selectedLessonContent, validateSelectedLessonContent, type LessonContentType } from '../utils/lessonContent';
 import { scrollWithin } from "../utils/scrollWithin";
 import { ref, computed, nextTick, watch, defineAsyncComponent } from "vue";
 import { Upload, Link2, Plus, FileText, X, Trash2, Sparkles, ShieldAlert } from "lucide-vue-next";
@@ -391,6 +396,8 @@ const lessonForm = ref({
     steps: [...s.steps],
   })),
 });
+const selectedContentTypes = ref<LessonContentType[]>(lessonContentTypes(props.lesson));
+watch(selectedContentTypes, () => emit("dirty", true), { deep: true });
 watch(lessonForm, () => emit("dirty", true), { deep: true });
 const lessonModalBodyRef = ref<HTMLElement | null>(null);
 
@@ -430,6 +437,7 @@ const clearVideoFile = (event: MouseEvent) => {
 
 const addLessonDocument = async () => {
   lessonForm.value.documents.push({
+    purpose: "SUPPORTING",
     name: "",
     documentType: "PDF",
     fileUrl: "",
@@ -549,7 +557,9 @@ const saveLesson = async () => {
   loading.value = true;
   videoUploadProgress.value = null;
   try {
-    const videoUrl =
+    validateSelectedLessonContent(lessonForm.value, selectedContentTypes.value);
+    const activeContent = selectedLessonContent(lessonForm.value, selectedContentTypes.value);
+    const videoUrl = !selectedContentTypes.value.includes("VIDEO") ? "" :
       lessonForm.value.videoSource === "UPLOAD" && lessonForm.value.videoFile
         ? await adminApi.uploadVideo(lessonForm.value.videoFile, (percent) => {
             videoUploadProgress.value = percent;
@@ -557,12 +567,13 @@ const saveLesson = async () => {
         : lessonForm.value.videoUrl.trim();
     videoUploadProgress.value = null;
     const documents = await Promise.all(
-      lessonForm.value.documents.map(async (document, index) => {
+      activeContent.documents.map(async (document, index) => {
         const uploaded = document.file
           ? await adminApi.uploadDocument(document.file)
           : document;
         return {
-          id: uploaded.id,
+          id: document.file ? undefined : document.id,
+          purpose: document.purpose || "SUPPORTING",
           name: document.name || uploaded.name,
           documentType: uploaded.documentType,
           fileUrl: uploaded.fileUrl,
@@ -574,7 +585,7 @@ const saveLesson = async () => {
     );
 
     const payload = {
-      ...lessonForm.value,
+      ...activeContent,
       videoUrl,
       documents,
       procedureSteps: lessonForm.value.procedureSteps,

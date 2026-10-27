@@ -23,6 +23,10 @@ public interface CourseMapper {
         @Mapping(target = "allowedActions", ignore = true)
         @Mapping(target = "adminActions", ignore = true)
         @Mapping(target = "canEdit", ignore = true)
+        // Populated explicitly by mapCourseUnitGrants on the DTO builder.
+        @Mapping(target = "mandatoryUnitIds", ignore = true)
+        @Mapping(target = "optionalUnitIds", ignore = true)
+        @Mapping(target = "unitIds", ignore = true)
         @Mapping(target = "hasQuiz", expression = "java(course.getQuestions() != null && course.getQuestions().stream().anyMatch(question -> question.getLesson() == null))")
         @Mapping(source = "program.id", target = "programId")
         @Mapping(source = "program.name", target = "programName")
@@ -33,7 +37,7 @@ public interface CourseMapper {
         List<CourseDto> toCourseDtoList(List<Course> courses);
 
         @AfterMapping
-        default void mapCourseUnitGrants(Course course, @MappingTarget CourseDto dto) {
+        default void mapCourseUnitGrants(Course course, @MappingTarget CourseDto.CourseDtoBuilder dto) {
                 java.util.Set<String> mandatory = new java.util.HashSet<>();
                 java.util.Set<String> optional = new java.util.HashSet<>();
                 if (course.getUnitGrants() != null) {
@@ -45,11 +49,11 @@ public interface CourseMapper {
                                 }
                         }
                 }
-                dto.setMandatoryUnitIds(mandatory);
-                dto.setOptionalUnitIds(optional);
+                dto.mandatoryUnitIds(mandatory);
+                dto.optionalUnitIds(optional);
                 java.util.Set<String> allUnits = new java.util.HashSet<>(mandatory);
                 allUnits.addAll(optional);
-                dto.setUnitIds(allUnits);
+                dto.unitIds(allUnits);
         }
 
         @AfterMapping
@@ -101,6 +105,8 @@ public interface CourseMapper {
         @Mapping(source = "parent.id", target = "parentId")
         @Mapping(source = "replyToUsername", target = "replyToUser")
         @Mapping(target = "replies", qualifiedByName = "allComments")
+        @Mapping(target = "repliesHasMore", ignore = true)
+        @Mapping(target = "replyCursor", ignore = true)
         CommentDto toCommentDto(Comment comment);
 
         @InheritConfiguration(name = "toCommentDto")

@@ -1,0 +1,160 @@
+/* Shared appearance for all fields in lesson create/edit forms. Keep neutral
+   field surfaces and reserve the brand accent for selected/focused controls. */
+.lesson-authoring-fields:is(.lesson-modal-body, .legacy-lesson-fields) {
+  --lesson-control-font-size: 0.85rem;
+  --lesson-label-font-size: 0.75rem;
+  --lesson-help-font-size: 0.75rem;
+  font-family: var(--font-family);
+  font-size: var(--lesson-control-font-size);
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.lesson-authoring-fields:is(.lesson-modal-body, .legacy-lesson-fields) :is(
+  input,
+  select,
+  textarea,
+  button,
+  .file-picker,
+  .file-picker span,
+  .readonly-file,
+  .content-selection summary,
+  .content-selection .content-option
+) {
+  font-family: var(--font-family);
+  font-size: var(--lesson-control-font-size);
+  font-style: normal;
+  font-weight: 400;
+  letter-spacing: normal;
+  line-height: 1.5;
+}
+
+.lesson-authoring-fields:is(.lesson-modal-body, .legacy-lesson-fields) :is(
+  .slide-heading h2,
+  .workspace-heading h2,
+  .supporting-section h2,
+  .video-source-group > label
+) {
+  margin: 0 0 0.35rem;
+  color: var(--text-main);
+  font-size: var(--lesson-label-font-size);
+  font-weight: 700;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.lesson-authoring-fields:is(.lesson-modal-body, .legacy-lesson-fields) :is(
+  .form-group > label,
+  .field-label,
+  .slide-name-field > span,
+  .document-form-index
+) {
+  color: var(--text-main);
+  font-size: var(--lesson-label-font-size);
+  font-weight: 700;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.lesson-authoring-fields:is(.lesson-modal-body, .legacy-lesson-fields) :is(
+  .form-control,
+  .file-picker,
+  .readonly-file,
+  .video-source-option,
+  .text-workspace,
+  .document-form-card,
+  .supporting-section,
+  .content-selection details
+) {
+  border-color: var(--border-color);
+  background: var(--surface-ffffff);
+  color: var(--text-main);
+}
+
+.lesson-authoring-fields:is(.lesson-modal-body, .legacy-lesson-fields) :is(.file-picker, .readonly-file) {
+  border-style: solid;
+  text-transform: none;
+}
+
+.lesson-authoring-fields:is(.lesson-modal-body, .legacy-lesson-fields) .file-picker span {
+  color: var(--text-main);
+  font-size: var(--lesson-control-font-size);
+  font-weight: 400;
+}
+
+.lesson-authoring-fields:is(.lesson-modal-body, .legacy-lesson-fields) .form-control::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.lesson-authoring-fields:is(.lesson-modal-body, .legacy-lesson-fields) :is(
+  .slide-heading p,
+  .workspace-heading p,
+  .section-description,
+  .slide-help,
+  .video-source-help,
+  .selected-file-meta,
+  .selected-video-note,
+  .video-source-option small,
+  .workspace-status
+) {
+  color: var(--text-muted);
+  font-size: var(--lesson-help-font-size);
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+.lesson-authoring-fields:is(.lesson-modal-body, .legacy-lesson-fields) .video-source-option {
+  color: var(--text-main);
+  text-transform: none;
+}
+
+.lesson-authoring-fields:is(.lesson-modal-body, .legacy-lesson-fields) .video-source-option strong {
+  font-family: var(--font-family);
+  font-size: var(--lesson-control-font-size);
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.lesson-authoring-fields:is(.lesson-modal-body, .legacy-lesson-fields) :is(
+  .lesson-writing-surface .tiptap,
+  .writing-area textarea,
+  .content-preview
+) {
+  font-family: var(--font-family);
+  font-size: var(--lesson-control-font-size);
+  font-weight: 400;
+  line-height: 1.8;
+}
+
+.lesson-authoring-fields:is(.lesson-modal-body, .legacy-lesson-fields) .video-source-option.active {
+  border-color: var(--primary-color);
+  background: var(--surface-ffffff);
+  color: var(--text-main);
+  box-shadow: 0 0 0 1px var(--primary-color);
+}
+
+.lesson-authoring-fields:is(.lesson-modal-body, .legacy-lesson-fields) :is(.file-picker:hover, .form-control:focus) {
+  border-color: var(--primary-color);
+  background: var(--surface-ffffff);
+}
+
+.lesson-authoring-fields:is(.lesson-modal-body, .legacy-lesson-fields) .expand-button,
+.lesson-authoring-fields:is(.lesson-modal-body, .legacy-lesson-fields) .format-toolbar button {
+  color: var(--text-main);
+}
+
+.lesson-authoring-fields:is(.lesson-modal-body, .legacy-lesson-fields) :is(.format-toolbar, .workspace-status) {
+  background: var(--bg-main);
+}
+
+.lesson-authoring-fields:is(.lesson-modal-body, .legacy-lesson-fields) .writing-area textarea {
+  background: var(--surface-ffffff);
+  color: var(--text-main);
+}
+
+.lesson-authoring-fields:is(.lesson-modal-body, .legacy-lesson-fields) .required-mark {
+  margin-left: 0.2rem;
+  color: var(--ink-b42318);
+  font-weight: 700;
+}

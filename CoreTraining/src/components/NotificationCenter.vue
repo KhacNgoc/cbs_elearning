@@ -39,6 +39,7 @@
                 v-else-if="item.type === 'COURSE_CONTENT_UPDATED'"
                 :size="18"
               />
+              <UserRoundX v-else-if="item.type === 'ENROLLMENT_REJECTED'" :size="18" />
               <UserRoundCheck v-else :size="18" />
             </span>
             <span
@@ -93,6 +94,7 @@ import {
   MessageCircleReply,
   TriangleAlert,
   UserRoundCheck,
+  UserRoundX,
   X,
 } from "lucide-vue-next";
 import { notificationApi, type AppNotification } from "../api/notificationApi";

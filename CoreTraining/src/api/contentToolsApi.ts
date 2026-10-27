@@ -94,6 +94,9 @@ export const contentToolsApi = {
       )
     ).data;
   },
+  async report(id: number) {
+    return (await axiosClient.get<LessonReport>(`/api/lesson-reports/${id}`)).data;
+  },
   async reports() {
     return (await axiosClient.get<LessonReport[]>("/api/admin/content-reports"))
       .data;

@@ -40,6 +40,7 @@ class AccessSecurityIntegrationTest {
     @Autowired LessonRepository lessons;
     @Autowired UserGroupRepository groups;
     @Autowired CourseEnrollmentRequestRepository enrollmentRequests;
+    @Autowired CommentRepository comments;
     OrganizationUnit a,b,child;
     Course ca,cb;
     Lesson la,lb;
@@ -78,6 +79,24 @@ class AccessSecurityIntegrationTest {
     }
     Map<String,Object> userBody(User u){Map<String,Object> r=new HashMap<>();r.put("username",u.getUsername());r.put("fullName",u.getFullName());r.put("role",u.getRole());r.put("roles",u.effectiveRoles());r.put("unitId",u.getOrganizationUnit()==null?null:u.getOrganizationUnit().getId());r.put("status",u.getStatus());r.put("points",0);return r;}
 
+    @Test void commentReplyEndpointLimitsPagesAndEnforcesLessonAccess() throws Exception {
+        var root = comments.save(Comment.builder().lesson(la).username(learner.getUsername()).avatar("L")
+                .content("Thread").createdAt(java.time.LocalDateTime.now().plusSeconds(1)).build());
+        for (int i=0; i<12; i++) comments.save(Comment.builder().lesson(la).parent(root).username(learner.getUsername())
+                .avatar("L").content("Reply " + i).createdAt(java.time.LocalDateTime.of(2026,10,1,9,0)).build());
+        comments.flush(); var jwt = login(learner);
+        var initial = mvc.perform(get("/api/lessons/LA/comments").cookie(jwt)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].replies.length()").value(5))
+                .andExpect(jsonPath("$.content[0].repliesHasMore").value(true)).andReturn();
+        var cursor = json.readTree(initial.getResponse().getContentAsString()).path("content").get(0).path("replyCursor").asText();
+        mvc.perform(get("/api/lessons/LA/comments/"+root.getId()+"/replies").param("after",cursor).cookie(jwt))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(5))
+                .andExpect(jsonPath("$.content[0].content").value("Reply 5")).andExpect(jsonPath("$.hasMore").value(true));
+        mvc.perform(get("/api/lessons/LA/comments/"+root.getId()+"/replies").param("after","!").cookie(jwt)).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/lessons/LB/comments/"+root.getId()+"/replies").cookie(jwt)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/lessons/LA/comments/"+root.getId()+"/replies")).andExpect(status().isUnauthorized());
+    }
+
     @Test void trainingReportsReadPersistedProgressAndEnforceScope() throws Exception {
         learner.getCompletedLessons().add(la);
         learner.getCompletedCourses().put("CA",java.time.LocalDateTime.of(2026,10,10,9,0));
@@ -97,6 +116,12 @@ class AccessSecurityIntegrationTest {
     }
 
     @Test void learnerWorkspaceUsesOnlyVisibleCoursesAndRestoresDocumentAndVideoBookmarks() throws Exception {
+        // Only slide learning content is an automatic resume target. Supporting
+        // file bookmarks remain available when a learner opens that attachment.
+        la.getDocuments().get(0).setPurpose(DocumentPurpose.SLIDE);
+        la.getDocuments().get(0).setDocumentType(DocumentType.POWERPOINT);
+        la.getDocuments().get(0).setFileUrl("/uploads/documents/protected.pptx");
+        lessons.saveAndFlush(la);
         Cookie jwt=login(learner);
         mvc.perform(get("/api/users/me/learning").cookie(jwt)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.courses.length()").value(1)).andExpect(jsonPath("$.courses[0].course.id").value("CA"))

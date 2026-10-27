@@ -111,7 +111,7 @@
                     :class="{ expanded: expandedLessons.has(item.id) }"
                     @click="toggleDocuments(item.id)"
                   >
-                    <FolderOpen :size="14" /><span>Tài liệu</span
+                    <FolderOpen :size="14" /><span>Tài liệu tham khảo</span
                     ><span class="resource-count">{{ getDocuments(item).length }}</span
                     ><ChevronDown :size="14" />
                   </button>
@@ -286,7 +286,7 @@ const courseQuizPassed = computed(() => {
   );
 });
 const getDocuments = (lesson: Lesson): LessonDocument[] => {
-  return lesson.documents || [];
+  return (lesson.documents || []).filter(document => document.purpose !== 'SLIDE');
 };
 const formatFileSize = (size?: number) =>
   size ? `${(size / 1024 / 1024).toFixed(1)} MB` : "Tệp đính kèm";
