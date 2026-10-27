@@ -94,34 +94,6 @@
         </div>
 
         <div class="filter-controls">
-          <!-- Type Filter -->
-          <div class="filter-pills">
-            <button
-              type="button"
-              class="filter-pill"
-              :class="{ active: typeFilter === 'ALL' }"
-              @click="typeFilter = 'ALL'"
-            >
-              Tất cả ({{ units.length }})
-            </button>
-            <button
-              type="button"
-              class="filter-pill"
-              :class="{ active: typeFilter === 'BRANCH' }"
-              @click="typeFilter = 'BRANCH'"
-            >
-              Chi nhánh / Hội sở ({{ branchCount }})
-            </button>
-            <button
-              type="button"
-              class="filter-pill"
-              :class="{ active: typeFilter === 'DEPARTMENT' }"
-              @click="typeFilter = 'DEPARTMENT'"
-            >
-              Phòng ban ({{ deptCount }})
-            </button>
-          </div>
-
           <!-- Status Filter -->
           <div class="filter-pills status-pills">
             <button
@@ -170,7 +142,6 @@
             <tr>
               <th class="col-stt">STT</th>
               <th class="col-name">Đơn vị / Chi nhánh</th>
-              <th class="col-type">Loại hình</th>
               <th class="col-stat text-center">Lĩnh vực</th>
               <th class="col-stat text-center">Chương trình</th>
               <th class="col-stat text-center">Khóa học</th>
@@ -194,11 +165,6 @@
                     <span class="unit-main-name">{{ u.name }}</span>
                   </div>
                 </div>
-              </td>
-              <td class="col-type">
-                <span class="unit-type-tag" :class="u.type === 'DEPARTMENT' ? 'dept' : 'branch'">
-                  {{ u.type === 'DEPARTMENT' ? 'Phòng ban' : 'Chi nhánh / Hội sở' }}
-                </span>
               </td>
               <td class="col-stat text-center">
                 <span class="badge-stat stat-domain">
@@ -991,9 +957,6 @@ const unitDirectoryPageSize = 10;
 // Filter active items
 const activeDomains = computed(() => domains.value.filter((d) => d.status !== "DELETED"));
 const activePrograms = computed(() => programs.value.filter((p) => p.status !== "DELETED"));
-
-const branchCount = computed(() => units.value.filter((u) => u.type !== "DEPARTMENT").length);
-const deptCount = computed(() => units.value.filter((u) => u.type === "DEPARTMENT").length);
 
 const allocatedUnitsCount = computed(() => {
   return units.value.filter((u) => isUnitAllocated(u.id)).length;
@@ -3275,14 +3238,14 @@ async function handleExecuteBatchSync() {
   color: var(--text-main);
 }
 
-:root[data-theme="dark"] .badge-allocation-status.allocated {
-  background: #19382f;
-  color: #7cddba;
+:root[data-theme="dark"] .badge-allocation-status.allocated,
+:root[data-theme="dark"] .badge-allocation-status.unallocated {
+  background: transparent;
+  color: var(--text-main);
 }
 
-:root[data-theme="dark"] .badge-allocation-status.unallocated {
-  background: var(--bg-subtle);
-  color: var(--text-muted);
+:root[data-theme="dark"] .badge-allocation-status .dot {
+  background: var(--text-muted);
 }
 
 :root[data-theme="dark"] .btn-action-primary {
