@@ -186,7 +186,6 @@
                   class="badge-allocation-status"
                   :class="isUnitAllocated(u.id) ? 'allocated' : 'unallocated'"
                 >
-                  <span class="dot"></span>
                   <span>{{ isUnitAllocated(u.id) ? 'Đã phân bổ' : 'Chưa phân bổ' }}</span>
                 </span>
               </td>
