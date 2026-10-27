@@ -147,4 +147,32 @@ export const trainingApi = {
       }>(`/api/admin/programs/${encodeURIComponent(programId)}/courses`, { params })
     ).data;
   },
+  async unitDirectoryPaged(params?: { search?: string; type?: string; status?: string; page?: number; size?: number }) {
+    return (
+      await axiosClient.get<{
+        items: {
+          id: string;
+          name: string;
+          type: string;
+          active: boolean;
+          parentId?: string;
+          domainCount: number;
+          programCount: number;
+          courseCount: number;
+          isAllocated: boolean;
+        }[];
+        page: number;
+        size: number;
+        totalElements: number;
+        totalPages: number;
+        stats: {
+          totalCount: number;
+          allocatedCount: number;
+          unallocatedCount: number;
+          branchCount: number;
+          departmentCount: number;
+        };
+      }>("/api/admin/unit-allocations/directory", { params })
+    ).data;
+  },
 };

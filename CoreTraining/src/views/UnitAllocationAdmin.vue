@@ -36,7 +36,7 @@
         </div>
         <div class="stat-info">
           <span class="stat-label">Tổng số Đơn vị</span>
-          <strong class="stat-value">{{ units.length }}</strong>
+          <strong class="stat-value">{{ directoryStats.totalCount || units.length }}</strong>
         </div>
       </div>
 
@@ -46,7 +46,7 @@
         </div>
         <div class="stat-info">
           <span class="stat-label">Đơn vị đã phân bổ</span>
-          <strong class="stat-value">{{ allocatedUnitsCount }}</strong>
+          <strong class="stat-value">{{ directoryStats.allocatedCount || allocatedUnitsCount }}</strong>
         </div>
       </div>
 
@@ -126,12 +126,12 @@
 
       <!-- DIRECTORY TABLE -->
       <div class="table-responsive">
-        <div v-if="loading" class="table-loading-state">
+        <div v-if="loading || loadingDirectory" class="table-loading-state">
           <Loader2 :size="32" class="spin-icon" />
           <p>Đang tải danh sách đơn vị và phân bổ đào tạo...</p>
         </div>
 
-        <div v-else-if="filteredDirectoryUnits.length === 0" class="table-empty-state">
+        <div v-else-if="pagedDirectoryUnits.length === 0" class="table-empty-state">
           <Building2 :size="36" class="empty-icon" />
           <h4>Không tìm thấy đơn vị phù hợp</h4>
           <p>Thử tìm kiếm với từ khóa khác hoặc điều chỉnh lại bộ lọc.</p>
@@ -168,25 +168,25 @@
               </td>
               <td class="col-stat text-center">
                 <span class="badge-stat stat-domain">
-                  {{ getUnitDomainCount(u.id) }}
+                  {{ u.domainCount ?? getUnitDomainCount(u.id) }}
                 </span>
               </td>
               <td class="col-stat text-center">
                 <span class="badge-stat stat-program">
-                  {{ getUnitProgramCount(u.id) }}
+                  {{ u.programCount ?? getUnitProgramCount(u.id) }}
                 </span>
               </td>
               <td class="col-stat text-center">
                 <span class="badge-stat stat-course">
-                  {{ getUnitCourseCount(u.id) }}
+                  {{ u.courseCount ?? getUnitCourseCount(u.id) }}
                 </span>
               </td>
               <td class="col-status text-center">
                 <span
                   class="badge-allocation-status"
-                  :class="isUnitAllocated(u.id) ? 'allocated' : 'unallocated'"
+                  :class="(u.isAllocated ?? isUnitAllocated(u.id)) ? 'allocated' : 'unallocated'"
                 >
-                  <span>{{ isUnitAllocated(u.id) ? 'Đã phân bổ' : 'Chưa phân bổ' }}</span>
+                  <span>{{ (u.isAllocated ?? isUnitAllocated(u.id)) ? 'Đã phân bổ' : 'Chưa phân bổ' }}</span>
                 </span>
               </td>
               <td class="col-actions text-right">
@@ -220,9 +220,9 @@
       </div>
 
       <!-- PAGINATION BAR -->
-      <div v-if="filteredDirectoryUnits.length > unitDirectoryPageSize" class="directory-pagination">
+      <div v-if="unitDirectoryTotalElements > unitDirectoryPageSize" class="directory-pagination">
         <span class="pagination-summary">
-          Hiển thị {{ (unitDirectoryPage - 1) * unitDirectoryPageSize + 1 }}–{{ Math.min(unitDirectoryPage * unitDirectoryPageSize, filteredDirectoryUnits.length) }} trong tổng số {{ filteredDirectoryUnits.length }} đơn vị
+          Hiển thị {{ (unitDirectoryPage - 1) * unitDirectoryPageSize + 1 }}–{{ Math.min(unitDirectoryPage * unitDirectoryPageSize, unitDirectoryTotalElements) }} trong tổng số {{ unitDirectoryTotalElements }} đơn vị
         </span>
         <div class="pagination-buttons">
           <button
@@ -954,12 +954,64 @@ function openBatchModalFromDetail() {
   }
 }
 
-// Directory Search & Filters
+// Directory Search & Filters (Server-side Pagination & DB Trigram Search)
 const unitDirectoryQuery = ref("");
 const typeFilter = ref<"ALL" | "BRANCH" | "DEPARTMENT">("ALL");
 const statusFilter = ref<"ALL" | "ALLOCATED" | "UNALLOCATED">("ALL");
 const unitDirectoryPage = ref(1);
 const unitDirectoryPageSize = 10;
+const unitDirectoryTotalElements = ref(0);
+const unitDirectoryTotalPages = ref(1);
+const pagedDirectoryUnits = ref<any[]>([]);
+const directoryStats = ref({
+  totalCount: 0,
+  allocatedCount: 0,
+  unallocatedCount: 0,
+  branchCount: 0,
+  departmentCount: 0,
+});
+const loadingDirectory = ref(false);
+
+let unitSearchTimer: ReturnType<typeof setTimeout> | null = null;
+watch(unitDirectoryQuery, () => {
+  if (unitSearchTimer) clearTimeout(unitSearchTimer);
+  unitSearchTimer = setTimeout(() => {
+    unitDirectoryPage.value = 1;
+    fetchDirectoryUnits();
+  }, 300);
+});
+
+watch([typeFilter, statusFilter], () => {
+  unitDirectoryPage.value = 1;
+  fetchDirectoryUnits();
+});
+
+watch(unitDirectoryPage, () => {
+  fetchDirectoryUnits();
+});
+
+async function fetchDirectoryUnits() {
+  loadingDirectory.value = true;
+  try {
+    const res = await trainingApi.unitDirectoryPaged({
+      search: unitDirectoryQuery.value.trim() || undefined,
+      type: typeFilter.value,
+      status: statusFilter.value,
+      page: unitDirectoryPage.value - 1,
+      size: unitDirectoryPageSize,
+    });
+    pagedDirectoryUnits.value = res.items || [];
+    unitDirectoryTotalElements.value = res.totalElements || 0;
+    unitDirectoryTotalPages.value = Math.max(1, res.totalPages || 1);
+    if (res.stats) {
+      directoryStats.value = res.stats;
+    }
+  } catch (err) {
+    console.error("Lỗi khi tải danh mục đơn vị:", err);
+  } finally {
+    loadingDirectory.value = false;
+  }
+}
 
 // Filter active items
 const activeDomains = computed(() => domains.value.filter((d) => d.status !== "DELETED"));
@@ -1005,36 +1057,7 @@ function getUnitCourseCount(uId: string): number {
   ).length;
 }
 
-const filteredDirectoryUnits = computed(() => {
-  return units.value.filter((u) => {
-    if (unitDirectoryQuery.value.trim()) {
-      const q = unitDirectoryQuery.value.trim().toLowerCase();
-      if (!u.name.toLowerCase().includes(q)) return false;
-    }
-
-    if (typeFilter.value === "DEPARTMENT" && u.type !== "DEPARTMENT") return false;
-    if (typeFilter.value === "BRANCH" && u.type === "DEPARTMENT") return false;
-
-    const allocated = isUnitAllocated(u.id);
-    if (statusFilter.value === "ALLOCATED" && !allocated) return false;
-    if (statusFilter.value === "UNALLOCATED" && allocated) return false;
-
-    return true;
-  });
-});
-
-const unitDirectoryTotalPages = computed(() =>
-  Math.max(1, Math.ceil(filteredDirectoryUnits.value.length / unitDirectoryPageSize))
-);
-
-const pagedDirectoryUnits = computed(() => {
-  const start = (unitDirectoryPage.value - 1) * unitDirectoryPageSize;
-  return filteredDirectoryUnits.value.slice(start, start + unitDirectoryPageSize);
-});
-
-watch([unitDirectoryQuery, typeFilter, statusFilter], () => {
-  unitDirectoryPage.value = 1;
-});
+// Old in-memory filter replaced by server-side pagination & trigram search
 
 // Load metadata
 async function loadData() {
@@ -1044,6 +1067,7 @@ async function loadData() {
       trainingApi.catalog(),
       axiosClient.get("/api/admin/options/catalog"),
       trainingApi.courses(),
+      fetchDirectoryUnits(),
     ]);
 
     domains.value = catalog.domains || [];

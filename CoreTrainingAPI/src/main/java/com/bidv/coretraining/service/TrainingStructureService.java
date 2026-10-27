@@ -7,6 +7,7 @@ import com.bidv.coretraining.exception.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 
 @Service
 @Transactional
@@ -1650,4 +1651,97 @@ public class TrainingStructureService {
     public void requireCourse(String id, String username) {
         LearningPolicy.assertCourseAccess(user(username), course(id));
     }
+
+    public Map<String, Object> getUnitAllocationDirectoryPaged(String search, String type, String status, int page, int size) {
+        String query = (search != null && !search.isBlank()) ? search.trim() : null;
+        String typeFilter = (type != null && !type.isBlank()) ? type.trim().toUpperCase() : "ALL";
+        String statusFilter = (status != null && !status.isBlank()) ? status.trim().toUpperCase() : "ALL";
+
+        int pageSize = size > 0 ? size : 10;
+        int offset = Math.max(0, page) * pageSize;
+
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        params.addValue("search", query);
+        params.addValue("limit", pageSize);
+        params.addValue("offset", offset);
+
+        StringBuilder whereClause = new StringBuilder(" WHERE 1=1 ");
+        if (query != null) {
+            whereClause.append(" AND u.name ILIKE CONCAT('%', :search, '%') ");
+        }
+        if ("DEPARTMENT".equals(typeFilter)) {
+            whereClause.append(" AND u.type = 'DEPARTMENT' ");
+        } else if ("BRANCH".equals(typeFilter)) {
+            whereClause.append(" AND u.type <> 'DEPARTMENT' ");
+        }
+        if ("ALLOCATED".equals(statusFilter)) {
+            whereClause.append(" AND (EXISTS (SELECT 1 FROM domain_unit_grants dug WHERE dug.unit_id = u.id) OR " +
+                               "      EXISTS (SELECT 1 FROM program_unit_grants pug WHERE pug.unit_id = u.id) OR " +
+                               "      EXISTS (SELECT 1 FROM course_unit_grants cug WHERE cug.unit_id = u.id)) ");
+        } else if ("UNALLOCATED".equals(statusFilter)) {
+            whereClause.append(" AND NOT (EXISTS (SELECT 1 FROM domain_unit_grants dug WHERE dug.unit_id = u.id) OR " +
+                               "          EXISTS (SELECT 1 FROM program_unit_grants pug WHERE pug.unit_id = u.id) OR " +
+                               "          EXISTS (SELECT 1 FROM course_unit_grants cug WHERE cug.unit_id = u.id)) ");
+        }
+
+        String countSql = "SELECT COUNT(*) FROM organization_units u " + whereClause;
+        Integer totalCount = namedParameterJdbcTemplate.queryForObject(countSql, params, Integer.class);
+        int totalElements = totalCount != null ? totalCount : 0;
+        int totalPages = (int) Math.ceil((double) totalElements / pageSize);
+
+        String dataSql = "SELECT u.id, u.name, u.type, u.active, u.parent_id, " +
+                "(SELECT COUNT(DISTINCT dug.domain_id) FROM domain_unit_grants dug WHERE dug.unit_id = u.id) AS domain_count, " +
+                "(SELECT COUNT(DISTINCT pug.program_id) FROM program_unit_grants pug WHERE pug.unit_id = u.id) AS program_count, " +
+                "(SELECT COUNT(DISTINCT cug.course_id) FROM course_unit_grants cug WHERE cug.unit_id = u.id) AS course_count " +
+                "FROM organization_units u " + whereClause + " ORDER BY u.name ASC LIMIT :limit OFFSET :offset";
+
+        List<Map<String, Object>> items = namedParameterJdbcTemplate.query(dataSql, params, (rs, rowNum) -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", rs.getString("id"));
+            map.put("name", rs.getString("name"));
+            map.put("type", rs.getString("type"));
+            map.put("active", rs.getBoolean("active"));
+            map.put("parentId", rs.getString("parent_id"));
+            int dCount = rs.getInt("domain_count");
+            int pCount = rs.getInt("program_count");
+            int cCount = rs.getInt("course_count");
+            map.put("domainCount", dCount);
+            map.put("programCount", pCount);
+            map.put("courseCount", cCount);
+            map.put("isAllocated", (dCount > 0 || pCount > 0 || cCount > 0));
+            return map;
+        });
+
+        // Overview stats for the pills
+        String statsSql = "SELECT " +
+                "COUNT(*) AS total_count, " +
+                "COUNT(CASE WHEN u.type = 'DEPARTMENT' THEN 1 END) AS department_count, " +
+                "COUNT(CASE WHEN u.type <> 'DEPARTMENT' THEN 1 END) AS branch_count, " +
+                "COUNT(CASE WHEN EXISTS (SELECT 1 FROM domain_unit_grants dug WHERE dug.unit_id = u.id) " +
+                "             OR EXISTS (SELECT 1 FROM program_unit_grants pug WHERE pug.unit_id = u.id) " +
+                "             OR EXISTS (SELECT 1 FROM course_unit_grants cug WHERE cug.unit_id = u.id) THEN 1 END) AS allocated_count " +
+                "FROM organization_units u";
+
+        Map<String, Object> stats = namedParameterJdbcTemplate.queryForMap(statsSql, Collections.emptyMap());
+        int totalUnits = ((Number) stats.getOrDefault("total_count", 0)).intValue();
+        int allocatedUnits = ((Number) stats.getOrDefault("allocated_count", 0)).intValue();
+        int branchUnits = ((Number) stats.getOrDefault("branch_count", 0)).intValue();
+        int departmentUnits = ((Number) stats.getOrDefault("department_count", 0)).intValue();
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("items", items);
+        res.put("page", page);
+        res.put("size", pageSize);
+        res.put("totalElements", totalElements);
+        res.put("totalPages", Math.max(1, totalPages));
+        res.put("stats", Map.of(
+                "totalCount", totalUnits,
+                "allocatedCount", allocatedUnits,
+                "unallocatedCount", Math.max(0, totalUnits - allocatedUnits),
+                "branchCount", branchUnits,
+                "departmentCount", departmentUnits
+        ));
+        return res;
+    }
+
 }

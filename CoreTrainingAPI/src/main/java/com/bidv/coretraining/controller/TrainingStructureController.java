@@ -121,6 +121,16 @@ public class TrainingStructureController {
             List<BatchChangeItem> changes
     ) {}
 
+    @GetMapping("/admin/unit-allocations/directory")
+    public Map<String, Object> getUnitAllocationDirectory(
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "ALL") String type,
+            @RequestParam(defaultValue = "ALL") String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return service.getUnitAllocationDirectoryPaged(search, type, status, page, size);
+    }
+
     @PostMapping("/admin/unit-allocations/batch-assign")
     public Map<String, Object> batchAssignUnitAllocation(@RequestBody UnitBatchAllocationRequest request) {
         return service.batchAssignUnitAllocation(request.unitId(), request.items());
