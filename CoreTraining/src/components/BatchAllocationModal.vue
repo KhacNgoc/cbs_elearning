@@ -1,45 +1,40 @@
 <template>
-  <div v-if="show" class="batch-modal-overlay" @click.self="$emit('close')">
-    <div class="batch-modal-card" role="dialog" aria-modal="true">
+  <div v-if="show" class="batch-modal-overlay" @click.self="handleClose">
+    <div class="batch-modal-container" role="dialog" aria-modal="true">
       <!-- HEADER -->
       <header class="batch-modal-header">
         <div class="header-left">
-          <div class="modal-badge-icon">
-            <Building2 :size="20" />
+          <div class="header-icon-wrap">
+            <Building2 :size="20" class="header-icon" />
           </div>
-          <div>
-            <h3>Phân bổ nội dung đào tạo</h3>
-            <p v-if="unit">
-              Áp dụng cho: <strong>{{ unit.name }}</strong>
-            </p>
+          <div class="header-titles">
+            <div class="title-row">
+              <h3>Phân bổ Đào tạo</h3>
+              <span class="target-unit-pill">
+                {{ unit?.name || "Đơn vị được chọn" }}
+              </span>
+            </div>
           </div>
         </div>
-        <button type="button" class="btn-close" @click="$emit('close')" title="Đóng">
-          <X :size="20" />
+        <button type="button" class="btn-close-modal" @click="handleClose" title="Đóng modal">
+          <X :size="18" />
         </button>
       </header>
 
-      <!-- TOOLBAR: SEARCH & EXPAND CONTROLS -->
-      <div class="batch-modal-toolbar">
-        <div class="toolbar-search">
-          <Search :size="16" class="search-icon" />
+      <!-- TOOLBAR: SEARCH & EXPAND -->
+      <div class="batch-toolbar">
+        <div class="search-wrap">
+          <Search :size="15" class="search-icon" />
           <input
-            v-model="searchInput"
             type="text"
-            placeholder="Tìm kiếm Lĩnh vực, Chương trình, Khóa học (theo tên hoặc mã)..."
+            v-model="searchQuery"
+            placeholder="Tìm nhanh Lĩnh vực, Chương trình, Khóa học theo tên hoặc mã..."
             class="search-input"
           />
-          <button
-            v-if="searchInput"
-            type="button"
-            class="search-clear-btn"
-            @click="searchInput = ''"
-            title="Xóa tìm kiếm"
-          >
+          <button v-if="searchQuery" type="button" class="btn-clear-search" @click="searchQuery = ''">
             <X :size="14" />
           </button>
         </div>
-
         <div class="toolbar-actions">
           <button
             type="button"
@@ -123,8 +118,8 @@
 
             <!-- PROGRAMS LIST (LEVEL 2) -->
             <div v-if="expandedDomainIds.has(d.id)" class="children-container program-children">
-              <div v-if="loadingProgramsByDomain.has(d.id)" class="loading-child-inline">
-                <Loader2 :size="16" class="spin-icon" />
+              <div v-if="loadingProgramsByDomain.has(d.id)" class="loading-child-hint">
+                <Loader2 :size="15" class="spin-icon" />
                 <span>Đang tải danh sách chương trình...</span>
               </div>
               <template v-else>
@@ -182,8 +177,8 @@
 
                   <!-- COURSES LIST (LEVEL 3) -->
                   <div v-if="expandedProgramIds.has(p.id)" class="children-container course-children">
-                    <div v-if="loadingCoursesByProgram.has(p.id) && coursesOf(p.id).length === 0" class="loading-child-inline">
-                      <Loader2 :size="15" class="spin-icon" />
+                    <div v-if="loadingCoursesByProgram.has(p.id) && coursesOf(p.id).length === 0" class="loading-child-hint">
+                      <Loader2 :size="14" class="spin-icon" />
                       <span>Đang tải danh sách khóa học...</span>
                     </div>
                     <template v-else>
@@ -227,17 +222,16 @@
                         </div>
                       </div>
 
-                      <div v-if="coursesHasNext(p.id)" class="show-more-row">
-                        <button
-                          type="button"
-                          class="btn-show-more"
-                          :disabled="loadingCoursesByProgram.has(p.id)"
-                          @click.stop="loadMoreCourses(p.id)"
-                        >
-                          <Loader2 v-if="loadingCoursesByProgram.has(p.id)" :size="13" class="spin-icon" />
-                          <span>Tải thêm khóa học tiếp theo...</span>
-                        </button>
-                      </div>
+                      <button
+                        v-if="coursesHasNext(p.id)"
+                        type="button"
+                        class="btn-show-more"
+                        :disabled="loadingCoursesByProgram.has(p.id)"
+                        @click.stop="loadMoreCourses(p.id)"
+                      >
+                        <Loader2 v-if="loadingCoursesByProgram.has(p.id)" :size="12" class="spin-icon" />
+                        <span>Tải thêm khóa học tiếp theo...</span>
+                      </button>
 
                       <div v-if="coursesOf(p.id).length === 0" class="empty-child-hint">
                         Chưa có khóa học nào trong chương trình này.
@@ -255,14 +249,14 @@
         </div>
       </div>
 
-      <!-- TREE PAGINATION (SERVER-SIDE) -->
+      <!-- TREE PAGINATION -->
       <div v-if="!loadingTree && totalPages > 1" class="tree-pagination">
         <span class="pagination-summary">
           Lĩnh vực {{ (page - 1) * DOMAIN_PAGE_SIZE + 1 }}–{{ Math.min(page * DOMAIN_PAGE_SIZE, totalDomainElements) }}
           / {{ totalDomainElements }}
         </span>
         <div class="pagination-buttons">
-          <button type="button" class="page-nav-btn" :disabled="page <= 1" @click="changePage(page - 1)">
+          <button type="button" class="page-nav-btn" :disabled="page === 1" @click="changePage(page - 1)">
             <ChevronLeft :size="14" />
           </button>
           <span class="page-current">{{ page }} / {{ totalPages }}</span>
@@ -287,26 +281,23 @@
                 <span class="switch-thumb"></span>
               </span>
               <span class="switch-label">
-                {{ hasSelection ? "Bỏ chọn tất cả" : "Chọn tất cả trang này" }}
+                {{ hasSelection ? "Bỏ chọn tất cả" : "Chọn tất cả" }}
               </span>
             </button>
           </div>
 
-          <div class="selected-stats">
-            <span class="stat-pill">
+          <div class="summary-badge">
+            <span class="summary-count">
               <strong>{{ selectedCourseCount }}</strong> khóa học được chọn
             </span>
-            <span v-if="selectedProgramCount > 0" class="stat-sub">
-              ({{ selectedProgramCount }} chương trình)
-            </span>
-            <span v-if="selectedDomainCount > 0" class="stat-sub">
-              ({{ selectedDomainCount }} lĩnh vực)
+            <span v-if="selectedProgramCount > 0" class="summary-breakdown">
+              ({{ selectedProgramCount }} chương trình / {{ selectedDomainCount }} lĩnh vực)
             </span>
           </div>
         </div>
 
         <div class="footer-actions">
-          <button type="button" class="btn btn-secondary" :disabled="submitting" @click="$emit('close')">
+          <button type="button" class="btn btn-secondary" :disabled="submitting" @click="handleClose">
             Hủy
           </button>
           <button
@@ -369,7 +360,7 @@ const emit = defineEmits<{
 // ---------------- State ----------------
 const loadingTree = ref(false);
 const submitting = ref(false);
-const searchInput = ref("");
+const searchQuery = ref("");
 const debouncedSearch = ref("");
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -390,12 +381,10 @@ const expandedDomainIds = ref<Set<string>>(new Set());
 const expandedProgramIds = ref<Set<string>>(new Set());
 
 // ---------------- Selection Maps ----------------
-// Stored per level to allow whole-branch selection even before children are fetched!
 const domainSel = ref<Map<string, Grant>>(new Map());
 const programSel = ref<Map<string, Grant>>(new Map());
 const courseSel = ref<Map<string, Grant>>(new Map());
 
-// Keep track of partially deselecting children from a full parent
 const unselectedProgramIds = ref<Set<string>>(new Set());
 const unselectedCourseIds = ref<Set<string>>(new Set());
 
@@ -404,7 +393,7 @@ watch(
   async (open) => {
     if (open) {
       clearAllSelection();
-      searchInput.value = "";
+      searchQuery.value = "";
       debouncedSearch.value = "";
       page.value = 1;
       await loadDomains();
@@ -412,7 +401,7 @@ watch(
   }
 );
 
-watch(searchInput, (val) => {
+watch(searchQuery, (val) => {
   if (searchTimer) clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
     debouncedSearch.value = val.trim();
@@ -433,7 +422,6 @@ async function loadDomains() {
     totalPages.value = Math.max(1, res.totalPages || 1);
     totalDomainElements.value = res.totalElements || 0;
 
-    // If searching, auto-expand matching domains and lazy-fetch programs
     if (debouncedSearch.value) {
       for (const d of pagedDomains.value) {
         expandedDomainIds.value.add(d.id);
@@ -809,7 +797,6 @@ function grantLabel(g: GrantState) {
 function buildPayloadItems() {
   const items: { categoryType: "domain" | "program" | "course"; targetId: string; grantType: Grant }[] = [];
 
-  // 1. Domains that are fully selected
   for (const d of pagedDomains.value) {
     const s = domainState(d.id);
     if (s === "full") {
@@ -817,7 +804,6 @@ function buildPayloadItems() {
       items.push({ categoryType: "domain", targetId: d.id, grantType: g === "MIXED" ? "MANDATORY" : g });
       continue;
     }
-    // If domain is partial or not fully selected, check its programs
     for (const p of programsOf(d.id)) {
       const ps = programState(p.id, d.id);
       if (ps === "full") {
@@ -825,7 +811,6 @@ function buildPayloadItems() {
         items.push({ categoryType: "program", targetId: p.id, grantType: pg === "MIXED" ? "MANDATORY" : pg });
         continue;
       }
-      // Check courses under program
       for (const c of coursesOf(p.id)) {
         if (isCourseSelected(c.id, p.id, d.id)) {
           items.push({ categoryType: "course", targetId: c.id, grantType: courseGrant(c.id, p.id, d.id) });
@@ -834,7 +819,6 @@ function buildPayloadItems() {
     }
   }
 
-  // Also include any standalone selections outside current view
   for (const [did, g] of domainSel.value) {
     if (!items.some((i) => i.targetId === did)) {
       items.push({ categoryType: "domain", targetId: did, grantType: g });
@@ -877,6 +861,10 @@ async function handleSubmitBatch() {
   } finally {
     submitting.value = false;
   }
+}
+
+function handleClose() {
+  if (!submitting.value) emit("close");
 }
 </script>
 
@@ -1865,38 +1853,13 @@ async function handleSubmitBatch() {
   background: var(--primary-hover);
 }
 
-.loading-child-inline {
+.loading-child-hint {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 8px 16px;
   font-size: 13px;
-  color: #94a3b8;
-}
-.show-more-row {
-  padding: 6px 12px;
-}
-.btn-show-more {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  font-size: 12px;
-  font-weight: 500;
-  border-radius: 6px;
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
-  border: 1px dashed rgba(59, 130, 246, 0.3);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.btn-show-more:hover:not(:disabled) {
-  background: rgba(59, 130, 246, 0.2);
-  border-color: #3b82f6;
-}
-.btn-show-more:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  color: var(--text-muted);
 }
 
 </style>
