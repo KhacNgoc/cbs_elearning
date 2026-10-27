@@ -13,13 +13,7 @@
               <span class="target-unit-pill">
                 {{ unit?.name || "Đơn vị được chọn" }}
               </span>
-              <span class="unit-type-badge" :class="unit?.type === 'DEPARTMENT' ? 'dept' : 'branch'">
-                {{ unit?.type === "DEPARTMENT" ? "Phòng ban" : "Chi nhánh / Hội sở" }}
-              </span>
             </div>
-            <p class="header-desc">
-              Tích chọn hỗn hợp Lĩnh vực, Chương trình và Khóa học lẻ. Nhấp nút hình thức ở cuối hàng để chuyển Bắt buộc / Tự chọn.
-            </p>
           </div>
         </div>
         <button type="button" class="btn-close-modal" @click="handleClose" title="Đóng modal">
@@ -228,43 +222,31 @@
       <!-- FLOATING ACTION BAR AT MODAL BOTTOM -->
       <footer class="batch-modal-footer">
         <div class="footer-summary">
+          <!-- Switch Chọn tất cả / Bỏ chọn tất cả -->
+          <div class="select-all-switch-wrap">
+            <button
+              type="button"
+              class="switch-btn"
+              :class="{ 'is-active': totalSelectedCount > 0 }"
+              @click="toggleSelectAll"
+              :title="totalSelectedCount > 0 ? 'Bỏ chọn tất cả' : 'Chọn tất cả'"
+            >
+              <span class="switch-track">
+                <span class="switch-thumb"></span>
+              </span>
+              <span class="switch-label">
+                {{ totalSelectedCount > 0 ? "Bỏ chọn tất cả" : "Chọn tất cả" }}
+              </span>
+            </button>
+          </div>
+
           <div class="summary-badge">
-            <span class="badge-icon">🛒</span>
             <span class="summary-text">
               Đã chọn: <strong>{{ totalSelectedCount }}</strong> mục
               <span v-if="totalSelectedCount > 0" class="summary-breakdown">
                 ({{ selectedDomainsCount }} Lĩnh vực, {{ selectedProgramsCount }} Chương trình, {{ selectedCoursesCount }} Khóa học)
               </span>
             </span>
-          </div>
-
-          <!-- Quick Bulk Actions -->
-          <div v-if="totalSelectedCount > 0" class="bulk-actions">
-            <span class="bulk-label">Đổi nhanh tất cả:</span>
-            <button
-              type="button"
-              class="btn-bulk-toggle bulk-mandatory"
-              @click="setAllGrantType('MANDATORY')"
-              title="Đổi tất cả mục đã chọn thành Bắt buộc"
-            >
-              Bắt buộc
-            </button>
-            <button
-              type="button"
-              class="btn-bulk-toggle bulk-optional"
-              @click="setAllGrantType('OPTIONAL')"
-              title="Đổi tất cả mục đã chọn thành Tự chọn"
-            >
-              Tự chọn
-            </button>
-            <button
-              type="button"
-              class="btn-clear-selection"
-              @click="clearAllSelection"
-              title="Bỏ chọn tất cả"
-            >
-              Bỏ chọn hết
-            </button>
           </div>
         </div>
 
@@ -279,7 +261,7 @@
             @click="handleSubmitBatch"
           >
             <Loader2 v-if="submitting" :size="15" class="spin-icon" />
-            <span>{{ submitting ? "Đang lưu phân bổ..." : `Đăng ký phân bổ (${totalSelectedCount} mục)` }}</span>
+            <span>{{ submitting ? "Đang phân bổ..." : "Phân bổ" }}</span>
           </button>
         </div>
       </footer>
@@ -573,10 +555,39 @@ function toggleGrantType(type: "domain" | "program" | "course", id: string) {
   selectedMap.value = new Map(selectedMap.value);
 }
 
-// Bulk Grant Setting
-function setAllGrantType(grant: "MANDATORY" | "OPTIONAL") {
-  for (const item of selectedMap.value.values()) {
-    item.grantType = grant;
+// Select All / Deselect All
+function selectAll() {
+  const domainsToSelect = filteredDomains.value;
+  for (const d of domainsToSelect) {
+    selectedMap.value.set(itemKey("domain", d.id), {
+      type: "domain",
+      id: d.id,
+      name: d.name,
+      code: d.code,
+      grantType: "MANDATORY",
+    });
+    const childPrograms = getProgramsByDomain(d.id);
+    for (const p of childPrograms) {
+      selectedMap.value.set(itemKey("program", p.id), {
+        type: "program",
+        id: p.id,
+        name: p.name,
+        code: p.code,
+        parentName: d.name,
+        grantType: "MANDATORY",
+      });
+      const childCourses = getCoursesByProgram(p.id);
+      for (const c of childCourses) {
+        selectedMap.value.set(itemKey("course", c.id), {
+          type: "course",
+          id: c.id,
+          name: c.name,
+          code: c.code,
+          parentName: p.name,
+          grantType: "MANDATORY",
+        });
+      }
+    }
   }
   selectedMap.value = new Map(selectedMap.value);
 }
@@ -584,6 +595,14 @@ function setAllGrantType(grant: "MANDATORY" | "OPTIONAL") {
 function clearAllSelection() {
   selectedMap.value.clear();
   selectedMap.value = new Map(selectedMap.value);
+}
+
+function toggleSelectAll() {
+  if (totalSelectedCount.value > 0) {
+    clearAllSelection();
+  } else {
+    selectAll();
+  }
 }
 
 // Counters
@@ -1126,72 +1145,80 @@ function handleClose() {
   color: #1e293b;
 }
 
-.badge-icon {
-  font-size: 1.1rem;
+.select-all-switch-wrap {
+  display: flex;
+  align-items: center;
+  border-right: 1px solid #e2e8f0;
+  padding-right: 1.25rem;
+}
+
+.switch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  cursor: pointer;
+  padding: 0.3rem 0.65rem;
+  border-radius: 20px;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.switch-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.switch-btn.is-active {
+  background: #f0fdfa;
+  border-color: #99f6e4;
+}
+
+.switch-track {
+  width: 32px;
+  height: 18px;
+  background: #cbd5e1;
+  border-radius: 10px;
+  position: relative;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.switch-thumb {
+  width: 14px;
+  height: 14px;
+  background: #ffffff;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.switch-btn.is-active .switch-track {
+  background: #0d9488;
+}
+
+.switch-btn.is-active .switch-thumb {
+  transform: translateX(14px);
+}
+
+.switch-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.switch-btn.is-active .switch-label {
+  color: #0f766e;
 }
 
 .summary-breakdown {
   font-size: 0.78rem;
   color: #64748b;
   margin-left: 0.25rem;
-}
-
-.bulk-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  border-left: 1px solid #e2e8f0;
-  padding-left: 1rem;
-}
-
-.bulk-label {
-  font-size: 0.75rem;
-  color: #64748b;
-}
-
-.btn-bulk-toggle {
-  padding: 0.2rem 0.55rem;
-  border-radius: 4px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid transparent;
-  transition: all 0.15s;
-}
-
-.btn-bulk-toggle.bulk-mandatory {
-  background: #f1f5f9;
-  color: #334155;
-  border-color: #cbd5e1;
-}
-
-.btn-bulk-toggle.bulk-mandatory:hover {
-  background: #e2e8f0;
-  color: #0f172a;
-}
-
-.btn-bulk-toggle.bulk-optional {
-  background: #f0fdf4;
-  color: #15803d;
-  border-color: #bbf7d0;
-}
-
-.btn-bulk-toggle.bulk-optional:hover {
-  background: #dcfce7;
-}
-
-.btn-clear-selection {
-  background: transparent;
-  border: none;
-  font-size: 0.75rem;
-  color: #94a3b8;
-  cursor: pointer;
-  text-decoration: underline;
-  margin-left: 0.25rem;
-}
-
-.btn-clear-selection:hover {
-  color: #dc2626;
 }
 
 .footer-buttons {
