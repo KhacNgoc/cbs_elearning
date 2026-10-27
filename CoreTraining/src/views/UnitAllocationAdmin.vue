@@ -1291,6 +1291,40 @@ function handleStagedRemove(targetItem: { id: string; type: "domain" | "program"
           s.isRemoved = true;
         }
       }
+    } else if (targetItem.type === "course") {
+      // If all sibling courses under this program are removed, mark parent program as removed too
+      const progId = direct.programId;
+      if (progId) {
+        const siblingCourses = stagedAllocations.value.filter(
+          (s) => s.type === "course" && s.programId === progId
+        );
+        if (siblingCourses.length > 0 && siblingCourses.every((s) => s.isRemoved)) {
+          const parentProg = stagedAllocations.value.find(
+            (s) => s.type === "program" && s.id === progId
+          );
+          if (parentProg) parentProg.isRemoved = true;
+        }
+      }
+      // If all items under parent domain are removed, mark domain as removed too
+      const prog = progId ? activePrograms.value.find((p) => p.id === progId) : undefined;
+      const domainId = direct.domainId || prog?.domainId;
+      if (domainId) {
+        const childProgIds = activePrograms.value
+          .filter((p) => p.domainId === domainId)
+          .map((p) => p.id);
+        const domainItems = stagedAllocations.value.filter(
+          (s) =>
+            (s.type === "program" && s.domainId === domainId) ||
+            (s.type === "course" &&
+              (s.domainId === domainId || (s.programId && childProgIds.includes(s.programId))))
+        );
+        if (domainItems.length > 0 && domainItems.every((s) => s.isRemoved)) {
+          const parentDom = stagedAllocations.value.find(
+            (s) => s.type === "domain" && s.id === domainId
+          );
+          if (parentDom) parentDom.isRemoved = true;
+        }
+      }
     }
   } else {
     // Implicit node: remove all children
@@ -1348,6 +1382,32 @@ function handleStagedUndoRemove(targetItem: { id: string; type: "domain" | "prog
           s.isRemoved = false;
         }
       }
+      // Also un-remove parent domain if any
+      const prog = activePrograms.value.find((p) => p.id === targetItem.id);
+      const domainId = direct.domainId || prog?.domainId;
+      if (domainId) {
+        const parentDom = stagedAllocations.value.find(
+          (s) => s.type === "domain" && s.id === domainId
+        );
+        if (parentDom) parentDom.isRemoved = false;
+      }
+    } else if (targetItem.type === "course") {
+      // Khi hoàn tác 1 khóa học con: TỰ ĐỘNG KHÔI PHỤC (HIỆN LẠI) CHƯƠNG TRÌNH CHA & LĨNH VỰC CHA
+      const progId = direct.programId;
+      const prog = progId ? activePrograms.value.find((p) => p.id === progId) : undefined;
+      const domainId = direct.domainId || prog?.domainId;
+      if (progId) {
+        const parentProg = stagedAllocations.value.find(
+          (s) => s.type === "program" && s.id === progId
+        );
+        if (parentProg) parentProg.isRemoved = false;
+      }
+      if (domainId) {
+        const parentDom = stagedAllocations.value.find(
+          (s) => s.type === "domain" && s.id === domainId
+        );
+        if (parentDom) parentDom.isRemoved = false;
+      }
     }
   } else {
     // Implicit node: undo all children
@@ -1369,6 +1429,13 @@ function handleStagedUndoRemove(targetItem: { id: string; type: "domain" | "prog
         if (s.type === "course" && s.programId === targetItem.id) {
           s.isRemoved = false;
         }
+      }
+      const prog = activePrograms.value.find((p) => p.id === targetItem.id);
+      if (prog && prog.domainId) {
+        const parentDom = stagedAllocations.value.find(
+          (s) => s.type === "domain" && s.id === prog.domainId
+        );
+        if (parentDom) parentDom.isRemoved = false;
       }
     }
   }
@@ -1555,31 +1622,37 @@ const assignedTreeData = computed(() => {
     }
   }
 
-  // Second pass: compute aggregate status for implicit parent nodes
+  // Second pass: compute aggregate status for parent nodes (both explicit & implicit)
   for (const domainNode of domainMap.values()) {
     for (const progNode of domainNode.programs) {
-      if (!progNode.isExplicit && progNode.courses.length > 0) {
+      if (progNode.courses.length > 0) {
+        // If ALL child courses are removed, the program node is considered removed.
+        // If AT LEAST ONE child course is active, the program node MUST be active (NOT removed)!
         progNode.isRemoved = progNode.courses.every((c: any) => c.isRemoved);
         progNode.isModified = progNode.courses.some((c: any) => c.isModified);
         const activeCourses = progNode.courses.filter((c: any) => !c.isRemoved);
-        progNode.grantType =
-          activeCourses.length > 0 && activeCourses.every((c: any) => c.grantType === "MANDATORY")
+        if (activeCourses.length > 0) {
+          progNode.grantType = activeCourses.every((c: any) => c.grantType === "MANDATORY")
             ? "MANDATORY"
             : "OPTIONAL";
+        }
       }
     }
 
-    if (!domainNode.isExplicit) {
-      const allProgCourses = domainNode.programs.flatMap((p: any) => p.courses);
-      const allChildren = [...domainNode.programs, ...allProgCourses];
-      if (allChildren.length > 0) {
-        domainNode.isRemoved = domainNode.programs.every((p: any) => p.isRemoved);
-        domainNode.isModified = domainNode.programs.some((p: any) => p.isModified) || allProgCourses.some((c: any) => c.isModified);
-        const activeCourses = allProgCourses.filter((c: any) => !c.isRemoved);
-        domainNode.grantType =
-          activeCourses.length > 0 && activeCourses.every((c: any) => c.grantType === "MANDATORY")
-            ? "MANDATORY"
-            : "OPTIONAL";
+    const allProgCourses = domainNode.programs.flatMap((p: any) => p.courses);
+    const allChildren = [...domainNode.programs, ...allProgCourses];
+    if (allChildren.length > 0) {
+      // If ALL programs and courses are removed, the domain node is considered removed.
+      // If AT LEAST ONE program or course is active, the domain node MUST be active (NOT removed)!
+      domainNode.isRemoved = domainNode.programs.every((p: any) => p.isRemoved) &&
+        (allProgCourses.length === 0 || allProgCourses.every((c: any) => c.isRemoved));
+      domainNode.isModified = domainNode.programs.some((p: any) => p.isModified) ||
+        allProgCourses.some((c: any) => c.isModified);
+      const activeCourses = allProgCourses.filter((c: any) => !c.isRemoved);
+      if (activeCourses.length > 0) {
+        domainNode.grantType = activeCourses.every((c: any) => c.grantType === "MANDATORY")
+          ? "MANDATORY"
+          : "OPTIONAL";
       }
     }
   }
