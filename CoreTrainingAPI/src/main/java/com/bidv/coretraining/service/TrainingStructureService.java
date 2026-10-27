@@ -1035,6 +1035,50 @@ public class TrainingStructureService {
         return result;
     }
 
+    @org.springframework.transaction.annotation.Transactional
+    public Map<String, Object> batchSyncUnitAllocations(
+            String unitId,
+            List<com.bidv.coretraining.controller.TrainingStructureController.BatchChangeItem> changes) {
+        authorization.permission("CATALOG_MANAGE");
+        OrganizationUnit unit = authorization.unit(required(unitId, "Đơn vị áp dụng"));
+        authorization.scope(unit);
+        if (!com.bidv.coretraining.security.AccessPolicy.activeUnit(unit)) {
+            throw new BadRequestException("Đơn vị " + unit.getName() + " đã ngừng hoạt động");
+        }
+
+        if (changes == null || changes.isEmpty()) {
+            return Map.of("status", "SUCCESS", "message", "Không có thay đổi nào cần lưu");
+        }
+
+        int updatedCount = 0;
+        int removedCount = 0;
+
+        for (com.bidv.coretraining.controller.TrainingStructureController.BatchChangeItem item : changes) {
+            if (item == null || item.categoryType() == null || item.targetId() == null) continue;
+            String action = item.action() == null ? "UPDATE_GRANT" : item.action().trim().toUpperCase();
+            String type = item.categoryType().trim().toLowerCase();
+            String targetId = item.targetId();
+
+            if ("REMOVE".equals(action)) {
+                removeUnitAllocation(unitId, type, targetId);
+                removedCount++;
+            } else {
+                String grant = "MANDATORY".equalsIgnoreCase(item.grantType()) ? "MANDATORY" : "OPTIONAL";
+                toggleUnitAllocationGrantType(unitId, type, targetId, grant);
+                updatedCount++;
+            }
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("unitId", unit.getId());
+        result.put("unitName", unit.getName());
+        result.put("updatedCount", updatedCount);
+        result.put("removedCount", removedCount);
+        result.put("totalChanges", updatedCount + removedCount);
+        result.put("status", "SUCCESS");
+        return result;
+    }
+
     public Map<String, Object> toggleUnitAllocationGrantType(
             String unitId,
             String categoryType,

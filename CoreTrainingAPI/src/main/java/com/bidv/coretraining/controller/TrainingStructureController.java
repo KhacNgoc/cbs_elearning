@@ -109,9 +109,26 @@ public class TrainingStructureController {
             List<BatchAllocationItem> items
     ) {}
 
+    public record BatchChangeItem(
+            String action,
+            String categoryType,
+            String targetId,
+            String grantType
+    ) {}
+
+    public record UnitBatchSyncRequest(
+            String unitId,
+            List<BatchChangeItem> changes
+    ) {}
+
     @PostMapping("/admin/unit-allocations/batch-assign")
     public Map<String, Object> batchAssignUnitAllocation(@RequestBody UnitBatchAllocationRequest request) {
         return service.batchAssignUnitAllocation(request.unitId(), request.items());
+    }
+
+    @PostMapping("/admin/unit-allocations/batch-sync")
+    public Map<String, Object> batchSyncUnitAllocations(@RequestBody UnitBatchSyncRequest request) {
+        return service.batchSyncUnitAllocations(request.unitId(), request.changes());
     }
 
     @PostMapping("/admin/unit-allocations/assign")

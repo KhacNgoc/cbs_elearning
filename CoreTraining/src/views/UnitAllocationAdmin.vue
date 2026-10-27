@@ -289,8 +289,8 @@
       @saved="handleBatchSaved"
     />
 
-    <!-- UNIT DETAIL MODAL: VIEW EXISTING ALLOCATIONS (TO, RỘNG RÃI, THOÁNG MẮT) -->
-    <div v-if="showDetailModal && currentDetailUnit" class="detail-modal-overlay" @click.self="closeDetailModal">
+    <!-- UNIT DETAIL MODAL: VIEW EXISTING ALLOCATIONS (TO, RỘNG RÃI, THAO TÁC IN-MEMORY) -->
+    <div v-if="showDetailModal && currentDetailUnit" class="detail-modal-overlay" @click.self="handleAttemptCloseDetail">
       <div class="detail-modal-container" role="dialog" aria-modal="true">
         <!-- MODAL HEADER -->
         <header class="detail-modal-header">
@@ -305,9 +305,12 @@
                 <span class="unit-type-tag" :class="currentDetailUnit.type === 'DEPARTMENT' ? 'dept' : 'branch'">
                   {{ currentDetailUnit.type === 'DEPARTMENT' ? 'Phòng ban' : 'Chi nhánh / Hội sở' }}
                 </span>
+                <span v-if="totalPendingChanges > 0" class="badge-pending-changes">
+                  ● Có {{ totalPendingChanges }} thay đổi chưa lưu
+                </span>
               </div>
               <p class="modal-unit-subtitle">
-                Danh sách các nội dung đào tạo (Lĩnh vực, Chương trình, Khóa học) đang áp dụng cho đơn vị này
+                Đổi hình thức hoặc gỡ bỏ các nội dung trên giao diện. Nhấn <strong>"Cập nhật"</strong> để xác nhận và lưu 1 lượt xuống hệ thống.
               </p>
             </div>
           </div>
@@ -315,13 +318,13 @@
           <div class="modal-header-right">
             <button
               type="button"
-              class="btn btn-primary btn-sm"
+              class="btn btn-outline-primary btn-sm"
               @click="openBatchModalFromDetail"
             >
               <FolderPlus :size="14" />
               <span>Phân bổ thêm</span>
             </button>
-            <button type="button" class="btn-close-modal" @click="closeDetailModal" title="Đóng cửa sổ">
+            <button type="button" class="btn-close-modal" @click="handleAttemptCloseDetail" title="Đóng cửa sổ">
               <X :size="18" />
             </button>
           </div>
@@ -381,7 +384,7 @@
                 :class="{ active: detailGrantFilter === 'ALL' }"
                 @click="detailGrantFilter = 'ALL'"
               >
-                Tất cả ({{ modalAssignedAllocations.length }})
+                Tất cả ({{ activeStagedAllocations.length }})
               </button>
               <button
                 type="button"
@@ -389,7 +392,7 @@
                 :class="{ active: detailGrantFilter === 'MANDATORY' }"
                 @click="detailGrantFilter = 'MANDATORY'"
               >
-                Bắt buộc ({{ modalMandatoryCount }})
+                Bắt buộc ({{ stagedMandatoryCount }})
               </button>
               <button
                 type="button"
@@ -397,7 +400,7 @@
                 :class="{ active: detailGrantFilter === 'OPTIONAL' }"
                 @click="detailGrantFilter = 'OPTIONAL'"
               >
-                Tự chọn ({{ modalOptionalCount }})
+                Tự chọn ({{ stagedOptionalCount }})
               </button>
             </div>
           </div>
@@ -410,17 +413,17 @@
             <p>Đang tải dữ liệu phân bổ của đơn vị...</p>
           </div>
 
-          <div v-else-if="filteredModalAllocations.length === 0" class="modal-empty-state">
+          <div v-else-if="filteredStagedAllocations.length === 0" class="modal-empty-state">
             <Inbox :size="38" class="empty-icon" />
-            <h4 v-if="modalAssignedAllocations.length === 0">
+            <h4 v-if="activeStagedAllocations.length === 0">
               Đơn vị này chưa có nội dung đào tạo nào được phân bổ
             </h4>
             <h4 v-else>Không tìm thấy nội dung phù hợp với bộ lọc</h4>
-            <p v-if="modalAssignedAllocations.length === 0">
+            <p v-if="activeStagedAllocations.length === 0">
               Nhấn nút bên dưới để chọn Lĩnh vực, Chương trình hoặc Khóa học phân bổ cho đơn vị.
             </p>
             <button
-              v-if="modalAssignedAllocations.length === 0"
+              v-if="activeStagedAllocations.length === 0"
               type="button"
               class="btn btn-primary"
               @click="openBatchModalFromDetail"
@@ -432,46 +435,58 @@
 
           <!-- VIEW MODE 1: CÂY PHÂN CẤP (TREE VIEW) -->
           <div v-else-if="detailViewMode === 'tree'" class="detail-tree-view">
-            <!-- HIERARCHICAL TREE VIEW -->
             <div
               v-for="domainNode in assignedTreeData"
               :key="domainNode.id"
               class="assigned-domain-group"
+              :class="{ 'item-marked-removed': domainNode.isRemoved }"
             >
               <!-- DOMAIN HEADER -->
               <div class="assigned-domain-header">
                 <div class="domain-header-left">
                   <Globe :size="16" class="domain-icon" />
-                  <span class="domain-title">{{ domainNode.name }}</span>
+                  <span class="domain-title" :class="{ 'strikethrough-text': domainNode.isRemoved }">
+                    {{ domainNode.name }}
+                  </span>
                   <span v-if="domainNode.code" class="node-code">{{ domainNode.code }}</span>
                   <span v-if="domainNode.isExplicit" class="badge-explicit">Gán cấp Lĩnh vực</span>
+                  <span v-if="domainNode.isModified && !domainNode.isRemoved" class="badge-modified">Đã đổi hình thức</span>
+                  <span v-if="domainNode.isRemoved" class="badge-removed-tag">Đã đánh dấu gỡ bỏ</span>
                 </div>
 
                 <div class="domain-header-right">
+                  <!-- TOGGLE BUTTON (IN-MEMORY) -->
                   <button
-                    v-if="domainNode.isExplicit"
+                    v-if="domainNode.isExplicit && !domainNode.isRemoved"
                     type="button"
                     class="btn-grant-toggle"
                     :class="domainNode.grantType === 'MANDATORY' ? 'grant-mandatory' : 'grant-optional'"
-                    :disabled="togglingId === domainNode.id"
-                    @click="handleToggleGrantType({ id: domainNode.id, type: 'domain', name: domainNode.name, grantType: domainNode.grantType })"
-                    title="Bấm để đổi hình thức"
+                    @click="handleStagedToggleGrantType(domainNode)"
+                    title="Bấm để đổi hình thức (tạm tính trên giao diện)"
                   >
-                    <Loader2 v-if="togglingId === domainNode.id" :size="11" class="spin-icon" />
-                    <span v-else class="dot"></span>
+                    <span class="dot"></span>
                     <span>{{ domainNode.grantType === 'MANDATORY' ? 'Bắt buộc' : 'Tự chọn' }}</span>
                   </button>
 
+                  <!-- UNDO REMOVE OR REMOVE BUTTON -->
                   <button
-                    v-if="domainNode.isExplicit"
+                    v-if="domainNode.isExplicit && domainNode.isRemoved"
+                    type="button"
+                    class="btn-undo-remove"
+                    @click="handleStagedUndoRemove(domainNode)"
+                    title="Hoàn tác gỡ bỏ"
+                  >
+                    <Undo2 :size="13" />
+                    <span>Hoàn tác</span>
+                  </button>
+                  <button
+                    v-else-if="domainNode.isExplicit"
                     type="button"
                     class="btn-remove-allocation"
-                    :disabled="deletingId === domainNode.id"
-                    @click="handleRemoveAllocation({ id: domainNode.id, type: 'domain', name: domainNode.name })"
-                    title="Gỡ bỏ phân bổ Lĩnh vực"
+                    @click="handleStagedRemove(domainNode)"
+                    title="Đánh dấu gỡ bỏ phân bổ Lĩnh vực"
                   >
-                    <Loader2 v-if="deletingId === domainNode.id" :size="13" class="spin-icon" />
-                    <Trash2 v-else :size="14" />
+                    <Trash2 :size="14" />
                   </button>
                 </div>
               </div>
@@ -482,40 +497,51 @@
                   v-for="progNode in domainNode.programs"
                   :key="progNode.id"
                   class="assigned-program-card"
+                  :class="{ 'item-marked-removed': progNode.isRemoved }"
                 >
                   <div class="program-card-header">
                     <div class="prog-header-left">
                       <Folder :size="15" class="program-icon" />
-                      <span class="program-title">{{ progNode.name }}</span>
+                      <span class="program-title" :class="{ 'strikethrough-text': progNode.isRemoved }">
+                        {{ progNode.name }}
+                      </span>
                       <span v-if="progNode.code" class="node-code">{{ progNode.code }}</span>
                       <span v-if="progNode.isExplicit" class="badge-explicit">Gán cấp Chương trình</span>
+                      <span v-if="progNode.isModified && !progNode.isRemoved" class="badge-modified">Đã đổi hình thức</span>
+                      <span v-if="progNode.isRemoved" class="badge-removed-tag">Đã đánh dấu gỡ bỏ</span>
                     </div>
 
                     <div class="prog-header-right">
                       <button
-                        v-if="progNode.isExplicit"
+                        v-if="progNode.isExplicit && !progNode.isRemoved"
                         type="button"
                         class="btn-grant-toggle"
                         :class="progNode.grantType === 'MANDATORY' ? 'grant-mandatory' : 'grant-optional'"
-                        :disabled="togglingId === progNode.id"
-                        @click="handleToggleGrantType({ id: progNode.id, type: 'program', name: progNode.name, grantType: progNode.grantType })"
-                        title="Bấm để đổi hình thức"
+                        @click="handleStagedToggleGrantType(progNode)"
+                        title="Bấm để đổi hình thức (tạm tính trên giao diện)"
                       >
-                        <Loader2 v-if="togglingId === progNode.id" :size="11" class="spin-icon" />
-                        <span v-else class="dot"></span>
+                        <span class="dot"></span>
                         <span>{{ progNode.grantType === 'MANDATORY' ? 'Bắt buộc' : 'Tự chọn' }}</span>
                       </button>
 
                       <button
-                        v-if="progNode.isExplicit"
+                        v-if="progNode.isExplicit && progNode.isRemoved"
+                        type="button"
+                        class="btn-undo-remove"
+                        @click="handleStagedUndoRemove(progNode)"
+                        title="Hoàn tác gỡ bỏ"
+                      >
+                        <Undo2 :size="13" />
+                        <span>Hoàn tác</span>
+                      </button>
+                      <button
+                        v-else-if="progNode.isExplicit"
                         type="button"
                         class="btn-remove-allocation"
-                        :disabled="deletingId === progNode.id"
-                        @click="handleRemoveAllocation({ id: progNode.id, type: 'program', name: progNode.name })"
-                        title="Gỡ bỏ phân bổ Chương trình"
+                        @click="handleStagedRemove(progNode)"
+                        title="Đánh dấu gỡ bỏ Chương trình"
                       >
-                        <Loader2 v-if="deletingId === progNode.id" :size="13" class="spin-icon" />
-                        <Trash2 v-else :size="14" />
+                        <Trash2 :size="14" />
                       </button>
                     </div>
                   </div>
@@ -526,36 +552,49 @@
                       v-for="course in progNode.courses"
                       :key="course.id"
                       class="assigned-course-row"
+                      :class="{ 'item-marked-removed': course.isRemoved }"
                     >
                       <div class="course-left">
                         <BookOpen :size="14" class="course-icon" />
-                        <span class="course-title">{{ course.name }}</span>
+                        <span class="course-title" :class="{ 'strikethrough-text': course.isRemoved }">
+                          {{ course.name }}
+                        </span>
                         <span v-if="course.code" class="node-code">{{ course.code }}</span>
+                        <span v-if="course.isModified && !course.isRemoved" class="badge-modified">Đã đổi hình thức</span>
+                        <span v-if="course.isRemoved" class="badge-removed-tag">Đã đánh dấu gỡ bỏ</span>
                       </div>
 
                       <div class="course-right">
                         <button
+                          v-if="!course.isRemoved"
                           type="button"
                           class="btn-grant-toggle"
                           :class="course.grantType === 'MANDATORY' ? 'grant-mandatory' : 'grant-optional'"
-                          :disabled="togglingId === course.id"
-                          @click="handleToggleGrantType({ id: course.id, type: 'course', name: course.name, grantType: course.grantType })"
-                          title="Bấm để đổi hình thức"
+                          @click="handleStagedToggleGrantType(course)"
+                          title="Bấm để đổi hình thức (tạm tính trên giao diện)"
                         >
-                          <Loader2 v-if="togglingId === course.id" :size="11" class="spin-icon" />
-                          <span v-else class="dot"></span>
+                          <span class="dot"></span>
                           <span>{{ course.grantType === 'MANDATORY' ? 'Bắt buộc' : 'Tự chọn' }}</span>
                         </button>
 
                         <button
+                          v-if="course.isRemoved"
+                          type="button"
+                          class="btn-undo-remove"
+                          @click="handleStagedUndoRemove(course)"
+                          title="Hoàn tác gỡ bỏ"
+                        >
+                          <Undo2 :size="13" />
+                          <span>Hoàn tác</span>
+                        </button>
+                        <button
+                          v-else
                           type="button"
                           class="btn-remove-allocation"
-                          :disabled="deletingId === course.id"
-                          @click="handleRemoveAllocation({ id: course.id, type: 'course', name: course.name })"
-                          title="Gỡ bỏ phân bổ Khóa học"
+                          @click="handleStagedRemove(course)"
+                          title="Đánh dấu gỡ bỏ Khóa học"
                         >
-                          <Loader2 v-if="deletingId === course.id" :size="13" class="spin-icon" />
-                          <Trash2 v-else :size="14" />
+                          <Trash2 :size="14" />
                         </button>
                       </div>
                     </div>
@@ -576,13 +615,14 @@
                   <th class="col-name">Tên nội dung đào tạo</th>
                   <th class="col-parent">Trực thuộc</th>
                   <th class="col-grant text-center">Hình thức áp dụng</th>
-                  <th class="col-action text-right">Gỡ bỏ</th>
+                  <th class="col-action text-right">Thao tác</th>
                 </tr>
               </thead>
               <tbody>
                 <tr
-                  v-for="(item, idx) in filteredModalAllocations"
+                  v-for="(item, idx) in filteredStagedAllocations"
                   :key="`${item.type}_${item.id}`"
+                  :class="{ 'row-marked-removed': item.isRemoved }"
                 >
                   <td class="col-stt">{{ idx + 1 }}</td>
                   <td class="col-level">
@@ -598,7 +638,13 @@
                     <span v-else class="text-muted">—</span>
                   </td>
                   <td class="col-name">
-                    <strong class="item-table-name">{{ item.name }}</strong>
+                    <div class="table-name-wrap">
+                      <strong class="item-table-name" :class="{ 'strikethrough-text': item.isRemoved }">
+                        {{ item.name }}
+                      </strong>
+                      <span v-if="item.isModified && !item.isRemoved" class="badge-modified">Đã đổi</span>
+                      <span v-if="item.isRemoved" class="badge-removed-tag">Đã đánh dấu gỡ</span>
+                    </div>
                   </td>
                   <td class="col-parent">
                     <span v-if="item.parentProgramName" class="parent-text">
@@ -608,28 +654,37 @@
                   </td>
                   <td class="col-grant text-center">
                     <button
+                      v-if="!item.isRemoved"
                       type="button"
                       class="btn-grant-toggle"
                       :class="item.grantType === 'MANDATORY' ? 'grant-mandatory' : 'grant-optional'"
-                      :disabled="togglingId === item.id"
-                      @click="handleToggleGrantType(item)"
-                      title="Bấm để đổi Bắt buộc / Tự chọn"
+                      @click="handleStagedToggleGrantType(item)"
+                      title="Bấm để đổi Bắt buộc / Tự chọn (in-memory)"
                     >
-                      <Loader2 v-if="togglingId === item.id" :size="11" class="spin-icon" />
-                      <span v-else class="dot"></span>
+                      <span class="dot"></span>
                       <span>{{ item.grantType === 'MANDATORY' ? 'Bắt buộc' : 'Tự chọn' }}</span>
                     </button>
+                    <span v-else class="text-muted italic">—</span>
                   </td>
                   <td class="col-action text-right">
                     <button
+                      v-if="item.isRemoved"
+                      type="button"
+                      class="btn-undo-remove"
+                      @click="handleStagedUndoRemove(item)"
+                      title="Hoàn tác gỡ bỏ"
+                    >
+                      <Undo2 :size="13" />
+                      <span>Hoàn tác</span>
+                    </button>
+                    <button
+                      v-else
                       type="button"
                       class="btn-remove-allocation"
-                      :disabled="deletingId === item.id"
-                      @click="handleRemoveAllocation(item)"
-                      title="Gỡ bỏ phân bổ"
+                      @click="handleStagedRemove(item)"
+                      title="Đánh dấu gỡ bỏ"
                     >
-                      <Loader2 v-if="deletingId === item.id" :size="13" class="spin-icon" />
-                      <Trash2 v-else :size="14" />
+                      <Trash2 :size="14" />
                     </button>
                   </td>
                 </tr>
@@ -643,31 +698,93 @@
           <div class="footer-stats">
             <span class="stats-label">Đang áp dụng:</span>
             <span class="stats-item">
-              <strong>{{ modalDomainCount }}</strong> Lĩnh vực
+              <strong>{{ stagedDomainCount }}</strong> Lĩnh vực
             </span>
             <span class="stats-separator">·</span>
             <span class="stats-item">
-              <strong>{{ modalProgramCount }}</strong> Chương trình
+              <strong>{{ stagedProgramCount }}</strong> Chương trình
             </span>
             <span class="stats-separator">·</span>
             <span class="stats-item">
-              <strong>{{ modalCourseCount }}</strong> Khóa học
+              <strong>{{ stagedCourseCount }}</strong> Khóa học
             </span>
             <span class="stats-total">
-              (Tổng cộng <strong>{{ modalAssignedAllocations.length }}</strong> nội dung)
+              (Tổng cộng <strong>{{ activeStagedAllocations.length }}</strong> nội dung)
             </span>
           </div>
 
           <div class="footer-actions">
-            <button type="button" class="btn btn-secondary" @click="closeDetailModal">
+            <button type="button" class="btn btn-secondary" @click="handleAttemptCloseDetail">
               Đóng
             </button>
-            <button type="button" class="btn btn-primary" @click="openBatchModalFromDetail">
-              <FolderPlus :size="14" />
-              <span>Phân bổ thêm</span>
+            <!-- NÚT CẬP NHẬT TẬP TRUNG (CHỈ BẤM MỚI GỌI BACKEND) -->
+            <button
+              type="button"
+              class="btn btn-primary btn-save-batch"
+              :class="{ 'has-changes': totalPendingChanges > 0 }"
+              :disabled="totalPendingChanges === 0 || savingChanges"
+              @click="openConfirmModal"
+            >
+              <Loader2 v-if="savingChanges" :size="15" class="spin-icon" />
+              <Save v-else :size="15" />
+              <span>
+                {{ totalPendingChanges > 0 ? `Cập nhật (${totalPendingChanges} thay đổi)` : "Cập nhật" }}
+              </span>
             </button>
           </div>
         </footer>
+      </div>
+    </div>
+
+    <!-- CONFIRMATION POPUP MODAL (XÁC NHẬN THAY ĐỔI TRƯỚC KHI GỌI BACKEND) -->
+    <div v-if="showConfirmModal" class="confirm-modal-overlay" @click.self="showConfirmModal = false">
+      <div class="confirm-modal-card" role="dialog" aria-modal="true">
+        <div class="confirm-modal-header">
+          <div class="confirm-icon-wrap">
+            <AlertTriangle :size="24" />
+          </div>
+          <div class="confirm-title-wrap">
+            <h4>Xác nhận cập nhật phân bổ</h4>
+            <p>Đơn vị: <strong>{{ currentDetailUnit?.name }}</strong></p>
+          </div>
+        </div>
+
+        <div class="confirm-modal-body">
+          <p class="confirm-intro-text">
+            Bạn có chắc chắn muốn xác nhận và lưu các thay đổi sau xuống hệ thống không?
+          </p>
+
+          <div class="confirm-summary-box">
+            <div v-if="stagedModifiedCount > 0" class="confirm-stat-row stat-modify">
+              <span class="dot"></span>
+              <span><strong>{{ stagedModifiedCount }}</strong> nội dung thay đổi hình thức (Bắt buộc / Tự chọn)</span>
+            </div>
+            <div v-if="stagedRemovedCount > 0" class="confirm-stat-row stat-remove">
+              <span class="dot"></span>
+              <span><strong>{{ stagedRemovedCount }}</strong> nội dung bị gỡ bỏ khỏi đơn vị</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="confirm-modal-footer">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            :disabled="savingChanges"
+            @click="showConfirmModal = false"
+          >
+            Xem lại
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary btn-confirm-submit"
+            :disabled="savingChanges"
+            @click="handleExecuteBatchSync"
+          >
+            <Loader2 v-if="savingChanges" :size="15" class="spin-icon" />
+            <span>{{ savingChanges ? "Đang lưu thay đổi..." : "Xác nhận & Cập nhật ngay" }}</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -691,6 +808,9 @@ import {
   ChevronRight,
   X,
   FolderPlus,
+  AlertTriangle,
+  Undo2,
+  Save,
 } from "lucide-vue-next";
 import { trainingApi } from "../api/trainingApi";
 import { axiosClient } from "../api/axiosClient";
@@ -701,8 +821,7 @@ import BatchAllocationModal from "../components/BatchAllocationModal.vue";
 
 // State
 const loading = ref(false);
-const deletingId = ref("");
-const togglingId = ref("");
+const savingChanges = ref(false);
 
 const units = ref<OrganizationUnit[]>([]);
 const domains = ref<TrainingDomain[]>([]);
@@ -729,28 +848,54 @@ async function handleBatchSaved() {
   await loadData();
   if (currentDetailUnit.value) {
     await loadUnitCourses(currentDetailUnit.value.id);
+    initStagedAllocations();
   }
 }
 
-// Detail Modal State (Replaced Drawer with Large Modal)
+// Detail Modal State
 const showDetailModal = ref(false);
+const showConfirmModal = ref(false);
 const currentDetailUnit = ref<OrganizationUnit | null>(null);
 const detailFilterQuery = ref("");
 const detailGrantFilter = ref<"ALL" | "MANDATORY" | "OPTIONAL">("ALL");
 const detailViewMode = ref<"tree" | "table">("tree");
 
-function openDetailModal(unit: OrganizationUnit) {
+interface StagedAllocationItem {
+  id: string;
+  type: "domain" | "program" | "course";
+  typeLabel: string;
+  code: string;
+  name: string;
+  grantType: "MANDATORY" | "OPTIONAL";
+  initialGrantType: "MANDATORY" | "OPTIONAL";
+  parentProgramName?: string;
+  domainId?: string;
+  programId?: string;
+  isModified: boolean;
+  isRemoved: boolean;
+}
+
+const stagedAllocations = ref<StagedAllocationItem[]>([]);
+
+async function openDetailModal(unit: OrganizationUnit) {
   currentDetailUnit.value = unit;
   detailFilterQuery.value = "";
   detailGrantFilter.value = "ALL";
   detailViewMode.value = "tree";
   showDetailModal.value = true;
-  loadUnitCourses(unit.id);
+  await loadUnitCourses(unit.id);
+  initStagedAllocations();
 }
 
-function closeDetailModal() {
+function handleAttemptCloseDetail() {
+  if (totalPendingChanges.value > 0) {
+    if (!confirm(`Bạn có ${totalPendingChanges.value} thay đổi chưa lưu. Bạn có chắc chắn muốn đóng mà không lưu không?`)) {
+      return;
+    }
+  }
   showDetailModal.value = false;
   currentDetailUnit.value = null;
+  stagedAllocations.value = [];
 }
 
 function openBatchModalFromDetail() {
@@ -766,7 +911,7 @@ const statusFilter = ref<"ALL" | "ALLOCATED" | "UNALLOCATED">("ALL");
 const unitDirectoryPage = ref(1);
 const unitDirectoryPageSize = 10;
 
-// Filter active (non-deleted) items
+// Filter active items
 const activeDomains = computed(() => domains.value.filter((d) => d.status !== "DELETED"));
 const activePrograms = computed(() => programs.value.filter((p) => p.status !== "DELETED"));
 
@@ -815,17 +960,14 @@ function getUnitCourseCount(uId: string): number {
 
 const filteredDirectoryUnits = computed(() => {
   return units.value.filter((u) => {
-    // Search
     if (unitDirectoryQuery.value.trim()) {
       const q = unitDirectoryQuery.value.trim().toLowerCase();
       if (!u.name.toLowerCase().includes(q)) return false;
     }
 
-    // Type filter
     if (typeFilter.value === "DEPARTMENT" && u.type !== "DEPARTMENT") return false;
     if (typeFilter.value === "BRANCH" && u.type === "DEPARTMENT") return false;
 
-    // Status filter
     const allocated = isUnitAllocated(u.id);
     if (statusFilter.value === "ALLOCATED" && !allocated) return false;
     if (statusFilter.value === "UNALLOCATED" && allocated) return false;
@@ -847,7 +989,7 @@ watch([unitDirectoryQuery, typeFilter, statusFilter], () => {
   unitDirectoryPage.value = 1;
 });
 
-// Load metadata (Domains, Programs, Units, Courses)
+// Load metadata
 async function loadData() {
   loading.value = true;
   try {
@@ -871,7 +1013,6 @@ async function loadData() {
   }
 }
 
-// Lazy load courses for current detail unit
 async function loadUnitCourses(unitId: string) {
   loadingUnitCourses.value = true;
   try {
@@ -889,36 +1030,31 @@ onMounted(() => {
   loadData();
 });
 
-// Assigned allocations for Detail Modal
-interface AllocationRow {
-  id: string;
-  type: "domain" | "program" | "course";
-  typeLabel: string;
-  code: string;
-  name: string;
-  grantType: "MANDATORY" | "OPTIONAL";
-  parentProgramName?: string;
-  domainId?: string;
-  programId?: string;
-}
-
-const modalAssignedAllocations = computed<AllocationRow[]>(() => {
-  if (!currentDetailUnit.value) return [];
+// ================= STAGED IN-MEMORY ALLOCATION LOGIC =================
+function initStagedAllocations() {
+  if (!currentDetailUnit.value) {
+    stagedAllocations.value = [];
+    return;
+  }
   const uId = currentDetailUnit.value.id;
-  const rows: AllocationRow[] = [];
+  const list: StagedAllocationItem[] = [];
 
   // 1. Domains
   for (const d of activeDomains.value) {
     const isMan = d.mandatoryUnitIds?.includes(uId);
     const isOpt = d.optionalUnitIds?.includes(uId) || d.unitIds?.includes(uId);
     if (isMan || isOpt) {
-      rows.push({
+      const grant = isMan ? "MANDATORY" : "OPTIONAL";
+      list.push({
         id: d.id,
         type: "domain",
         typeLabel: "Lĩnh vực",
         code: d.code,
         name: d.name,
-        grantType: isMan ? "MANDATORY" : "OPTIONAL",
+        grantType: grant,
+        initialGrantType: grant,
+        isModified: false,
+        isRemoved: false,
       });
     }
   }
@@ -928,14 +1064,18 @@ const modalAssignedAllocations = computed<AllocationRow[]>(() => {
     const isMan = p.mandatoryUnitIds?.includes(uId);
     const isOpt = p.optionalUnitIds?.includes(uId) || p.unitIds?.includes(uId);
     if (isMan || isOpt) {
-      rows.push({
+      const grant = isMan ? "MANDATORY" : "OPTIONAL";
+      list.push({
         id: p.id,
         type: "program",
         typeLabel: "Chương trình",
         code: p.code,
         name: p.name,
-        grantType: isMan ? "MANDATORY" : "OPTIONAL",
+        grantType: grant,
+        initialGrantType: grant,
         domainId: p.domainId,
+        isModified: false,
+        isRemoved: false,
       });
     }
   }
@@ -946,46 +1086,82 @@ const modalAssignedAllocations = computed<AllocationRow[]>(() => {
     const isMan = c.mandatoryUnitIds?.includes(uId);
     const isOpt = c.optionalUnitIds?.includes(uId) || c.unitIds?.includes(uId);
     if (isMan || isOpt) {
+      const grant = isMan ? "MANDATORY" : "OPTIONAL";
       const prog = programs.value.find((p) => p.id === c.programId);
-      rows.push({
+      list.push({
         id: c.id,
         type: "course",
         typeLabel: "Khóa học",
         code: c.code || "",
         name: c.name,
-        grantType: isMan ? "MANDATORY" : "OPTIONAL",
+        grantType: grant,
+        initialGrantType: grant,
         parentProgramName: prog?.name,
         programId: c.programId,
         domainId: prog?.domainId,
+        isModified: false,
+        isRemoved: false,
       });
     }
   }
 
-  return rows;
+  stagedAllocations.value = list;
+}
+
+// In-Memory Actions
+function handleStagedToggleGrantType(item: StagedAllocationItem) {
+  const next = item.grantType === "MANDATORY" ? "OPTIONAL" : "MANDATORY";
+  item.grantType = next;
+  item.isModified = item.grantType !== item.initialGrantType;
+}
+
+function handleStagedRemove(item: StagedAllocationItem) {
+  item.isRemoved = true;
+}
+
+function handleStagedUndoRemove(item: StagedAllocationItem) {
+  item.isRemoved = false;
+}
+
+// Staged Calculations
+const activeStagedAllocations = computed(() => {
+  return stagedAllocations.value.filter((i) => !i.isRemoved);
 });
 
-const modalMandatoryCount = computed(
-  () => modalAssignedAllocations.value.filter((a) => a.grantType === "MANDATORY").length
-);
+const stagedMandatoryCount = computed(() => {
+  return activeStagedAllocations.value.filter((i) => i.grantType === "MANDATORY").length;
+});
 
-const modalOptionalCount = computed(
-  () => modalAssignedAllocations.value.filter((a) => a.grantType === "OPTIONAL").length
-);
+const stagedOptionalCount = computed(() => {
+  return activeStagedAllocations.value.filter((i) => i.grantType === "OPTIONAL").length;
+});
 
-const modalDomainCount = computed(
-  () => modalAssignedAllocations.value.filter((a) => a.type === "domain").length
-);
+const stagedDomainCount = computed(() => {
+  return activeStagedAllocations.value.filter((i) => i.type === "domain").length;
+});
 
-const modalProgramCount = computed(
-  () => modalAssignedAllocations.value.filter((a) => a.type === "program").length
-);
+const stagedProgramCount = computed(() => {
+  return activeStagedAllocations.value.filter((i) => i.type === "program").length;
+});
 
-const modalCourseCount = computed(
-  () => modalAssignedAllocations.value.filter((a) => a.type === "course").length
-);
+const stagedCourseCount = computed(() => {
+  return activeStagedAllocations.value.filter((i) => i.type === "course").length;
+});
 
-const filteredModalAllocations = computed(() => {
-  let list = modalAssignedAllocations.value;
+const stagedModifiedCount = computed(() => {
+  return stagedAllocations.value.filter((i) => !i.isRemoved && i.isModified).length;
+});
+
+const stagedRemovedCount = computed(() => {
+  return stagedAllocations.value.filter((i) => i.isRemoved).length;
+});
+
+const totalPendingChanges = computed(() => {
+  return stagedModifiedCount.value + stagedRemovedCount.value;
+});
+
+const filteredStagedAllocations = computed(() => {
+  let list = stagedAllocations.value;
   if (detailGrantFilter.value !== "ALL") {
     list = list.filter((item) => item.grantType === detailGrantFilter.value);
   }
@@ -1000,39 +1176,13 @@ const filteredModalAllocations = computed(() => {
   );
 });
 
-// Tree View Data for Detail Modal
-interface TreeCourseNode {
-  id: string;
-  name: string;
-  code?: string;
-  grantType: "MANDATORY" | "OPTIONAL";
-}
-
-interface TreeProgramNode {
-  id: string;
-  name: string;
-  code?: string;
-  isExplicit: boolean;
-  grantType: "MANDATORY" | "OPTIONAL";
-  courses: TreeCourseNode[];
-}
-
-interface TreeDomainNode {
-  id: string;
-  name: string;
-  code?: string;
-  isExplicit: boolean;
-  grantType: "MANDATORY" | "OPTIONAL";
-  programs: TreeProgramNode[];
-}
-
-const assignedTreeData = computed<TreeDomainNode[]>(() => {
-  const filteredList = filteredModalAllocations.value;
+// Tree View Data for Detail Modal (Reactive from stagedAllocations)
+const assignedTreeData = computed(() => {
+  const filteredList = filteredStagedAllocations.value;
   if (filteredList.length === 0) return [];
 
-  const domainMap = new Map<string, TreeDomainNode>();
+  const domainMap = new Map<string, any>();
 
-  // Process all filtered items
   for (const item of filteredList) {
     if (item.type === "domain") {
       if (!domainMap.has(item.id)) {
@@ -1042,12 +1192,17 @@ const assignedTreeData = computed<TreeDomainNode[]>(() => {
           code: item.code,
           isExplicit: true,
           grantType: item.grantType,
+          initialGrantType: item.initialGrantType,
+          isModified: item.isModified,
+          isRemoved: item.isRemoved,
           programs: [],
         });
       } else {
         const d = domainMap.get(item.id)!;
         d.isExplicit = true;
         d.grantType = item.grantType;
+        d.isModified = item.isModified;
+        d.isRemoved = item.isRemoved;
       }
     } else if (item.type === "program") {
       const dId = item.domainId || "other";
@@ -1060,12 +1215,14 @@ const assignedTreeData = computed<TreeDomainNode[]>(() => {
           code: rawDomain?.code,
           isExplicit: false,
           grantType: "MANDATORY",
+          isModified: false,
+          isRemoved: false,
           programs: [],
         };
         domainMap.set(dId, domainNode);
       }
 
-      let progNode = domainNode.programs.find((p) => p.id === item.id);
+      let progNode = domainNode.programs.find((p: any) => p.id === item.id);
       if (!progNode) {
         progNode = {
           id: item.id,
@@ -1073,12 +1230,17 @@ const assignedTreeData = computed<TreeDomainNode[]>(() => {
           code: item.code,
           isExplicit: true,
           grantType: item.grantType,
+          initialGrantType: item.initialGrantType,
+          isModified: item.isModified,
+          isRemoved: item.isRemoved,
           courses: [],
         };
         domainNode.programs.push(progNode);
       } else {
         progNode.isExplicit = true;
         progNode.grantType = item.grantType;
+        progNode.isModified = item.isModified;
+        progNode.isRemoved = item.isRemoved;
       }
     } else if (item.type === "course") {
       const pId = item.programId || "other_program";
@@ -1093,12 +1255,14 @@ const assignedTreeData = computed<TreeDomainNode[]>(() => {
           code: rawDomain?.code,
           isExplicit: false,
           grantType: "MANDATORY",
+          isModified: false,
+          isRemoved: false,
           programs: [],
         };
         domainMap.set(dId, domainNode);
       }
 
-      let progNode = domainNode.programs.find((p) => p.id === pId);
+      let progNode = domainNode.programs.find((p: any) => p.id === pId);
       if (!progNode) {
         const rawProg = activePrograms.value.find((p) => p.id === pId);
         progNode = {
@@ -1107,17 +1271,22 @@ const assignedTreeData = computed<TreeDomainNode[]>(() => {
           code: rawProg?.code,
           isExplicit: false,
           grantType: "MANDATORY",
+          isModified: false,
+          isRemoved: false,
           courses: [],
         };
         domainNode.programs.push(progNode);
       }
 
-      if (!progNode.courses.some((c) => c.id === item.id)) {
+      if (!progNode.courses.some((c: any) => c.id === item.id)) {
         progNode.courses.push({
           id: item.id,
           name: item.name,
           code: item.code,
           grantType: item.grantType,
+          initialGrantType: item.initialGrantType,
+          isModified: item.isModified,
+          isRemoved: item.isRemoved,
         });
       }
     }
@@ -1126,62 +1295,59 @@ const assignedTreeData = computed<TreeDomainNode[]>(() => {
   return Array.from(domainMap.values());
 });
 
-// Toggle grant type
-async function handleToggleGrantType(item: { id: string; type: string; name: string; grantType: string }) {
-  if (!currentDetailUnit.value || togglingId.value) return;
-  const uId = currentDetailUnit.value.id;
-  const nextGrantType = item.grantType === "MANDATORY" ? "OPTIONAL" : "MANDATORY";
-  togglingId.value = item.id;
-
-  try {
-    await axiosClient.patch("/api/admin/unit-allocations/grant-type", {
-      unitId: uId,
-      categoryType: item.type,
-      targetId: item.id,
-      grantType: nextGrantType,
-    });
-
-    showToast(
-      `Đã chuyển [${item.name}] sang hình thức ${nextGrantType === "MANDATORY" ? "Bắt buộc" : "Tự chọn"}!`,
-      "success"
-    );
-    await loadData();
-    await loadUnitCourses(uId);
-  } catch (err: any) {
-    console.error("Lỗi khi đổi hình thức áp dụng:", err);
-    showToast(err.response?.data?.message || "Không thể đổi hình thức áp dụng", "error");
-  } finally {
-    togglingId.value = "";
-  }
+// Confirmation & Batch Execution
+function openConfirmModal() {
+  if (totalPendingChanges.value === 0) return;
+  showConfirmModal.value = true;
 }
 
-// Remove allocation
-async function handleRemoveAllocation(item: { id: string; type: string; name: string }) {
+async function handleExecuteBatchSync() {
   if (!currentDetailUnit.value) return;
-  if (!confirm(`Bạn có chắc chắn muốn gỡ bỏ phân bổ [${item.name}] khỏi đơn vị này?`)) {
-    return;
-  }
-
-  deletingId.value = item.id;
-  const uId = currentDetailUnit.value.id;
+  savingChanges.value = true;
 
   try {
-    await axiosClient.delete("/api/admin/unit-allocations", {
-      params: {
-        unitId: uId,
-        categoryType: item.type,
-        targetId: item.id,
-      },
-    });
+    const changes: any[] = [];
 
-    showToast(`Đã gỡ bỏ phân bổ [${item.name}] khỏi đơn vị!`, "success");
+    // Collect all staged modifications and removals
+    for (const item of stagedAllocations.value) {
+      if (item.isRemoved) {
+        changes.push({
+          action: "REMOVE",
+          categoryType: item.type,
+          targetId: item.id,
+        });
+      } else if (item.isModified) {
+        changes.push({
+          action: "UPDATE_GRANT",
+          categoryType: item.type,
+          targetId: item.id,
+          grantType: item.grantType,
+        });
+      }
+    }
+
+    const payload = {
+      unitId: currentDetailUnit.value.id,
+      changes,
+    };
+
+    await axiosClient.post("/api/admin/unit-allocations/batch-sync", payload);
+
+    showToast(
+      `Đã cập nhật thành công ${changes.length} thay đổi phân bổ cho ${currentDetailUnit.value.name}!`,
+      "success"
+    );
+
+    showConfirmModal.value = false;
     await loadData();
-    await loadUnitCourses(uId);
+    await loadUnitCourses(currentDetailUnit.value.id);
+    initStagedAllocations();
   } catch (err: any) {
-    console.error("Lỗi khi gỡ phân bổ:", err);
-    showToast(err.response?.data?.message || "Lỗi khi gỡ phân bổ", "error");
+    console.error("Lỗi khi lưu đồng bộ phân bổ:", err);
+    const msg = err.response?.data?.message || err.message || "Lỗi khi cập nhật phân bổ";
+    showToast(msg, "error");
   } finally {
-    deletingId.value = "";
+    savingChanges.value = false;
   }
 }
 </script>
@@ -1722,6 +1888,7 @@ async function handleRemoveAllocation(item: { id: string; type: string; name: st
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  flex-wrap: wrap;
 }
 
 .modal-unit-title-row h3 {
@@ -1738,6 +1905,16 @@ async function handleRemoveAllocation(item: { id: string; type: string; name: st
   color: #ffffff;
   padding: 0.2rem 0.6rem;
   border-radius: 6px;
+}
+
+.badge-pending-changes {
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+  padding: 0.15rem 0.55rem;
+  border-radius: 20px;
 }
 
 .modal-unit-subtitle {
@@ -1912,6 +2089,13 @@ async function handleRemoveAllocation(item: { id: string; type: string; name: st
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s ease;
+}
+
+.assigned-domain-group.item-marked-removed {
+  background: #fef2f2;
+  border-color: #fecaca;
+  opacity: 0.75;
 }
 
 .assigned-domain-header {
@@ -1927,6 +2111,7 @@ async function handleRemoveAllocation(item: { id: string; type: string; name: st
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  flex-wrap: wrap;
 }
 
 .domain-title {
@@ -1957,6 +2142,13 @@ async function handleRemoveAllocation(item: { id: string; type: string; name: st
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.assigned-program-card.item-marked-removed {
+  background: #fff5f5;
+  border-color: #fee2e2;
+  opacity: 0.75;
 }
 
 .program-card-header {
@@ -1972,6 +2164,7 @@ async function handleRemoveAllocation(item: { id: string; type: string; name: st
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .program-title {
@@ -1999,6 +2192,31 @@ async function handleRemoveAllocation(item: { id: string; type: string; name: st
   border-radius: 4px;
 }
 
+.badge-modified {
+  font-size: 0.68rem;
+  font-weight: 600;
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+}
+
+.badge-removed-tag {
+  font-size: 0.68rem;
+  font-weight: 600;
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+}
+
+.strikethrough-text {
+  text-decoration: line-through;
+  color: #94a3b8 !important;
+}
+
 .assigned-courses-list {
   padding: 0.4rem 0.85rem;
   display: flex;
@@ -2014,9 +2232,16 @@ async function handleRemoveAllocation(item: { id: string; type: string; name: st
   border-radius: 6px;
   background: #ffffff;
   border: 1px solid #f1f5f9;
+  transition: all 0.2s ease;
 }
 
-.assigned-course-row:hover {
+.assigned-course-row.item-marked-removed {
+  background: #fef2f2;
+  border-color: #fee2e2;
+  opacity: 0.75;
+}
+
+.assigned-course-row:hover:not(.item-marked-removed) {
   background: #f8fafc;
   border-color: #e2e8f0;
 }
@@ -2025,6 +2250,7 @@ async function handleRemoveAllocation(item: { id: string; type: string; name: st
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .course-title {
@@ -2073,6 +2299,18 @@ async function handleRemoveAllocation(item: { id: string; type: string; name: st
   vertical-align: middle;
 }
 
+.row-marked-removed {
+  background: #fef2f2;
+  opacity: 0.75;
+}
+
+.table-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
 .item-table-name {
   color: #0f172a;
 }
@@ -2084,6 +2322,10 @@ async function handleRemoveAllocation(item: { id: string; type: string; name: st
 
 .text-muted {
   color: #94a3b8;
+}
+
+.text-muted.italic {
+  font-style: italic;
 }
 
 .node-code {
@@ -2182,8 +2424,28 @@ async function handleRemoveAllocation(item: { id: string; type: string; name: st
   transition: all 0.15s;
 }
 
-.btn-remove-allocation:hover:not(:disabled) {
+.btn-remove-allocation:hover {
   background: #fee2e2;
+}
+
+.btn-undo-remove {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-undo-remove:hover {
+  background: #f1f5f9;
+  color: #0f172a;
 }
 
 /* MODAL FOOTER */
@@ -2242,7 +2504,7 @@ async function handleRemoveAllocation(item: { id: string; type: string; name: st
   color: #475569;
 }
 
-.btn-secondary:hover {
+.btn-secondary:hover:not(:disabled) {
   background: #f1f5f9;
   color: #0f172a;
 }
@@ -2253,13 +2515,165 @@ async function handleRemoveAllocation(item: { id: string; type: string; name: st
   color: #ffffff;
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background: #004540;
+}
+
+.btn-primary.btn-save-batch {
+  background: #005a54;
+}
+
+.btn-primary.btn-save-batch.has-changes {
+  background: #0284c7;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3);
+}
+
+.btn-primary.btn-save-batch.has-changes:hover:not(:disabled) {
+  background: #0369a1;
+}
+
+.btn-outline-primary {
+  background: transparent;
+  color: #005a54;
+  border: 1px solid #005a54;
+}
+
+.btn-outline-primary:hover {
+  background: rgba(0, 90, 84, 0.08);
 }
 
 .btn-sm {
   padding: 0.35rem 0.75rem;
   font-size: 0.78rem;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* CONFIRMATION MODAL POPUP */
+.confirm-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.confirm-modal-card {
+  background: #ffffff;
+  border-radius: 12px;
+  max-width: 460px;
+  width: 100%;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  animation: modalScaleIn 0.18s ease-out;
+}
+
+.confirm-modal-header {
+  padding: 1.25rem 1.25rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.confirm-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: #fef3c7;
+  color: #d97706;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.confirm-title-wrap h4 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.confirm-title-wrap p {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.confirm-modal-body {
+  padding: 0.75rem 1.25rem 1.25rem;
+}
+
+.confirm-intro-text {
+  margin: 0 0 0.85rem;
+  font-size: 0.85rem;
+  color: #334155;
+  line-height: 1.5;
+}
+
+.confirm-summary-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.confirm-stat-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+}
+
+.confirm-stat-row .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.confirm-stat-row.stat-modify .dot {
+  background: #0284c7;
+}
+
+.confirm-stat-row.stat-modify {
+  color: #0369a1;
+}
+
+.confirm-stat-row.stat-remove .dot {
+  background: #dc2626;
+}
+
+.confirm-stat-row.stat-remove {
+  color: #b91c1c;
+}
+
+.confirm-modal-footer {
+  padding: 0.85rem 1.25rem;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+.btn-confirm-submit {
+  background: #005a54;
+}
+
+.btn-confirm-submit:hover:not(:disabled) {
+  background: #004540;
 }
 
 .spin-icon {
