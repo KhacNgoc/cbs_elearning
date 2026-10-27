@@ -2007,19 +2007,11 @@ async function handleExecuteBatchSync() {
   font-weight: 700;
 }
 
-.stat-domain {
-  background: #f0fdf4;
-  color: #166534;
-}
-
-.stat-program {
-  background: #f0f9ff;
-  color: #075985;
-}
-
+.stat-domain,
+.stat-program,
 .stat-course {
-  background: #faf5ff;
-  color: #6b21a8;
+  background: transparent;
+  color: var(--text-main, #0f172a);
 }
 
 .badge-allocation-status {
@@ -2038,22 +2030,10 @@ async function handleExecuteBatchSync() {
   border-radius: 50%;
 }
 
-.badge-allocation-status.allocated {
-  background: #ecfdf5;
-  color: #047857;
-}
-
-.badge-allocation-status.allocated .dot {
-  background: #10b981;
-}
-
+.badge-allocation-status.allocated,
 .badge-allocation-status.unallocated {
-  background: #f1f5f9;
-  color: #64748b;
-}
-
-.badge-allocation-status.unallocated .dot {
-  background: #94a3b8;
+  background: transparent;
+  color: var(--text-main, #0f172a);
 }
 
 /* ACTION BUTTONS IN TABLE */
