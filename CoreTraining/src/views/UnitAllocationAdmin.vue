@@ -126,12 +126,12 @@
 
       <!-- DIRECTORY TABLE -->
       <div class="table-responsive">
-        <div v-if="loading || loadingDirectory" class="table-loading-state">
+        <div v-if="loading && allDirectoryUnits.length === 0" class="table-loading-state">
           <Loader2 :size="32" class="spin-icon" />
           <p>Đang tải danh sách đơn vị và phân bổ đào tạo...</p>
         </div>
 
-        <div v-else-if="pagedDirectoryUnits.length === 0" class="table-empty-state">
+        <div v-else-if="filteredDirectoryUnits.length === 0" class="table-empty-state">
           <Building2 :size="36" class="empty-icon" />
           <h4>Không tìm thấy đơn vị phù hợp</h4>
           <p>Thử tìm kiếm với từ khóa khác hoặc điều chỉnh lại bộ lọc.</p>
@@ -954,15 +954,13 @@ function openBatchModalFromDetail() {
   }
 }
 
-// Directory Search & Filters (Server-side Pagination & DB Trigram Search)
+// Directory Search & Filters (Reusing loaded units for instant filter switching without network delays)
 const unitDirectoryQuery = ref("");
 const typeFilter = ref<"ALL" | "BRANCH" | "DEPARTMENT">("ALL");
 const statusFilter = ref<"ALL" | "ALLOCATED" | "UNALLOCATED">("ALL");
 const unitDirectoryPage = ref(1);
 const unitDirectoryPageSize = 10;
-const unitDirectoryTotalElements = ref(0);
-const unitDirectoryTotalPages = ref(1);
-const pagedDirectoryUnits = ref<any[]>([]);
+const allDirectoryUnits = ref<any[]>([]);
 const directoryStats = ref({
   totalCount: 0,
   allocatedCount: 0,
@@ -972,37 +970,53 @@ const directoryStats = ref({
 });
 const loadingDirectory = ref(false);
 
-let unitSearchTimer: ReturnType<typeof setTimeout> | null = null;
-watch(unitDirectoryQuery, () => {
-  if (unitSearchTimer) clearTimeout(unitSearchTimer);
-  unitSearchTimer = setTimeout(() => {
-    unitDirectoryPage.value = 1;
-    fetchDirectoryUnits();
-  }, 300);
+const filteredDirectoryUnits = computed(() => {
+  let list = allDirectoryUnits.value;
+  const q = unitDirectoryQuery.value.trim().toLowerCase();
+  if (q) {
+    list = list.filter((u) =>
+      (u.name && u.name.toLowerCase().includes(q)) ||
+      (u.code && u.code.toLowerCase().includes(q))
+    );
+  }
+  if (typeFilter.value === "DEPARTMENT") {
+    list = list.filter((u) => u.type === "DEPARTMENT");
+  } else if (typeFilter.value === "BRANCH") {
+    list = list.filter((u) => u.type !== "DEPARTMENT");
+  }
+
+  if (statusFilter.value === "ALLOCATED") {
+    list = list.filter((u) => u.isAllocated || (u.domainCount || 0) > 0 || (u.programCount || 0) > 0 || (u.courseCount || 0) > 0);
+  } else if (statusFilter.value === "UNALLOCATED") {
+    list = list.filter((u) => !u.isAllocated && (u.domainCount || 0) === 0 && (u.programCount || 0) === 0 && (u.courseCount || 0) === 0);
+  }
+  return list;
 });
 
-watch([typeFilter, statusFilter], () => {
+const unitDirectoryTotalElements = computed(() => filteredDirectoryUnits.value.length);
+const unitDirectoryTotalPages = computed(() =>
+  Math.max(1, Math.ceil(unitDirectoryTotalElements.value / unitDirectoryPageSize))
+);
+
+const pagedDirectoryUnits = computed(() => {
+  const start = (unitDirectoryPage.value - 1) * unitDirectoryPageSize;
+  return filteredDirectoryUnits.value.slice(start, start + unitDirectoryPageSize);
+});
+
+watch([unitDirectoryQuery, typeFilter, statusFilter], () => {
   unitDirectoryPage.value = 1;
-  fetchDirectoryUnits();
-});
-
-watch(unitDirectoryPage, () => {
-  fetchDirectoryUnits();
 });
 
 async function fetchDirectoryUnits() {
   loadingDirectory.value = true;
   try {
     const res = await trainingApi.unitDirectoryPaged({
-      search: unitDirectoryQuery.value.trim() || undefined,
-      type: typeFilter.value,
-      status: statusFilter.value,
-      page: unitDirectoryPage.value - 1,
-      size: unitDirectoryPageSize,
+      type: "ALL",
+      status: "ALL",
+      page: 0,
+      size: 1000,
     });
-    pagedDirectoryUnits.value = res.items || [];
-    unitDirectoryTotalElements.value = res.totalElements || 0;
-    unitDirectoryTotalPages.value = Math.max(1, res.totalPages || 1);
+    allDirectoryUnits.value = res.items || [];
     if (res.stats) {
       directoryStats.value = res.stats;
     }
@@ -1960,7 +1974,7 @@ async function handleExecuteBatchSync() {
 .filter-pill.active {
   background: #ffffff;
   color: #005a54;
-  font-weight: 600;
+  font-weight: 500;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
@@ -2405,7 +2419,7 @@ async function handleExecuteBatchSync() {
 .pill-grant.active {
   background: #0f172a;
   color: #ffffff;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .pill-grant.mandatory.active {
