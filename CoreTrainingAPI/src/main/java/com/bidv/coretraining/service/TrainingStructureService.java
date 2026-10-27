@@ -1162,7 +1162,28 @@ public class TrainingStructureService {
     }
 
     public List<CourseDto> adminCoursesByUnit(String unitId) {
-        return courses.findByUnitGrant(unitId).stream()
+        // Collect courses explicitly assigned to unit OR whose program/domain is assigned to unit
+        Set<String> courseIds = new HashSet<>();
+        for (Course c : courses.findByUnitGrant(unitId)) {
+            courseIds.add(c.getId());
+        }
+        for (Course c : courses.findAll()) {
+            if ("DELETED".equals(c.getStatus())) continue;
+            boolean hasCourseGrant = c.getUnitGrants() != null && c.getUnitGrants().containsKey(unitId);
+            boolean hasProgramGrant = c.getProgram() != null && (
+                    (c.getProgram().getUnitGrants() != null && c.getProgram().getUnitGrants().containsKey(unitId)) ||
+                    (c.getProgram().getUnits() != null && c.getProgram().getUnits().stream().anyMatch(u -> unitId.equals(u.getId())))
+            );
+            boolean hasDomainGrant = c.getProgram() != null && c.getProgram().getDomain() != null && (
+                    (c.getProgram().getDomain().getUnitGrants() != null && c.getProgram().getDomain().getUnitGrants().containsKey(unitId)) ||
+                    (c.getProgram().getDomain().getUnits() != null && c.getProgram().getDomain().getUnits().stream().anyMatch(u -> unitId.equals(u.getId())))
+            );
+            if (hasCourseGrant || hasProgramGrant || hasDomainGrant) {
+                courseIds.add(c.getId());
+            }
+        }
+        return courses.findAllById(courseIds).stream()
+                .filter(c -> !"DELETED".equals(c.getStatus()))
                 .map(this::mapToAdminCourseDto)
                 .toList();
     }
@@ -1191,12 +1212,45 @@ public class TrainingStructureService {
                     optional.add(entry.getKey());
                 }
             }
-        } else if (c.getProgram() != null && c.getProgram().getUnitGrants() != null) {
-            for (var entry : c.getProgram().getUnitGrants().entrySet()) {
-                if ("MANDATORY".equalsIgnoreCase(entry.getValue())) {
-                    mandatory.add(entry.getKey());
-                } else {
-                    optional.add(entry.getKey());
+        }
+        if (c.getProgram() != null) {
+            if (c.getProgram().getUnitGrants() != null) {
+                for (var entry : c.getProgram().getUnitGrants().entrySet()) {
+                    if (!mandatory.contains(entry.getKey()) && !optional.contains(entry.getKey())) {
+                        if ("MANDATORY".equalsIgnoreCase(entry.getValue())) {
+                            mandatory.add(entry.getKey());
+                        } else {
+                            optional.add(entry.getKey());
+                        }
+                    }
+                }
+            }
+            if (c.getProgram().getUnits() != null) {
+                for (OrganizationUnit u : c.getProgram().getUnits()) {
+                    if (!mandatory.contains(u.getId()) && !optional.contains(u.getId())) {
+                        optional.add(u.getId());
+                    }
+                }
+            }
+            if (c.getProgram().getDomain() != null) {
+                TrainingDomain d = c.getProgram().getDomain();
+                if (d.getUnitGrants() != null) {
+                    for (var entry : d.getUnitGrants().entrySet()) {
+                        if (!mandatory.contains(entry.getKey()) && !optional.contains(entry.getKey())) {
+                            if ("MANDATORY".equalsIgnoreCase(entry.getValue())) {
+                                mandatory.add(entry.getKey());
+                            } else {
+                                optional.add(entry.getKey());
+                            }
+                        }
+                    }
+                }
+                if (d.getUnits() != null) {
+                    for (OrganizationUnit u : d.getUnits()) {
+                        if (!mandatory.contains(u.getId()) && !optional.contains(u.getId())) {
+                            optional.add(u.getId());
+                        }
+                    }
                 }
             }
         }

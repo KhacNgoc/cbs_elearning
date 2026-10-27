@@ -588,6 +588,14 @@
                       </div>
                     </div>
                   </div>
+
+                  <!-- EMPTY CHILD HINT IF NO COURSES -->
+                  <div
+                    v-if="expandedDetailProgramIds.has(progNode.id) && progNode.courses.length === 0"
+                    class="empty-child-hint"
+                  >
+                    Chưa có khóa học nào thuộc chương trình này
+                  </div>
                 </div>
               </div>
             </div>
@@ -1141,6 +1149,29 @@ function initStagedAllocations() {
         isModified: false,
         isRemoved: false,
       });
+    }
+  }
+
+  // 3b. Ensure courses of assigned programs are included in staged allocations
+  for (const item of list.filter((i) => i.type === "program")) {
+    const pCourses = allCoursesList.value.filter((c) => c.programId === item.id && c.status !== "DELETED");
+    for (const c of pCourses) {
+      if (!list.some((existing) => existing.type === "course" && existing.id === c.id)) {
+        list.push({
+          id: c.id,
+          type: "course",
+          typeLabel: "Khóa học",
+          code: c.code || "",
+          name: c.name,
+          grantType: item.grantType,
+          initialGrantType: item.grantType,
+          parentProgramName: item.name,
+          programId: item.id,
+          domainId: item.domainId,
+          isModified: false,
+          isRemoved: false,
+        });
+      }
     }
   }
 
