@@ -2636,6 +2636,8 @@ function stripLeadingIndexPrefix(text: string | undefined, prefixWord: string): 
   return text.replace(regex, "").trim() || text;
 }
 
+let nodeTooltipTimer: ReturnType<typeof setTimeout> | null = null;
+
 function showNodeTooltip(
   e: MouseEvent,
   type: "domain" | "program" | "course" | "chapter" | "lesson",
@@ -2643,61 +2645,69 @@ function showNodeTooltip(
   parentObj?: any
 ) {
   if (!rawObj) return;
-  const target = e.currentTarget as HTMLElement;
+  if (nodeTooltipTimer) clearTimeout(nodeTooltipTimer);
+
+  const target = (e.currentTarget || e.target) as HTMLElement;
   const rect = target.getBoundingClientRect();
 
-  const popoverWidth = 340;
-  let left = rect.left;
-  if (left + popoverWidth > window.innerWidth - 20) {
-    left = Math.max(16, window.innerWidth - popoverWidth - 20);
-  }
-  let top = rect.bottom + 8;
-  if (top + 180 > window.innerHeight) {
-    top = Math.max(16, rect.top - 160);
-  }
-
-  const typeLabelMap: Record<string, string> = {
-    domain: "Lĩnh vực đào tạo",
-    program: "Chương trình đào tạo",
-    course: "Khóa học nghiệp vụ",
-    chapter: "Chương học",
-    lesson: "Bài giảng",
-  };
-
-  let description = rawObj.description || rawObj.hint || "";
-  let extraMeta = "";
-  if (type === "chapter") {
-    const lessonCount = (rawObj.lessons || []).filter((l: any) => l.status !== "DELETED").length;
-    if (!description) {
-      description = `Chương học thuộc khóa "${parentObj?.name || "Khóa học hiện tại"}", bao gồm ${lessonCount} bài giảng nghiệp vụ.`;
+  nodeTooltipTimer = setTimeout(() => {
+    const popoverWidth = 340;
+    let left = rect.left;
+    if (left + popoverWidth > window.innerWidth - 20) {
+      left = Math.max(16, window.innerWidth - popoverWidth - 20);
     }
-    extraMeta = `${lessonCount} bài giảng`;
-  } else if (type === "lesson") {
-    const parts: string[] = [];
-    if (rawObj.videoUrl) parts.push("Video");
-    if (rawObj.documents?.length) parts.push(`${rawObj.documents.length} Tài liệu`);
-    if (rawObj.procedureSteps?.length) parts.push(`${rawObj.procedureSteps.length} Bước quy trình`);
-    if (rawObj.hasQuiz) parts.push("Quiz đánh giá");
-    extraMeta = parts.length ? parts.join(" • ") : "Chưa đính kèm học liệu";
-  }
+    let top = rect.bottom + 8;
+    if (top + 190 > window.innerHeight) {
+      top = Math.max(16, rect.top - 180);
+    }
 
-  hoverTooltip.value = {
-    visible: true,
-    x: left,
-    y: top,
-    type,
-    typeLabel: typeLabelMap[type] || "Nội dung đào tạo",
-    code: rawObj.code || "",
-    title: rawObj.name || rawObj.title || "",
-    description,
-    businessModule: rawObj.businessModule || parentObj?.businessModule || "",
-    level: type === "course" ? rawObj.level || "" : "",
-    deadline: type === "course" ? rawObj.completionDeadline || "" : "",
-    extraMeta,
-  };
+    const typeLabelMap: Record<string, string> = {
+      domain: "Lĩnh vực đào tạo",
+      program: "Chương trình đào tạo",
+      course: "Khóa học nghiệp vụ",
+      chapter: "Chương học",
+      lesson: "Bài giảng",
+    };
+
+    let description = rawObj.description || rawObj.hint || "";
+    let extraMeta = "";
+    if (type === "chapter") {
+      const lessonCount = (rawObj.lessons || []).filter((l: any) => l.status !== "DELETED").length;
+      if (!description) {
+        description = `Chương học thuộc khóa "${parentObj?.name || "Khóa học hiện tại"}", bao gồm ${lessonCount} bài giảng nghiệp vụ.`;
+      }
+      extraMeta = `${lessonCount} bài giảng`;
+    } else if (type === "lesson") {
+      const parts: string[] = [];
+      if (rawObj.videoUrl) parts.push("Video");
+      if (rawObj.documents?.length) parts.push(`${rawObj.documents.length} Tài liệu`);
+      if (rawObj.procedureSteps?.length) parts.push(`${rawObj.procedureSteps.length} Bước quy trình`);
+      if (rawObj.hasQuiz) parts.push("Quiz đánh giá");
+      extraMeta = parts.length ? parts.join(" • ") : "Chưa đính kèm học liệu";
+    }
+
+    hoverTooltip.value = {
+      visible: true,
+      x: left,
+      y: top,
+      type,
+      typeLabel: typeLabelMap[type] || "Nội dung đào tạo",
+      code: rawObj.code || "",
+      title: rawObj.name || rawObj.title || "",
+      description,
+      businessModule: rawObj.businessModule || parentObj?.businessModule || "",
+      level: type === "course" ? rawObj.level || "" : "",
+      deadline: type === "course" ? rawObj.completionDeadline || "" : "",
+      extraMeta,
+    };
+  }, 220);
 }
 
 function hideNodeTooltip() {
+  if (nodeTooltipTimer) {
+    clearTimeout(nodeTooltipTimer);
+    nodeTooltipTimer = null;
+  }
   hoverTooltip.value.visible = false;
 }
 
@@ -2982,7 +2992,7 @@ watch(
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
-  transition: all 0.14s ease;
+  transition: background-color 0.14s ease, border-color 0.14s ease;
   user-select: none;
   min-height: 38px;
 }
@@ -3079,6 +3089,7 @@ watch(
   align-items: center;
   gap: 0.5rem;
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -3254,16 +3265,22 @@ watch(
   font-weight: bold;
 }
 
-/* Hover Action Buttons */
+/* Hover Action Buttons (Reserve layout space to prevent horizontal jitter on hover) */
 .node-hover-actions {
-  display: none;
+  display: flex;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
   align-items: center;
   gap: 0.3rem;
   margin-left: 0.4rem;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
 }
 
 .tree-node:hover .node-hover-actions {
-  display: flex;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .hover-action-btn {
@@ -4140,6 +4157,18 @@ watch(
 
 <!-- GLOBAL STYLE FOR TELEPORTED HOVER DESCRIPTION POPOVER (Light & Dark Mode Synchronized) -->
 <style>
+/* Tooltip Transition */
+.tooltip-fade-enter-active,
+.tooltip-fade-leave-active {
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.tooltip-fade-enter-from,
+.tooltip-fade-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
 .impeccable-desc-popover {
   position: fixed;
   z-index: 9999;
