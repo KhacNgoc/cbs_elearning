@@ -376,6 +376,27 @@
               </button>
             </div>
 
+            <!-- EXPAND/COLLAPSE ALL HELPERS FOR TREE VIEW -->
+            <div v-if="detailViewMode === 'tree'" class="tree-expand-helpers">
+              <button
+                type="button"
+                class="btn-expand-helper"
+                @click="expandAllDetail"
+                title="Mở rộng tất cả các cấp"
+              >
+                Mở rộng hết
+              </button>
+              <span class="helper-sep">/</span>
+              <button
+                type="button"
+                class="btn-expand-helper"
+                @click="collapseAllDetail"
+                title="Thu gọn tất cả các cấp"
+              >
+                Thu gọn hết
+              </button>
+            </div>
+
             <!-- GRANT PILLS -->
             <div class="grant-filter-pills">
               <button
@@ -442,27 +463,36 @@
               :class="{ 'item-marked-removed': domainNode.isRemoved }"
             >
               <!-- DOMAIN HEADER -->
-              <div class="assigned-domain-header">
+              <div class="assigned-domain-header" @click="toggleDetailDomain(domainNode.id)">
                 <div class="domain-header-left">
+                  <button
+                    type="button"
+                    class="btn-chevron"
+                    @click.stop="toggleDetailDomain(domainNode.id)"
+                    :title="expandedDetailDomainIds.has(domainNode.id) ? 'Thu gọn' : 'Mở rộng'"
+                  >
+                    <ChevronDown v-if="expandedDetailDomainIds.has(domainNode.id)" :size="15" />
+                    <ChevronRight v-else :size="15" />
+                  </button>
                   <Globe :size="16" class="domain-icon" />
                   <span class="domain-title" :class="{ 'strikethrough-text': domainNode.isRemoved }">
                     {{ domainNode.name }}
                   </span>
-                  <span v-if="domainNode.code" class="node-code">{{ domainNode.code }}</span>
                   <span v-if="domainNode.isExplicit" class="badge-explicit">Gán cấp Lĩnh vực</span>
-                  <span v-if="domainNode.isModified && !domainNode.isRemoved" class="badge-modified">Đã đổi hình thức</span>
+                  <span v-else class="badge-inherited">Nhóm Lĩnh vực</span>
+                  <span v-if="domainNode.isModified && !domainNode.isRemoved" class="badge-modified">Đã đổi</span>
                   <span v-if="domainNode.isRemoved" class="badge-removed-tag">Đã đánh dấu gỡ bỏ</span>
                 </div>
 
-                <div class="domain-header-right">
-                  <!-- TOGGLE BUTTON (IN-MEMORY) -->
+                <div class="domain-header-right" @click.stop>
+                  <!-- TOGGLE BUTTON -->
                   <button
-                    v-if="domainNode.isExplicit && !domainNode.isRemoved"
+                    v-if="!domainNode.isRemoved"
                     type="button"
                     class="btn-grant-toggle"
                     :class="domainNode.grantType === 'MANDATORY' ? 'grant-mandatory' : 'grant-optional'"
-                    @click="handleStagedToggleGrantType(domainNode)"
-                    title="Bấm để đổi hình thức (tạm tính trên giao diện)"
+                    @click.stop="handleStagedToggleGrantType({ id: domainNode.id, type: 'domain' })"
+                    :title="domainNode.isExplicit ? 'Bấm để đổi hình thức (cho lĩnh vực & các mục con)' : 'Đổi hình thức tất cả khóa con'"
                   >
                     <span class="dot"></span>
                     <span>{{ domainNode.grantType === 'MANDATORY' ? 'Bắt buộc' : 'Tự chọn' }}</span>
@@ -470,21 +500,21 @@
 
                   <!-- UNDO REMOVE OR REMOVE BUTTON -->
                   <button
-                    v-if="domainNode.isExplicit && domainNode.isRemoved"
+                    v-if="domainNode.isRemoved"
                     type="button"
                     class="btn-undo-remove"
-                    @click="handleStagedUndoRemove(domainNode)"
+                    @click.stop="handleStagedUndoRemove({ id: domainNode.id, type: 'domain' })"
                     title="Hoàn tác gỡ bỏ"
                   >
                     <Undo2 :size="13" />
                     <span>Hoàn tác</span>
                   </button>
                   <button
-                    v-else-if="domainNode.isExplicit"
+                    v-else
                     type="button"
                     class="btn-remove-allocation"
-                    @click="handleStagedRemove(domainNode)"
-                    title="Đánh dấu gỡ bỏ phân bổ Lĩnh vực"
+                    @click.stop="handleStagedRemove({ id: domainNode.id, type: 'domain' })"
+                    :title="domainNode.isExplicit ? 'Đánh dấu gỡ bỏ phân bổ Lĩnh vực' : 'Đánh dấu gỡ bỏ tất cả khóa con'"
                   >
                     <Trash2 :size="14" />
                   </button>
@@ -492,54 +522,66 @@
               </div>
 
               <!-- PROGRAMS UNDER DOMAIN -->
-              <div class="assigned-programs-container">
+              <div
+                v-if="expandedDetailDomainIds.has(domainNode.id) && domainNode.programs.length > 0"
+                class="assigned-programs-container"
+              >
                 <div
                   v-for="progNode in domainNode.programs"
                   :key="progNode.id"
                   class="assigned-program-card"
                   :class="{ 'item-marked-removed': progNode.isRemoved }"
                 >
-                  <div class="program-card-header">
+                  <div class="program-card-header" @click="toggleDetailProgram(progNode.id)">
                     <div class="prog-header-left">
+                      <button
+                        type="button"
+                        class="btn-chevron"
+                        @click.stop="toggleDetailProgram(progNode.id)"
+                        :title="expandedDetailProgramIds.has(progNode.id) ? 'Thu gọn' : 'Mở rộng'"
+                      >
+                        <ChevronDown v-if="expandedDetailProgramIds.has(progNode.id)" :size="14" />
+                        <ChevronRight v-else :size="14" />
+                      </button>
                       <Folder :size="15" class="program-icon" />
                       <span class="program-title" :class="{ 'strikethrough-text': progNode.isRemoved }">
                         {{ progNode.name }}
                       </span>
-                      <span v-if="progNode.code" class="node-code">{{ progNode.code }}</span>
                       <span v-if="progNode.isExplicit" class="badge-explicit">Gán cấp Chương trình</span>
-                      <span v-if="progNode.isModified && !progNode.isRemoved" class="badge-modified">Đã đổi hình thức</span>
+                      <span v-else class="badge-inherited">Nhóm Chương trình</span>
+                      <span v-if="progNode.isModified && !progNode.isRemoved" class="badge-modified">Đã đổi</span>
                       <span v-if="progNode.isRemoved" class="badge-removed-tag">Đã đánh dấu gỡ bỏ</span>
                     </div>
 
-                    <div class="prog-header-right">
+                    <div class="prog-header-right" @click.stop>
                       <button
-                        v-if="progNode.isExplicit && !progNode.isRemoved"
+                        v-if="!progNode.isRemoved"
                         type="button"
                         class="btn-grant-toggle"
                         :class="progNode.grantType === 'MANDATORY' ? 'grant-mandatory' : 'grant-optional'"
-                        @click="handleStagedToggleGrantType(progNode)"
-                        title="Bấm để đổi hình thức (tạm tính trên giao diện)"
+                        @click.stop="handleStagedToggleGrantType({ id: progNode.id, type: 'program' })"
+                        :title="progNode.isExplicit ? 'Bấm để đổi hình thức (cho chương trình & các khóa con)' : 'Đổi hình thức tất cả khóa con'"
                       >
                         <span class="dot"></span>
                         <span>{{ progNode.grantType === 'MANDATORY' ? 'Bắt buộc' : 'Tự chọn' }}</span>
                       </button>
 
                       <button
-                        v-if="progNode.isExplicit && progNode.isRemoved"
+                        v-if="progNode.isRemoved"
                         type="button"
                         class="btn-undo-remove"
-                        @click="handleStagedUndoRemove(progNode)"
+                        @click.stop="handleStagedUndoRemove({ id: progNode.id, type: 'program' })"
                         title="Hoàn tác gỡ bỏ"
                       >
                         <Undo2 :size="13" />
                         <span>Hoàn tác</span>
                       </button>
                       <button
-                        v-else-if="progNode.isExplicit"
+                        v-else
                         type="button"
                         class="btn-remove-allocation"
-                        @click="handleStagedRemove(progNode)"
-                        title="Đánh dấu gỡ bỏ Chương trình"
+                        @click.stop="handleStagedRemove({ id: progNode.id, type: 'program' })"
+                        :title="progNode.isExplicit ? 'Đánh dấu gỡ bỏ Chương trình' : 'Đánh dấu gỡ bỏ tất cả khóa con'"
                       >
                         <Trash2 :size="14" />
                       </button>
@@ -547,7 +589,10 @@
                   </div>
 
                   <!-- COURSES UNDER PROGRAM -->
-                  <div v-if="progNode.courses.length > 0" class="assigned-courses-list">
+                  <div
+                    v-if="expandedDetailProgramIds.has(progNode.id) && progNode.courses.length > 0"
+                    class="assigned-courses-list"
+                  >
                     <div
                       v-for="course in progNode.courses"
                       :key="course.id"
@@ -559,19 +604,18 @@
                         <span class="course-title" :class="{ 'strikethrough-text': course.isRemoved }">
                           {{ course.name }}
                         </span>
-                        <span v-if="course.code" class="node-code">{{ course.code }}</span>
-                        <span v-if="course.isModified && !course.isRemoved" class="badge-modified">Đã đổi hình thức</span>
+                        <span v-if="course.isModified && !course.isRemoved" class="badge-modified">Đã đổi</span>
                         <span v-if="course.isRemoved" class="badge-removed-tag">Đã đánh dấu gỡ bỏ</span>
                       </div>
 
-                      <div class="course-right">
+                      <div class="course-right" @click.stop>
                         <button
                           v-if="!course.isRemoved"
                           type="button"
                           class="btn-grant-toggle"
                           :class="course.grantType === 'MANDATORY' ? 'grant-mandatory' : 'grant-optional'"
-                          @click="handleStagedToggleGrantType(course)"
-                          title="Bấm để đổi hình thức (tạm tính trên giao diện)"
+                          @click.stop="handleStagedToggleGrantType({ id: course.id, type: 'course' })"
+                          title="Bấm để đổi hình thức"
                         >
                           <span class="dot"></span>
                           <span>{{ course.grantType === 'MANDATORY' ? 'Bắt buộc' : 'Tự chọn' }}</span>
@@ -581,7 +625,7 @@
                           v-if="course.isRemoved"
                           type="button"
                           class="btn-undo-remove"
-                          @click="handleStagedUndoRemove(course)"
+                          @click.stop="handleStagedUndoRemove({ id: course.id, type: 'course' })"
                           title="Hoàn tác gỡ bỏ"
                         >
                           <Undo2 :size="13" />
@@ -591,7 +635,7 @@
                           v-else
                           type="button"
                           class="btn-remove-allocation"
-                          @click="handleStagedRemove(course)"
+                          @click.stop="handleStagedRemove({ id: course.id, type: 'course' })"
                           title="Đánh dấu gỡ bỏ Khóa học"
                         >
                           <Trash2 :size="14" />
@@ -611,7 +655,6 @@
                 <tr>
                   <th class="col-stt">STT</th>
                   <th class="col-level">Cấp độ</th>
-                  <th class="col-code">Mã</th>
                   <th class="col-name">Tên nội dung đào tạo</th>
                   <th class="col-parent">Trực thuộc</th>
                   <th class="col-grant text-center">Hình thức áp dụng</th>
@@ -632,10 +675,6 @@
                       <BookOpen v-else :size="12" />
                       <span>{{ item.typeLabel }}</span>
                     </span>
-                  </td>
-                  <td class="col-code">
-                    <span v-if="item.code" class="node-code">{{ item.code }}</span>
-                    <span v-else class="text-muted">—</span>
                   </td>
                   <td class="col-name">
                     <div class="table-name-wrap">
@@ -806,6 +845,7 @@ import {
   Layers,
   ListOrdered,
   ChevronRight,
+  ChevronDown,
   X,
   FolderPlus,
   AlertTriangle,
@@ -860,6 +900,50 @@ const detailFilterQuery = ref("");
 const detailGrantFilter = ref<"ALL" | "MANDATORY" | "OPTIONAL">("ALL");
 const detailViewMode = ref<"tree" | "table">("tree");
 
+// Tree View Expand / Collapse State
+const expandedDetailDomainIds = ref<Set<string>>(new Set());
+const expandedDetailProgramIds = ref<Set<string>>(new Set());
+
+function toggleDetailDomain(id: string) {
+  if (expandedDetailDomainIds.value.has(id)) {
+    expandedDetailDomainIds.value.delete(id);
+  } else {
+    expandedDetailDomainIds.value.add(id);
+  }
+}
+
+function toggleDetailProgram(id: string) {
+  if (expandedDetailProgramIds.value.has(id)) {
+    expandedDetailProgramIds.value.delete(id);
+  } else {
+    expandedDetailProgramIds.value.add(id);
+  }
+}
+
+function expandAllDetail() {
+  const dIds = new Set<string>();
+  const pIds = new Set<string>();
+  for (const item of stagedAllocations.value) {
+    if (item.type === "domain") dIds.add(item.id);
+    else if (item.type === "program") {
+      if (item.domainId) dIds.add(item.domainId);
+      pIds.add(item.id);
+    } else if (item.type === "course") {
+      if (item.domainId) dIds.add(item.domainId);
+      if (item.programId) pIds.add(item.programId);
+    }
+  }
+  for (const d of activeDomains.value) dIds.add(d.id);
+  for (const p of activePrograms.value) pIds.add(p.id);
+  expandedDetailDomainIds.value = dIds;
+  expandedDetailProgramIds.value = pIds;
+}
+
+function collapseAllDetail() {
+  expandedDetailDomainIds.value.clear();
+  expandedDetailProgramIds.value.clear();
+}
+
 interface StagedAllocationItem {
   id: string;
   type: "domain" | "program" | "course";
@@ -885,6 +969,7 @@ async function openDetailModal(unit: OrganizationUnit) {
   showDetailModal.value = true;
   await loadUnitCourses(unit.id);
   initStagedAllocations();
+  expandAllDetail();
 }
 
 function handleAttemptCloseDetail() {
@@ -1109,18 +1194,194 @@ function initStagedAllocations() {
 }
 
 // In-Memory Actions
-function handleStagedToggleGrantType(item: StagedAllocationItem) {
-  const next = item.grantType === "MANDATORY" ? "OPTIONAL" : "MANDATORY";
-  item.grantType = next;
-  item.isModified = item.grantType !== item.initialGrantType;
+function handleStagedToggleGrantType(targetItem: { id: string; type: "domain" | "program" | "course" }) {
+  const direct = stagedAllocations.value.find(
+    (i) => i.id === targetItem.id && i.type === targetItem.type
+  );
+
+  if (direct) {
+    const nextGrant = direct.grantType === "MANDATORY" ? "OPTIONAL" : "MANDATORY";
+    direct.grantType = nextGrant;
+    direct.isModified = direct.grantType !== direct.initialGrantType;
+
+    // Cascade to children
+    if (targetItem.type === "domain") {
+      const childProgIds = activePrograms.value
+        .filter((p) => p.domainId === targetItem.id)
+        .map((p) => p.id);
+      for (const s of stagedAllocations.value) {
+        if (s.type === "program" && s.domainId === targetItem.id) {
+          s.grantType = nextGrant;
+          s.isModified = s.grantType !== s.initialGrantType;
+        } else if (
+          s.type === "course" &&
+          (s.domainId === targetItem.id || (s.programId && childProgIds.includes(s.programId)))
+        ) {
+          s.grantType = nextGrant;
+          s.isModified = s.grantType !== s.initialGrantType;
+        }
+      }
+    } else if (targetItem.type === "program") {
+      for (const s of stagedAllocations.value) {
+        if (s.type === "course" && s.programId === targetItem.id) {
+          s.grantType = nextGrant;
+          s.isModified = s.grantType !== s.initialGrantType;
+        }
+      }
+    }
+  } else {
+    // If implicit node (not explicitly in stagedAllocations, but has children)
+    if (targetItem.type === "domain") {
+      const childProgIds = activePrograms.value
+        .filter((p) => p.domainId === targetItem.id)
+        .map((p) => p.id);
+      const children = stagedAllocations.value.filter(
+        (s) =>
+          (s.type === "program" && s.domainId === targetItem.id) ||
+          (s.type === "course" &&
+            (s.domainId === targetItem.id || (s.programId && childProgIds.includes(s.programId))))
+      );
+      if (children.length > 0) {
+        const nextGrant = children.every((c) => c.grantType === "MANDATORY")
+          ? "OPTIONAL"
+          : "MANDATORY";
+        for (const c of children) {
+          c.grantType = nextGrant;
+          c.isModified = c.grantType !== c.initialGrantType;
+        }
+      }
+    } else if (targetItem.type === "program") {
+      const children = stagedAllocations.value.filter(
+        (s) => s.type === "course" && s.programId === targetItem.id
+      );
+      if (children.length > 0) {
+        const nextGrant = children.every((c) => c.grantType === "MANDATORY")
+          ? "OPTIONAL"
+          : "MANDATORY";
+        for (const c of children) {
+          c.grantType = nextGrant;
+          c.isModified = c.grantType !== c.initialGrantType;
+        }
+      }
+    }
+  }
+
+  // Force reactivity trigger
+  stagedAllocations.value = [...stagedAllocations.value];
 }
 
-function handleStagedRemove(item: StagedAllocationItem) {
-  item.isRemoved = true;
+function handleStagedRemove(targetItem: { id: string; type: "domain" | "program" | "course" }) {
+  const direct = stagedAllocations.value.find(
+    (i) => i.id === targetItem.id && i.type === targetItem.type
+  );
+
+  if (direct) {
+    direct.isRemoved = true;
+
+    // Cascade to children
+    if (targetItem.type === "domain") {
+      const childProgIds = activePrograms.value
+        .filter((p) => p.domainId === targetItem.id)
+        .map((p) => p.id);
+      for (const s of stagedAllocations.value) {
+        if (s.type === "program" && s.domainId === targetItem.id) {
+          s.isRemoved = true;
+        } else if (
+          s.type === "course" &&
+          (s.domainId === targetItem.id || (s.programId && childProgIds.includes(s.programId)))
+        ) {
+          s.isRemoved = true;
+        }
+      }
+    } else if (targetItem.type === "program") {
+      for (const s of stagedAllocations.value) {
+        if (s.type === "course" && s.programId === targetItem.id) {
+          s.isRemoved = true;
+        }
+      }
+    }
+  } else {
+    // Implicit node: remove all children
+    if (targetItem.type === "domain") {
+      const childProgIds = activePrograms.value
+        .filter((p) => p.domainId === targetItem.id)
+        .map((p) => p.id);
+      for (const s of stagedAllocations.value) {
+        if (
+          (s.type === "program" && s.domainId === targetItem.id) ||
+          (s.type === "course" &&
+            (s.domainId === targetItem.id || (s.programId && childProgIds.includes(s.programId))))
+        ) {
+          s.isRemoved = true;
+        }
+      }
+    } else if (targetItem.type === "program") {
+      for (const s of stagedAllocations.value) {
+        if (s.type === "course" && s.programId === targetItem.id) {
+          s.isRemoved = true;
+        }
+      }
+    }
+  }
+
+  stagedAllocations.value = [...stagedAllocations.value];
 }
 
-function handleStagedUndoRemove(item: StagedAllocationItem) {
-  item.isRemoved = false;
+function handleStagedUndoRemove(targetItem: { id: string; type: "domain" | "program" | "course" }) {
+  const direct = stagedAllocations.value.find(
+    (i) => i.id === targetItem.id && i.type === targetItem.type
+  );
+
+  if (direct) {
+    direct.isRemoved = false;
+
+    // Cascade to children
+    if (targetItem.type === "domain") {
+      const childProgIds = activePrograms.value
+        .filter((p) => p.domainId === targetItem.id)
+        .map((p) => p.id);
+      for (const s of stagedAllocations.value) {
+        if (s.type === "program" && s.domainId === targetItem.id) {
+          s.isRemoved = false;
+        } else if (
+          s.type === "course" &&
+          (s.domainId === targetItem.id || (s.programId && childProgIds.includes(s.programId)))
+        ) {
+          s.isRemoved = false;
+        }
+      }
+    } else if (targetItem.type === "program") {
+      for (const s of stagedAllocations.value) {
+        if (s.type === "course" && s.programId === targetItem.id) {
+          s.isRemoved = false;
+        }
+      }
+    }
+  } else {
+    // Implicit node: undo all children
+    if (targetItem.type === "domain") {
+      const childProgIds = activePrograms.value
+        .filter((p) => p.domainId === targetItem.id)
+        .map((p) => p.id);
+      for (const s of stagedAllocations.value) {
+        if (
+          (s.type === "program" && s.domainId === targetItem.id) ||
+          (s.type === "course" &&
+            (s.domainId === targetItem.id || (s.programId && childProgIds.includes(s.programId))))
+        ) {
+          s.isRemoved = false;
+        }
+      }
+    } else if (targetItem.type === "program") {
+      for (const s of stagedAllocations.value) {
+        if (s.type === "course" && s.programId === targetItem.id) {
+          s.isRemoved = false;
+        }
+      }
+    }
+  }
+
+  stagedAllocations.value = [...stagedAllocations.value];
 }
 
 // Staged Calculations
@@ -1188,6 +1449,7 @@ const assignedTreeData = computed(() => {
       if (!domainMap.has(item.id)) {
         domainMap.set(item.id, {
           id: item.id,
+          type: "domain",
           name: item.name,
           code: item.code,
           isExplicit: true,
@@ -1211,6 +1473,7 @@ const assignedTreeData = computed(() => {
         const rawDomain = activeDomains.value.find((d) => d.id === dId);
         domainNode = {
           id: dId,
+          type: "domain",
           name: rawDomain ? rawDomain.name : "Lĩnh vực khác",
           code: rawDomain?.code,
           isExplicit: false,
@@ -1226,6 +1489,8 @@ const assignedTreeData = computed(() => {
       if (!progNode) {
         progNode = {
           id: item.id,
+          type: "program",
+          domainId: dId,
           name: item.name,
           code: item.code,
           isExplicit: true,
@@ -1251,6 +1516,7 @@ const assignedTreeData = computed(() => {
         const rawDomain = activeDomains.value.find((d) => d.id === dId);
         domainNode = {
           id: dId,
+          type: "domain",
           name: rawDomain ? rawDomain.name : "Lĩnh vực khác",
           code: rawDomain?.code,
           isExplicit: false,
@@ -1267,6 +1533,8 @@ const assignedTreeData = computed(() => {
         const rawProg = activePrograms.value.find((p) => p.id === pId);
         progNode = {
           id: pId,
+          type: "program",
+          domainId: dId,
           name: rawProg ? rawProg.name : (item.parentProgramName || "Chương trình khác"),
           code: rawProg?.code,
           isExplicit: false,
@@ -1281,6 +1549,9 @@ const assignedTreeData = computed(() => {
       if (!progNode.courses.some((c: any) => c.id === item.id)) {
         progNode.courses.push({
           id: item.id,
+          type: "course",
+          programId: pId,
+          domainId: dId,
           name: item.name,
           code: item.code,
           grantType: item.grantType,
@@ -1288,6 +1559,35 @@ const assignedTreeData = computed(() => {
           isModified: item.isModified,
           isRemoved: item.isRemoved,
         });
+      }
+    }
+  }
+
+  // Second pass: compute aggregate status for implicit parent nodes
+  for (const domainNode of domainMap.values()) {
+    for (const progNode of domainNode.programs) {
+      if (!progNode.isExplicit && progNode.courses.length > 0) {
+        progNode.isRemoved = progNode.courses.every((c: any) => c.isRemoved);
+        progNode.isModified = progNode.courses.some((c: any) => c.isModified);
+        const activeCourses = progNode.courses.filter((c: any) => !c.isRemoved);
+        progNode.grantType =
+          activeCourses.length > 0 && activeCourses.every((c: any) => c.grantType === "MANDATORY")
+            ? "MANDATORY"
+            : "OPTIONAL";
+      }
+    }
+
+    if (!domainNode.isExplicit) {
+      const allProgCourses = domainNode.programs.flatMap((p: any) => p.courses);
+      const allChildren = [...domainNode.programs, ...allProgCourses];
+      if (allChildren.length > 0) {
+        domainNode.isRemoved = domainNode.programs.every((p: any) => p.isRemoved);
+        domainNode.isModified = domainNode.programs.some((p: any) => p.isModified) || allProgCourses.some((c: any) => c.isModified);
+        const activeCourses = allProgCourses.filter((c: any) => !c.isRemoved);
+        domainNode.grantType =
+          activeCourses.length > 0 && activeCourses.every((c: any) => c.grantType === "MANDATORY")
+            ? "MANDATORY"
+            : "OPTIONAL";
       }
     }
   }
@@ -2047,13 +2347,68 @@ async function handleExecuteBatchSync() {
 }
 
 .pill-grant.mandatory.active {
-  background: #b91c1c;
+  background: #334155;
   color: #ffffff;
 }
 
 .pill-grant.optional.active {
   background: #15803d;
   color: #ffffff;
+}
+
+/* TREE EXPAND HELPERS */
+.tree-expand-helpers {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+}
+
+.btn-expand-helper {
+  background: transparent;
+  border: none;
+  font-size: 0.73rem;
+  color: #0284c7;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0.1rem 0.25rem;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.btn-expand-helper:hover {
+  background: #f0f9ff;
+  color: #0369a1;
+}
+
+.helper-sep {
+  color: #cbd5e1;
+  font-size: 0.7rem;
+}
+
+.btn-chevron {
+  background: transparent;
+  border: none;
+  padding: 0;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.btn-chevron:hover {
+  background: #e2e8f0;
+  color: #0f172a;
 }
 
 /* MODAL BODY */
@@ -2105,6 +2460,8 @@ async function handleExecuteBatchSync() {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
 }
 
 .domain-header-left {
@@ -2158,6 +2515,8 @@ async function handleExecuteBatchSync() {
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid #f1f5f9;
+  cursor: pointer;
+  user-select: none;
 }
 
 .prog-header-left {
@@ -2188,6 +2547,16 @@ async function handleExecuteBatchSync() {
   font-weight: 600;
   background: #e0f2fe;
   color: #0369a1;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+}
+
+.badge-inherited {
+  font-size: 0.68rem;
+  font-weight: 600;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
   padding: 0.1rem 0.45rem;
   border-radius: 4px;
 }
@@ -2367,13 +2736,14 @@ async function handleExecuteBatchSync() {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.22rem 0.6rem;
-  border-radius: 20px;
+  padding: 0.22rem 0.65rem;
+  border-radius: 6px;
   font-size: 0.72rem;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   border: 1px solid transparent;
   transition: all 0.15s ease;
+  user-select: none;
 }
 
 .btn-grant-toggle .dot {
@@ -2383,31 +2753,35 @@ async function handleExecuteBatchSync() {
 }
 
 .btn-grant-toggle.grant-mandatory {
-  background: #fef2f2;
-  color: #b91c1c;
-  border-color: #fecaca;
+  background: #f8fafc;
+  color: #334155;
+  border-color: #cbd5e1;
 }
 
 .btn-grant-toggle.grant-mandatory .dot {
-  background: #dc2626;
+  background: #475569;
 }
 
 .btn-grant-toggle.grant-mandatory:hover {
-  background: #fee2e2;
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
 }
 
 .btn-grant-toggle.grant-optional {
-  background: #f0fdf4;
-  color: #15803d;
-  border-color: #bbf7d0;
+  background: #ffffff;
+  color: #64748b;
+  border-color: #e2e8f0;
 }
 
 .btn-grant-toggle.grant-optional .dot {
-  background: #16a34a;
+  background: #cbd5e1;
 }
 
 .btn-grant-toggle.grant-optional:hover {
-  background: #dcfce7;
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #334155;
 }
 
 .btn-remove-allocation {

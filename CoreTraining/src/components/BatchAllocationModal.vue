@@ -96,7 +96,6 @@
                 <!-- Icon & Label -->
                 <Globe :size="16" class="node-icon domain-icon" />
                 <span class="node-name">{{ d.name }}</span>
-                <span v-if="d.code" class="node-code">{{ d.code }}</span>
                 <span class="node-count">({{ getProgramsByDomain(d.id).length }} chương trình)</span>
               </div>
 
@@ -148,7 +147,6 @@
                     <!-- Icon & Label -->
                     <Folder :size="15" class="node-icon program-icon" />
                     <span class="node-name">{{ p.name }}</span>
-                    <span v-if="p.code" class="node-code">{{ p.code }}</span>
                     <span class="node-count">({{ getCoursesByProgram(p.id).length }} khóa học)</span>
                   </div>
 
@@ -193,7 +191,6 @@
 
                         <BookOpen :size="14" class="node-icon course-icon" />
                         <span class="node-name">{{ c.name }}</span>
-                        <span v-if="c.code" class="node-code">{{ c.code }}</span>
                       </div>
 
                       <!-- RIGHT ACTION: GRANT TYPE TOGGLE BUTTON (When Selected) -->
@@ -1055,10 +1052,10 @@ function handleClose() {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.25rem 0.65rem;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 600;
+  padding: 0.22rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
   user-select: none;
@@ -1066,39 +1063,41 @@ function handleClose() {
 }
 
 .btn-grant-toggle .dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
 }
 
 .btn-grant-toggle.grant-mandatory {
-  background: #fef2f2;
-  color: #b91c1c;
-  border-color: #fecaca;
+  background: #f8fafc;
+  color: #334155;
+  border-color: #cbd5e1;
 }
 
 .btn-grant-toggle.grant-mandatory .dot {
-  background: #dc2626;
+  background: #475569;
 }
 
 .btn-grant-toggle.grant-mandatory:hover {
-  background: #fee2e2;
-  transform: translateY(-1px);
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
 }
 
 .btn-grant-toggle.grant-optional {
-  background: #f0fdf4;
-  color: #15803d;
-  border-color: #bbf7d0;
+  background: #ffffff;
+  color: #64748b;
+  border-color: #e2e8f0;
 }
 
 .btn-grant-toggle.grant-optional .dot {
-  background: #16a34a;
+  background: #cbd5e1;
 }
 
 .btn-grant-toggle.grant-optional:hover {
-  background: #dcfce7;
-  transform: translateY(-1px);
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #334155;
 }
 
 /* FOOTER */
@@ -1161,13 +1160,14 @@ function handleClose() {
 }
 
 .btn-bulk-toggle.bulk-mandatory {
-  background: #fef2f2;
-  color: #b91c1c;
-  border-color: #fecaca;
+  background: #f1f5f9;
+  color: #334155;
+  border-color: #cbd5e1;
 }
 
 .btn-bulk-toggle.bulk-mandatory:hover {
-  background: #fee2e2;
+  background: #e2e8f0;
+  color: #0f172a;
 }
 
 .btn-bulk-toggle.bulk-optional {
