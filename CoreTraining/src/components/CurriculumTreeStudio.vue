@@ -711,12 +711,7 @@
 
             <!-- PHÂN HỆ CHO CẤP 1 (LĨNH VỰC) - CHO PHÉP CHỌN GỐC -->
             <div class="form-group" v-if="addModal.type === 'domain'">
-              <div class="code-label-row">
-                <label>Phân hệ nghiệp vụ (*):</label>
-                <span class="badge-module-hint" v-if="addModal.businessModule">
-                  Tiền tố mã: {{ getModulePrefix(addModal.type, addModal.businessModule) }}
-                </span>
-              </div>
+              <label>Phân hệ nghiệp vụ (*):</label>
               <select
                 v-model="addModal.businessModule"
                 class="form-control select-control module-select"
@@ -739,12 +734,7 @@
               class="form-group inherited-module-info"
               v-else
             >
-              <div class="code-label-row">
-                <label>Phân hệ nghiệp vụ:</label>
-                <span class="badge-module-hint" v-if="addModal.businessModule">
-                  Tiền tố mã: {{ getModulePrefix(addModal.type, addModal.businessModule) }}
-                </span>
-              </div>
+              <label>Phân hệ nghiệp vụ:</label>
               <div class="inherited-module-display">
                 <span class="module-chip-badge">{{ addModal.businessModule || "N/A" }}</span>
                 <span class="module-title-text">{{ getModuleName(addModal.businessModule) }}</span>
