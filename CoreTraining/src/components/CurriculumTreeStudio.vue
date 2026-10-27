@@ -751,7 +751,7 @@
                 <input
                   v-model="addModal.code"
                   type="text"
-                  :placeholder="addModal.autoCode ? '(Hệ thống đang tự sinh mã...)' : 'Ví dụ: RMCT1, RMLV1...'"
+                  :placeholder="addModal.autoCode ? '(Hệ thống đang tự sinh mã...)' : 'Nhập mã định danh...'"
                   :disabled="addModal.autoCode"
                   :readonly="addModal.autoCode"
                   required
@@ -768,9 +768,6 @@
                   <span>{{ addModal.autoCode ? "Tự nhập" : "Khóa tự sinh" }}</span>
                 </button>
               </div>
-              <small class="form-hint" v-if="addModal.autoCode">
-                Mã định danh tuần tự chuẩn nghiệp vụ (Ví dụ: RMLV1, RMCT1, RMKH1, RMCH1, RMBH1...).
-              </small>
             </div>
 
             <div class="form-group">
