@@ -177,6 +177,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:?LOG_LEVEL is required}
     volumes:
       - training_uploads:/app/uploads
+      - backend_logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy
@@ -202,9 +203,55 @@ services:
       - training_uploads:/srv/uploads:ro
     restart: always
 
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: cbs-elearning-loki
+    user: "0:0"
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/tmp/loki
+    restart: always
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: cbs-elearning-promtail
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - backend_logs:/var/log/backend:ro
+    depends_on:
+      - loki
+    restart: always
+
+  grafana:
+    image: grafana/grafana:11.0.0
+    container_name: cbs-elearning-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=false
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/json/backend-logs.json
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - loki
+    restart: always
+
 volumes:
   postgres_data:
   pgadmin_data:
   training_uploads:
   qdrant_data:
   ollama_data:
+  backend_logs:
+  loki_data:
+  grafana_data:
