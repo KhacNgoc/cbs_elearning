@@ -478,10 +478,7 @@
                   <span class="domain-title" :class="{ 'strikethrough-text': domainNode.isRemoved }">
                     {{ domainNode.name }}
                   </span>
-                  <span v-if="domainNode.isExplicit" class="badge-explicit">Gán cấp Lĩnh vực</span>
-                  <span v-else class="badge-inherited">Nhóm Lĩnh vực</span>
                   <span v-if="domainNode.isModified && !domainNode.isRemoved" class="badge-modified">Đã đổi</span>
-                  <span v-if="domainNode.isRemoved" class="badge-removed-tag">Đã đánh dấu gỡ bỏ</span>
                 </div>
 
                 <div class="domain-header-right" @click.stop>
@@ -547,10 +544,7 @@
                       <span class="program-title" :class="{ 'strikethrough-text': progNode.isRemoved }">
                         {{ progNode.name }}
                       </span>
-                      <span v-if="progNode.isExplicit" class="badge-explicit">Gán cấp Chương trình</span>
-                      <span v-else class="badge-inherited">Nhóm Chương trình</span>
                       <span v-if="progNode.isModified && !progNode.isRemoved" class="badge-modified">Đã đổi</span>
-                      <span v-if="progNode.isRemoved" class="badge-removed-tag">Đã đánh dấu gỡ bỏ</span>
                     </div>
 
                     <div class="prog-header-right" @click.stop>
@@ -605,7 +599,6 @@
                           {{ course.name }}
                         </span>
                         <span v-if="course.isModified && !course.isRemoved" class="badge-modified">Đã đổi</span>
-                        <span v-if="course.isRemoved" class="badge-removed-tag">Đã đánh dấu gỡ bỏ</span>
                       </div>
 
                       <div class="course-right" @click.stop>
@@ -682,7 +675,6 @@
                         {{ item.name }}
                       </strong>
                       <span v-if="item.isModified && !item.isRemoved" class="badge-modified">Đã đổi</span>
-                      <span v-if="item.isRemoved" class="badge-removed-tag">Đã đánh dấu gỡ</span>
                     </div>
                   </td>
                   <td class="col-parent">
