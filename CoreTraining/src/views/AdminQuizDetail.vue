@@ -1,5 +1,5 @@
 <template>
-  <main class="quiz-editor-page" :class="{embedded}">
+  <main class="quiz-editor-page" :class="{embedded}" :aria-busy="initialLoading">
     <header v-if="!embedded" class="quiz-editor-header">
       <button class="back-button" @click="router.push('/admin?tab=exams')">
         <ArrowLeft :size="19" />
@@ -12,6 +12,15 @@
       </div>
     </header>
 
+    <section v-if="initialLoading" class="editor-card quiz-detail-loading" role="status" aria-live="polite">
+      <LoaderCircle class="spin" :size="28" aria-hidden="true" />
+      <p>Đang tải bài kiểm tra...</p>
+    </section>
+    <section v-else-if="loadError" class="editor-card quiz-detail-error" role="alert">
+      <p>{{ loadError }}</p>
+      <button class="secondary-button" @click="initialize">Thử lại</button>
+    </section>
+    <template v-else>
     <p v-if="courseId && !canEdit && !embedded" class="readonly-notice">Khóa học đang ở chế độ chỉ xem. Chuyển khóa về bản nháp để chỉnh sửa bài kiểm tra.</p>
     <section class="editor-card settings-card">
       <div class="section-heading">
@@ -23,17 +32,19 @@
           <span>Khóa học</span>
           <select v-model="courseId" :disabled="!isNew">
             <option value="" disabled>Chọn khóa học</option>
-            <option v-for="course in courseStore.courses" :key="course.id" :value="course.id">{{ course.name }}</option>
+            <option v-for="course in quizCourses" :key="course.id" :value="course.id">{{ course.name }}</option>
           </select>
         </label>
         <label>
           <span>Phạm vi</span>
-          <select v-model="lessonId" :disabled="!isNew || !courseId">
+          <select v-model="lessonId" :disabled="!isNew || !courseId || scopeLoading || !!scopeError">
             <option value="" disabled>Chọn bài học để đính kèm kiểm tra</option>
             <option v-for="lesson in availableLessons" :key="lesson.id" :value="lesson.id">
               Bài học: {{ lesson.title }}
             </option>
           </select>
+          <small v-if="scopeLoading" role="status">Đang tải bài học...</small>
+          <small v-if="scopeError" role="alert">{{ scopeError }} <button type="button" @click="loadLessonOptions">Thử lại</button></small>
         </label>
         <label>
           <span>Ngưỡng điểm đạt</span>
@@ -47,7 +58,7 @@
       <div class="required-quiz-setting"><ToggleSwitch v-model="requiredForProgress" :disabled="!canAction('update') && !isNew" label="Bắt buộc đạt để sang bài tiếp theo" /><small>Tắt tùy chọn: bài kiểm tra tự luyện, không chặn hoàn thành bài, chương hoặc khóa.</small></div>
       <div v-if="isNew && canEdit" class="settings-action">
         <p>Phạm vi sẽ tự động áp dụng cho mọi câu hỏi được thêm hoặc import.</p>
-        <button class="primary-button" :disabled="!courseId || !lessonId" @click="confirmScope">
+        <button class="primary-button" :disabled="!courseId || !lessonId || scopeLoading || !!scopeError" @click="confirmScope">
           Tiếp tục soạn câu hỏi <ArrowRight :size="17" />
         </button>
       </div>
@@ -241,15 +252,16 @@
       @cancel="closeConfirmationModal"
       @confirm="confirmModalAction"
     />
+    </template>
   </main>
 </template>
 
 <script setup lang="ts">
-import {axiosClient} from "../api/axiosClient";
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import {getQuizCourses, getQuizContext, type QuizCourseContext} from "../api/quizContextApi";
+import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ArrowLeft, ArrowRight, CheckCircle2, Download, Edit, FileUp, LoaderCircle, Plus, Search, Sparkles, Trash2, X } from "lucide-vue-next";
-import { useCourseStore } from "../stores/courseStore";
+
 import { adminApi } from "../api/adminApi";
 import type { GeneratedQuizQuestion, QuizGenerationSource } from "../api/adminApi";
 import type { Question, Lesson } from "../types";
@@ -268,17 +280,19 @@ const emit=defineEmits<{saved:[]}>();
 const requiredForProgress=ref(true);
 const route = useRoute();
 const router = useRouter();
-const courseStore = useCourseStore();
+const quizCourses = ref<QuizCourseContext[]>([]);
 const isNew = computed(() => !props.lesson && route.name === "AdminQuizCreate");
 const courseId = ref("");
-const canAction=(action:string)=>!props.readOnly && courseStore.courses.find(c=>c.id===courseId.value)?.status==='DRAFT' && courseStore.courses.find(c=>c.id===courseId.value)?.adminActions?.exams?.includes(action)===true;
+const canAction=(action:string)=>!props.readOnly && quizCourses.value.find(c=>c.id===courseId.value)?.status==='DRAFT' && quizCourses.value.find(c=>c.id===courseId.value)?.adminActions?.exams?.includes(action)===true;
 const canEdit=computed(()=>canAction('create')||canAction('update')||canAction('delete'));
 const lessonId = ref("");
 const questions = ref<Question[]>([]);
+const initialLoading = ref(true);
+const loadError = ref('');
 const showBank=ref(false),capturing=ref<number|null>(null);
-const canCapture=computed(()=>courseStore.courses.find(c=>c.id===courseId.value)?.adminActions?.exams?.includes('create'));
+const canCapture=computed(()=>quizCourses.value.find(c=>c.id===courseId.value)?.adminActions?.exams?.includes('create'));
 async function captureQuestion(question:Question){if(capturing.value!==null || question.bankQuestionId!=null || !canCapture.value)return;capturing.value=question.id;try{const saved=await contentToolsApi.capture(question.id);question.bankQuestionId=saved.id;question.bankQuestionCode=saved.code;showToast(`Đã lưu ${saved.code} vào ngân hàng câu hỏi.`);await loadQuestions();}catch(e){showToast(contentToolsError(e),'error');}finally{capturing.value=null;}}
-async function bankAdded(){showBank.value=false;await loadQuestions();await loadAdminCourses();emit('saved');}
+async function bankAdded(){showBank.value=false;await loadQuestions();await refreshQuizContext();emit('saved');}
 const searchQuery = ref("");
 const showQuestionForm = ref(false);
 const editingId = ref<number | null>(null);
@@ -320,9 +334,9 @@ const form = reactive<{
   correctAnswers: number[];
 }>({ text: "", explanation:"", options: ["", "", "", ""], type: "SINGLE_CHOICE", correctAnswers: [0] });
 
-const availableLessons = computed(() => courseStore.courses.find((course) => course.id === courseId.value)?.lessons || []);
+const availableLessons = computed(() => quizCourses.value.find((course) => course.id === courseId.value)?.lessons || []);
 const pageTitle = computed(() => {
-  const course = courseStore.courses.find((item) => item.id === courseId.value);
+  const course = quizCourses.value.find((item) => item.id === courseId.value);
   const lesson = availableLessons.value.find((item) => item.id === lessonId.value);
   return lesson?.title || (course ? `Bài kiểm tra tổng hợp — ${course.name}` : "Bài kiểm tra mới");
 });
@@ -339,38 +353,101 @@ watch(searchQuery,resetQuestionPage);
 watch([courseId,lessonId],resetQuestionPage);
 const selectedDraftCount = computed(() => aiDrafts.value.filter(draft => draft.selected).length);
 
-async function loadAdminCourses(){courseStore.courses=(await axiosClient.get("/api/admin/courses",{params:{page:"exams"}})).data;}
+function retainContext(context: QuizCourseContext) {
+  quizCourses.value = quizCourses.value.some(c => c.id === context.id)
+    ? quizCourses.value.map(c => c.id === context.id ? context : c)
+    : [...quizCourses.value, context];
+}
+async function refreshQuizContext() {
+  retainContext(await getQuizContext({ courseId: courseId.value, lessonId: lessonId.value || undefined }));
+}
 
-onMounted(async () => {
-  if(props.lesson){courseId.value=props.lesson.courseId;lessonId.value=props.lesson.id;passingScore.value=props.lesson.quizPassingScore ?? 80;requiredForProgress.value=props.lesson.quizRequired ?? true;await loadQuestions();return;}
-  courseStore.courses=(await axiosClient.get("/api/admin/courses",{params:{page:"exams"}})).data;
+let initialRequestId = 0;
+let questionRequestId = 0;
+let pendingCreationSettings: { courseId: string; lessonId: string; passingScore: number; requiredForProgress: boolean } | null = null;
+async function initialize() {
+  const id = ++initialRequestId;
+  ++questionRequestId;
+  ++scopeRequestId;
+  scopeLoading.value = false;
+  scopeError.value = '';
+  initialLoading.value = true;
+  loadError.value = '';
+  questions.value = [];
+  try {
   if (isNew.value) {
-    courseId.value = typeof route.query.courseId === "string" ? route.query.courseId : courseStore.courses[0]?.id || "";
+    const options = await getQuizCourses();
+    if (id !== initialRequestId) return;
+    quizCourses.value = options;
+    courseId.value = typeof route.query.courseId === "string" ? route.query.courseId : quizCourses.value[0]?.id || "";
+    lessonId.value = '';
+    if (courseId.value) {
+      const context = await getQuizContext({ courseId: courseId.value });
+      if (id !== initialRequestId) return;
+      retainContext(context);
+    }
   } else {
-    const scopeId = String(route.params.scopeId || "");
-    if (route.params.scopeType === "lesson") {
-      lessonId.value = scopeId;
-      courseId.value = courseStore.courses.find((course) => course.lessons.some((lesson) => lesson.id === scopeId))?.id || "";
-    } else courseId.value = scopeId;
-    const course = courseStore.courses.find((item) => item.id === courseId.value);
+    const scopeId = String(props.lesson?.id || route.params.scopeId || "");
+    const lessonScope = !!props.lesson || route.params.scopeType === "lesson";
+    const context = await getQuizContext(lessonScope ? { lessonId: scopeId } : { courseId: scopeId });
+    if (id !== initialRequestId) return;
+    quizCourses.value = [context];
+    courseId.value = context.id;
+    lessonId.value = lessonScope ? scopeId : '';
+    const course = quizCourses.value.find((item) => item.id === courseId.value);
     const lesson = course?.lessons.find((item) => item.id === lessonId.value);
     passingScore.value = lesson?.quizPassingScore ?? course?.quizPassingScore ?? 80;
+    requiredForProgress.value = lesson?.quizRequired ?? true;
+    if (pendingCreationSettings?.courseId === context.id && pendingCreationSettings.lessonId === lessonId.value) {
+      passingScore.value = pendingCreationSettings.passingScore;
+      requiredForProgress.value = pendingCreationSettings.requiredForProgress;
+    }
     await loadQuestions();
+    if (id === initialRequestId) pendingCreationSettings = null;
   }
-});
+  } catch {
+    if (id === initialRequestId) loadError.value = 'Không thể tải bài kiểm tra. Vui lòng thử lại.';
+  } finally {
+    if (id === initialRequestId) initialLoading.value = false;
+  }
+}
 
+const scopeLoading = ref(false);
+const scopeError = ref('');
+let scopeRequestId = 0;
+async function loadLessonOptions() {
+  const id = ++scopeRequestId;
+  scopeLoading.value = true;
+  scopeError.value = '';
+  try {
+    const context = await getQuizContext({ courseId: courseId.value });
+    if (id === scopeRequestId) retainContext(context);
+  } catch {
+    if (id === scopeRequestId) scopeError.value = 'Không thể tải bài học. Vui lòng thử lại.';
+  } finally {
+    if (id === scopeRequestId) scopeLoading.value = false;
+  }
+}
 watch(courseId, () => {
-  if (lessonId.value && !availableLessons.value.some((lesson) => lesson.id === lessonId.value)) lessonId.value = "";
+  if (initialLoading.value || !isNew.value) return;
+  lessonId.value = '';
+  if (courseId.value) void loadLessonOptions();
 });
 
 const loadQuestions = async () => {
-  questions.value = await adminApi.getQuizQuestions(courseId.value, lessonId.value || undefined);
+  const id = ++questionRequestId;
+  const data = await adminApi.getQuizQuestions(courseId.value, lessonId.value || undefined);
+  if (id === questionRequestId) questions.value = data;
 };
-const confirmScope = () => router.replace(
-  lessonId.value
+watch(() => [route.name, route.params.scopeType, route.params.scopeId, props.lesson?.id], initialize, { immediate: true });
+onBeforeUnmount(() => { ++initialRequestId; ++questionRequestId; ++scopeRequestId; });
+const confirmScope = () => {
+  pendingCreationSettings = { courseId: courseId.value, lessonId: lessonId.value,
+    passingScore: passingScore.value, requiredForProgress: requiredForProgress.value };
+  return router.replace(lessonId.value
     ? `/admin/quizzes/lesson/${encodeURIComponent(lessonId.value)}`
-    : `/admin/quizzes/course/${encodeURIComponent(courseId.value)}`,
-);
+    : `/admin/quizzes/course/${encodeURIComponent(courseId.value)}`);
+};
 const saveSettings = async () => {
   if (!Number.isInteger(passingScore.value) || passingScore.value < 1 || passingScore.value > 100) {
     showToast("Ngưỡng đạt phải là số nguyên từ 1 đến 100.", "warning");
@@ -380,7 +457,7 @@ const saveSettings = async () => {
   try {
     await adminApi.updateQuizSettings(courseId.value, lessonId.value || undefined, passingScore.value, requiredForProgress.value);
     showToast("Đã lưu cấu hình bài kiểm tra.");
-    await loadAdminCourses();
+    await refreshQuizContext();
     emit("saved");
   } catch {
     showToast("Không thể hoàn tất lưu cấu hình bài kiểm tra. Vui lòng thử lại.", "error");
@@ -429,7 +506,7 @@ const deleteQuiz = () => {
       try {
         await adminApi.deleteQuiz(courseId.value, lessonId.value || undefined);
         showToast("Đã xóa bài kiểm tra.");
-        await loadAdminCourses();
+        await refreshQuizContext();
         if(props.embedded){await loadQuestions();emit("saved");}else router.push("/admin?tab=exams");
       } finally {
         deletingQuiz.value = false;
@@ -488,7 +565,7 @@ const saveQuestion = async () => {
     showToast(editingId.value ? "Đã cập nhật câu hỏi." : "Đã thêm câu hỏi.");
     await loadQuestions();
     emit("saved");
-    await loadAdminCourses();
+    await refreshQuizContext();
     closeQuestionForm();
   } catch {
     showToast("Không thể hoàn tất lưu câu hỏi. Vui lòng thử lại.", "error");
@@ -658,7 +735,7 @@ const saveAiDrafts = async () => {
     }
     await loadQuestions();
     emit("saved");
-    await loadAdminCourses();
+    await refreshQuizContext();
     showToast(`Đã thêm ${selected.length} câu hỏi AI vào bài kiểm tra.`);
     aiDrafts.value = [];
     showAiPanel.value = false;
@@ -676,7 +753,7 @@ const deleteQuestion = (question: Question) => {
       await adminApi.deleteQuestion(question.id);
       showToast("Đã xóa câu hỏi.");
       await loadQuestions();
-      await loadAdminCourses();
+      await refreshQuizContext();
       emit("saved");
     },
   );
@@ -730,7 +807,7 @@ const importCsv = async (event: Event) => {
     await Promise.all(payloads.map((payload) => adminApi.createQuestion(payload)));
     await loadQuestions();
     emit("saved");
-    await loadAdminCourses();
+    await refreshQuizContext();
     showToast(`Đã nhập ${payloads.length} câu hỏi từ CSV.`);
   } catch (error) {
     showToast(error instanceof Error ? error.message : "Không thể nhập câu hỏi từ file.", "error");
@@ -739,6 +816,10 @@ const importCsv = async (event: Event) => {
 </script>
 
 <style scoped>
+.quiz-detail-loading, .quiz-detail-error { min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; text-align: center; }
+.quiz-detail-loading { color: var(--primary-color); }
+.quiz-detail-loading p, .quiz-detail-error p { margin: 0; color: var(--text-main); }
+@media (prefers-reduced-motion: reduce) { .quiz-detail-loading .spin { animation: none; } }
 .modal-question-editor{display:grid;gap:1.5rem;margin:0!important;padding:0!important;border:0!important;background:transparent!important}
 .modal-question-editor>.question-text-field,.modal-question-editor>.question-type-field{display:grid;gap:.5rem;margin:0;min-width:0}
 .modal-question-editor>.question-text-field>span,.modal-question-editor>.question-type-field>span{margin:0;line-height:1.5}

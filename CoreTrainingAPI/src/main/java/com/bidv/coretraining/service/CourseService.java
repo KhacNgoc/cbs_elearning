@@ -19,6 +19,8 @@ public interface CourseService {
 
     com.bidv.coretraining.dto.CommentPageDto getComments(String id, int page, int size);
 
+    com.bidv.coretraining.dto.CommentReplyPageDto getReplies(String lessonId, Long rootCommentId, String after);
+
     CommentDto addCommentToLesson(String lessonId, CommentRequest commentRequest, String username);
 
     CommentDto replyToComment(String lessonId, Long commentId, CommentReplyRequest request, String username);

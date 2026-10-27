@@ -44,7 +44,7 @@ class LearnerWorkspaceServiceTest {
     }
     @Test void unfinishedRequiredQuizIsTheNextContent(){
         first.ensureQuiz();first.getQuiz().getQuestions().add(Question.builder().id(1L).build());
-        when(progress.findByUserId(1L)).thenReturn(List.of(LessonProgress.builder().user(user).lesson(first).contentType("TEXT").contentCompleted(true).updatedAt(LocalDateTime.now()).build()));
+        when(progress.findByUserId(1L)).thenReturn(List.of(LessonProgress.builder().user(user).lesson(first).contentType("TEXT").textCompleted(true).contentCompleted(true).updatedAt(LocalDateTime.now()).build()));
         assertThat(service.workspace().resume().contentType()).isEqualTo("QUIZ");
     }
     @Test void completionAndEmptyCourseDoNotProduceAnActiveResume(){

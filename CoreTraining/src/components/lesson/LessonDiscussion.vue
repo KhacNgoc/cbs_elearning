@@ -103,6 +103,21 @@
           </div>
         </div>
 
+        <div v-if="item.repliesHasMore" class="reply-pagination">
+          <button
+            class="reply-load-more btn btn-outline"
+            :disabled="replyPageStates?.[item.id]?.loading"
+            :aria-busy="Boolean(replyPageStates?.[item.id]?.loading)"
+            @click="emit('load-more-replies', item.id)"
+          >
+            <span v-if="replyPageStates?.[item.id]?.loading" class="reply-loading-spinner" aria-hidden="true"></span>
+            {{ replyPageStates?.[item.id]?.loading ? "Đang tải phản hồi…" : "Xem thêm phản hồi" }}
+          </button>
+          <p v-if="replyPageStates?.[item.id]?.error" role="alert" class="reply-load-error">
+            {{ replyPageStates[item.id]?.error }}
+          </p>
+        </div>
+
         <div v-if="replyingTo?.rootId === item.id" class="reply-composer">
           <span class="avatar composer-avatar">{{ currentUserInitial }}</span>
           <div>
@@ -146,7 +161,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from "vue";
 import { MessageSquare, Reply, Send, Trash2, X } from "lucide-vue-next";
-import type { Comment } from "../../types";
+import type { Comment, ReplyPageState } from "../../types";
 import ConfirmModal from "../ConfirmModal.vue";
 import StarRating from "../StarRating.vue";
 
@@ -154,6 +169,7 @@ const props = defineProps<{
   comments: Comment[];
   hasMore?: boolean;
   loadingMore?: boolean;
+  replyPageStates?: Record<number, ReplyPageState>;
   comment: string;
   currentUsername: string;
   isAdmin: boolean;
@@ -162,6 +178,7 @@ const emit = defineEmits<{
   "update:comment": [value: string];
   submit: [];
   "load-more": [];
+  "load-more-replies": [rootCommentId: number];
   reply: [rootCommentId: number, replyToCommentId: number, content: string];
   delete: [commentId: number];
 }>();
@@ -269,6 +286,18 @@ const sendReply = () => {
   gap: 0.65rem;
   border-left: 2px solid var(--line-d8e5e0);
 }
+.reply-pagination {
+  margin: 0.75rem 0 0 3rem;
+}
+.reply-load-more { display: inline-flex; align-items: center; gap: .5rem; }
+.reply-loading-spinner { width: 14px; height: 14px; flex-shrink: 0; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: reply-loading-spin .7s linear infinite; }
+@keyframes reply-loading-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .reply-loading-spinner { animation: none; } }
+.reply-load-error {
+  margin-top: 0.35rem;
+  color: var(--ink-b42318);
+  font-size: 0.8rem;
+}
 .reply-comment {
   grid-template-columns: 32px 1fr;
 }
@@ -345,6 +374,7 @@ const sendReply = () => {
 }
 @media (max-width: 600px) {
   .reply-list,
+  .reply-pagination,
   .reply-composer {
     margin-left: 1rem;
   }

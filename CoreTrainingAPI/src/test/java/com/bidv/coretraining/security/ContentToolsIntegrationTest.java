@@ -145,6 +145,48 @@ class ContentToolsIntegrationTest {
         assertThatThrownBy(()->reportService.review(r.id(),r.version(),LessonReport.Status.DISMISSED,"Stale")).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
     }
 
+    @Test void changedRepliesNotifyOwnerOnceAndOpenAnOwnerOnlyDetail() throws Exception {
+        as("learner");var r=reportService.submit(id("L"),"Review content",List.of());
+        as("reviewer");
+        var reviewed=reportService.review(r.id(),r.version(),LessonReport.Status.IN_REVIEW,"  Đang kiểm tra  ");
+        tx().executeWithoutResult(s->{
+            var notices=notifications.findTop50ByRecipientUsernameOrderByCreatedAtDesc(id("learner"));
+            assertThat(notices).hasSize(1);
+            assertThat(notices.get(0).getTargetUrl()).isEqualTo("/lesson-reports/"+r.id());
+            assertThat(notices.get(0).getType()).isEqualTo(NotificationType.LESSON_REPORT);
+        });
+        verify(socket,times(1)).sendToUser(eq(id("learner")),any());
+        var unchanged=reportService.review(r.id(),reviewed.version(),LessonReport.Status.RESOLVED,"Đang kiểm tra");
+        assertThat(notifications.findTop50ByRecipientUsernameOrderByCreatedAtDesc(id("learner"))).hasSize(1);
+        reportService.review(r.id(),unchanged.version(),LessonReport.Status.RESOLVED,"Đã sửa nội dung");
+        assertThat(notifications.findTop50ByRecipientUsernameOrderByCreatedAtDesc(id("learner"))).hasSize(2);
+        mvc.perform(get("/api/lesson-reports/"+r.id()).cookie(cookie("learner"))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.resolution").value("Đã sửa nội dung")).andExpect(jsonPath("$.canReview").value(false));
+        mvc.perform(get("/api/lesson-reports/"+r.id()).cookie(cookie("other"))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/lesson-reports/"+r.id()).cookie(cookie("reviewer"))).andExpect(status().isForbidden());
+    }
+
+    @Test void ownerCanReadReportWithoutAdminPermissionsAndAnotherLearnerCannot() throws Exception {
+        as("learner");var r=reportService.submit(id("L"),"Private report",List.of());
+        tx().executeWithoutResult(s->users.save(User.builder().username(id("peer")).fullName("Peer").password("unused")
+                .role("ROLE_USER").mustChangePassword(false).build()));
+        mvc.perform(get("/api/lesson-reports/"+r.id()).cookie(cookie("learner"))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").value("Private report"));
+        mvc.perform(get("/api/lesson-reports/"+r.id()).cookie(cookie("peer"))).andExpect(status().isForbidden());
+    }
+
+    @Test void emptyFailedAndRolledBackReviewsDoNotNotifyReporter() {
+        as("learner");var r=reportService.submit(id("L"),"Review content",List.of());
+        as("reviewer");
+        var empty=reportService.review(r.id(),r.version(),LessonReport.Status.IN_REVIEW," ");
+        assertThat(notifications.findTop50ByRecipientUsernameOrderByCreatedAtDesc(id("learner"))).isEmpty();
+        assertThatThrownBy(()->reportService.review(r.id(),r.version(),LessonReport.Status.RESOLVED,"Stale"))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        tx().executeWithoutResult(s->{reportService.review(r.id(),empty.version(),LessonReport.Status.RESOLVED,"Rolled back");s.setRollbackOnly();});
+        assertThat(notifications.findTop50ByRecipientUsernameOrderByCreatedAtDesc(id("learner"))).isEmpty();
+        verify(socket,never()).sendToUser(eq(id("learner")),any());
+    }
+
     @Test void bankStoresRequestedMetadataAndRejectsDuplicateCodeAndStaleEdits() {
         as("reviewer");var q=bankService.save(null,request("Q1",BankQuestion.Status.ACTIVE));
         assertThat(q.domainName()).isEqualTo("Domain");assertThat(q.lessonId()).isEqualTo(id("L"));assertThat(q.difficulty()).isEqualTo(BankQuestion.Difficulty.HARD);assertThat(q.explanation()).isEqualTo("Explanation");

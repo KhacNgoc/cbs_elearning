@@ -1,28 +1,28 @@
 <template>
   <div class="video-container card">
-    <div class="video-title-bar">
-      <span class="video-filename">{{
-        title || "CIF03_Quy trinh tao CIF KHTC.mp4"
-      }}</span>
-    </div>
-
     <div class="video-player-wrapper">
-      <iframe
+      <div
         v-if="youtubeEmbedUrl"
-        :src="youtubeEmbedUrl"
+        :key="`${lessonId}:${videoUrl}:${youtubeAttempt}`"
         class="video-element youtube-player"
-        :title="title || 'Video bài học'"
-        allow="
-          accelerometer;
-          autoplay;
-          clipboard-write;
-          encrypted-media;
-          gyroscope;
-          picture-in-picture;
-          web-share;
-        "
-        allowfullscreen
-      ></iframe>
+      >
+        <iframe
+          ref="youtubeElement"
+          :src="youtubeEmbedUrl"
+          class="youtube-frame"
+          :title="title || 'Video bài học'"
+          allow="
+            accelerometer;
+            autoplay;
+            clipboard-write;
+            encrypted-media;
+            gyroscope;
+            picture-in-picture;
+            web-share;
+          "
+          allowfullscreen
+        ></iframe>
+      </div>
       <video
         v-else
         ref="videoElement"
@@ -40,7 +40,7 @@
       ></video>
 
       <div
-        v-if="!youtubeEmbedUrl && (videoError || accessLoading)"
+        v-if="videoError || accessLoading"
         class="video-status"
         role="status"
       >
@@ -219,8 +219,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onBeforeUnmount } from "vue";
+import { ref, computed, watch, nextTick, onBeforeUnmount } from "vue";
 import { VideoAccessSession } from "../utils/videoAccess";
+import { loadYouTubeApi } from "../utils/youtubePlayer";
+import type { YouTubePlayer } from "../utils/youtubePlayer";
 import { axiosClient } from "../api/axiosClient";
 import type { LessonProgressRequest } from "../types";
 
@@ -256,6 +258,12 @@ const props = defineProps({
 });
 
 const videoElement = ref<HTMLVideoElement | null>(null);
+const youtubeElement = ref<HTMLIFrameElement | null>(null);
+const youtubeAttempt = ref(0);
+let youtubePlayer: YouTubePlayer | undefined;
+let youtubeTimer: ReturnType<typeof setInterval> | undefined;
+let youtubeGeneration = 0;
+let youtubeAwaitingPlayback = true;
 const isPlaying = ref(false);
 const currentTime = ref(0);
 const duration = ref(0);
@@ -298,7 +306,7 @@ const youtubeVideoId = computed(() => {
 
 const youtubeEmbedUrl = computed(() =>
   youtubeVideoId.value
-    ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(youtubeVideoId.value)}?rel=0`
+    ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(youtubeVideoId.value)}?rel=0&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`
     : "",
 );
 
@@ -320,7 +328,14 @@ const showVideoError = () => {
 const retryVideo = () => {
   videoError.value = "";
   accessLoading.value = true;
-  if (accessSession) accessSession.retry();
+  if (youtubeEmbedUrl.value) {
+    pendingRestore = { position: currentTime.value, playing: false };
+    restoring = true;
+    isPlaying.value = false;
+    stopYouTube();
+    youtubeAttempt.value++;
+    void startYouTube();
+  } else if (accessSession) accessSession.retry();
   else {
     videoElement.value?.load();
     accessLoading.value = false;
@@ -336,6 +351,7 @@ const onVideoError = () => {
 watch(
   () => [props.lessonId, props.videoUrl],
   () => {
+    stopYouTube();
     accessSession?.stop();
     accessSession = undefined;
     authorizedStreamUrl.value = "";
@@ -383,7 +399,95 @@ watch(
   { immediate: true },
 );
 
-onBeforeUnmount(() => accessSession?.stop());
+function stopYouTubeTimer() {
+  clearInterval(youtubeTimer);
+  youtubeTimer = undefined;
+}
+
+function stopYouTube() {
+  youtubeGeneration++;
+  youtubeAwaitingPlayback = true;
+  stopYouTubeTimer();
+  const player = youtubePlayer;
+  youtubePlayer = undefined;
+  player?.destroy();
+}
+
+function sampleYouTube(countWatched = isPlaying.value) {
+  if (!youtubePlayer || restoring) return;
+  const position = youtubePlayer.getCurrentTime();
+  const length = youtubePlayer.getDuration();
+  if (!Number.isFinite(position) || position < 0) return;
+  if (Number.isFinite(length) && length > 0) duration.value = length;
+  const elapsed = position - lastPlaybackPosition.value;
+  if (countWatched && elapsed > 0 && elapsed <= 2) watchedSeconds.value += elapsed;
+  currentTime.value = position;
+  lastPlaybackPosition.value = position;
+  emit("time-update", position);
+  emit("progress-update", progressSnapshot());
+}
+
+async function startYouTube() {
+  const generation = youtubeGeneration;
+  await nextTick();
+  if (!youtubeEmbedUrl.value || generation !== youtubeGeneration) return;
+  accessLoading.value = true;
+  try {
+    const api = await loadYouTubeApi();
+    if (generation !== youtubeGeneration || !youtubeElement.value) return;
+    youtubePlayer = new api.Player(youtubeElement.value, {
+      events: {
+        onReady: ({ target }) => {
+          if (generation !== youtubeGeneration) return;
+          youtubePlayer = target;
+          accessLoading.value = false;
+          const length = target.getDuration();
+          if (Number.isFinite(length) && length > 0) duration.value = length;
+          const position = Math.max(0, Math.min(pendingRestore.position, duration.value || pendingRestore.position));
+          if (position > 0) {
+            // Prepare the bookmark without starting and immediately interrupting
+            // playback, which can leave the iframe black before its first frame.
+            target.cueVideoById({ videoId: youtubeVideoId.value, startSeconds: position });
+          }
+          currentTime.value = position;
+          lastPlaybackPosition.value = position;
+          restoring = false;
+        },
+        onStateChange: ({ data }) => {
+          if (generation !== youtubeGeneration || restoring) return;
+          // Before the first play, cueing may briefly report position zero.
+          // Keep the saved bookmark until the user actually starts playback.
+          if (youtubeAwaitingPlayback) {
+            if (data !== 1) return;
+            youtubeAwaitingPlayback = false;
+          }
+          // Sample the final fraction before pause/end, but never a buffering gap.
+          sampleYouTube();
+          stopYouTubeTimer();
+          isPlaying.value = data === 1;
+          if (data === 1) youtubeTimer = setInterval(() => sampleYouTube(), 500);
+          else if (data === 2) emit("pause");
+          else if (data === 0) emit("ended", progressSnapshot());
+        },
+        onError: () => {
+          if (generation !== youtubeGeneration) return;
+          isPlaying.value = false;
+          stopYouTubeTimer();
+          showVideoError();
+          emit("pause");
+        },
+      },
+    });
+  } catch {
+    if (generation === youtubeGeneration) showVideoError();
+  }
+}
+
+watch(() => [props.lessonId, props.videoUrl], () => { void startYouTube(); }, { immediate: true, flush: "post" });
+onBeforeUnmount(() => {
+  accessSession?.stop();
+  stopYouTube();
+});
 
 const progressPercent = computed(() => {
   if (duration.value <= 0) return 0;
@@ -516,6 +620,14 @@ const seek = (event: MouseEvent) => {
 };
 
 const seekTo = (seconds: number) => {
+  if (youtubePlayer) {
+    const position = Math.max(0, Math.min(seconds, duration.value || seconds));
+    youtubePlayer.seekTo(position, true);
+    currentTime.value = position;
+    lastPlaybackPosition.value = position;
+    emit("time-update", position);
+    return;
+  }
   if (!videoElement.value) return;
   const upperBound = Number.isFinite(videoElement.value.duration)
     ? videoElement.value.duration
@@ -527,6 +639,11 @@ const seekTo = (seconds: number) => {
 };
 
 const resetProgress = () => {
+  if (youtubePlayer) {
+    youtubePlayer.pauseVideo();
+    youtubePlayer.seekTo(0, true);
+    stopYouTubeTimer();
+  }
   if (videoElement.value) {
     videoElement.value.pause();
     videoElement.value.currentTime = 0;
@@ -536,6 +653,7 @@ const resetProgress = () => {
   watchedSeconds.value = 0;
   lastPlaybackPosition.value = 0;
   emit("time-update", 0);
+  if (youtubePlayer) emit("progress-update", progressSnapshot());
 };
 
 const requestNote = () => {
@@ -562,6 +680,12 @@ const openExternal = () => {
 </script>
 
 <style scoped>
+.youtube-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
 .video-status {
   position: absolute;
   inset: 0;
@@ -586,21 +710,6 @@ const openExternal = () => {
   padding: 1rem;
   color: #fff;
   min-height: 480px;
-}
-
-.video-title-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-  border-bottom: 1px solid var(--line-333333);
-  padding-bottom: 0.5rem;
-}
-
-.video-filename {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--ink-cccccc);
 }
 
 .video-player-wrapper {

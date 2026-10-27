@@ -161,20 +161,23 @@ public class LearnerWorkspaceService {
                 LessonProgress saved = history.get(lesson.getId());
                 String type = saved == null ? null : saved.getContentType();
                 Long document = saved == null ? null : saved.getDocumentId();
-                if (saved != null && saved.isContentCompleted() && lesson.isQuizRequired()
+                var slides = LessonContentPolicy.slides(lesson);
+                if (LessonContentPolicy.complete(lesson, saved) && lesson.isQuizRequired()
                                 && !LearningPolicy.quizPassed(user, lesson))
                         type = "QUIZ";
-                else if ("DOCUMENT".equals(type) && lesson.getDocuments().stream()
+                else if ("DOCUMENT".equals(type) && slides.stream()
                                 .noneMatch(d -> Objects.equals(d.getId(), saved.getDocumentId()))) {
                         type = null;
                         document = null;
-                } else if ("VIDEO".equals(type) && (lesson.getVideoUrl() == null || lesson.getVideoUrl().isBlank()))
+                } else if ("VIDEO".equals(type) && !LessonContentPolicy.hasVideo(lesson)
+                                || "TEXT".equals(type) && !LessonContentPolicy.hasText(lesson))
                         type = null;
                 if (type == null)
                         type = lesson.getVideoUrl() != null && !lesson.getVideoUrl().isBlank() ? "VIDEO"
-                                        : !lesson.getDocuments().isEmpty() ? "DOCUMENT" : "TEXT";
+                                        : LessonContentPolicy.hasText(lesson) ? "TEXT"
+                                        : !slides.isEmpty() ? "DOCUMENT" : "TEXT";
                 if ("DOCUMENT".equals(type) && document == null)
-                        document = lesson.getDocuments().get(0).getId();
+                        document = slides.get(0).getId();
                 return new Resume(course.getId(), lesson.getId(), lesson.getTitle(), course.getName(), type, document,
                                 saved == null || saved.getDocumentPage() == null ? 1 : saved.getDocumentPage(),
                                 saved == null || saved.getScrollOffset() == null ? 0 : saved.getScrollOffset(),

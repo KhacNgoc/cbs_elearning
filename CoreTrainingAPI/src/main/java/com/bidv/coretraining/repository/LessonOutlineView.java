@@ -14,4 +14,5 @@ public interface LessonOutlineView {
     Boolean getQuizRequired();
     Integer getQuizPassingScore();
     Boolean getHasVideo();
+    Boolean getHasText();
 }

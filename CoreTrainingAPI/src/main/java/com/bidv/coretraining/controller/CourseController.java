@@ -57,6 +57,12 @@ public class CourseController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/lessons/{lessonId}/comments/{commentId}/replies")
+    public com.bidv.coretraining.dto.CommentReplyPageDto replies(@PathVariable String lessonId,
+            @PathVariable Long commentId, @RequestParam(required = false) String after) {
+        return courseService.getReplies(lessonId, commentId, after);
+    }
+
     @PostMapping("/lessons/{lessonId}/comments/{commentId}/replies")
     public ResponseEntity<CommentDto> replyToComment(
             @PathVariable String lessonId,

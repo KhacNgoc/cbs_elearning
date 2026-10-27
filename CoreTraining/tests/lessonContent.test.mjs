@@ -1,29 +1,157 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { initialLessonContent } from '../src/utils/lessonContent.ts';
+import * as content from '../src/utils/lessonContent.ts';
+const supporting = { id: 10, name: 'Supporting', fileUrl: '/legacy.pptx', documentType: 'POWERPOINT' };
+const slide = { id: 20, name: 'Slide', fileUrl: '/deck.pptx', documentType: 'POWERPOINT', purpose: 'SLIDE' };
+const lesson = { textBody: '# Nội dung', videoUrl: '/video.mp4', documents: [supporting, slide] };
+test('normal visits prioritize video then text then required slides', () => {
+  assert.equal(content.initialLessonContent(lesson).type, 'VIDEO');
+  assert.equal(content.initialLessonContent({ ...lesson, videoUrl: '' }).type, 'TEXT');
+  assert.equal(content.initialLessonContent({ ...lesson, videoUrl: '', textBody: '' }).document, slide);
+});
+test('supporting files never automatically open, including saved PowerPoint bookmarks', () => {
+  assert.deepEqual(content.initialLessonContent({ documents: [supporting] }, { contentType: 'DOCUMENT', documentId: 10 }), { type: 'TEXT', document: null });
+});
+test('explicit supporting file links remain available', () => {
+  assert.deepEqual(content.initialLessonContent(lesson, undefined, supporting), { type: 'DOCUMENT', document: supporting });
+});
+test('only purpose selects slides, and edit selection derives from real content', () => {
+  assert.equal(typeof content.lessonContentTypes, 'function');
+  assert.deepEqual(content.lessonContentTypes(lesson), ['TEXT', 'VIDEO', 'SLIDE']);
+  assert.deepEqual(content.lessonContentTypes({ documents: [supporting] }), []);
+});
+test('submission removes hidden input without mutating local unsaved values', () => {
+  assert.equal(typeof content.selectedLessonContent, 'function');
+  const result = content.selectedLessonContent(lesson, ['SLIDE']);
+  assert.equal(result.textBody, '');
+  assert.equal(result.videoUrl, '');
+  assert.deepEqual(result.documents, [supporting, slide]);
+  assert.equal(lesson.textBody, '# Nội dung');
+  assert.deepEqual(content.selectedLessonContent(lesson, ['TEXT']).documents, [supporting]);
+});
+test('selected components require real text, video and at least one usable PPTX slide', () => {
+  assert.equal(typeof content.validateSelectedLessonContent, 'function');
+  assert.throws(() => content.validateSelectedLessonContent({ documents: [] }, ['TEXT']), /văn bản/);
+  assert.throws(() => content.validateSelectedLessonContent({ documents: [] }, ['VIDEO']), /video/);
+  assert.throws(() => content.validateSelectedLessonContent({ documents: [supporting] }, ['SLIDE']), /Slide/);
+  assert.throws(() => content.validateSelectedLessonContent({ documents: [{ ...slide, fileUrl: '/old.ppt' }] }, ['SLIDE']), /pptx/);
+  assert.doesNotThrow(() => content.validateSelectedLessonContent(lesson, ['TEXT', 'VIDEO', 'SLIDE']));
+});
 
-const document = { id: 10, fileUrl: '/lesson.pdf' };
-const lesson = { textBody: '# Nội dung', videoUrl: '/video.mp4', documents: [document] };
-test('video takes priority on a normal visit even after viewing text or a document', () => {
-  assert.deepEqual(initialLessonContent(lesson, { contentType: 'TEXT' }), { type: 'VIDEO', document: null });
-  assert.equal(initialLessonContent(lesson, { contentType: 'DOCUMENT', documentId: 10 }).type, 'VIDEO');
+test('only one required slide file is allowed while supporting PowerPoint files stay unrestricted', () => {
+  assert.throws(() => content.validateSelectedLessonContent({ documents: [slide, { ...slide, id: 21 }] }, ['SLIDE']), /một|1/);
+  assert.doesNotThrow(() => content.validateSelectedLessonContent({ documents: [slide, supporting, { ...supporting, id: 11 }] }, ['SLIDE']));
 });
-test('explicit document link takes precedence over the last viewed content', () => {
-  assert.deepEqual(initialLessonContent(lesson, { contentType: 'TEXT' }, document), { type: 'DOCUMENT', document });
+
+// Mount the actual selector to verify its v-model and upload classification.
+import { readFile } from 'node:fs/promises';
+import { parse, compileScript } from '@vue/compiler-sfc';
+import ts from 'typescript';
+import { JSDOM } from 'jsdom';
+const dom = new JSDOM('<!doctype html><div id="app"></div>');
+for (const key of ['window', 'document', 'Document', 'Element', 'HTMLElement', 'SVGElement', 'Node']) globalThis[key] = dom.window[key];
+const vue = await import('vue');
+const icons = await import('lucide-vue-next');
+async function selectorFixture(selected = [], documents = [], readOnly = false) {
+  const { descriptor } = parse(await readFile(new URL('../src/components/lesson/LessonContentSelection.vue', import.meta.url), 'utf8'));
+  let code = ts.transpileModule(compileScript(descriptor, { id: 'content-selector', inlineTemplate: true }).content, {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  code = code.replace(/import\s+([\s\S]*?)\s+from\s+["']([^"']+)["'];/g, (_, bindings, module) => `const ${bindings.replace(/\bas\b/g, ':')} = modules[${JSON.stringify(module)}];`).replace('export default', 'return');
+  const messages = [];
+  const component = new Function('modules', code)({ vue, 'lucide-vue-next': icons, '../../utils/toast': { showToast: message => messages.push(message) } });
+  const state = vue.reactive({ selected, documents });
+  const app = vue.createApp({ render: () => vue.h(component, { readOnly, modelValue: state.selected, 'onUpdate:modelValue': value => state.selected = value, documents: state.documents, 'onUpdate:documents': value => state.documents = value }) });
+  app.mount('#app');
+  return { state, messages, close: () => app.unmount() };
+}
+test('real dropdown toggles editors and preserves unsaved slide values while hidden', async () => {
+  const f = await selectorFixture(['SLIDE'], [{ ...slide, file: { name: 'draft.pptx' } }]);
+  try {
+    assert.ok(document.querySelector('.slide-editor'));
+    const input = document.querySelector('input[value="SLIDE"]');
+    input.checked = false; input.dispatchEvent(new dom.window.Event('change', { bubbles: true })); await vue.nextTick();
+    assert.equal(document.querySelector('.slide-editor'), null);
+    assert.equal(f.state.documents[0].file.name, 'draft.pptx');
+    input.checked = true; input.dispatchEvent(new dom.window.Event('change', { bubbles: true })); await vue.nextTick();
+    assert.match(document.querySelector('.slide-editor').textContent, /draft.pptx/);
+  } finally { f.close(); }
 });
-test('restores a saved document and falls back if the document was removed', () => {
-  assert.equal(initialLessonContent({ ...lesson, videoUrl: '', textBody: '' }, { contentType: 'DOCUMENT', documentId: 10 }).document, document);
-  assert.equal(initialLessonContent(lesson, { contentType: 'DOCUMENT', documentId: 99 }).type, 'VIDEO');
+test('slide upload uses SLIDE purpose, rejects unsupported PPT and retains supporting PowerPoint', async () => {
+  const f = await selectorFixture(['SLIDE'], [{ ...supporting }]);
+  try {
+    await vue.nextTick();
+    assert.equal(f.state.documents[1].purpose, 'SLIDE');
+    const input = document.querySelector('input[type="file"]');
+    Object.defineProperty(input, 'files', { configurable: true, value: [new dom.window.File(['old'], 'old.ppt')] });
+    input.dispatchEvent(new dom.window.Event('change', { bubbles: true })); await vue.nextTick();
+    assert.equal(f.state.documents[1].file, undefined);
+    assert.match(f.messages[0], /pptx/);
+    Object.defineProperty(input, 'files', { configurable: true, value: [new dom.window.File(['deck'], 'deck.pptx')] });
+    input.dispatchEvent(new dom.window.Event('change', { bubbles: true })); await vue.nextTick();
+    assert.equal(f.state.documents[1].file.name, 'deck.pptx');
+    assert.equal(f.state.documents[1].documentType, 'POWERPOINT');
+    assert.equal(f.state.documents[0].purpose, undefined);
+  } finally { f.close(); }
 });
-test('text and document lessons can restore text without video', () => {
-  const withoutVideo = { ...lesson, videoUrl: '' };
-  assert.equal(initialLessonContent(withoutVideo).type, 'TEXT');
-  assert.equal(initialLessonContent(withoutVideo, { contentType: 'DOCUMENT', documentId: 10 }).type, 'TEXT');
-  assert.equal(initialLessonContent(withoutVideo, { contentType: 'TEXT' }).type, 'TEXT');
+
+
+test('metadata edits preserve fetched learning content, document identities and optimistic lock', () => {
+  assert.equal(typeof content.lessonMetadataUpdate, 'function');
+  const existing = { ...lesson, id: 'L1', title: 'Old', hint: 'Hint', version: 7, procedureSteps: [{ title: 'Process', steps: ['A'] }] };
+  const result = content.lessonMetadataUpdate(existing, { title: 'New', hint: 'New hint', chapterId: 'chapter', courseId: 'course' }, 6);
+  assert.equal(result.title, 'New');
+  assert.equal(result.videoUrl, '/video.mp4');
+  assert.equal(result.textBody, '# Nội dung');
+  assert.equal(result.documents[1].id, 20);
+  assert.equal(result.documents[1].purpose, 'SLIDE');
+  assert.equal(result.procedureSteps, existing.procedureSteps);
+  assert.equal(result.version, 6);
 });
-test('handles video only, text only and missing content', () => {
-  assert.equal(initialLessonContent({ ...lesson, documents: [], textBody: '' }).type, 'VIDEO');
-  assert.equal(initialLessonContent({ ...lesson, documents: [], videoUrl: '' }).type, 'TEXT');
-  assert.equal(initialLessonContent({ documents: [], videoUrl: ' ', textBody: ' ' }).type, 'TEXT');
-  assert.equal(initialLessonContent(lesson, undefined, { id: 99, fileUrl: '/other.pdf' }).document, null);
+
+test('URL video selection cannot validate through a stale hidden upload', () => {
+  assert.throws(() => content.validateSelectedLessonContent({ videoSource: 'URL', videoUrl: '', videoFile: { name: 'old.mp4' } }, ['VIDEO']), /video/);
+});
+
+test('slide editor offers one styled file picker and replaces the selected file in place', async () => {
+  const f = await selectorFixture(['SLIDE'], [{ ...supporting }]);
+  try {
+    assert.equal([...document.querySelectorAll('button')].some(button => button.textContent.trim() === 'Thêm Slide'), false);
+    assert.ok(document.querySelector('.file-picker input[type="file"]'));
+    assert.equal(document.querySelectorAll('.document-form-card').length, 1);
+    const input = document.querySelector('input[type="file"]');
+    for (const name of ['first.pptx', 'replacement.pptx']) {
+      Object.defineProperty(input, 'files', { configurable: true, value: [new dom.window.File(['deck'], name)] });
+      input.dispatchEvent(new dom.window.Event('change', { bubbles: true })); await vue.nextTick();
+      const slides = f.state.documents.filter(document => document.purpose === 'SLIDE');
+      assert.equal(slides.length, 1);
+      assert.equal(slides[0].file.name, name);
+    }
+    assert.equal(f.state.documents[0].id, supporting.id);
+    document.querySelector('button[aria-label="Gỡ file slide"]').click(); await vue.nextTick();
+    const cleared = f.state.documents.find(document => document.purpose === 'SLIDE');
+    assert.equal(cleared.file, undefined);
+    assert.equal(cleared.fileUrl, '');
+    assert.equal(input.required, true);
+  } finally { f.close(); }
+});
+
+test('legacy extra slides require explicit removal and do not discard supporting files', async () => {
+  const f = await selectorFixture(['SLIDE'], [{ ...supporting }, { ...slide }, { ...slide, id: 21, name: 'Extra' }]);
+  try {
+    assert.ok(document.querySelector('[role="alert"]'));
+    document.querySelector('button[aria-label="Xóa slide dư Extra"]').click(); await vue.nextTick();
+    assert.equal(f.state.documents.length, 2);
+    assert.equal(f.state.documents[0].id, supporting.id);
+    assert.equal(document.querySelector('[role="alert"]'), null);
+    assert.equal(document.querySelectorAll('input[type="file"]').length, 1);
+  } finally { f.close(); }
+});
+
+test('read-only slide editor does not create or change lesson documents', async () => {
+  const f = await selectorFixture(['SLIDE'], [{ ...supporting }], true);
+  try {
+    assert.equal(f.state.documents.length, 1);
+    assert.equal(document.querySelector('input[type="file"]'), null);
+  } finally { f.close(); }
 });

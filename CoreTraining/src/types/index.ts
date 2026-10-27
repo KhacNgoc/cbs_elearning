@@ -5,9 +5,23 @@ export interface Comment {
   rating?: number;
   content: string;
   date: string;
+  createdAt?: string;
   parentId?: number;
   replyToUser?: string;
   replies?: Comment[];
+  repliesHasMore?: boolean;
+  replyCursor?: string | null;
+}
+
+export interface ReplyPage {
+  content: Comment[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface ReplyPageState {
+  loading: boolean;
+  error: string;
 }
 
 export interface VideoNote {
@@ -25,6 +39,7 @@ export interface ProcedureSection {
 }
 
 export interface LessonDocument {
+  purpose?: 'SUPPORTING' | 'SLIDE';
   id?: number;
   name: string;
   documentType: "PDF" | "WORD" | "POWERPOINT";

@@ -1,21 +1,21 @@
 import {useUserStore} from '../stores/userStore';
 import { createRouter, createWebHistory } from 'vue-router';
 import type { RouteRecordRaw } from 'vue-router';
-import Dashboard from '../views/Dashboard.vue';
-import LessonDetail from '../views/LessonDetail.vue';
-import QuizView from '../views/QuizView.vue';
-import Leaderboard from '../views/Leaderboard.vue';
-import Login from '../views/Login.vue';
-import AdminOverview from '../views/AdminOverview.vue';
-import AdminQuizDetail from '../views/AdminQuizDetail.vue';
-import Profile from '../views/Profile.vue';
+const Dashboard = () => import('../views/Dashboard.vue');
+const LessonDetail = () => import('../views/LessonDetail.vue');
+const QuizView = () => import('../views/QuizView.vue');
+const Leaderboard = () => import('../views/Leaderboard.vue');
+const Login = () => import('../views/Login.vue');
+const AdminOverview = () => import('../views/AdminOverview.vue');
+const AdminQuizDetail = () => import('../views/AdminQuizDetail.vue');
+const Profile = () => import('../views/Profile.vue');
 import { useNavigationStore } from '../stores/navigationStore';
 import { clearAuthSession, getCachedAuthSession, setCachedAuthSession } from '../utils/authSession';
 import { authApi } from '../api/authApi';
 
-import TrainingAdmin from '../views/TrainingAdmin.vue';
-import LessonEditor from '../views/LessonEditor.vue';
-import CourseOutline from '../views/CourseOutline.vue';
+const TrainingAdmin = () => import('../views/TrainingAdmin.vue');
+const LessonEditor = () => import('../views/LessonEditor.vue');
+const CourseOutline = () => import('../views/CourseOutline.vue');
 
 const routes: Array<RouteRecordRaw> = [
   ...(import.meta.env.DEV ? [{ path: '/mockups/reports', name: 'ReportsMockup', component: () => import('../views/ReportsPreview.vue') }] : []),
@@ -37,6 +37,12 @@ const routes: Array<RouteRecordRaw> = [
     component: LessonDetail,
     props: true,
     meta: { requiresAuth: true, pageKey: 'lesson' }
+  },
+  {
+    path: '/lesson-reports/:id',
+    name: 'LessonReportDetail',
+    component: () => import('../views/LessonReportDetail.vue'),
+    meta: { requiresAuth: true }
   },
   {
     path: '/quiz/:courseId',

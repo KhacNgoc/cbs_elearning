@@ -43,13 +43,9 @@ public class LessonProgressService {
         LessonProgress progress = progressRepository.findByUserIdAndLessonId(user.getId(), lessonId)
                 .orElseGet(() -> LessonProgress.builder().user(user).lesson(lesson).build());
         var before = toDto(progress);
-        boolean videoWasComplete = videoComplete(progress);
-        boolean textWasComplete = progress.isTextCompleted();
-        boolean documentWasComplete = request.getDocumentId() != null && progress.getDocumentPositions() != null
-            && progress.getDocumentPositions().get(request.getDocumentId().toString()) != null
-            && Boolean.TRUE.equals(progress.getDocumentPositions().get(request.getDocumentId().toString()).completed());
         boolean lessonCompleted = userRepository.hasCompletedLesson(user.getId(), lessonId);
-        boolean versionChanged = !java.util.Objects.equals(progress.getCompletionVersion(), authorized.lesson().getVersion());
+        boolean versionChanged = !java.util.Objects.equals(progress.getCompletionVersion(),
+                authorized.lesson().getVersion());
 
         // Preserve the single-document bookmark from records created before this
         // feature.
@@ -88,29 +84,23 @@ public class LessonProgressService {
             progress.setContentType("VIDEO");
         if ("TEXT".equals(request.getContentType()) && Boolean.TRUE.equals(request.getTextCompleted()))
             progress.setTextCompleted(true);
-        boolean importantChange = !textWasComplete && progress.isTextCompleted()
-            || !videoWasComplete && videoComplete(progress)
-            || !documentWasComplete && "DOCUMENT".equals(request.getContentType()) && Boolean.TRUE.equals(request.getDocumentCompleted());
-        if (!lessonCompleted && (versionChanged || importantChange)) {
-            var documentIds = documents.findAllByLessonId(lessonId);
-            boolean hasText = Boolean.TRUE.equals(authorized.lesson().getHasText());
-            boolean hasVideo = Boolean.TRUE.equals(authorized.lesson().getHasVideo());
-            progress.setContentCompleted((hasText || hasVideo || !documentIds.isEmpty())
-                && (!hasText || progress.isTextCompleted())
-                && (!hasVideo || progress.getDurationSeconds() > 0
-                        && progress.getWatchedSeconds() >= progress.getDurationSeconds() * 0.9)
-                && documentIds.stream().allMatch(d -> progress.getDocumentPositions() != null
-                        && progress.getDocumentPositions().get(d.getId().toString()) != null
-                        && Boolean.TRUE.equals(progress.getDocumentPositions().get(d.getId().toString()).completed())));
-            if (progress.isContentCompleted() && !lesson.isQuizRequired()) {
+        // Always evaluate current learning requirements: old supporting-file blockers
+        // must disappear even when the bookmark and lesson version did not change.
+        boolean contentWasComplete = progress.isContentCompleted();
+        progress.setContentCompleted(currentContentComplete(authorized.lesson(), progress));
+        if (!lessonCompleted) {
+            if (progress.isContentCompleted()
+                    && (!lesson.isQuizRequired() || LearningPolicy.quizPassed(user, lesson))) {
                 recordCompletion(user, lesson);
                 lessonCompleted = true;
             }
         }
         progress.setCompletionVersion(authorized.lesson().getVersion());
-        // Do not force an UPDATE for identical bookmarks. Access-only touches are bounded.
-        if (versionChanged || !before.equals(toDto(progress)) || progress.getUpdatedAt() == null
-            || progress.getUpdatedAt().isBefore(LocalDateTime.now().minusSeconds(60))) {
+        // Do not force an UPDATE for identical bookmarks. Access-only touches are
+        // bounded.
+        if (versionChanged || contentWasComplete != progress.isContentCompleted()
+                || !before.equals(toDto(progress)) || progress.getUpdatedAt() == null
+                || progress.getUpdatedAt().isBefore(LocalDateTime.now().minusSeconds(60))) {
             progress.setUpdatedAt(LocalDateTime.now());
             progressRepository.save(progress);
         }
@@ -127,9 +117,10 @@ public class LessonProgressService {
         Lesson lesson = lessonRepository.getReferenceById(lessonId);
         LessonProgress progress = progressRepository.findByUserIdAndLessonId(user.getId(), lessonId)
                 .orElseGet(() -> LessonProgress.builder().user(user).lesson(lesson).build());
-        if (!lesson.isQuizRequired() && !progress.isContentCompleted())
+        progress.setContentCompleted(currentContentComplete(authorized.lesson(), progress));
+        if (!progress.isContentCompleted())
             throw new com.bidv.coretraining.exception.BadRequestException(
-                    "Hãy xem hết văn bản, ít nhất 90% video và trang cuối của tất cả tài liệu trước khi hoàn thành bài");
+                    "Hãy đọc hết văn bản, xem ít nhất 90% video và đến trang cuối của các slide thuộc nội dung bài học");
         progress.setUpdatedAt(LocalDateTime.now());
         progressRepository.save(progress);
     }
@@ -147,14 +138,28 @@ public class LessonProgressService {
     @Transactional(readOnly = true)
     public boolean contentCompleted(User user, String lessonId) {
         return progressRepository.findByUserIdAndLessonId(user.getId(), lessonId)
-                .map(LessonProgress::isContentCompleted).orElse(false);
+                .map(p -> lessonRepository.findAccess(lessonId)
+                        .map(row -> currentContentComplete(row, p)).orElse(false)).orElse(false);
     }
 
     @Transactional(readOnly = true)
     public Map<String, LessonProgressDto> getAllProgress(User user) {
         Map<String, LessonProgressDto> result = new LinkedHashMap<>();
-        for (LessonProgress progress : progressRepository.findByUserId(user.getId())) {
-            result.put(progress.getLesson().getId(), toDto(progress));
+        var saved = progressRepository.findByUserId(user.getId());
+        if (saved.isEmpty()) return result;
+        var lessonIds = saved.stream().map(p -> p.getLesson().getId()).toList();
+        var requirements = lessonRepository.findProgressRequirements(lessonIds).stream().collect(
+                java.util.stream.Collectors.toMap(com.bidv.coretraining.repository.LessonAccessView::getId, r -> r));
+        var slides = documents.findSlideIds(lessonIds).stream().collect(java.util.stream.Collectors.groupingBy(
+                com.bidv.coretraining.repository.LessonDocumentRepository.SlideId::getLessonId,
+                java.util.stream.Collectors.mapping(com.bidv.coretraining.repository.LessonDocumentRepository.SlideId::getId,
+                        java.util.stream.Collectors.toList())));
+        for (LessonProgress progress : saved) {
+            var dto = toDto(progress);
+            var row = requirements.get(progress.getLesson().getId());
+            dto.setContentCompleted(row != null && LessonContentPolicy.complete(Boolean.TRUE.equals(row.getHasText()),
+                    Boolean.TRUE.equals(row.getHasVideo()), slides.getOrDefault(progress.getLesson().getId(), java.util.List.of()), progress));
+            result.put(progress.getLesson().getId(), dto);
         }
         return result;
     }
@@ -182,9 +187,18 @@ public class LessonProgressService {
     }
 
     private double nonNegative(Double value) {
-        return value == null ? 0D : Math.max(0D, value);
+        return value == null || !Double.isFinite(value) ? 0D : Math.max(0D, value);
     }
-    private boolean videoComplete(LessonProgress progress) {
-        return progress.getDurationSeconds() > 0 && progress.getWatchedSeconds() >= progress.getDurationSeconds() * 0.9;
+
+    private boolean currentContentComplete(com.bidv.coretraining.repository.LessonAccessView row,
+            LessonProgress progress) {
+        boolean text = Boolean.TRUE.equals(row.getHasText());
+        boolean video = Boolean.TRUE.equals(row.getHasVideo());
+        if (text && !progress.isTextCompleted() || video && !(progress.getDurationSeconds() > 0
+                && progress.getWatchedSeconds() >= progress.getDurationSeconds() * 0.9)) return false;
+        var slides = documents.findAllByLessonIdAndPurpose(progress.getLesson().getId(),
+                com.bidv.coretraining.entity.DocumentPurpose.SLIDE);
+        return LessonContentPolicy.complete(text, video,
+                slides.stream().map(com.bidv.coretraining.repository.LessonDocumentRepository.IdOnly::getId).toList(), progress);
     }
 }

@@ -1,6 +1,7 @@
 package com.bidv.coretraining.dto;
 
 import com.bidv.coretraining.entity.DocumentType;
+import com.bidv.coretraining.entity.DocumentPurpose;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,4 +19,5 @@ public class LessonDocumentDto {
     private String originalFileName;
     private Long fileSize;
     private Integer documentOrder;
+    private DocumentPurpose purpose;
 }

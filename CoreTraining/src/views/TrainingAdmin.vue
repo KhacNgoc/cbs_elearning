@@ -1038,6 +1038,7 @@ async function save() {
         courseId: course.value!.id,
         chapterId: (lessonChapter.value || chapter.value)!.id,
         hint: f.description,
+        status: "DRAFT",
         videoUrl: "",
         videoSource: "URL",
         documents: [],

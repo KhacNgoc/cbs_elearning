@@ -1,6 +1,7 @@
 <template>
   <div class="word-preview-shell">
     <DocumentZoomControls v-if="!loading && !error" v-model="zoom" />
+    <DocumentPageNavigation v-if="pageCount && !loading && !error" :page="page" :total="pageCount" :disabled="loading" @go="go" />
     <div ref="scrollContainer" class="word-preview" @scroll="savePosition">
       <div v-if="loading" class="word-preview-state">
         <LoaderCircle class="word-preview-spinner" :size="32" /><span
@@ -25,6 +26,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { FileWarning, LoaderCircle } from "lucide-vue-next";
 import DocumentZoomControls from "./DocumentZoomControls.vue";
+import DocumentPageNavigation from "./DocumentPageNavigation.vue";
 import { axiosClient } from "../../api/axiosClient";
 
 const props = defineProps<{
@@ -40,6 +42,9 @@ const emit = defineEmits<{
 }>();
 const zoom = ref(100);
 const fitScale = ref(1);
+const page = ref(1);
+const pageCount = ref(0);
+let pageAnchor: { page: number; scrollTop: number } | null = null;
 let observer: ResizeObserver | null = null;
 let resizeFrame = 0;
 function fitDocument() {
@@ -48,7 +53,7 @@ function fitDocument() {
   if (!page || !scrollContainer.value) return;
   fitScale.value = Math.min(
     1,
-    Math.max(1, scrollContainer.value.clientWidth - 48) /
+    Math.max(1, scrollContainer.value.clientWidth - 104) /
       (page.offsetWidth + 40),
   );
 }
@@ -59,15 +64,31 @@ function savePosition() {
     previewContainer.value?.querySelectorAll("section.docx-page") || [],
   );
   const top = scrollContainer.value.getBoundingClientRect().top;
-  const page = Math.max(
-    1,
-    pages.findIndex((el) => el.getBoundingClientRect().bottom > top + 24) + 1,
-  );
+  pageCount.value = pages.length;
+  const firstVisible = pages.findIndex((el) => el.getBoundingClientRect().bottom > top + 24);
+  // At low zoom the browser can clamp scrollTop before the last page reaches
+  // the top. Keep the page explicitly selected by navigation until the user scrolls.
+  if (pageAnchor && Math.abs(scrollContainer.value.scrollTop - pageAnchor.scrollTop) < 1) {
+    page.value = pageAnchor.page;
+  } else {
+    pageAnchor = null;
+    page.value = Math.max(1, firstVisible >= 0 ? firstVisible + 1 : pages.length);
+  }
   emit("position-change", {
-    page,
+    page: page.value,
     scrollOffset: scrollContainer.value.scrollTop,
-    completed: pages.length > 0 && page === pages.length,
+    completed: pages.length > 0 && page.value === pages.length,
   });
+}
+function go(value: number) {
+  if (loading.value || error.value || !scrollContainer.value || !Number.isFinite(value)) return;
+  const pages = Array.from(previewContainer.value?.querySelectorAll<HTMLElement>('section.docx-page') || []);
+  const next = Math.min(Math.max(1, Math.floor(value)), pages.length);
+  const target = pages[next - 1];
+  if (!target) return;
+  scrollContainer.value.scrollTop += target.getBoundingClientRect().top - scrollContainer.value.getBoundingClientRect().top;
+  pageAnchor = { page: next, scrollTop: scrollContainer.value.scrollTop };
+  savePosition();
 }
 const previewContainer = ref<HTMLElement | null>(null);
 const loading = ref(false);
@@ -75,6 +96,9 @@ const error = ref("");
 
 const renderDocument = async () => {
   if (!previewContainer.value) return;
+  page.value = 1;
+  pageCount.value = 0;
+  pageAnchor = null;
   const fileName = (props.originalFileName || props.url).toLowerCase();
   if (!fileName.endsWith(".docx")) {
     error.value =
@@ -150,6 +174,11 @@ watch(zoom, () => {
   if (zoom.value === 100 && scrollContainer.value)
     scrollContainer.value.scrollLeft = 0;
 });
+watch([zoom, fitScale], async () => {
+  pageAnchor = null;
+  await nextTick();
+  if (!loading.value && !error.value) savePosition();
+});
 watch(() => props.url, renderDocument);
 </script>
 
@@ -164,7 +193,7 @@ watch(() => props.url, renderDocument);
 .word-preview {
   height: 100%;
   overflow: auto;
-  padding: 1.5rem;
+  padding: 1.5rem 52px;
   background: var(--surface-e8eeec);
 }
 .word-preview-content {
@@ -206,7 +235,7 @@ watch(() => props.url, renderDocument);
 }
 @media (max-width: 600px) {
   .word-preview {
-    padding: 0.5rem;
+    padding: 0.5rem 40px;
   }
 }
 </style>

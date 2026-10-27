@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
-import type { Course, Lesson, CourseOutline } from "../types";
+import type { Course, Lesson, CourseOutline, ReplyPageState } from "../types";
+import { mergeReplies } from "../utils/commentReplies";
 import { courseApi } from "../api/courseApi";
 import { showToast } from "../utils/toast";
 import { trainingApi } from "../api/trainingApi";
@@ -16,6 +17,7 @@ export const useCourseStore = defineStore("course", {
     currentLessonId: null as string | null,
     currentLessonData: null as Lesson | null,
     isLoading: false,
+    replyPageStates: {} as Record<number, ReplyPageState>,
   }),
 
   getters: {
@@ -69,6 +71,7 @@ export const useCourseStore = defineStore("course", {
       const requestId = ++lessonRequestId;
       this.isLoading = true;
       this.currentLessonId = lessonId;
+      this.replyPageStates = {};
       try {
         const lesson = await courseApi.getLessonById(lessonId);
         if (requestId !== lessonRequestId) return;
@@ -122,6 +125,28 @@ export const useCourseStore = defineStore("course", {
       }
     },
 
+    async loadMoreReplies(lessonId: string, rootCommentId: number) {
+      const lesson = this.currentLessonData;
+      if (!lesson || lesson.id !== lessonId || this.currentLessonId !== lessonId) return;
+      const root = lesson.comments.find((comment) => comment.id === rootCommentId);
+      if (!root?.repliesHasMore || this.replyPageStates[rootCommentId]?.loading) return;
+      this.replyPageStates[rootCommentId] = { loading: true, error: "" };
+      const state = this.replyPageStates[rootCommentId]!;
+      const isCurrent = () => this.currentLessonData === lesson && this.currentLessonId === lessonId
+        && this.replyPageStates[rootCommentId] === state && lesson.comments.includes(root);
+      try {
+        const page = await courseApi.getReplies(lessonId, rootCommentId, root.replyCursor);
+        if (!isCurrent()) return;
+        root.replies = mergeReplies(root.replies || [], page.content);
+        root.replyCursor = page.nextCursor;
+        root.repliesHasMore = page.hasMore;
+      } catch {
+        if (isCurrent()) state.error = "Không thể tải phản hồi. Vui lòng thử lại.";
+      } finally {
+        state.loading = false;
+      }
+    },
+
     async replyToComment(
       lessonId: string,
       rootCommentId: number,
@@ -142,7 +167,7 @@ export const useCourseStore = defineStore("course", {
           root &&
           !(root.replies || []).some((item) => item.id === reply.id)
         ) {
-          root.replies = [...(root.replies || []), reply];
+          root.replies = mergeReplies(root.replies || [], [reply]);
         }
       }
     },
@@ -163,6 +188,12 @@ export const useCourseStore = defineStore("course", {
         return;
       }
       this.currentLessonData.comments.forEach((comment) => {
+        if ((comment.replies || []).some((reply) => reply.id === commentId)
+          && this.replyPageStates[comment.id]?.loading) {
+          // Discard the older in-flight page so it cannot restore this reply.
+          // Keep its cursor; a retry still reads from the same ordering key.
+          this.replyPageStates[comment.id] = { loading: false, error: "" };
+        }
         comment.replies = (comment.replies || []).filter(
           (reply) => reply.id !== commentId,
         );

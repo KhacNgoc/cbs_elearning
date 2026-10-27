@@ -3,12 +3,14 @@ import type {
   Course,
   Lesson,
   Comment,
+  ReplyPage,
   UserProgress,
   VideoNote,
   LessonProgress,
   LessonProgressRequest,
 } from "../types";
 import { mockCourses } from "../data/mockData";
+import { mockInitialComment, mockReplyPage } from "../utils/commentReplies";
 
 // We maintain an in-memory database in mock mode so updates are reflected dynamically!
 export let mockDbCourses = JSON.parse(JSON.stringify(mockCourses)) as Course[];
@@ -24,7 +26,7 @@ export const courseApi = {
   async getAllCourses(): Promise<Course[]> {
     if (isMockApi()) {
       await mockDelay(300);
-      return mockDbCourses;
+      return structuredClone(mockDbCourses);
     }
     const response = await axiosClient.get<Course[]>("/api/courses");
     return response.data;
@@ -35,7 +37,7 @@ export const courseApi = {
       await mockDelay(200);
       const course = mockDbCourses.find((t) => t.id === id);
       if (!course) throw new Error(`Course not found with id: ${id}`);
-      return course;
+      return structuredClone(course);
     }
     const response = await axiosClient.get<Course>(`/api/courses/${id}`);
     return response.data;
@@ -47,7 +49,7 @@ export const courseApi = {
       const allLessons = mockDbCourses.flatMap((t) => t.lessons);
       const lesson = allLessons.find((l) => l.id === id);
       if (!lesson) throw new Error(`Lesson not found with id: ${id}`);
-      return lesson;
+      return { ...structuredClone(lesson), comments: lesson.comments.slice(0, 20).map(mockInitialComment), commentCount: lesson.comments.length };
     }
     const response = await axiosClient.get<Lesson>(`/api/lessons/${id}`);
     return response.data;
@@ -59,11 +61,25 @@ export const courseApi = {
     if (isMockApi()) {
       const comments = mockDbCourses.flatMap((course) => course.lessons)
         .find((lesson) => lesson.id === lessonId)?.comments || [];
-      return { content: comments.slice(page * size, (page + 1) * size), page,
+      return { content: comments.slice(page * size, (page + 1) * size).map(mockInitialComment), page,
         last: (page + 1) * size >= comments.length, totalElements: comments.length };
     }
     const response = await axiosClient.get(`/api/lessons/${lessonId}/comments`, {
       params: { page, size },
+    });
+    return response.data;
+  },
+
+  async getReplies(lessonId: string, rootCommentId: number, after?: string | null): Promise<ReplyPage> {
+    if (isMockApi()) {
+      await mockDelay(200);
+      const root = mockDbCourses.flatMap((course) => course.lessons)
+        .find((lesson) => lesson.id === lessonId)?.comments.find((comment) => comment.id === rootCommentId);
+      if (!root) throw new Error(`Comment not found with id: ${rootCommentId}`);
+      return mockReplyPage(root.replies || [], after);
+    }
+    const response = await axiosClient.get<ReplyPage>(`/api/lessons/${lessonId}/comments/${rootCommentId}/replies`, {
+      params: after ? { after } : {},
     });
     return response.data;
   },
@@ -87,11 +103,12 @@ export const courseApi = {
         rating: rating ?? undefined,
         content,
         date: new Date().toISOString().split("T")[0],
+        createdAt: new Date().toISOString(),
         replies: [],
       };
 
       lesson.comments.unshift(newComment);
-      return newComment;
+      return mockInitialComment(newComment);
     }
     const response = await axiosClient.post<Comment>(
       `/api/lessons/${lessonId}/comments`,
@@ -129,12 +146,13 @@ export const courseApi = {
         avatar: username.charAt(0).toUpperCase(),
         content,
         date: new Date().toISOString().split("T")[0],
+        createdAt: new Date().toISOString(),
         parentId: rootCommentId,
         replyToUser: target?.user || root.user,
         replies: [],
       };
       root.replies = [...(root.replies || []), reply];
-      return reply;
+      return structuredClone(reply);
     }
     const response = await axiosClient.post<Comment>(
       `/api/lessons/${lessonId}/comments/${rootCommentId}/replies`,

@@ -143,7 +143,8 @@ public class QuizServiceImpl implements QuizService {
         }
         if (total > 0 && percent >= passingScore
                 && !user.getCompletedLessons().contains(lesson)
-                && lesson.isQuizRequired()) {
+                && lesson.isQuizRequired()
+                && progress.contentCompleted(user, lessonId)) {
             progress.recordCompletion(user, lesson);
         }
         return QuizResultDto.builder().score(score).total(total).percent(percent)

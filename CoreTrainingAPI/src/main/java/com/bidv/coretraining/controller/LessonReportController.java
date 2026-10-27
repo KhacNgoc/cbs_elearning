@@ -36,6 +36,11 @@ public class LessonReportController {
         return service.review(id, request.version(), request.status(), request.resolution());
     }
 
+    @GetMapping("/api/lesson-reports/{id}")
+    public LessonReportDto detail(@PathVariable Long id) {
+        return service.detail(id);
+    }
+
     @GetMapping("/api/lesson-reports/{id}/images/{index}")
     public ResponseEntity<Resource> image(@PathVariable Long id, @PathVariable int index) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).contentType(MediaType.IMAGE_PNG)
