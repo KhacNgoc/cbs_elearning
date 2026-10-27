@@ -1,9 +1,11 @@
 <template>
-  <nav class="document-pagination" aria-label="Chuyển trang tài liệu">
+  <nav ref="navigation" class="document-pagination" aria-label="Chuyển trang tài liệu">
     <button
       type="button"
       class="page-arrow previous"
       aria-label="Trang trước"
+      title="Trang trước (←)"
+      aria-keyshortcuts="ArrowLeft"
       :disabled="disabled || page <= 1"
       @click="$emit('go', page - 1)"
     >
@@ -13,6 +15,8 @@
       type="button"
       class="page-arrow next"
       aria-label="Trang sau"
+      title="Trang sau (→)"
+      aria-keyshortcuts="ArrowRight"
       :disabled="disabled || page >= total"
       @click="$emit('go', page + 1)"
     >
@@ -24,9 +28,38 @@
   </nav>
 </template>
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import { ChevronLeft, ChevronRight } from "lucide-vue-next";
-defineProps<{ page: number; total: number; disabled?: boolean }>();
-defineEmits<{ go: [page: number] }>();
+const props = defineProps<{ page: number; total: number; disabled?: boolean }>();
+const emit = defineEmits<{ go: [page: number] }>();
+const navigation = ref<HTMLElement | null>(null);
+const nativeArrowControls = 'input, textarea, select, video, audio, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="combobox"], [role="slider"], [role="listbox"], [role="menu"], [role="tablist"]';
+
+function handleArrowKey(event: KeyboardEvent) {
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+  if (event.defaultPrevented || event.isComposing || event.repeat || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey
+      || props.disabled || props.total < 1) return;
+  const viewer = navigation.value?.parentElement;
+  if (!viewer || !viewer.getClientRects().length) return;
+  const target = event.target instanceof Element ? event.target : null;
+  if (target?.closest(nativeArrowControls) || document.activeElement?.closest(nativeArrowControls)
+      || window.getSelection()?.toString()) return;
+  if (document.fullscreenElement && !document.fullscreenElement.contains(viewer)) return;
+  // Unrelated dialogs take precedence; a fullscreen document dialog can own the viewer.
+  const otherDialog = [...document.querySelectorAll<HTMLElement>('dialog[open], [aria-modal="true"]')]
+    .some(dialog => !dialog.contains(viewer) && !dialog.hidden && dialog.getAttribute('aria-hidden') !== 'true'
+      && window.getComputedStyle(dialog).display !== 'none');
+  if (otherDialog) return;
+  const focusedViewer = document.activeElement?.closest('.pdf-preview, .powerpoint-preview, .word-preview-shell');
+  if (focusedViewer && focusedViewer !== viewer) return;
+  const next = props.page + (event.key === 'ArrowRight' ? 1 : -1);
+  if (next < 1 || next > props.total) return;
+  event.preventDefault();
+  emit('go', next);
+}
+
+onMounted(() => document.addEventListener('keydown', handleArrowKey));
+onBeforeUnmount(() => document.removeEventListener('keydown', handleArrowKey));
 </script>
 <style scoped>
 .document-pagination {

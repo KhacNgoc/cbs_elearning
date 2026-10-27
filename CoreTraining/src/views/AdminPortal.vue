@@ -1117,10 +1117,10 @@
       @close="lessonModal.show = false"
       @submit="runModalSave(saveLesson)"
     >
-      <div ref="lessonModalBodyRef" class="legacy-lesson-fields">
+      <div ref="lessonModalBodyRef" class="legacy-lesson-fields lesson-authoring-fields">
         <div class="form-row">
           <div class="form-group col">
-            <label>Khóa học trực thuộc</label>
+            <label>Khóa học trực thuộc <span class="required-mark" aria-hidden="true">*</span></label>
             <select
               v-model="lessonForm.courseId"
               class="form-control"
@@ -1137,7 +1137,7 @@
             </select>
           </div>
           <div class="form-group col">
-            <label>Mã bài học (Ví dụ: 'LN03', 'CIF05')</label>
+            <label>Mã bài học (Ví dụ: 'LN03', 'CIF05') <span class="required-mark" aria-hidden="true">*</span></label>
             <input
               v-model="lessonForm.id"
               type="text"
@@ -1149,7 +1149,7 @@
         </div>
 
         <div class="form-group">
-          <label>Tiêu đề bài học</label>
+          <label>Tiêu đề bài học <span class="required-mark" aria-hidden="true">*</span></label>
           <input
             v-model="lessonForm.title"
             type="text"
@@ -1159,7 +1159,7 @@
         </div>
 
         <div class="form-group">
-          <label>Gợi ý nghiệp vụ nhanh (Hint)</label>
+          <label>Gợi ý nghiệp vụ nhanh (Hint) <span class="required-mark" aria-hidden="true">*</span></label>
           <input
             v-model="lessonForm.hint"
             type="text"
@@ -1168,8 +1168,9 @@
           />
         </div>
 
-        <div class="form-group video-source-group">
-          <label id="video-source-label">Nguồn video bài học</label>
+        <LessonContentSelection v-model="selectedContentTypes" v-model:documents="lessonForm.documents" :read-only="loading" />
+        <div v-if="selectedContentTypes.includes('VIDEO')" class="form-group video-source-group">
+          <label id="video-source-label">Nguồn video bài học <span class="required-mark" aria-hidden="true">*</span></label>
           <div
             class="video-source-options"
             role="radiogroup"
@@ -1272,6 +1273,7 @@
           </div>
         </div>
 
+        <LessonTextEditor v-if="selectedContentTypes.includes('TEXT')" v-model="lessonForm.textBody" :read-only="loading" @attach="addLessonDocument" />
         <!-- Lesson documents -->
         <div class="form-group">
           <div
@@ -1290,11 +1292,11 @@
               <Plus :size="15" /> Thêm tài liệu
             </button>
           </div>
-          <div v-if="lessonForm.documents.length === 0" class="empty-state-box">
+          <div v-if="!lessonForm.documents.some(document => document.purpose !== 'SLIDE')" class="empty-state-box">
             Bài học chưa có tài liệu đính kèm.
           </div>
           <div
-            v-for="(document, index) in lessonForm.documents"
+            v-for="{ document, index } in lessonForm.documents.map((document, index) => ({ document, index })).filter(({ document }) => document.purpose !== 'SLIDE')"
             :key="index"
             class="document-form-card"
           >
@@ -1303,7 +1305,7 @@
             </div>
             <div class="document-form-fields">
               <div class="form-group">
-                <label>Tên hiển thị</label>
+                <label>Tên hiển thị <span class="required-mark" aria-hidden="true">*</span></label>
                 <input
                   v-model="document.name"
                   class="form-control"
@@ -1312,7 +1314,7 @@
                 />
               </div>
               <div class="form-group document-file-field">
-                <label>Chọn file PDF, Word hoặc PowerPoint</label>
+                <label>Chọn file PDF, Word hoặc PowerPoint <span class="required-mark" aria-hidden="true">*</span></label>
                 <div class="file-upload-control">
                   <label class="file-picker">
                     <Upload :size="18" />
@@ -1446,6 +1448,10 @@
 </template>
 
 <script setup lang="ts">
+import '../assets/styles/lesson-authoring.css';
+import LessonContentSelection from '../components/lesson/LessonContentSelection.vue';
+import { lessonContentTypes, selectedLessonContent, validateSelectedLessonContent, type LessonContentType } from '../utils/lessonContent';
+const LessonTextEditor = defineAsyncComponent(() => import("../components/lesson/LessonTextEditor.vue"));
 import { scrollWithin } from "../utils/scrollWithin";
 import { showToast } from "../utils/toast";
 import AdminModal from "../components/AdminModal.vue";
@@ -1454,6 +1460,7 @@ import { useTablePagination } from "../composables/useTablePagination";
 import { axiosClient } from "../api/axiosClient";
 import {
   ref,
+  defineAsyncComponent,
   computed,
   nextTick,
   onMounted,
@@ -1658,6 +1665,7 @@ const userForm = ref({
 });
 
 const lessonModal = ref({ show: false, isEdit: false });
+const selectedContentTypes = ref<LessonContentType[]>([]);
 type LessonDocumentForm = LessonDocument & { file?: File };
 const lessonForm = ref({
   id: "",
@@ -1667,6 +1675,9 @@ const lessonForm = ref({
   videoSource: "UPLOAD" as "UPLOAD" | "URL",
   videoUrl: "",
   videoFile: undefined as File | undefined,
+  textBody: "",
+  version: undefined as number | undefined,
+  procedureSteps: [] as Lesson["procedureSteps"],
   documents: [] as LessonDocumentForm[],
 });
 
@@ -2693,6 +2704,7 @@ const handleDeleteUser = (user: AdminUser) => {
 // LESSON ACTIONS
 // ==========================================
 const openLessonModal = (lesson?: Lesson) => {
+  selectedContentTypes.value = lesson ? lessonContentTypes(lesson) : [];
   if (lesson) {
     lessonModal.value = { show: true, isEdit: true };
     lessonForm.value = {
@@ -2705,6 +2717,9 @@ const openLessonModal = (lesson?: Lesson) => {
         (lesson.videoUrl?.includes("/uploads/") ? "UPLOAD" : "URL"),
       videoUrl: lesson.videoUrl || "",
       videoFile: undefined,
+      textBody: lesson.textBody || "",
+      version: lesson.version,
+      procedureSteps: lesson.procedureSteps || [],
       documents: (lesson.documents || []).map((document) => ({ ...document })),
     };
   } else {
@@ -2720,6 +2735,9 @@ const openLessonModal = (lesson?: Lesson) => {
       videoSource: "UPLOAD",
       videoUrl: "",
       videoFile: undefined,
+      textBody: "",
+      version: undefined,
+      procedureSteps: [],
       documents: [],
     };
   }
@@ -2763,6 +2781,7 @@ const clearVideoFile = (event: MouseEvent) => {
 
 const addLessonDocument = async () => {
   lessonForm.value.documents.push({
+    purpose: "SUPPORTING",
     name: "",
     documentType: "PDF",
     fileUrl: "",
@@ -2838,7 +2857,9 @@ const saveLesson = async () => {
   loading.value = true;
   videoUploadProgress.value = null;
   try {
-    const videoUrl =
+    validateSelectedLessonContent(lessonForm.value, selectedContentTypes.value);
+    const activeContent = selectedLessonContent(lessonForm.value, selectedContentTypes.value);
+    const videoUrl = !selectedContentTypes.value.includes("VIDEO") ? "" :
       lessonForm.value.videoSource === "UPLOAD" && lessonForm.value.videoFile
         ? await adminApi.uploadVideo(lessonForm.value.videoFile, (percent) => {
             videoUploadProgress.value = percent;
@@ -2846,12 +2867,13 @@ const saveLesson = async () => {
         : lessonForm.value.videoUrl.trim();
     videoUploadProgress.value = null;
     const documents = await Promise.all(
-      lessonForm.value.documents.map(async (document, index) => {
+      activeContent.documents.map(async (document, index) => {
         const uploaded = document.file
           ? await adminApi.uploadDocument(document.file)
           : document;
         return {
-          id: uploaded.id,
+          id: document.file ? undefined : document.id,
+          purpose: document.purpose || "SUPPORTING",
           name: document.name || uploaded.name,
           documentType: uploaded.documentType,
           fileUrl: uploaded.fileUrl,
@@ -2863,10 +2885,10 @@ const saveLesson = async () => {
     );
 
     const payload = {
-      ...lessonForm.value,
+      ...activeContent,
       videoUrl,
       documents,
-      procedureSteps: [],
+      procedureSteps: lessonForm.value.procedureSteps,
     };
     delete (payload as Partial<typeof lessonForm.value>).videoFile;
 

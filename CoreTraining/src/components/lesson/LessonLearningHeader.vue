@@ -13,7 +13,7 @@
     </div>
     <div class="header-actions">
       <div
-        v-if="hasText || hasVideo"
+        v-if="hasText || hasVideo || hasSlides"
         class="lesson-content-switch"
         role="group"
         aria-label="Chọn nội dung bài học"
@@ -34,6 +34,7 @@
         >
           <PlayCircle :size="17" /><span>Video</span>
         </button>
+        <button v-if="hasSlides" type="button" :aria-pressed="activeContent === 'SLIDE'" @click="$emit('select-content', 'SLIDE')"><FileText :size="17" /><span>Slide</span></button>
       </div>
       <div
         class="header-completion"
@@ -101,7 +102,8 @@ import {
 } from "lucide-vue-next";
 defineProps<{
   sidebarOpen: boolean;
-  activeContent: "VIDEO" | "TEXT" | "DOCUMENT";
+  activeContent: "VIDEO" | "TEXT" | "DOCUMENT" | "SLIDE";
+  hasSlides: boolean;
   hasText: boolean;
   hasVideo: boolean;
   courseName?: string;
@@ -115,6 +117,6 @@ defineProps<{
 defineEmits<{
   complete: [];
   "open-content": [];
-  "select-content": [type: "VIDEO" | "TEXT"];
+  "select-content": [type: "VIDEO" | "TEXT" | "SLIDE"];
 }>();
 </script>

@@ -6,7 +6,7 @@
   >
     <header class="workspace-heading">
       <div>
-        <h2>Nội dung bài học</h2>
+        <h2>Nội dung bài học <span class="required-mark" aria-hidden="true">*</span></h2>
         <p>
           Soạn nội dung, chèn hình ảnh và liên kết đến sơ đồ hoặc tài liệu liên
           quan.

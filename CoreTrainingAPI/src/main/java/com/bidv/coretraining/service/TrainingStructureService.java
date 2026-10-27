@@ -492,6 +492,7 @@ public class TrainingStructureService {
                 if (ch.getLessons() != null) {
                     for (Lesson l : ch.getLessons()) {
                         if ("DRAFT".equalsIgnoreCase(l.getStatus()) || l.getStatus() == null) {
+                            LessonContentPolicy.requirePublishable(l);
                             l.setStatus("PUBLISHED");
                         }
                     }
@@ -1155,9 +1156,7 @@ public class TrainingStructureService {
                 if (ch.getLessons().isEmpty())
                     throw new BadRequestException("Chương " + ch.getTitle() + " chưa có bài");
                 for (Lesson l : ch.getLessons()) {
-                    if (l.getContent() == null || (blank(l.getVideoUrl()) && blank(l.getTextBody())
-                            && l.getDocuments().isEmpty() && l.getProcedureSteps().isEmpty()))
-                        throw new BadRequestException("Bài " + l.getTitle() + " chưa có nội dung");
+                    LessonContentPolicy.requirePublishable(l);
                     l.setStatus("PUBLISHED");
                 }
                 ch.setStatus("PUBLISHED");

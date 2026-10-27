@@ -1039,6 +1039,8 @@ import {
   Edit3,
   Trash2,
 } from "lucide-vue-next";
+import { courseApi } from "../api/courseApi";
+import { lessonMetadataUpdate } from "../utils/lessonContent";
 import { trainingApi } from "../api/trainingApi";
 import { adminApi, type AdminUser } from "../api/adminApi";
 import { axiosClient } from "../api/axiosClient";
@@ -2335,21 +2337,18 @@ async function submitAddModal() {
         }
       }
       if (isEdit) {
-        await adminApi.updateLesson(editId!, {
-          id: editId!,
+        const existing = await courseApi.getLessonById(editId!);
+        await adminApi.updateLesson(editId!, lessonMetadataUpdate(existing, {
           title: name.trim(),
           hint: addModal.value.description.trim() || name.trim(),
           chapterId: parentId!,
-          courseId: courseId,
-          videoUrl: "",
-          videoSource: "URL",
-          documents: [],
-          procedureSteps: [],
-        });
+          courseId,
+        }, addModal.value.version));
         showToast("Cập nhật bài học thành công!", "success");
       } else {
-        await adminApi.createLesson({
+        const saved = await adminApi.createLesson({
           id: code.trim().toUpperCase(),
+          status: "DRAFT",
           title: name.trim(),
           hint: addModal.value.description.trim() || name.trim(),
           chapterId: parentId!,
@@ -2359,6 +2358,7 @@ async function submitAddModal() {
           documents: [],
           procedureSteps: [],
         });
+        savedNodeId = saved.id;
         showToast("Tạo bài học thành công!", "success");
       }
     }
@@ -2368,6 +2368,8 @@ async function submitAddModal() {
     addModal.value.show = false;
     await loadTreeData({ type, id: savedNodeId, parentId });
     emit("refresh");
+    if (type === "lesson" && !isEdit && savedNodeId)
+      await router.push(`/admin/lessons/${encodeURIComponent(savedNodeId)}/edit`);
   } catch (error: any) {
     const msg = error.response?.data?.message || (isEdit ? "Lỗi khi cập nhật!" : "Lỗi khi tạo mục mới!");
     showToast(msg, "error");

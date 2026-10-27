@@ -1,11 +1,5 @@
 <template>
   <div class="video-container card">
-    <div class="video-title-bar">
-      <span class="video-filename">{{
-        title || "CIF03_Quy trinh tao CIF KHTC.mp4"
-      }}</span>
-    </div>
-
     <div class="video-player-wrapper">
       <div
         v-if="youtubeEmbedUrl"
@@ -716,21 +710,6 @@ const openExternal = () => {
   padding: 1rem;
   color: #fff;
   min-height: 480px;
-}
-
-.video-title-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-  border-bottom: 1px solid var(--line-333333);
-  padding-bottom: 0.5rem;
-}
-
-.video-filename {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--ink-cccccc);
 }
 
 .video-player-wrapper {

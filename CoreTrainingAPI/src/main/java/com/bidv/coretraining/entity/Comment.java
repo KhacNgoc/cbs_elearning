@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "comments")
+@Table(name = "comments", indexes = @Index(name = "idx_comment_replies_page", columnList = "parent_comment_id,created_at,id"))
 @Getter
 @Setter
 @NoArgsConstructor

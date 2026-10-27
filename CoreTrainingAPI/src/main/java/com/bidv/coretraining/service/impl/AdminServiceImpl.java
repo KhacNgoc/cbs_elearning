@@ -149,7 +149,7 @@ public class AdminServiceImpl implements AdminService {
         assets.attach(normalizeUploadedPath(lessonDto.getVideoUrl()));
         lesson.setVideoUrl(normalizeUploadedPath(lessonDto.getVideoUrl()));
         lesson.setVideoSource(resolveVideoSource(lessonDto));
-        lesson.setTextBody(lessonDto.getTextBody());
+        lesson.setTextBody(com.bidv.coretraining.service.LessonContentPolicy.normalizeText(lessonDto.getTextBody()));
         lesson.setDocuments(buildDocuments(lessonDto.getDocuments(), lesson));
 
         if (lessonDto.getProcedureSteps() != null) {
@@ -189,12 +189,17 @@ public class AdminServiceImpl implements AdminService {
         lesson.setTitle(lessonDto.getTitle());
         lesson.setUpdatedAt(java.time.LocalDateTime.now());
         lesson.setHint(lessonDto.getHint());
-        lesson.setTextBody(lessonDto.getTextBody());
+        lesson.setTextBody(com.bidv.coretraining.service.LessonContentPolicy.normalizeText(lessonDto.getTextBody()));
         assets.attach(normalizeUploadedPath(lessonDto.getVideoUrl()));
         lesson.setVideoUrl(normalizeUploadedPath(lessonDto.getVideoUrl()));
         lesson.setVideoSource(resolveVideoSource(lessonDto));
-        lesson.getDocuments().clear();
-        lesson.getDocuments().addAll(buildDocuments(lessonDto.getDocuments(), lesson));
+        var updatedDocuments = buildDocuments(lessonDto.getDocuments(), lesson);
+        lesson.getDocuments().removeIf(document -> !updatedDocuments.contains(document));
+        for (var document : updatedDocuments)
+            if (!lesson.getDocuments().contains(document)) lesson.getDocuments().add(document);
+        lesson.getDocuments().sort(java.util.Comparator.comparing(LessonDocument::getDocumentOrder));
+        if ("PUBLISHED".equals(lesson.getStatus()))
+            com.bidv.coretraining.service.LessonContentPolicy.requirePublishable(lesson);
 
         // Rebuild procedure steps to avoid merge errors
         lesson.getProcedureSteps().clear();
@@ -284,20 +289,43 @@ public class AdminServiceImpl implements AdminService {
         if (documentDtos == null) {
             return new ArrayList<>();
         }
+        if (documentDtos.stream().filter(d -> d != null && d.getPurpose() == DocumentPurpose.SLIDE).count() > 1)
+            throw new BadRequestException("Mỗi bài học chỉ được có một file slide PowerPoint");
 
         List<LessonDocument> documents = new ArrayList<>();
+        var existing = lesson.getDocuments().stream().filter(d -> d.getId() != null)
+                .collect(Collectors.toMap(LessonDocument::getId, d -> d));
+        var seen = new java.util.HashSet<Long>();
         for (int i = 0; i < documentDtos.size(); i++) {
             LessonDocumentDto documentDto = documentDtos.get(i);
-            assets.attach(normalizeUploadedPath(documentDto.getFileUrl()));
-            documents.add(LessonDocument.builder()
-                    .name(documentDto.getName())
-                    .documentType(documentDto.getDocumentType())
-                    .fileUrl(normalizeUploadedPath(documentDto.getFileUrl()))
-                    .originalFileName(documentDto.getOriginalFileName())
-                    .fileSize(documentDto.getFileSize())
-                    .documentOrder(i)
-                    .lesson(lesson)
-                    .build());
+            if (documentDto == null || documentDto.getName() == null || documentDto.getName().isBlank()
+                    || documentDto.getFileUrl() == null || documentDto.getFileUrl().isBlank()
+                    || documentDto.getDocumentType() == null)
+                throw new BadRequestException("Tài liệu cần tên, file và định dạng hợp lệ");
+            String path = normalizeUploadedPath(documentDto.getFileUrl());
+            var purpose = documentDto.getPurpose() == null ? DocumentPurpose.SUPPORTING : documentDto.getPurpose();
+            if (purpose == DocumentPurpose.SLIDE && (documentDto.getDocumentType() != DocumentType.POWERPOINT
+                    || !path.startsWith("/uploads/documents/")
+                    || !path.toLowerCase(java.util.Locale.ROOT).endsWith(".pptx")))
+                throw new BadRequestException("Nội dung slide cần file PowerPoint .pptx để học viên xem và ghi nhận tiến độ");
+            LessonDocument previous = documentDto.getId() == null ? null : existing.get(documentDto.getId());
+            if (documentDto.getId() != null && (previous == null || !seen.add(documentDto.getId())))
+                throw new BadRequestException("ID tài liệu không thuộc bài học hoặc bị trùng");
+            assets.attach(path);
+            boolean sameContent = previous != null && java.util.Objects.equals(previous.getFileUrl(), path)
+                    && previous.getDocumentType() == documentDto.getDocumentType()
+                    && previous.getPurpose() == purpose;
+            // A new file or a supporting -> slide promotion must not inherit a
+            // bookmark's completion from the old document identity.
+            var document = sameContent ? previous : LessonDocument.builder().lesson(lesson).build();
+            document.setName(documentDto.getName().trim());
+            document.setDocumentType(documentDto.getDocumentType());
+            document.setPurpose(purpose);
+            document.setFileUrl(path);
+            document.setOriginalFileName(documentDto.getOriginalFileName());
+            document.setFileSize(documentDto.getFileSize());
+            document.setDocumentOrder(i);
+            documents.add(document);
         }
         return documents;
     }

@@ -25,6 +25,7 @@ import java.util.List;
 
 @Service
 public class CourseServiceImpl implements CourseService {
+    private static final int REPLY_PAGE_SIZE = 5;
     @org.springframework.beans.factory.annotation.Autowired
     private com.bidv.coretraining.service.AuthorizationService authorization;
     @org.springframework.beans.factory.annotation.Autowired
@@ -150,16 +151,74 @@ public class CourseServiceImpl implements CourseService {
         for (var root : roots) {
             CommentDto dto = courseMapper.toCommentSummaryDto(root);
             dto.setReplies(new java.util.ArrayList<>());
+            dto.setRepliesHasMore(false);
             mapped.put(dto.getId(), dto);
         }
         if (!mapped.isEmpty()) {
-            for (var reply : commentRepository.findByParentIdInOrderByCreatedAtAscIdAsc(mapped.keySet())) {
+            for (var reply : commentRepository.findReplyPreviews(id, mapped.keySet(), REPLY_PAGE_SIZE + 1)) {
+                var thread = mapped.get(reply.getParent().getId());
+                if (thread.getReplies().size() == REPLY_PAGE_SIZE) {
+                    thread.setRepliesHasMore(true);
+                    continue;
+                }
                 CommentDto dto = courseMapper.toCommentSummaryDto(reply);
                 dto.setReplies(List.of());
-                mapped.get(dto.getParentId()).getReplies().add(dto);
+                thread.getReplies().add(dto);
+                thread.setReplyCursor(encodeReplyCursor(reply.getCreatedAt(), reply.getId()));
             }
+            mapped.values().stream().filter(thread -> !Boolean.TRUE.equals(thread.getRepliesHasMore()))
+                    .forEach(thread -> thread.setReplyCursor(null));
         }
         return new CommentPageDto(List.copyOf(mapped.values()), roots.getNumber(), roots.isLast(), roots.getTotalElements());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CommentReplyPageDto getReplies(String lessonId, Long rootCommentId, String after) {
+        learningAccess.requireLesson(authorization.current(), lessonId);
+        Comment root = commentRepository.findById(rootCommentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Comment", "id", rootCommentId));
+        if (!root.getLesson().getId().equals(lessonId) || root.getParent() != null)
+            throw new ResourceNotFoundException("Comment", "id", rootCommentId);
+        var request = org.springframework.data.domain.PageRequest.of(0, REPLY_PAGE_SIZE + 1);
+        List<Comment> replies;
+        if (after == null) {
+            replies = commentRepository.findByLessonIdAndParentIdOrderByCreatedAtAscIdAsc(lessonId, rootCommentId, request);
+        } else {
+            var cursor = decodeReplyCursor(after);
+            replies = commentRepository.findRepliesAfter(lessonId, rootCommentId, cursor.time(), cursor.id(), request);
+        }
+        boolean hasMore = replies.size() > REPLY_PAGE_SIZE;
+        var visible = replies.stream().limit(REPLY_PAGE_SIZE).toList();
+        var content = visible.stream().map(reply -> {
+            var dto = courseMapper.toCommentSummaryDto(reply);
+            dto.setReplies(List.of());
+            return dto;
+        }).toList();
+        String nextCursor = hasMore ? encodeReplyCursor(visible.get(visible.size() - 1).getCreatedAt(),
+                visible.get(visible.size() - 1).getId()) : null;
+        return new CommentReplyPageDto(content, nextCursor, hasMore);
+    }
+
+    private record ReplyCursor(LocalDateTime time, long id) {}
+
+    private String encodeReplyCursor(LocalDateTime time, Long id) {
+        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(
+                (time + "|" + id).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    private ReplyCursor decodeReplyCursor(String cursor) {
+        try {
+            if (cursor.length() > 256) throw new IllegalArgumentException();
+            String decoded = new String(java.util.Base64.getUrlDecoder().decode(cursor), java.nio.charset.StandardCharsets.UTF_8);
+            int separator = decoded.lastIndexOf('|');
+            var time = LocalDateTime.parse(decoded.substring(0, separator));
+            long id = Long.parseLong(decoded.substring(separator + 1));
+            if (id <= 0) throw new IllegalArgumentException();
+            return new ReplyCursor(time, id);
+        } catch (RuntimeException invalid) {
+            throw new com.bidv.coretraining.exception.BadRequestException("Mốc tải phản hồi không hợp lệ");
+        }
     }
 
     @Override

@@ -39,6 +39,12 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true, pageKey: 'lesson' }
   },
   {
+    path: '/lesson-reports/:id',
+    name: 'LessonReportDetail',
+    component: () => import('../views/LessonReportDetail.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/quiz/:courseId',
     name: 'QuizView',
     component: QuizView,

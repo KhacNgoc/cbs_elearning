@@ -17,7 +17,10 @@ public class CommentDto {
     private Integer rating;
     private String content;
     private String date; // Format YYYY-MM-DD
+    private String createdAt;
     private Long parentId;
     private String replyToUser;
     private List<CommentDto> replies;
+    private Boolean repliesHasMore;
+    private String replyCursor;
 }

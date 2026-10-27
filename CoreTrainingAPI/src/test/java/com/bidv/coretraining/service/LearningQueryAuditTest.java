@@ -224,14 +224,17 @@ class LearningQueryAuditTest {
         }
     }
 
-    @Test void automaticCompletionRequiresTextVideoAndEveryDocument() {
+    @Test void automaticCompletionRequiresTextVideoAndEveryRequiredSlide() {
         var f = seed(2);
         var lesson = em.find(Lesson.class, f.lesson());
         lesson.getQuiz().setRequiredForProgress(false);
         lesson.setVideoUrl("/video.mp4");
         var first = lesson.getDocuments().get(0).getId();
-        var other = LessonDocument.builder().lesson(lesson).name("Other").documentType(DocumentType.PDF)
-            .fileUrl("/other.pdf").documentOrder(2).build();
+        lesson.getDocuments().get(0).setPurpose(DocumentPurpose.SLIDE);
+        lesson.getDocuments().get(0).setDocumentType(DocumentType.POWERPOINT);
+        lesson.getDocuments().get(0).setFileUrl("/uploads/documents/first.pptx");
+        var other = LessonDocument.builder().lesson(lesson).name("Other").documentType(DocumentType.POWERPOINT)
+            .purpose(DocumentPurpose.SLIDE).fileUrl("/uploads/documents/other.pptx").documentOrder(2).build();
         em.persist(other); em.flush(); var second = other.getId(); reset();
         var request = new LessonProgressRequest(); request.setContentType("VIDEO");
         request.setDurationSeconds(100D); request.setWatchedSeconds(90D);
@@ -263,23 +266,23 @@ class LearningQueryAuditTest {
         request.setWatchedSeconds(20D); request.setLastPositionSeconds(20D);
         progress.saveProgress(f.user(), f.lesson(), request); em.flush();
         report("bookmark-hot", f);
-        org.mockito.Mockito.verify(documentRepository, org.mockito.Mockito.never()).findAllByLessonId(f.lesson());
+        org.mockito.Mockito.verify(documentRepository, org.mockito.Mockito.never()).findAllByLessonIdAndPurpose(f.lesson(), DocumentPurpose.SLIDE);
         request.setWatchedSeconds(90D);
         progress.saveProgress(f.user(), f.lesson(), request); em.flush();
-        org.mockito.Mockito.verify(documentRepository, org.mockito.Mockito.times(1)).findAllByLessonId(f.lesson());
+        org.mockito.Mockito.verify(documentRepository, org.mockito.Mockito.never()).findAllByLessonIdAndPurpose(f.lesson(), DocumentPurpose.SLIDE);
         request.setWatchedSeconds(95D);
         progress.saveProgress(f.user(), f.lesson(), request); em.flush();
-        org.mockito.Mockito.verify(documentRepository, org.mockito.Mockito.times(1)).findAllByLessonId(f.lesson());
+        org.mockito.Mockito.verify(documentRepository, org.mockito.Mockito.never()).findAllByLessonIdAndPurpose(f.lesson(), DocumentPurpose.SLIDE);
         request.setContentType("TEXT"); request.setTextCompleted(true);
         progress.saveProgress(f.user(), f.lesson(), request); em.flush();
-        org.mockito.Mockito.verify(documentRepository, org.mockito.Mockito.times(2)).findAllByLessonId(f.lesson());
+        org.mockito.Mockito.verify(documentRepository, org.mockito.Mockito.times(1)).findAllByLessonIdAndPurpose(f.lesson(), DocumentPurpose.SLIDE);
         // Editing metadata invalidates the last evaluation for an unfinished lesson.
         em.find(Lesson.class, f.lesson()).setTitle("Changed"); reset();
         progress.saveProgress(f.user(), f.lesson(), request); em.flush();
-        org.mockito.Mockito.verify(documentRepository, org.mockito.Mockito.times(3)).findAllByLessonId(f.lesson());
+        org.mockito.Mockito.verify(documentRepository, org.mockito.Mockito.times(2)).findAllByLessonIdAndPurpose(f.lesson(), DocumentPurpose.SLIDE);
     }
 
-    @Test void requiredQuizCompletesWithoutContentButOptionalQuizDoesNot() {
+    @Test void quizPassBeforeContentDoesNotCompleteLessonUntilContentIsFinished() {
         for (boolean required : List.of(true, false)) {
             var f = seed(2); var lesson = em.find(Lesson.class, f.lesson());
             lesson.getQuiz().setRequiredForProgress(required);
@@ -289,7 +292,54 @@ class LearningQueryAuditTest {
             assertThat(quizService.submitLessonQuiz(f.lesson(), request, f.user()).getPassed()).isTrue();
             reset();
             var user = em.createQuery("select u from User u where u.username=:name", User.class).setParameter("name", f.user()).getSingleResult();
-            assertThat(user.getCompletedLessons().stream().anyMatch(l -> l.getId().equals(f.lesson()))).isEqualTo(required);
+            assertThat(user.getCompletedLessons().stream().anyMatch(l -> l.getId().equals(f.lesson()))).isFalse();
+            var content = new LessonProgressRequest(); content.setContentType("TEXT"); content.setTextCompleted(true);
+            assertThat(progress.saveProgress(f.user(), f.lesson(), content).isLessonCompleted()).isTrue();
+        }
+    }
+
+    @Test void requiredQuizPassAfterContentAwardsCompletionOnce() {
+        var f = seed(2);
+        var content = new LessonProgressRequest(); content.setContentType("TEXT"); content.setTextCompleted(true);
+        assertThat(progress.saveProgress(f.user(), f.lesson(), content).isLessonCompleted()).isFalse();
+        var lesson = em.find(Lesson.class, f.lesson());
+        var request = new QuizSubmitRequest();
+        request.setSelectedAnswers(Map.of(lesson.getQuiz().getQuestions().get(0).getId(), List.of(0)));
+        quizService.submitLessonQuiz(f.lesson(), request, f.user());
+        quizService.submitLessonQuiz(f.lesson(), request, f.user());
+        var user = em.createQuery("select u from User u where u.username=:name", User.class)
+                .setParameter("name", f.user()).getSingleResult();
+        assertThat(user.getCompletedLessons()).extracting(Lesson::getId).contains(f.lesson());
+        assertThat(user.getPoints()).isEqualTo(100);
+    }
+
+    @Test void supportingOnlyLessonCannotBePublishedButSlideOnlyLessonCan() {
+        var f = seed(2);
+        var lesson = em.find(Lesson.class, f.lesson());
+        lesson.setTextBody(null);
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> structure.status(f.course(), "PUBLISHED")))
+                .isInstanceOf(com.bidv.coretraining.exception.BadRequestException.class);
+        var slide = lesson.getDocuments().get(0);
+        slide.setPurpose(DocumentPurpose.SLIDE); slide.setDocumentType(DocumentType.POWERPOINT);
+        slide.setFileUrl("/uploads/documents/slide.pptx");
+        assertThat(structure.status(f.course(), "PUBLISHED").getStatus()).isEqualTo("PUBLISHED");
+    }
+
+    @Test void allProgressReevaluatesCurrentRequirementsInBoundedMetadataQueries() {
+        for (int size : List.of(2, 6)) {
+            var f = seed(size);
+            var user = em.createQuery("select u from User u where u.username=:name", User.class)
+                    .setParameter("name", f.user()).getSingleResult();
+            for (var lesson : em.createQuery("select l from Lesson l where l.course.id=:course", Lesson.class)
+                    .setParameter("course", f.course()).getResultList())
+                em.persist(LessonProgress.builder().lesson(lesson).user(user).textCompleted(true)
+                        .contentCompleted(false).updatedAt(LocalDateTime.now()).build());
+            reset();
+            var result = progress.getAllProgress(user);
+            assertThat(result).hasSize(f.count());
+            assertThat(result.values()).allSatisfy(p -> assertThat(p.isContentCompleted()).isTrue());
+            assertMetadataOnly();
+            assertThat(emf.unwrap(SessionFactory.class).getStatistics().getPrepareStatementCount()).isLessThanOrEqualTo(3);
         }
     }
 
@@ -328,7 +378,7 @@ class LearningQueryAuditTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> access.requireLesson(f.user(), nextChapter))
                 .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
         em.persist(LessonProgress.builder().user(em.find(User.class, user.getId()))
-                .lesson(em.getReference(Lesson.class, second)).contentType("TEXT").contentCompleted(true)
+                .lesson(em.getReference(Lesson.class, second)).contentType("TEXT").textCompleted(true).contentCompleted(true)
                 .updatedAt(LocalDateTime.now()).build());
         reset();
         assertThat(structure.outline(f.course(), f.user()).resume().contentType()).isEqualTo("QUIZ");
@@ -370,6 +420,96 @@ class LearningQueryAuditTest {
         assertThat(remaining.last()).isTrue();
         assertThat(remaining.content()).extracting(CommentDto::getId)
                 .doesNotContainAnyElementsOf(detail.getComments().stream().map(CommentDto::getId).toList());
+    }
+
+    @Test void initialCommentPageLoadsOnlyFiveRepliesPerThread() {
+        var f = seed(2);
+        var lesson = em.find(Lesson.class, f.lesson());
+        var root = Comment.builder().lesson(lesson).username("root").avatar("R").content("Thread")
+                .createdAt(LocalDateTime.now()).build();
+        em.persist(root);
+        for (int i = 0; i < 12; i++)
+            em.persist(Comment.builder().lesson(lesson).parent(root).username("reply").avatar("R")
+                    .content("Reply " + i).createdAt(LocalDateTime.of(2026, 10, 1, 9, 0)).build());
+        em.flush(); var rootId = root.getId(); reset();
+        org.mockito.Mockito.when(auth.current()).thenReturn(em.createQuery("select u from User u where u.username=:name", User.class)
+                .setParameter("name", f.user()).getSingleResult());
+        var page = service.getComments(f.lesson(), 0, 20);
+        var thread = page.content().stream().filter(c -> c.getId().equals(rootId)).findFirst().orElseThrow();
+        assertThat(thread.getReplies()).hasSize(5).extracting(CommentDto::getContent)
+                .containsExactly("Reply 0", "Reply 1", "Reply 2", "Reply 3", "Reply 4");
+        assertThat(thread.getRepliesHasMore()).isTrue();
+        assertThat(thread.getReplyCursor()).isNotBlank();
+        assertThat(thread.getReplies()).allSatisfy(reply -> assertThat(reply.getCreatedAt()).isNotBlank());
+        assertThat(emf.unwrap(SessionFactory.class).getStatistics().getEntityStatistics(Comment.class.getName()).getLoadCount())
+                .isLessThanOrEqualTo(8);
+    }
+
+    private Comment replyThread(String lessonId, int count) {
+        var lesson = em.find(Lesson.class, lessonId);
+        var root = Comment.builder().lesson(lesson).username("root").avatar("R").content("Thread")
+                .createdAt(LocalDateTime.now().plusSeconds(1)).build();
+        em.persist(root);
+        for (int i = 0; i < count; i++)
+            em.persist(Comment.builder().lesson(lesson).parent(root).username("reply").avatar("R")
+                    .content("Reply " + i).createdAt(LocalDateTime.of(2026, 10, 1, 9, 0)).build());
+        em.flush();
+        return root;
+    }
+
+    private void commentActor(Fixture f) {
+        org.mockito.Mockito.when(auth.current()).thenReturn(em.createQuery("select u from User u where u.username=:name", User.class)
+                .setParameter("name", f.user()).getSingleResult());
+    }
+
+    @Test void repliesUseFiveItemKeysetPagesAndSurviveCursorDeletionAndNewReplies() {
+        var f = seed(2); var root = replyThread(f.lesson(), 12); commentActor(f);
+        var first = service.getReplies(f.lesson(), root.getId(), null);
+        assertThat(first.content()).hasSize(5).extracting(CommentDto::getContent)
+                .containsExactly("Reply 0", "Reply 1", "Reply 2", "Reply 3", "Reply 4");
+        assertThat(first.hasMore()).isTrue();
+        // The cursor is a value, not a reference to a row which may be deleted.
+        em.remove(em.find(Comment.class, first.content().get(4).getId())); em.flush();
+        var second = service.getReplies(f.lesson(), root.getId(), first.nextCursor());
+        assertThat(second.content()).hasSize(5).extracting(CommentDto::getContent)
+                .containsExactly("Reply 5", "Reply 6", "Reply 7", "Reply 8", "Reply 9");
+        assertThat(second.hasMore()).isTrue();
+        em.persist(Comment.builder().lesson(root.getLesson()).parent(root).username("late").avatar("L")
+                .content("New reply").createdAt(LocalDateTime.of(2026, 10, 1, 9, 1)).build()); em.flush();
+        var last = service.getReplies(f.lesson(), root.getId(), second.nextCursor());
+        assertThat(last.content()).extracting(CommentDto::getContent).containsExactly("Reply 10", "Reply 11", "New reply");
+        assertThat(last.hasMore()).isFalse();
+        assertThat(last.nextCursor()).isNull();
+        assertThat(java.util.stream.Stream.of(first.content(), second.content(), last.content()).flatMap(List::stream)
+                .map(CommentDto::getId).toList()).doesNotHaveDuplicates();
+    }
+
+    @Test void replyPaginationRejectsMalformedCursorsAndForeignOrNestedRoots() {
+        var f = seed(2); var root = replyThread(f.lesson(), 1);
+        var other = seed(2); var foreign = replyThread(other.lesson(), 1); commentActor(f);
+        for (String cursor : List.of("", "!", "A".repeat(257), java.util.Base64.getUrlEncoder()
+                .encodeToString("2026-10-01T09:00|-1".getBytes(java.nio.charset.StandardCharsets.UTF_8))))
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.getReplies(f.lesson(), root.getId(), cursor))
+                    .isInstanceOf(com.bidv.coretraining.exception.BadRequestException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.getReplies(f.lesson(), foreign.getId(), null))
+                .isInstanceOf(com.bidv.coretraining.exception.ResourceNotFoundException.class);
+        var reply = em.createQuery("select c from Comment c where c.parent.id=:id", Comment.class)
+                .setParameter("id", root.getId()).getSingleResult();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.getReplies(f.lesson(), reply.getId(), null))
+                .isInstanceOf(com.bidv.coretraining.exception.ResourceNotFoundException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.getReplies(other.lesson(), foreign.getId(), null))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+    }
+
+    @Test void emptyAndExactlyFiveReplyThreadsHaveNoMorePages() {
+        var f = seed(2); var empty = replyThread(f.lesson(), 0); var full = replyThread(f.lesson(), 5); commentActor(f);
+        var noReplies = service.getReplies(f.lesson(), empty.getId(), null);
+        assertThat(noReplies.content()).isEmpty(); assertThat(noReplies.hasMore()).isFalse(); assertThat(noReplies.nextCursor()).isNull();
+        var five = service.getReplies(f.lesson(), full.getId(), null);
+        assertThat(five.content()).hasSize(5); assertThat(five.hasMore()).isFalse(); assertThat(five.nextCursor()).isNull();
+        assertThat(service.getComments(f.lesson(), 0, 20).content()).allSatisfy(thread -> {
+            assertThat(thread.getRepliesHasMore()).isFalse(); assertThat(thread.getReplyCursor()).isNull();
+        });
     }
 
     @Test
