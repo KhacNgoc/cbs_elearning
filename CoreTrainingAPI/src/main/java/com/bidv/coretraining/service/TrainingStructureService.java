@@ -916,8 +916,19 @@ public class TrainingStructureService {
         int programsCount = 0;
         int coursesCount = 0;
 
-        for (com.bidv.coretraining.controller.TrainingStructureController.BatchAllocationItem item : items) {
-            if (item == null || item.categoryType() == null || item.targetId() == null) continue;
+        // Process items in specificity order: domain first, then program, then individual courses
+        // so that specific child grant types override broader parent grant types.
+        List<com.bidv.coretraining.controller.TrainingStructureController.BatchAllocationItem> sortedItems = items.stream()
+                .filter(i -> i != null && i.categoryType() != null && i.targetId() != null)
+                .sorted(java.util.Comparator.comparingInt(i -> {
+                    String t = i.categoryType().trim().toLowerCase();
+                    if ("domain".equals(t)) return 1;
+                    if ("program".equals(t)) return 2;
+                    return 3;
+                }))
+                .toList();
+
+        for (com.bidv.coretraining.controller.TrainingStructureController.BatchAllocationItem item : sortedItems) {
             String type = item.categoryType().trim().toLowerCase();
             String grant = "MANDATORY".equalsIgnoreCase(item.grantType()) ? "MANDATORY" : "OPTIONAL";
             String targetId = item.targetId();
@@ -930,8 +941,8 @@ public class TrainingStructureService {
                 d.getUnitGrants().put(unit.getId(), grant);
                 domainsCount++;
 
-                List<TrainingProgram> domainPrograms = programs.findAll().stream()
-                        .filter(p -> p.getDomain() != null && p.getDomain().getId().equals(d.getId()) && !"DELETED".equals(p.getStatus()))
+                List<TrainingProgram> domainPrograms = programs.findByDomainId(d.getId()).stream()
+                        .filter(p -> !"DELETED".equals(p.getStatus()))
                         .toList();
                 for (TrainingProgram p : domainPrograms) {
                     TrainingProgram pToSave = programsToSave.computeIfAbsent(p.getId(), pid -> p);
