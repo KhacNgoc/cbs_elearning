@@ -302,16 +302,10 @@
               <div class="modal-unit-title-row">
                 <h3>Chi tiết Phân bổ Đào tạo</h3>
                 <span class="modal-unit-pill">{{ currentDetailUnit.name }}</span>
-                <span class="unit-type-tag" :class="currentDetailUnit.type === 'DEPARTMENT' ? 'dept' : 'branch'">
-                  {{ currentDetailUnit.type === 'DEPARTMENT' ? 'Phòng ban' : 'Chi nhánh / Hội sở' }}
-                </span>
                 <span v-if="totalPendingChanges > 0" class="badge-pending-changes">
                   ● Có {{ totalPendingChanges }} thay đổi chưa lưu
                 </span>
               </div>
-              <p class="modal-unit-subtitle">
-                Đổi hình thức hoặc gỡ bỏ các nội dung trên giao diện. Nhấn <strong>"Cập nhật"</strong> để xác nhận và lưu 1 lượt xuống hệ thống.
-              </p>
             </div>
           </div>
 
