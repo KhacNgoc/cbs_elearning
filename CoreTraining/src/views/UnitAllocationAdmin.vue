@@ -376,24 +376,17 @@
               </button>
             </div>
 
-            <!-- EXPAND/COLLAPSE ALL HELPERS FOR TREE VIEW -->
+            <!-- SINGLE EXPAND/COLLAPSE ALL TOGGLE -->
             <div v-if="detailViewMode === 'tree'" class="tree-expand-helpers">
               <button
                 type="button"
                 class="btn-expand-helper"
-                @click="expandAllDetail"
-                title="Mở rộng tất cả các cấp"
+                @click="toggleExpandAllDetail"
+                :title="isAnyDetailExpanded ? 'Thu gọn tất cả các cấp' : 'Mở rộng tất cả các cấp'"
               >
-                Mở rộng hết
-              </button>
-              <span class="helper-sep">/</span>
-              <button
-                type="button"
-                class="btn-expand-helper"
-                @click="collapseAllDetail"
-                title="Thu gọn tất cả các cấp"
-              >
-                Thu gọn hết
+                <ChevronUp v-if="isAnyDetailExpanded" :size="13" />
+                <ChevronDown v-else :size="13" />
+                <span>{{ isAnyDetailExpanded ? "Thu gọn tất cả" : "Mở rộng tất cả" }}</span>
               </button>
             </div>
 
@@ -838,6 +831,7 @@ import {
   ListOrdered,
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   X,
   FolderPlus,
   AlertTriangle,
@@ -934,6 +928,18 @@ function expandAllDetail() {
 function collapseAllDetail() {
   expandedDetailDomainIds.value.clear();
   expandedDetailProgramIds.value.clear();
+}
+
+const isAnyDetailExpanded = computed(
+  () => expandedDetailDomainIds.value.size > 0 || expandedDetailProgramIds.value.size > 0
+);
+
+function toggleExpandAllDetail() {
+  if (isAnyDetailExpanded.value) {
+    collapseAllDetail();
+  } else {
+    expandAllDetail();
+  }
 }
 
 interface StagedAllocationItem {

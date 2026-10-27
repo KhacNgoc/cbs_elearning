@@ -36,13 +36,15 @@
           </button>
         </div>
         <div class="toolbar-actions">
-          <button type="button" class="btn btn-ghost btn-sm" @click="expandAll">
-            <ChevronDown :size="14" />
-            <span>Mở rộng tất cả</span>
-          </button>
-          <button type="button" class="btn btn-ghost btn-sm" @click="collapseAll">
-            <ChevronRight :size="14" />
-            <span>Thu gọn</span>
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm btn-toggle-expand"
+            @click="toggleExpandAll"
+            :title="isAnyExpanded ? 'Thu gọn tất cả các cấp' : 'Mở rộng tất cả các cấp'"
+          >
+            <ChevronUp v-if="isAnyExpanded" :size="14" />
+            <ChevronDown v-else :size="14" />
+            <span>{{ isAnyExpanded ? "Thu gọn tất cả" : "Mở rộng tất cả" }}</span>
           </button>
         </div>
       </div>
@@ -279,6 +281,7 @@ import {
   BookOpen,
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   Check,
   Loader2,
   Building2,
@@ -398,6 +401,10 @@ const filteredDomains = computed(() => {
 });
 
 // Expand / Collapse
+const isAnyExpanded = computed(
+  () => expandedDomainIds.value.size > 0 || expandedProgramIds.value.size > 0
+);
+
 function expandAll() {
   expandedDomainIds.value = new Set(allDomains.value.map((d) => d.id));
   expandedProgramIds.value = new Set(allPrograms.value.map((p) => p.id));
@@ -406,6 +413,14 @@ function expandAll() {
 function collapseAll() {
   expandedDomainIds.value.clear();
   expandedProgramIds.value.clear();
+}
+
+function toggleExpandAll() {
+  if (isAnyExpanded.value) {
+    collapseAll();
+  } else {
+    expandAll();
+  }
 }
 
 function toggleDomainExpand(id: string) {
