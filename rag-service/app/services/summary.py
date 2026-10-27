@@ -61,3 +61,47 @@ Chỉ trả JSON hợp lệ đúng dạng: {"summary":"bản tóm tắt"}."""
     if not summary or "<think>" in summary.lower() or "</think>" in summary.lower():
         raise HTTPException(502, "Summary model returned an empty response")
     return SummaryResponse(summary=summary)
+
+
+async def summarize_lesson_diff(request: "LessonDiffSummaryRequest") -> "LessonDiffSummaryResponse":
+    from app.schemas import LessonDiffSummaryResponse
+    system_prompt = """Bạn là trợ lý đào tạo nội bộ chuyên nghiệp của ngân hàng BIDV.
+Nhiệm vụ của bạn: So sánh nội dung cũ và nội dung mới của bài học, sau đó viết 1 đến 2 câu tóm tắt thật ngắn gọn, súc tích (dưới 200 ký tự) về những điểm cốt lõi đã thay đổi để gửi thông báo cho học viên đã hoàn thành bài học này.
+Quy tắc:
+1. Tập trung vào: quy trình thay đổi, quy định mới, số liệu điều chỉnh, tài liệu bổ sung, câu hỏi kiểm tra cập nhật.
+2. Viết bằng tiếng Việt, văn phong thông báo trang trọng, rõ ràng.
+3. Nếu nội dung cũ rỗng hoặc không có gì thay đổi nhiều, ghi tóm tắt cập nhật kiến thức bài giảng.
+4. Không trả suy luận, thẻ think, giải thích hay markdown.
+5. Chỉ trả về JSON hợp lệ đúng dạng: {"summary":"câu tóm tắt ngắn gọn"}."""
+
+    prompt = f"""<lesson_title>{request.lesson_title}</lesson_title>
+<old_content>
+{request.old_content[:8000] if request.old_content else "(chưa có nội dung cũ)"}
+</old_content>
+<new_content>
+{request.new_content[:8000] if request.new_content else "(chưa có nội dung mới)"}
+</new_content>"""
+
+    try:
+        raw_summary = await infrastructure.ollama_chat(
+            config.SUMMARY_MODEL,
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            config.OLLAMA_SUMMARY_TIMEOUT_SECONDS,
+            json_schema=ollama_compatible_schema(
+                SummaryModelResult.model_json_schema()
+            ),
+            num_predict=config.OLLAMA_SUMMARY_NUM_PREDICT,
+        )
+        summary = SummaryModelResult.model_validate(
+            json.loads(strip_model_thinking(raw_summary))
+        ).summary.strip()
+        if summary and "<think>" not in summary.lower():
+            return LessonDiffSummaryResponse(summary=summary)
+    except Exception:
+        pass
+    return LessonDiffSummaryResponse(
+        summary=f"Cập nhật nội dung và tài liệu mới cho bài học {request.lesson_title}."
+    )

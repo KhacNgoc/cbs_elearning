@@ -22,6 +22,15 @@ public class TrainingStructureController {
         return service.catalog();
     }
 
+    @GetMapping("/admin/catalog/units/staff-count")
+    public Map<String, Object> countActiveStaffInUnits(
+            @RequestParam(name = "unitIds", required = false) Set<String> unitIds) {
+        long count = (unitIds == null || unitIds.isEmpty())
+                ? 0L
+                : service.countActiveStaffInUnitsNative(unitIds);
+        return Map.of("count", count);
+    }
+
     @GetMapping("/admin/training/next-code")
     public Map<String, Object> nextCode(
             @RequestParam(defaultValue = "program") String type,
@@ -89,6 +98,49 @@ public class TrainingStructureController {
             String grantType
     ) {}
 
+    public record BatchAllocationItem(
+            String categoryType,
+            String targetId,
+            String grantType
+    ) {}
+
+    public record UnitBatchAllocationRequest(
+            String unitId,
+            List<BatchAllocationItem> items
+    ) {}
+
+    public record BatchChangeItem(
+            String action,
+            String categoryType,
+            String targetId,
+            String grantType
+    ) {}
+
+    public record UnitBatchSyncRequest(
+            String unitId,
+            List<BatchChangeItem> changes
+    ) {}
+
+    @GetMapping("/admin/unit-allocations/directory")
+    public Map<String, Object> getUnitAllocationDirectory(
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "ALL") String type,
+            @RequestParam(defaultValue = "ALL") String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return service.getUnitAllocationDirectoryPaged(search, type, status, page, size);
+    }
+
+    @PostMapping("/admin/unit-allocations/batch-assign")
+    public Map<String, Object> batchAssignUnitAllocation(@RequestBody UnitBatchAllocationRequest request) {
+        return service.batchAssignUnitAllocation(request.unitId(), request.items());
+    }
+
+    @PostMapping("/admin/unit-allocations/batch-sync")
+    public Map<String, Object> batchSyncUnitAllocations(@RequestBody UnitBatchSyncRequest request) {
+        return service.batchSyncUnitAllocations(request.unitId(), request.changes());
+    }
+
     @PostMapping("/admin/unit-allocations/assign")
     public Map<String, Object> assignUnitAllocation(@RequestBody UnitAllocationAssignRequest request) {
         return service.assignUnitAllocation(
@@ -118,6 +170,14 @@ public class TrainingStructureController {
             @RequestParam String categoryType,
             @RequestParam String targetId) {
         return service.removeUnitAllocation(unitId, categoryType, targetId);
+    }
+
+    @GetMapping({"/admin/domains/paged", "/admin/domains", "/admin/training-domains/paged", "/admin/training/domains/paged"})
+    public java.util.Map<String, Object> domainsPaged(
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return service.adminDomainsPaged(search, page, size);
     }
 
     @GetMapping({"/admin/programs/paged", "/admin/programs/by-domain"})

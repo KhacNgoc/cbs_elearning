@@ -174,7 +174,7 @@
       <div class="role-form-toggles">
         <ToggleSwitch
           v-model="form.learnerRole"
-          label="Là học viên"
+          label="Role học viên"
           :disabled="busy"
         />
         <ToggleSwitch v-model="form.active" label="Đang hoạt động" />

@@ -35,6 +35,10 @@
                 v-if="item.type === 'COMMENT_REPLY'"
                 :size="18"
               />
+              <BookOpen
+                v-else-if="item.type === 'COURSE_CONTENT_UPDATED'"
+                :size="18"
+              />
               <UserRoundX v-else-if="item.type === 'ENROLLMENT_REJECTED'" :size="18" />
               <UserRoundCheck v-else :size="18" />
             </span>
@@ -83,6 +87,7 @@ import { useRouter } from "vue-router";
 import {
   Bell,
   BellOff,
+  BookOpen,
   CircleCheck,
   CircleAlert,
   Info,
@@ -347,6 +352,10 @@ onBeforeUnmount(() => {
   border-radius: 11px;
   background: var(--surface-e5f3ee);
   color: var(--ink-006747);
+}
+.notification-icon.COURSE_CONTENT_UPDATED {
+  background: rgba(245, 158, 11, 0.15);
+  color: #d97706;
 }
 .notification-icon.ENROLLMENT_REJECTED {
   background: var(--surface-fef2f2);

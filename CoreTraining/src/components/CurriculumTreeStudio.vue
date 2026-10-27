@@ -261,8 +261,8 @@
                         <ShieldCheck :size="11" />
                         {{ getCourseMandatoryUnits(course).length }} ĐV Bắt buộc
                       </span>
-                      <span class="status-pill" :class="course.status === 'PUBLISHED' ? 'published' : 'draft'">
-                        {{ course.status === 'PUBLISHED' ? 'Đã xuất bản' : 'Bản nháp' }}
+                      <span v-if="course.status === 'DRAFT'" class="status-pill draft">
+                        Bản nháp
                       </span>
                     </div>
 
@@ -711,12 +711,7 @@
 
             <!-- PHÂN HỆ CHO CẤP 1 (LĨNH VỰC) - CHO PHÉP CHỌN GỐC -->
             <div class="form-group" v-if="addModal.type === 'domain'">
-              <div class="code-label-row">
-                <label>Phân hệ nghiệp vụ (*):</label>
-                <span class="badge-module-hint" v-if="addModal.businessModule">
-                  Tiền tố mã: {{ getModulePrefix(addModal.type, addModal.businessModule) }}
-                </span>
-              </div>
+              <label>Phân hệ nghiệp vụ (*):</label>
               <select
                 v-model="addModal.businessModule"
                 class="form-control select-control module-select"
@@ -739,12 +734,7 @@
               class="form-group inherited-module-info"
               v-else
             >
-              <div class="code-label-row">
-                <label>Phân hệ nghiệp vụ:</label>
-                <span class="badge-module-hint" v-if="addModal.businessModule">
-                  Tiền tố mã: {{ getModulePrefix(addModal.type, addModal.businessModule) }}
-                </span>
-              </div>
+              <label>Phân hệ nghiệp vụ:</label>
               <div class="inherited-module-display">
                 <span class="module-chip-badge">{{ addModal.businessModule || "N/A" }}</span>
                 <span class="module-title-text">{{ getModuleName(addModal.businessModule) }}</span>
@@ -761,23 +751,13 @@
                 <input
                   v-model="addModal.code"
                   type="text"
-                  :placeholder="addModal.autoCode ? '(Hệ thống đang tự sinh mã...)' : 'Ví dụ: RMCT1, RMLV1...'"
+                  :placeholder="addModal.autoCode ? '(Hệ thống đang tự sinh mã...)' : 'Nhập mã định danh...'"
                   :disabled="addModal.autoCode"
                   :readonly="addModal.autoCode"
                   required
                   class="form-control code-input"
                   :class="{ 'is-auto': addModal.autoCode }"
                 />
-                <button
-                  v-if="addModal.autoCode"
-                  type="button"
-                  class="re-generate-btn"
-                  @click="reGenerateCode"
-                  title="Tạo lại mã tự động"
-                >
-                  <Sparkles :size="13" />
-                  <span>Sinh lại</span>
-                </button>
                 <button
                   type="button"
                   class="manual-edit-btn"
@@ -788,9 +768,6 @@
                   <span>{{ addModal.autoCode ? "Tự nhập" : "Khóa tự sinh" }}</span>
                 </button>
               </div>
-              <small class="form-hint" v-if="addModal.autoCode">
-                Mã định danh tuần tự chuẩn nghiệp vụ (Ví dụ: RMLV1, RMCT1, RMKH1, RMCH1, RMBH1...).
-              </small>
             </div>
 
             <div class="form-group">
@@ -960,7 +937,7 @@
               </button>
               <button type="submit" class="btn btn-primary" :disabled="submitting">
                 <Loader2 v-if="submitting" :size="14" class="spin-icon" />
-                <span>{{ submitting ? "Đang xử lý..." : (addModal.isEdit ? "Cập nhật & Lưu" : "Tạo mới & Đồng bộ") }}</span>
+                <span>{{ submitting ? "Đang xử lý..." : (addModal.isEdit ? "Cập nhật & Lưu" : "Tạo mới") }}</span>
               </button>
             </div>
           </div>
@@ -1031,7 +1008,6 @@ import {
   ExternalLink,
   FolderTree,
   Loader2,
-  Sparkles,
   Lock,
   Unlock,
   Building2,
@@ -1088,7 +1064,7 @@ const TRAINING_LEVELS = [
 const loading = ref(false);
 const submitting = ref(false);
 const searchQuery = ref("");
-const expandAll = ref(true);
+const expandAll = ref(false);
 const selectedId = ref<string>("");
 const expandedIds = ref<Set<string>>(new Set());
 
@@ -1667,15 +1643,9 @@ async function ensureModalAuxiliaryDataLoaded() {
   if (auxiliaryModalLoaded.value) return;
   auxiliaryModalLoaded.value = true;
   try {
-    const [optionsRes, allUsers] = await Promise.allSettled([
-      axiosClient.get("/api/admin/options/catalog"),
-      adminApi.getAllUsers(),
-    ]);
-    if (optionsRes.status === "fulfilled" && optionsRes.value.data?.units) {
-      unitsList.value = optionsRes.value.data.units;
-    }
-    if (allUsers.status === "fulfilled" && Array.isArray(allUsers.value)) {
-      systemUsers.value = allUsers.value;
+    const res = await axiosClient.get("/api/admin/options/catalog");
+    if (res.data?.units) {
+      unitsList.value = res.data.units;
     }
   } catch (e) {
     console.warn("Could not lazy-load auxiliary modal data:", e);
@@ -1899,12 +1869,6 @@ async function loadTreeData(expandTarget?: { type: string; id?: string; parentId
     } else if (expandTarget) {
       expandedIds.value.clear();
       expandOperatingBranch(expandTarget.type, expandTarget.id, expandTarget.parentId);
-    } else if (expandedIds.value.size === 0) {
-      // First initial load: only expand the first domain (zero course/chapter calls until program is expanded!)
-      const firstActiveDomain = domains.value.find((d) => d.status !== "DELETED");
-      if (firstActiveDomain) {
-        expandedIds.value.add(firstActiveDomain.id);
-      }
     }
   } catch (error) {
     console.error("Lỗi khi tải cấu trúc đào tạo:", error);
@@ -2674,6 +2638,8 @@ function stripLeadingIndexPrefix(text: string | undefined, prefixWord: string): 
   return text.replace(regex, "").trim() || text;
 }
 
+let nodeTooltipTimer: ReturnType<typeof setTimeout> | null = null;
+
 function showNodeTooltip(
   e: MouseEvent,
   type: "domain" | "program" | "course" | "chapter" | "lesson",
@@ -2681,61 +2647,69 @@ function showNodeTooltip(
   parentObj?: any
 ) {
   if (!rawObj) return;
-  const target = e.currentTarget as HTMLElement;
+  if (nodeTooltipTimer) clearTimeout(nodeTooltipTimer);
+
+  const target = (e.currentTarget || e.target) as HTMLElement;
   const rect = target.getBoundingClientRect();
 
-  const popoverWidth = 340;
-  let left = rect.left;
-  if (left + popoverWidth > window.innerWidth - 20) {
-    left = Math.max(16, window.innerWidth - popoverWidth - 20);
-  }
-  let top = rect.bottom + 8;
-  if (top + 180 > window.innerHeight) {
-    top = Math.max(16, rect.top - 160);
-  }
-
-  const typeLabelMap: Record<string, string> = {
-    domain: "Lĩnh vực đào tạo",
-    program: "Chương trình đào tạo",
-    course: "Khóa học nghiệp vụ",
-    chapter: "Chương học",
-    lesson: "Bài giảng",
-  };
-
-  let description = rawObj.description || rawObj.hint || "";
-  let extraMeta = "";
-  if (type === "chapter") {
-    const lessonCount = (rawObj.lessons || []).filter((l: any) => l.status !== "DELETED").length;
-    if (!description) {
-      description = `Chương học thuộc khóa "${parentObj?.name || "Khóa học hiện tại"}", bao gồm ${lessonCount} bài giảng nghiệp vụ.`;
+  nodeTooltipTimer = setTimeout(() => {
+    const popoverWidth = 340;
+    let left = rect.left;
+    if (left + popoverWidth > window.innerWidth - 20) {
+      left = Math.max(16, window.innerWidth - popoverWidth - 20);
     }
-    extraMeta = `${lessonCount} bài giảng`;
-  } else if (type === "lesson") {
-    const parts: string[] = [];
-    if (rawObj.videoUrl) parts.push("Video");
-    if (rawObj.documents?.length) parts.push(`${rawObj.documents.length} Tài liệu`);
-    if (rawObj.procedureSteps?.length) parts.push(`${rawObj.procedureSteps.length} Bước quy trình`);
-    if (rawObj.hasQuiz) parts.push("Quiz đánh giá");
-    extraMeta = parts.length ? parts.join(" • ") : "Chưa đính kèm học liệu";
-  }
+    let top = rect.bottom + 8;
+    if (top + 190 > window.innerHeight) {
+      top = Math.max(16, rect.top - 180);
+    }
 
-  hoverTooltip.value = {
-    visible: true,
-    x: left,
-    y: top,
-    type,
-    typeLabel: typeLabelMap[type] || "Nội dung đào tạo",
-    code: rawObj.code || "",
-    title: rawObj.name || rawObj.title || "",
-    description,
-    businessModule: rawObj.businessModule || parentObj?.businessModule || "",
-    level: type === "course" ? rawObj.level || "" : "",
-    deadline: type === "course" ? rawObj.completionDeadline || "" : "",
-    extraMeta,
-  };
+    const typeLabelMap: Record<string, string> = {
+      domain: "Lĩnh vực đào tạo",
+      program: "Chương trình đào tạo",
+      course: "Khóa học nghiệp vụ",
+      chapter: "Chương học",
+      lesson: "Bài giảng",
+    };
+
+    let description = rawObj.description || rawObj.hint || "";
+    let extraMeta = "";
+    if (type === "chapter") {
+      const lessonCount = (rawObj.lessons || []).filter((l: any) => l.status !== "DELETED").length;
+      if (!description) {
+        description = `Chương học thuộc khóa "${parentObj?.name || "Khóa học hiện tại"}", bao gồm ${lessonCount} bài giảng nghiệp vụ.`;
+      }
+      extraMeta = `${lessonCount} bài giảng`;
+    } else if (type === "lesson") {
+      const parts: string[] = [];
+      if (rawObj.videoUrl) parts.push("Video");
+      if (rawObj.documents?.length) parts.push(`${rawObj.documents.length} Tài liệu`);
+      if (rawObj.procedureSteps?.length) parts.push(`${rawObj.procedureSteps.length} Bước quy trình`);
+      if (rawObj.hasQuiz) parts.push("Quiz đánh giá");
+      extraMeta = parts.length ? parts.join(" • ") : "Chưa đính kèm học liệu";
+    }
+
+    hoverTooltip.value = {
+      visible: true,
+      x: left,
+      y: top,
+      type,
+      typeLabel: typeLabelMap[type] || "Nội dung đào tạo",
+      code: rawObj.code || "",
+      title: rawObj.name || rawObj.title || "",
+      description,
+      businessModule: rawObj.businessModule || parentObj?.businessModule || "",
+      level: type === "course" ? rawObj.level || "" : "",
+      deadline: type === "course" ? rawObj.completionDeadline || "" : "",
+      extraMeta,
+    };
+  }, 220);
 }
 
 function hideNodeTooltip() {
+  if (nodeTooltipTimer) {
+    clearTimeout(nodeTooltipTimer);
+    nodeTooltipTimer = null;
+  }
   hoverTooltip.value.visible = false;
 }
 
@@ -3020,7 +2994,7 @@ watch(
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
-  transition: all 0.14s ease;
+  transition: background-color 0.14s ease, border-color 0.14s ease;
   user-select: none;
   min-height: 38px;
 }
@@ -3117,6 +3091,7 @@ watch(
   align-items: center;
   gap: 0.5rem;
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -3292,16 +3267,22 @@ watch(
   font-weight: bold;
 }
 
-/* Hover Action Buttons */
+/* Hover Action Buttons (Reserve layout space to prevent horizontal jitter on hover) */
 .node-hover-actions {
-  display: none;
+  display: flex;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
   align-items: center;
   gap: 0.3rem;
   margin-left: 0.4rem;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
 }
 
 .tree-node:hover .node-hover-actions {
-  display: flex;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .hover-action-btn {
@@ -3797,7 +3778,17 @@ watch(
   font-weight: 600;
 }
 
-.badge-mandatory,
+.badge-mandatory {
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: rgba(245, 158, 11, 0.16);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  padding: 0.12rem 0.55rem;
+  border-radius: 9999px;
+  letter-spacing: 0.02em;
+}
+
 .badge-optional {
   font-size: 0.7rem;
   font-weight: 600;
@@ -3825,7 +3816,12 @@ watch(
   font-weight: 600;
 }
 
-.unit-chip.mandatory-chip,
+.unit-chip.mandatory-chip {
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #f59e0b;
+}
+
 .unit-chip.optional-chip {
   background: var(--primary-light);
   border: 1px solid var(--success-border);
@@ -4163,6 +4159,18 @@ watch(
 
 <!-- GLOBAL STYLE FOR TELEPORTED HOVER DESCRIPTION POPOVER (Light & Dark Mode Synchronized) -->
 <style>
+/* Tooltip Transition */
+.tooltip-fade-enter-active,
+.tooltip-fade-leave-active {
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.tooltip-fade-enter-from,
+.tooltip-fade-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
 .impeccable-desc-popover {
   position: fixed;
   z-index: 9999;
