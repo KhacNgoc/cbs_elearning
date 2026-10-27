@@ -937,7 +937,7 @@
               </button>
               <button type="submit" class="btn btn-primary" :disabled="submitting">
                 <Loader2 v-if="submitting" :size="14" class="spin-icon" />
-                <span>{{ submitting ? "Đang xử lý..." : (addModal.isEdit ? "Cập nhật & Lưu" : "Tạo mới & Đồng bộ") }}</span>
+                <span>{{ submitting ? "Đang xử lý..." : (addModal.isEdit ? "Cập nhật & Lưu" : "Tạo mới") }}</span>
               </button>
             </div>
           </div>
