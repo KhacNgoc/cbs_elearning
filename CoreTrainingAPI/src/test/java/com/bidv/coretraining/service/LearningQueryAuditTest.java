@@ -21,10 +21,99 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DataJpaTest(showSql = false, properties = { "spring.config.location=classpath:access-test.yml",
         "spring.sql.init.mode=never", "spring.jpa.properties.hibernate.generate_statistics=true" })
 @ContextConfiguration(classes = com.bidv.coretraining.CoreTrainingApiApplication.class)
-@Import({ LearningAccessService.class, LearningOutlineService.class, TrainingStructureService.class,
+@Import({ QuizContextService.class, QuizSummaryService.class, LearningAccessService.class, LearningOutlineService.class, TrainingStructureService.class,
         LearnerWorkspaceService.class, CourseMapperImpl.class, LessonProgressService.class, CourseServiceImpl.class,
         com.bidv.coretraining.service.impl.QuizServiceImpl.class, QuizMapperImpl.class, com.fasterxml.jackson.databind.ObjectMapper.class })
 class LearningQueryAuditTest {
+    @Autowired QuizContextService quizContext;
+
+    @Test
+    void quizContextLoadsOnlySelectedMetadataAndPreservesSettings() throws Exception {
+        var f = seed(12);
+        var lesson = em.find(Lesson.class, f.lesson());
+        lesson.getQuiz().setPassingScore(65);
+        lesson.getQuiz().setRequiredForProgress(false);
+        lesson.setTextBody("private content ".repeat(5000));
+        org.mockito.Mockito.when(auth.current()).thenReturn(User.builder().role("ROLE_ADMIN").build());
+        org.mockito.Mockito.when(auth.edit(f.course())).thenAnswer(i -> em.find(Course.class, f.course()));
+        reset();
+        var context = quizContext.context(null, f.lesson());
+        assertThat(context.id()).isEqualTo(f.course());
+        assertThat(context.lessons()).hasSize(1);
+        assertThat(context.lessons().get(0).quizPassingScore()).isEqualTo(65);
+        assertThat(context.lessons().get(0).quizRequired()).isFalse();
+        assertThat(context.adminActions().get("exams")).contains("read", "update");
+        String json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(context);
+        int bytes = json.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+        assertThat(bytes).isLessThan(1500);
+        System.out.printf("QUIZ_CONTEXT_AUDIT courseLessons=24 returnedLessons=%d bytes=%d%n", context.lessons().size(), bytes);
+        assertThat(json).doesNotContain("textBody", "private content", "documents", "comments", "procedureSteps");
+        var stats = emf.unwrap(SessionFactory.class).getStatistics();
+        for (var type : List.of(Lesson.class, LessonContent.class, Question.class, Quiz.class, Comment.class, LessonDocument.class))
+            assertThat(stats.getEntityStatistics(type.getName()).getLoadCount()).as(type.getSimpleName()).isZero();
+        assertThat(quizContext.context(f.course(), null).lessons()).hasSize(24);
+        org.mockito.Mockito.verify(auth, org.mockito.Mockito.atLeastOnce()).edit(f.course());
+    }
+
+    @Test
+    void quizContextChecksCourseScopeAndCourseOptionsDoNotLoadLessons() {
+        var f = seed(8);
+        org.mockito.Mockito.when(auth.current()).thenReturn(User.builder().role("ROLE_ADMIN").build());
+        org.mockito.Mockito.when(auth.editableCourses()).thenAnswer(i -> List.of(em.find(Course.class, f.course())));
+        org.mockito.Mockito.when(auth.edit(f.course())).thenThrow(new org.springframework.security.access.AccessDeniedException("denied"));
+        reset();
+        var options = quizContext.courses();
+        assertThat(options).hasSize(1);
+        assertThat(options.get(0).lessons()).isEmpty();
+        assertThat(emf.unwrap(SessionFactory.class).getStatistics().getEntityStatistics(Lesson.class.getName()).getLoadCount()).isZero();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> quizContext.context(null, f.lesson()))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> quizContext.context("foreign", f.lesson()))
+            .isInstanceOf(com.bidv.coretraining.exception.BadRequestException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> quizContext.context(null, null))
+            .isInstanceOf(com.bidv.coretraining.exception.BadRequestException.class);
+    }
+
+    @Autowired QuizSummaryService summaries;
+
+    @Test
+    void examSummariesAreScopedPagedAndNeverLoadQuestionBodies() {
+        var target = seed(8);
+        var other = seed(2);
+        var allowed = em.find(Course.class, target.course());
+        org.mockito.Mockito.when(auth.editableCourses()).thenReturn(List.of(allowed));
+        reset();
+        var first = summaries.list(null, "", 0, 5);
+        assertThat(first.content()).hasSize(5);
+        assertThat(first.totalElements()).isEqualTo(16);
+        assertThat(first.totalPages()).isEqualTo(4);
+        assertThat(first.content()).allSatisfy(row -> {
+            assertThat(row.courseId()).isEqualTo(target.course());
+            assertThat(row.questionCount()).isEqualTo(1L);
+            assertThat(row.passingScore()).isEqualTo(80);
+        });
+        var stats = emf.unwrap(SessionFactory.class).getStatistics();
+        assertThat(stats.getEntityStatistics(Question.class.getName()).getLoadCount()).isZero();
+        assertThat(stats.getEntityStatistics(LessonContent.class.getName()).getLoadCount()).isZero();
+        assertThat(stats.getPrepareStatementCount()).isLessThanOrEqualTo(2);
+        var second = summaries.list(null, "", 1, 5);
+        assertThat(second.content()).extracting(com.bidv.coretraining.dto.QuizSummaryDto::lessonId)
+                .doesNotContainAnyElementsOf(first.content().stream().map(com.bidv.coretraining.dto.QuizSummaryDto::lessonId).toList());
+        assertThat(summaries.list(other.course(), "", 0, 10).content()).isEmpty();
+        assertThat(summaries.list(null, "no match", 0, 10).totalElements()).isZero();
+        assertThat(summaries.list(null, "%", 0, 10).content()).isEmpty();
+        assertThat(summaries.list(target.course(), target.lesson(), 0, 10).content()).hasSize(1);
+    }
+
+    @Test
+    void emptyExamScopeDoesNotQueryQuestions() {
+        org.mockito.Mockito.when(auth.editableCourses()).thenReturn(List.of());
+        reset();
+        assertThat(summaries.list(null, "", 0, 10).content()).isEmpty();
+        assertThat(emf.unwrap(SessionFactory.class).getStatistics().getPrepareStatementCount()).isZero();
+        org.mockito.Mockito.verify(auth).requireOperation("exams", "read");
+    }
+
     @org.springframework.boot.test.mock.mockito.SpyBean
     com.bidv.coretraining.repository.LessonDocumentRepository documentRepository;
     @Autowired com.bidv.coretraining.service.impl.QuizServiceImpl quizService;

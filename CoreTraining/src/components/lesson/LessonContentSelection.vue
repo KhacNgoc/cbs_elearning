@@ -2,11 +2,17 @@
   <div class="form-group content-selection">
     <label id="lesson-content-types-label">Nội dung bài học</label>
     <details aria-labelledby="lesson-content-types-label">
-      <summary>{{ selected.length ? selected.map(type => labels[type]).join(', ') : 'Chọn nội dung bài học' }}</summary>
+      <summary aria-describedby="lesson-content-types-help">
+        <span class="content-selection-copy">
+          <span class="content-selection-action">Chọn nội dung bài học</span>
+          <span class="content-selection-value">{{ selected.length ? selected.map(type => labels[type]).join(', ') : 'Chưa chọn nội dung' }}</span>
+        </span>
+      </summary>
       <label v-for="type in types" :key="type" class="content-option">
         <input v-model="selected" type="checkbox" :value="type" :disabled="readOnly" /> {{ labels[type] }}
       </label>
     </details>
+    <small id="lesson-content-types-help" class="content-selection-help">Nhấn để mở danh sách. Có thể chọn nhiều mục.</small>
     <section v-if="selected.includes('SLIDE')" class="slide-editor" aria-label="Slide PowerPoint">
       <div class="slide-heading">
         <h2>Slide PowerPoint <span class="required-mark" aria-hidden="true">*</span></h2>
@@ -89,8 +95,18 @@ function formatFileSize(size?: number) {
 </script>
 <style scoped>
 .content-selection { margin: 1rem 0; }
-details { padding: .75rem; border: 1px solid var(--border-color); border-radius: 8px; }
-summary { cursor: pointer; }
+details { border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+summary { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 44px; padding: .65rem .85rem; cursor: pointer; list-style: none; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: ''; width: .45rem; height: .45rem; flex: 0 0 auto; margin-right: .2rem; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); }
+details[open] > summary::after { transform: rotate(225deg); }
+summary:hover { background: var(--bg-main); }
+summary:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -3px; }
+details[open] > summary { border-bottom: 1px solid var(--border-color); }
+.content-selection-copy { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+.content-selection-action { color: var(--text-main); font-weight: 600; }
+.content-selection-value { color: var(--text-main); overflow-wrap: anywhere; }
+.content-selection-help { display: block; margin-top: .35rem; color: var(--text-muted); font-size: var(--lesson-help-font-size, .75rem); line-height: 1.6; }
 .content-option { display: flex; gap: .5rem; padding: .6rem; }
 .slide-editor { margin-top: 1.25rem; }
 .slide-heading h2 { margin: 0 0 .2rem; font-size: 1rem; color: var(--text-main); }

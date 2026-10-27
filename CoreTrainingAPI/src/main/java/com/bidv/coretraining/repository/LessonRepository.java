@@ -8,6 +8,21 @@ import java.util.List;
 
 @Repository
 public interface LessonRepository extends JpaRepository<Lesson, String> {
+  @org.springframework.data.jpa.repository.Query("select l.course.id from Lesson l where l.id = :id")
+  java.util.Optional<String> findQuizCourseId(@org.springframework.data.repository.query.Param("id") String id);
+
+  @org.springframework.data.jpa.repository.Query("""
+      select new com.bidv.coretraining.dto.QuizLessonContextDto(l.id, l.title, l.course.id,
+        coalesce(q.passingScore, 80), coalesce(q.requiredForProgress, true))
+      from Lesson l join l.chapter ch left join l.quiz q
+      where l.course.id = :courseId and (:lessonId is null or l.id = :lessonId)
+        and l.status <> 'DELETED' and ch.status <> 'DELETED'
+      order by ch.chapterOrder, ch.id, l.lessonOrder, l.id
+      """)
+  List<com.bidv.coretraining.dto.QuizLessonContextDto> findQuizContext(
+      @org.springframework.data.repository.query.Param("courseId") String courseId,
+      @org.springframework.data.repository.query.Param("lessonId") String lessonId);
+
   @org.springframework.data.jpa.repository.Query("""
       select l.id as id, l.title as title, l.course.id as courseId, ch.id as chapterId, ch.status as chapterStatus,
         l.status as status, l.version as version, l.lessonOrder as lessonOrder,

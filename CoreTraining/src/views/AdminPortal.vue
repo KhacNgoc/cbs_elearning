@@ -2464,7 +2464,7 @@ const confirmModalAction = async () => {
 // ==========================================
 // LOAD ALL DATA
 // ==========================================
-const loadQuestions = async () => {
+async function loadQuestions() {
   const requests = courseStore.courses.flatMap((course) => [
     adminApi.getQuizQuestions(course.id),
     ...course.lessons.map((lesson) =>

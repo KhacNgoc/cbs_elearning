@@ -92,6 +92,33 @@ public class AdminController {
     }
 
     // Questions CRUD
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bidv.coretraining.service.QuizContextService quizContext;
+
+    @GetMapping("/quizzes/courses")
+    public java.util.List<com.bidv.coretraining.service.QuizContextService.Context> getQuizCourses() {
+        return quizContext.courses();
+    }
+
+    @GetMapping("/quizzes/context")
+    public com.bidv.coretraining.service.QuizContextService.Context getQuizContext(
+            @RequestParam(required = false) String courseId,
+            @RequestParam(required = false) String lessonId) {
+        return quizContext.context(courseId, lessonId);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bidv.coretraining.service.QuizSummaryService quizSummaries;
+
+    @GetMapping("/quizzes")
+    public com.bidv.coretraining.service.QuizSummaryService.Result getQuizSummaries(
+            @RequestParam(required = false) String courseId,
+            @RequestParam(defaultValue = "") String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return quizSummaries.list(courseId, search, page, size);
+    }
+
     @GetMapping("/quizzes/questions")
     public ResponseEntity<List<QuestionDto>> getQuizQuestions(
             @RequestParam String courseId,
