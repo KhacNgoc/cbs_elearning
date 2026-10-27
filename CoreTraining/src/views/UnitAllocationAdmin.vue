@@ -934,7 +934,7 @@ async function openDetailModal(unit: OrganizationUnit) {
   showDetailModal.value = true;
   await loadUnitCourses(unit.id);
   initStagedAllocations();
-  expandAllDetail();
+  collapseAllDetail();
 }
 
 function handleAttemptCloseDetail() {

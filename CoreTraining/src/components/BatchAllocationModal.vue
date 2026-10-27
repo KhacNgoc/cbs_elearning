@@ -396,8 +396,8 @@ async function loadTreeData() {
     allPrograms.value = (catalog.programs || []).filter((p) => p.status !== "DELETED");
     allCourses.value = (coursesList || []).filter((c) => c.status !== "DELETED");
 
-    // Domains open by default, programs collapsed (children rendered lazily)
-    expandedDomainIds.value = new Set(allDomains.value.map((d) => d.id));
+    // Default to completely collapsed
+    expandedDomainIds.value = new Set();
     expandedProgramIds.value = new Set();
   } catch (err) {
     console.error("Lỗi tải cây dữ liệu đào tạo:", err);
