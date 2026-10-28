@@ -101,8 +101,14 @@ public class TrainingStructureController {
     public record BatchAllocationItem(
             String categoryType,
             String targetId,
-            String grantType
-    ) {}
+            String grantType,
+            Boolean onlyUnallocated,
+            List<String> excludeIds
+    ) {
+        public BatchAllocationItem(String categoryType, String targetId, String grantType) {
+            this(categoryType, targetId, grantType, Boolean.TRUE, Collections.emptyList());
+        }
+    }
 
     public record UnitBatchAllocationRequest(
             String unitId,
@@ -176,8 +182,9 @@ public class TrainingStructureController {
     public java.util.Map<String, Object> domainsPaged(
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        return service.adminDomainsPaged(search, page, size);
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String unallocatedForUnitId) {
+        return service.adminDomainsPaged(search, page, size, unallocatedForUnitId);
     }
 
     @GetMapping({"/admin/programs/paged", "/admin/programs/by-domain"})
@@ -185,8 +192,9 @@ public class TrainingStructureController {
             @RequestParam(required = false) String domainId,
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        return service.adminProgramsPaged(domainId, search, page, size);
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String unallocatedForUnitId) {
+        return service.adminProgramsPaged(domainId, search, page, size, unallocatedForUnitId);
     }
 
     @GetMapping({"/admin/programs/{programId}/courses", "/admin/courses/by-program/{programId}"})
@@ -194,12 +202,18 @@ public class TrainingStructureController {
             @PathVariable String programId,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
-            @RequestParam(required = false) String search) {
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String unallocatedForUnitId) {
         if (page != null) {
             int pageSize = (size != null && size > 0) ? size : 10;
-            return service.adminCoursesByProgramPaged(programId, search, page, pageSize);
+            return service.adminCoursesByProgramPaged(programId, search, page, pageSize, unallocatedForUnitId);
         }
         return service.adminCoursesByProgram(programId);
+    }
+
+    @GetMapping("/admin/unit-allocations/{unitId}/allocated-items")
+    public List<Map<String, Object>> getUnitAllocatedItems(@PathVariable String unitId) {
+        return service.getUnitAllocatedItems(unitId);
     }
 
     @PostMapping("/admin/courses/batch-allocate")

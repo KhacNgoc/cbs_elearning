@@ -126,12 +126,12 @@
 
       <!-- DIRECTORY TABLE -->
       <div class="table-responsive">
-        <div v-if="loading && allDirectoryUnits.length === 0" class="table-loading-state">
+        <div v-if="loading && directoryUnits.length === 0" class="table-loading-state">
           <Loader2 :size="32" class="spin-icon" />
           <p>Đang tải danh sách đơn vị và phân bổ đào tạo...</p>
         </div>
 
-        <div v-else-if="filteredDirectoryUnits.length === 0" class="table-empty-state">
+        <div v-else-if="directoryUnits.length === 0" class="table-empty-state">
           <Building2 :size="36" class="empty-icon" />
           <h4>Không tìm thấy đơn vị phù hợp</h4>
           <p>Thử tìm kiếm với từ khóa khác hoặc điều chỉnh lại bộ lọc.</p>
@@ -146,7 +146,7 @@
               <th class="col-stat text-center">Chương trình</th>
               <th class="col-stat text-center">Khóa học</th>
               <th class="col-status text-center">Trạng thái</th>
-              <th class="col-actions text-right">Thao tác</th>
+              <th class="col-actions text-center">Thao tác</th>
             </tr>
           </thead>
           <tbody>
@@ -189,7 +189,7 @@
                   <span>{{ (u.isAllocated ?? isUnitAllocated(u.id)) ? 'Đã phân bổ' : 'Chưa phân bổ' }}</span>
                 </span>
               </td>
-              <td class="col-actions text-right">
+              <td class="col-actions text-center">
                 <div class="action-buttons-group">
                   <!-- PRIMARY ACTION: PHÂN BỔ ĐÀO TẠO (Mở Batch Allocation Modal) -->
                   <button
@@ -443,7 +443,6 @@
                     @click.stop="handleStagedToggleGrantType({ id: domainNode.id, type: 'domain' })"
                     :title="domainNode.isExplicit ? 'Bấm để đổi hình thức (cho lĩnh vực & các mục con)' : 'Đổi hình thức tất cả khóa con'"
                   >
-                    <span class="dot"></span>
                     <span>{{ domainNode.grantType === 'MANDATORY' ? 'Bắt buộc' : 'Tự chọn' }}</span>
                   </button>
 
@@ -508,7 +507,6 @@
                         @click.stop="handleStagedToggleGrantType({ id: progNode.id, type: 'program' })"
                         :title="progNode.isExplicit ? 'Bấm để đổi hình thức (cho chương trình & các khóa con)' : 'Đổi hình thức tất cả khóa con'"
                       >
-                        <span class="dot"></span>
                         <span>{{ progNode.grantType === 'MANDATORY' ? 'Bắt buộc' : 'Tự chọn' }}</span>
                       </button>
 
@@ -562,7 +560,6 @@
                           @click.stop="handleStagedToggleGrantType({ id: course.id, type: 'course' })"
                           title="Bấm để đổi hình thức"
                         >
-                          <span class="dot"></span>
                           <span>{{ course.grantType === 'MANDATORY' ? 'Bắt buộc' : 'Tự chọn' }}</span>
                         </button>
 
@@ -652,7 +649,6 @@
                       @click="handleStagedToggleGrantType(item)"
                       title="Bấm để đổi Bắt buộc / Tự chọn (in-memory)"
                     >
-                      <span class="dot"></span>
                       <span>{{ item.grantType === 'MANDATORY' ? 'Bắt buộc' : 'Tự chọn' }}</span>
                     </button>
                     <span v-else class="text-muted italic">—</span>
@@ -808,7 +804,7 @@ import {
 import { trainingApi } from "../api/trainingApi";
 import { axiosClient } from "../api/axiosClient";
 import { showToast } from "../utils/toast";
-import type { TrainingDomain, TrainingProgram, Course } from "../types";
+import type { TrainingDomain, TrainingProgram } from "../types";
 import type { OrganizationUnit } from "../types/organization";
 import BatchAllocationModal from "../components/BatchAllocationModal.vue";
 
@@ -819,8 +815,6 @@ const savingChanges = ref(false);
 const units = ref<OrganizationUnit[]>([]);
 const domains = ref<TrainingDomain[]>([]);
 const programs = ref<TrainingProgram[]>([]);
-const allCoursesList = ref<Course[]>([]);
-const unitAssignedCourses = ref<Course[]>([]);
 const loadingUnitCourses = ref(false);
 
 // Batch Modal State
@@ -840,8 +834,7 @@ function closeBatchModal() {
 async function handleBatchSaved() {
   await loadData();
   if (currentDetailUnit.value) {
-    await loadUnitCourses(currentDetailUnit.value.id);
-    initStagedAllocations();
+    await initStagedAllocations();
   }
 }
 
@@ -932,8 +925,7 @@ async function openDetailModal(unit: OrganizationUnit) {
   detailGrantFilter.value = "ALL";
   detailViewMode.value = "tree";
   showDetailModal.value = true;
-  await loadUnitCourses(unit.id);
-  initStagedAllocations();
+  await initStagedAllocations();
   collapseAllDetail();
 }
 
@@ -960,7 +952,6 @@ const typeFilter = ref<"ALL" | "BRANCH" | "DEPARTMENT">("ALL");
 const statusFilter = ref<"ALL" | "ALLOCATED" | "UNALLOCATED">("ALL");
 const unitDirectoryPage = ref(1);
 const unitDirectoryPageSize = 10;
-const allDirectoryUnits = ref<any[]>([]);
 const directoryStats = ref({
   totalCount: 0,
   allocatedCount: 0,
@@ -970,53 +961,42 @@ const directoryStats = ref({
 });
 const loadingDirectory = ref(false);
 
-const filteredDirectoryUnits = computed(() => {
-  let list = allDirectoryUnits.value;
-  const q = unitDirectoryQuery.value.trim().toLowerCase();
-  if (q) {
-    list = list.filter((u) =>
-      (u.name && u.name.toLowerCase().includes(q)) ||
-      (u.code && u.code.toLowerCase().includes(q))
-    );
-  }
-  if (typeFilter.value === "DEPARTMENT") {
-    list = list.filter((u) => u.type === "DEPARTMENT");
-  } else if (typeFilter.value === "BRANCH") {
-    list = list.filter((u) => u.type !== "DEPARTMENT");
-  }
+const directoryUnits = ref<any[]>([]);
+const pagedDirectoryUnits = computed(() => directoryUnits.value);
+const unitDirectoryTotalElements = ref(0);
+const unitDirectoryTotalPages = ref(1);
 
-  if (statusFilter.value === "ALLOCATED") {
-    list = list.filter((u) => u.isAllocated || (u.domainCount || 0) > 0 || (u.programCount || 0) > 0 || (u.courseCount || 0) > 0);
-  } else if (statusFilter.value === "UNALLOCATED") {
-    list = list.filter((u) => !u.isAllocated && (u.domainCount || 0) === 0 && (u.programCount || 0) === 0 && (u.courseCount || 0) === 0);
-  }
-  return list;
+let directorySearchTimer: any = null;
+watch(unitDirectoryQuery, () => {
+  if (directorySearchTimer) clearTimeout(directorySearchTimer);
+  directorySearchTimer = setTimeout(() => {
+    unitDirectoryPage.value = 1;
+    fetchDirectoryUnits();
+  }, 300);
 });
 
-const unitDirectoryTotalElements = computed(() => filteredDirectoryUnits.value.length);
-const unitDirectoryTotalPages = computed(() =>
-  Math.max(1, Math.ceil(unitDirectoryTotalElements.value / unitDirectoryPageSize))
-);
-
-const pagedDirectoryUnits = computed(() => {
-  const start = (unitDirectoryPage.value - 1) * unitDirectoryPageSize;
-  return filteredDirectoryUnits.value.slice(start, start + unitDirectoryPageSize);
-});
-
-watch([unitDirectoryQuery, typeFilter, statusFilter], () => {
+watch([typeFilter, statusFilter], () => {
   unitDirectoryPage.value = 1;
+  fetchDirectoryUnits();
+});
+
+watch(unitDirectoryPage, () => {
+  fetchDirectoryUnits();
 });
 
 async function fetchDirectoryUnits() {
   loadingDirectory.value = true;
   try {
     const res = await trainingApi.unitDirectoryPaged({
-      type: "ALL",
-      status: "ALL",
-      page: 0,
-      size: 1000,
+      search: unitDirectoryQuery.value.trim() || undefined,
+      type: typeFilter.value,
+      status: statusFilter.value,
+      page: unitDirectoryPage.value - 1,
+      size: unitDirectoryPageSize,
     });
-    allDirectoryUnits.value = res.items || [];
+    directoryUnits.value = res.items || [];
+    unitDirectoryTotalElements.value = res.totalElements || 0;
+    unitDirectoryTotalPages.value = Math.max(1, res.totalPages || 1);
     if (res.stats) {
       directoryStats.value = res.stats;
     }
@@ -1032,63 +1012,46 @@ const activeDomains = computed(() => domains.value.filter((d) => d.status !== "D
 const activePrograms = computed(() => programs.value.filter((p) => p.status !== "DELETED"));
 
 const allocatedUnitsCount = computed(() => {
-  return units.value.filter((u) => isUnitAllocated(u.id)).length;
+  return directoryStats.value.allocatedCount;
 });
 
 function isUnitAllocated(unitId: string): boolean {
-  return (
-    getUnitDomainCount(unitId) > 0 ||
-    getUnitProgramCount(unitId) > 0 ||
-    getUnitCourseCount(unitId) > 0
-  );
+  const found = directoryUnits.value.find((u) => u.id === unitId);
+  return !!found?.isAllocated;
 }
 
 function getUnitDomainCount(uId: string): number {
-  return activeDomains.value.filter(
-    (d) =>
-      d.mandatoryUnitIds?.includes(uId) ||
-      d.optionalUnitIds?.includes(uId) ||
-      d.unitIds?.includes(uId)
-  ).length;
+  const found = directoryUnits.value.find((u) => u.id === uId);
+  return found?.domainCount ?? 0;
 }
 
 function getUnitProgramCount(uId: string): number {
-  return activePrograms.value.filter(
-    (p) =>
-      p.mandatoryUnitIds?.includes(uId) ||
-      p.optionalUnitIds?.includes(uId) ||
-      p.unitIds?.includes(uId)
-  ).length;
+  const found = directoryUnits.value.find((u) => u.id === uId);
+  return found?.programCount ?? 0;
 }
 
 function getUnitCourseCount(uId: string): number {
-  return allCoursesList.value.filter(
-    (c) =>
-      c.status !== "DELETED" &&
-      (c.mandatoryUnitIds?.includes(uId) ||
-        c.optionalUnitIds?.includes(uId) ||
-        c.unitIds?.includes(uId))
-  ).length;
+  const found = directoryUnits.value.find((u) => u.id === uId);
+  return found?.courseCount ?? 0;
 }
-
-// Old in-memory filter replaced by server-side pagination & trigram search
 
 // Load metadata
 async function loadData() {
   loading.value = true;
   try {
-    const [catalog, optionsRes, coursesData] = await Promise.all([
-      trainingApi.catalog(),
-      axiosClient.get("/api/admin/options/catalog"),
-      trainingApi.courses(),
+    const [, optionsRes] = await Promise.all([
       fetchDirectoryUnits(),
+      axiosClient.get("/api/admin/options/catalog"),
     ]);
 
-    domains.value = catalog.domains || [];
-    programs.value = catalog.programs || [];
-    allCoursesList.value = coursesData || [];
     if (optionsRes.data?.units) {
       units.value = optionsRes.data.units;
+    }
+    if (optionsRes.data?.domains) {
+      domains.value = optionsRes.data.domains;
+    }
+    if (optionsRes.data?.programs) {
+      programs.value = optionsRes.data.programs;
     }
   } catch (err) {
     console.error("Lỗi khi tải dữ liệu phân bổ:", err);
@@ -1098,122 +1061,53 @@ async function loadData() {
   }
 }
 
-async function loadUnitCourses(unitId: string) {
-  loadingUnitCourses.value = true;
-  try {
-    const res = await axiosClient.get(`/api/admin/courses/by-unit/${unitId}`);
-    unitAssignedCourses.value = res.data || [];
-  } catch (err) {
-    console.error("Lỗi khi tải khóa học của đơn vị:", err);
-    unitAssignedCourses.value = [];
-  } finally {
-    loadingUnitCourses.value = false;
-  }
-}
-
 onMounted(() => {
   loadData();
 });
 
 // ================= STAGED IN-MEMORY ALLOCATION LOGIC =================
-function initStagedAllocations() {
+async function initStagedAllocations() {
   if (!currentDetailUnit.value) {
     stagedAllocations.value = [];
     return;
   }
   const uId = currentDetailUnit.value.id;
-  const list: StagedAllocationItem[] = [];
-
-  // 1. Domains
-  for (const d of activeDomains.value) {
-    const isMan = d.mandatoryUnitIds?.includes(uId);
-    const isOpt = d.optionalUnitIds?.includes(uId) || d.unitIds?.includes(uId);
-    if (isMan || isOpt) {
-      const grant = isMan ? "MANDATORY" : "OPTIONAL";
-      list.push({
-        id: d.id,
-        type: "domain",
-        typeLabel: "Lĩnh vực",
-        code: d.code,
-        name: d.name,
-        grantType: grant,
-        initialGrantType: grant,
+  loadingUnitCourses.value = true;
+  try {
+    const allocated = await trainingApi.unitAllocatedItems(uId);
+    const list: StagedAllocationItem[] = (allocated || []).map((item) => {
+      const typeLabel =
+        item.categoryType === "domain"
+          ? "Lĩnh vực"
+          : item.categoryType === "program"
+          ? "Chương trình"
+          : "Khóa học";
+      return {
+        id: item.targetId,
+        type: item.categoryType,
+        typeLabel,
+        code: item.code || "",
+        name: item.name || "",
+        grantType: item.grantType,
+        initialGrantType: item.grantType,
+        parentProgramName:
+          item.categoryType === "course"
+            ? (allocated.find((p) => p.categoryType === "program" && p.targetId === item.parentId)?.name ||
+               programs.value.find((p) => p.id === item.parentId)?.name)
+            : undefined,
+        programId: item.categoryType === "course" ? item.parentId : undefined,
+        domainId: item.categoryType === "program" ? item.parentId : undefined,
         isModified: false,
         isRemoved: false,
-      });
-    }
+      };
+    });
+    stagedAllocations.value = list;
+  } catch (err) {
+    console.error("Lỗi khi tải chi tiết phân bổ của đơn vị:", err);
+    stagedAllocations.value = [];
+  } finally {
+    loadingUnitCourses.value = false;
   }
-
-  // 2. Programs
-  for (const p of activePrograms.value) {
-    const isMan = p.mandatoryUnitIds?.includes(uId);
-    const isOpt = p.optionalUnitIds?.includes(uId) || p.unitIds?.includes(uId);
-    if (isMan || isOpt) {
-      const grant = isMan ? "MANDATORY" : "OPTIONAL";
-      list.push({
-        id: p.id,
-        type: "program",
-        typeLabel: "Chương trình",
-        code: p.code,
-        name: p.name,
-        grantType: grant,
-        initialGrantType: grant,
-        domainId: p.domainId,
-        isModified: false,
-        isRemoved: false,
-      });
-    }
-  }
-
-  // 3. Courses
-  for (const c of unitAssignedCourses.value) {
-    if (c.status === "DELETED") continue;
-    const isMan = c.mandatoryUnitIds?.includes(uId);
-    const isOpt = c.optionalUnitIds?.includes(uId) || c.unitIds?.includes(uId);
-    if (isMan || isOpt) {
-      const grant = isMan ? "MANDATORY" : "OPTIONAL";
-      const prog = programs.value.find((p) => p.id === c.programId);
-      list.push({
-        id: c.id,
-        type: "course",
-        typeLabel: "Khóa học",
-        code: c.code || "",
-        name: c.name,
-        grantType: grant,
-        initialGrantType: grant,
-        parentProgramName: prog?.name,
-        programId: c.programId,
-        domainId: prog?.domainId,
-        isModified: false,
-        isRemoved: false,
-      });
-    }
-  }
-
-  // 3b. Ensure courses of assigned programs are included in staged allocations
-  for (const item of list.filter((i) => i.type === "program")) {
-    const pCourses = allCoursesList.value.filter((c) => c.programId === item.id && c.status !== "DELETED");
-    for (const c of pCourses) {
-      if (!list.some((existing) => existing.type === "course" && existing.id === c.id)) {
-        list.push({
-          id: c.id,
-          type: "course",
-          typeLabel: "Khóa học",
-          code: c.code || "",
-          name: c.name,
-          grantType: item.grantType,
-          initialGrantType: item.grantType,
-          parentProgramName: item.name,
-          programId: item.id,
-          domainId: item.domainId,
-          isModified: false,
-          isRemoved: false,
-        });
-      }
-    }
-  }
-
-  stagedAllocations.value = list;
 }
 
 // In-Memory Actions
@@ -1736,8 +1630,7 @@ async function handleExecuteBatchSync() {
 
     showConfirmModal.value = false;
     await loadData();
-    await loadUnitCourses(currentDetailUnit.value.id);
-    initStagedAllocations();
+    await initStagedAllocations();
   } catch (err: any) {
     console.error("Lỗi khi lưu đồng bộ phân bổ:", err);
     const msg = err.response?.data?.message || err.message || "Lỗi khi cập nhật phân bổ";
@@ -1750,9 +1643,10 @@ async function handleExecuteBatchSync() {
 
 <style scoped>
 .unit-allocation-page {
-  padding: 1.5rem;
-  max-width: 1400px;
-  margin: 0 auto;
+  padding: 1.5rem 2rem;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -2011,10 +1905,24 @@ async function handleExecuteBatchSync() {
   background: #f8fafc;
 }
 
+.text-right {
+  text-align: right !important;
+}
+
+.text-center {
+  text-align: center !important;
+}
+
 .col-stt {
   width: 50px;
   color: #94a3b8;
   font-weight: 500;
+}
+
+.col-actions {
+  text-align: center !important;
+  width: 280px;
+  white-space: nowrap;
 }
 
 .unit-name-cell {
@@ -2109,6 +2017,7 @@ async function handleExecuteBatchSync() {
 .action-buttons-group {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
 }
 

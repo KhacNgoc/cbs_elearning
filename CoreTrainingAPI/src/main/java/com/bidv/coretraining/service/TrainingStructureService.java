@@ -748,8 +748,85 @@ public class TrainingStructureService {
                 .toList();
     }
 
-    public Map<String, Object> adminDomainsPaged(String search, int page, int size) {
+    public Map<String, Object> adminDomainsPaged(String search, int page, int size, String unallocatedForUnitId) {
         String query = (search != null && !search.isBlank()) ? search.trim() : null;
+        String unitId = (unallocatedForUnitId != null && !unallocatedForUnitId.isBlank()) ? unallocatedForUnitId.trim() : null;
+
+        if (unitId != null) {
+            int pageSize = size > 0 ? size : 10;
+            int offset = Math.max(0, page) * pageSize;
+            org.springframework.jdbc.core.namedparam.MapSqlParameterSource params =
+                    new org.springframework.jdbc.core.namedparam.MapSqlParameterSource()
+                            .addValue("search", query)
+                            .addValue("unitId", unitId)
+                            .addValue("limit", pageSize)
+                            .addValue("offset", offset);
+
+            String whereClause = " WHERE d.status <> 'DELETED' " +
+                    (query != null ? " AND (d.name ILIKE CONCAT('%', :search, '%') OR d.code ILIKE CONCAT('%', :search, '%') " +
+                                     "      OR EXISTS (SELECT 1 FROM training_programs p WHERE p.domain_id = d.id AND p.status <> 'DELETED' " +
+                                     "                 AND (p.name ILIKE CONCAT('%', :search, '%') OR p.code ILIKE CONCAT('%', :search, '%') " +
+                                     "                      OR EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED' " +
+                                     "                                 AND (c.name ILIKE CONCAT('%', :search, '%') OR c.code ILIKE CONCAT('%', :search, '%')))))) " : "") +
+                    " AND ( " +
+                    "   EXISTS ( " +
+                    "     SELECT 1 FROM training_programs p WHERE p.domain_id = d.id AND p.status <> 'DELETED' " +
+                    "     AND ( " +
+                    "       EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED' " +
+                    "               AND NOT EXISTS (SELECT 1 FROM course_unit_grants g WHERE g.course_id = c.id AND g.unit_id = :unitId)) " +
+                    "       OR (NOT EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED') " +
+                    "           AND NOT EXISTS (SELECT 1 FROM program_unit_grants g WHERE g.program_id = p.id AND g.unit_id = :unitId)) " +
+                    "     ) " +
+                    "   ) " +
+                    "   OR ( " +
+                    "     NOT EXISTS (SELECT 1 FROM training_programs p WHERE p.domain_id = d.id AND p.status <> 'DELETED') " +
+                    "     AND NOT EXISTS (SELECT 1 FROM domain_unit_grants g WHERE g.domain_id = d.id AND g.unit_id = :unitId) " +
+                    "   ) " +
+                    " ) ";
+
+            String countSql = "SELECT COUNT(*) FROM training_domains d " + whereClause;
+            Integer totalCount = namedParameterJdbcTemplate.queryForObject(countSql, params, Integer.class);
+            int totalElements = totalCount != null ? totalCount : 0;
+            int totalPages = (int) Math.ceil((double) totalElements / pageSize);
+
+            String dataSql = "SELECT d.id, d.code, d.name, d.description, d.status, d.business_module, d.seq_number, " +
+                    "  (SELECT COUNT(*) FROM training_programs p WHERE p.domain_id = d.id AND p.status <> 'DELETED' " +
+                    "   AND ( " +
+                    "     EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED' " +
+                    "             AND NOT EXISTS (SELECT 1 FROM course_unit_grants g WHERE g.course_id = c.id AND g.unit_id = :unitId)) " +
+                    "     OR (NOT EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED') " +
+                    "         AND NOT EXISTS (SELECT 1 FROM program_unit_grants g WHERE g.program_id = p.id AND g.unit_id = :unitId)) " +
+                    "   )) AS programs_count " +
+                    "FROM training_domains d " + whereClause +
+                    "ORDER BY d.code ASC, d.name ASC LIMIT :limit OFFSET :offset";
+
+            List<Map<String, Object>> items = namedParameterJdbcTemplate.query(dataSql, params, (rs, rowNum) -> {
+                Map<String, Object> m = new HashMap<>();
+                m.put("id", rs.getString("id"));
+                m.put("code", rs.getString("code"));
+                m.put("name", rs.getString("name"));
+                m.put("description", rs.getString("description"));
+                m.put("status", rs.getString("status"));
+                m.put("businessModule", rs.getString("business_module"));
+                m.put("seqNumber", rs.getInt("seq_number"));
+                m.put("programsCount", rs.getLong("programs_count"));
+                m.put("unitIds", Collections.emptyList());
+                m.put("mandatoryUnitIds", Collections.emptyList());
+                m.put("optionalUnitIds", Collections.emptyList());
+                m.put("allowedActions", List.of("VIEW", "EDIT"));
+                return m;
+            });
+
+            Map<String, Object> res = new HashMap<>();
+            res.put("items", items);
+            res.put("page", page);
+            res.put("size", pageSize);
+            res.put("totalElements", totalElements);
+            res.put("totalPages", Math.max(1, totalPages));
+            res.put("hasNext", (page + 1) < totalPages);
+            return res;
+        }
+
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
         org.springframework.data.domain.Page<TrainingDomain> result = domains.findByFilter(query, pageable);
         List<Map<String, Object>> items = result.getContent().stream()
@@ -782,8 +859,69 @@ public class TrainingStructureService {
         return res;
     }
 
-    public Map<String, Object> adminCoursesByProgramPaged(String programId, String search, int page, int size) {
+    public Map<String, Object> adminCoursesByProgramPaged(String programId, String search, int page, int size, String unallocatedForUnitId) {
         String query = (search != null && !search.isBlank()) ? search.trim() : null;
+        String unitId = (unallocatedForUnitId != null && !unallocatedForUnitId.isBlank()) ? unallocatedForUnitId.trim() : null;
+
+        if (unitId != null) {
+            int pageSize = size > 0 ? size : 10;
+            int offset = Math.max(0, page) * pageSize;
+            org.springframework.jdbc.core.namedparam.MapSqlParameterSource params =
+                    new org.springframework.jdbc.core.namedparam.MapSqlParameterSource()
+                            .addValue("programId", programId)
+                            .addValue("search", query)
+                            .addValue("unitId", unitId)
+                            .addValue("limit", pageSize)
+                            .addValue("offset", offset);
+
+            String whereClause = " WHERE c.program_id = :programId AND c.status <> 'DELETED' " +
+                    (query != null ? " AND (c.name ILIKE CONCAT('%', :search, '%') OR c.code ILIKE CONCAT('%', :search, '%')) " : "") +
+                    " AND NOT EXISTS (SELECT 1 FROM course_unit_grants g WHERE g.course_id = c.id AND g.unit_id = :unitId) ";
+
+            String countSql = "SELECT COUNT(*) FROM courses c " + whereClause;
+            Integer totalCount = namedParameterJdbcTemplate.queryForObject(countSql, params, Integer.class);
+            int totalElements = totalCount != null ? totalCount : 0;
+            int totalPages = (int) Math.ceil((double) totalElements / pageSize);
+
+            String dataSql = "SELECT c.id, c.code, c.name, c.description, c.status, c.business_module, c.level, c.seq_number, c.program_id, " +
+                    "  p.name AS program_name, p.domain_id, d.name AS domain_name " +
+                    "FROM courses c " +
+                    "LEFT JOIN training_programs p ON p.id = c.program_id " +
+                    "LEFT JOIN training_domains d ON d.id = p.domain_id " +
+                    whereClause +
+                    "ORDER BY c.code ASC, c.name ASC LIMIT :limit OFFSET :offset";
+
+            List<CourseDto> dtos = namedParameterJdbcTemplate.query(dataSql, params, (rs, rowNum) -> {
+                CourseDto.CourseDtoBuilder b = CourseDto.builder();
+                b.id(rs.getString("id"));
+                b.code(rs.getString("code"));
+                b.name(rs.getString("name"));
+                b.description(rs.getString("description"));
+                b.status(rs.getString("status"));
+                b.businessModule(rs.getString("business_module"));
+                b.level(rs.getString("level"));
+                b.seqNumber(rs.getInt("seq_number"));
+                b.programId(rs.getString("program_id"));
+                b.programName(rs.getString("program_name"));
+                b.domainId(rs.getString("domain_id"));
+                b.domainName(rs.getString("domain_name"));
+                b.unitIds(Collections.emptySet());
+                b.mandatoryUnitIds(Collections.emptySet());
+                b.optionalUnitIds(Collections.emptySet());
+                b.allowedActions(java.util.Set.of("VIEW", "EDIT"));
+                return b.build();
+            });
+
+            Map<String, Object> res = new HashMap<>();
+            res.put("items", dtos);
+            res.put("page", page);
+            res.put("size", pageSize);
+            res.put("totalElements", totalElements);
+            res.put("totalPages", Math.max(1, totalPages));
+            res.put("hasNext", (page + 1) < totalPages);
+            return res;
+        }
+
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
         org.springframework.data.domain.Page<Course> result = courses.findByProgramIdWithFilter(programId, query, pageable);
         List<CourseDto> dtos = result.getContent().stream()
@@ -800,9 +938,74 @@ public class TrainingStructureService {
         return res;
     }
 
-    public Map<String, Object> adminProgramsPaged(String domainId, String search, int page, int size) {
+    public Map<String, Object> adminProgramsPaged(String domainId, String search, int page, int size, String unallocatedForUnitId) {
         String query = (search != null && !search.isBlank()) ? search.trim() : null;
         String dId = (domainId != null && !domainId.isBlank()) ? domainId.trim() : null;
+        String unitId = (unallocatedForUnitId != null && !unallocatedForUnitId.isBlank()) ? unallocatedForUnitId.trim() : null;
+
+        if (unitId != null) {
+            int pageSize = size > 0 ? size : 10;
+            int offset = Math.max(0, page) * pageSize;
+            org.springframework.jdbc.core.namedparam.MapSqlParameterSource params =
+                    new org.springframework.jdbc.core.namedparam.MapSqlParameterSource()
+                            .addValue("domainId", dId)
+                            .addValue("search", query)
+                            .addValue("unitId", unitId)
+                            .addValue("limit", pageSize)
+                            .addValue("offset", offset);
+
+            String whereClause = " WHERE p.status <> 'DELETED' " +
+                    (dId != null ? " AND p.domain_id = :domainId " : "") +
+                    (query != null ? " AND (p.name ILIKE CONCAT('%', :search, '%') OR p.code ILIKE CONCAT('%', :search, '%') " +
+                                     "      OR EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED' " +
+                                     "                 AND (c.name ILIKE CONCAT('%', :search, '%') OR c.code ILIKE CONCAT('%', :search, '%')))) " : "") +
+                    " AND ( " +
+                    "   EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED' " +
+                    "           AND NOT EXISTS (SELECT 1 FROM course_unit_grants g WHERE g.course_id = c.id AND g.unit_id = :unitId)) " +
+                    "   OR (NOT EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED') " +
+                    "       AND NOT EXISTS (SELECT 1 FROM program_unit_grants g WHERE g.program_id = p.id AND g.unit_id = :unitId)) " +
+                    " ) ";
+
+            String countSql = "SELECT COUNT(*) FROM training_programs p " + whereClause;
+            Integer totalCount = namedParameterJdbcTemplate.queryForObject(countSql, params, Integer.class);
+            int totalElements = totalCount != null ? totalCount : 0;
+            int totalPages = (int) Math.ceil((double) totalElements / pageSize);
+
+            String dataSql = "SELECT p.id, p.domain_id, p.code, p.name, p.description, p.status, p.business_module, p.level, p.seq_number, " +
+                    "  (SELECT COUNT(*) FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED' " +
+                    "   AND NOT EXISTS (SELECT 1 FROM course_unit_grants g WHERE g.course_id = c.id AND g.unit_id = :unitId)) AS courses_count " +
+                    "FROM training_programs p " + whereClause +
+                    "ORDER BY p.code ASC, p.name ASC LIMIT :limit OFFSET :offset";
+
+            List<Map<String, Object>> dtos = namedParameterJdbcTemplate.query(dataSql, params, (rs, rowNum) -> {
+                Map<String, Object> m = new HashMap<>();
+                m.put("id", rs.getString("id"));
+                m.put("domainId", rs.getString("domain_id"));
+                m.put("code", rs.getString("code"));
+                m.put("name", rs.getString("name"));
+                m.put("description", rs.getString("description"));
+                m.put("status", rs.getString("status"));
+                m.put("businessModule", rs.getString("business_module"));
+                m.put("level", rs.getString("level"));
+                m.put("seqNumber", rs.getInt("seq_number"));
+                m.put("coursesCount", rs.getLong("courses_count"));
+                m.put("unitIds", Collections.emptyList());
+                m.put("mandatoryUnitIds", Collections.emptyList());
+                m.put("optionalUnitIds", Collections.emptyList());
+                m.put("allowedActions", List.of("VIEW", "EDIT"));
+                return m;
+            });
+
+            Map<String, Object> res = new HashMap<>();
+            res.put("items", dtos);
+            res.put("page", page);
+            res.put("size", pageSize);
+            res.put("totalElements", totalElements);
+            res.put("totalPages", Math.max(1, totalPages));
+            res.put("hasNext", (page + 1) < totalPages);
+            return res;
+        }
+
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
         org.springframework.data.domain.Page<TrainingProgram> result = programs.findByDomainIdWithFilter(dId, query, pageable);
         List<Map<String, Object>> dtos = result.getContent().stream()
@@ -836,6 +1039,35 @@ public class TrainingStructureService {
         res.put("totalPages", result.getTotalPages());
         res.put("hasNext", result.hasNext());
         return res;
+    }
+
+    public List<Map<String, Object>> getUnitAllocatedItems(String unitId) {
+        String sql = """
+            SELECT 'domain' AS category_type, dug.domain_id AS target_id, dug.grant_type, d.code, d.name, NULL AS parent_id
+            FROM domain_unit_grants dug
+            JOIN training_domains d ON d.id = dug.domain_id
+            WHERE dug.unit_id = :unitId AND d.status <> 'DELETED'
+            UNION ALL
+            SELECT 'program' AS category_type, pug.program_id AS target_id, pug.grant_type, p.code, p.name, p.domain_id AS parent_id
+            FROM program_unit_grants pug
+            JOIN training_programs p ON p.id = pug.program_id
+            WHERE pug.unit_id = :unitId AND p.status <> 'DELETED'
+            UNION ALL
+            SELECT 'course' AS category_type, cug.course_id AS target_id, cug.grant_type, c.code, c.name, c.program_id AS parent_id
+            FROM course_unit_grants cug
+            JOIN courses c ON c.id = cug.course_id
+            WHERE cug.unit_id = :unitId AND c.status <> 'DELETED'
+        """;
+        return namedParameterJdbcTemplate.query(sql, Map.of("unitId", unitId), (rs, rowNum) -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("categoryType", rs.getString("category_type"));
+            map.put("targetId", rs.getString("target_id"));
+            map.put("grantType", rs.getString("grant_type"));
+            map.put("code", rs.getString("code"));
+            map.put("name", rs.getString("name"));
+            map.put("parentId", rs.getString("parent_id"));
+            return map;
+        });
     }
 
     public void allocateCoursesToUnit(String unitId, String grantType, String programId, boolean allInProgram, List<String> courseIds) {
@@ -963,19 +1195,15 @@ public class TrainingStructureService {
 
         Set<String> mandatoryCourseIds = new HashSet<>();
         Set<String> optionalCourseIds = new HashSet<>();
-        Map<String, Course> coursesToSave = new HashMap<>();
-        Map<String, TrainingProgram> programsToSave = new HashMap<>();
-        Map<String, TrainingDomain> domainsToSave = new HashMap<>();
+        Set<String> allAffectedCourseIds = new HashSet<>();
 
         int domainsCount = 0;
         int programsCount = 0;
         int coursesCount = 0;
 
-        // Process items in specificity order: domain first, then program, then individual courses
-        // so that specific child grant types override broader parent grant types.
         List<com.bidv.coretraining.controller.TrainingStructureController.BatchAllocationItem> sortedItems = items.stream()
                 .filter(i -> i != null && i.categoryType() != null && i.targetId() != null)
-                .sorted(java.util.Comparator.comparingInt(i -> {
+                .sorted(Comparator.comparingInt(i -> {
                     String t = i.categoryType().trim().toLowerCase();
                     if ("domain".equals(t)) return 1;
                     if ("program".equals(t)) return 2;
@@ -986,100 +1214,151 @@ public class TrainingStructureService {
         for (com.bidv.coretraining.controller.TrainingStructureController.BatchAllocationItem item : sortedItems) {
             String type = item.categoryType().trim().toLowerCase();
             String grant = "MANDATORY".equalsIgnoreCase(item.grantType()) ? "MANDATORY" : "OPTIONAL";
-            String targetId = item.targetId();
+            String targetId = item.targetId().trim();
+            boolean onlyUnallocated = item.onlyUnallocated() == null || item.onlyUnallocated();
+            List<String> excludeIds = (item.excludeIds() != null) ? item.excludeIds() : Collections.emptyList();
+
+            org.springframework.jdbc.core.namedparam.MapSqlParameterSource p =
+                    new org.springframework.jdbc.core.namedparam.MapSqlParameterSource()
+                            .addValue("unitId", unit.getId())
+                            .addValue("targetId", targetId)
+                            .addValue("grant", grant)
+                            .addValue("excludeIds", excludeIds.isEmpty() ? List.of("__NONE__") : excludeIds);
 
             if ("domain".equals(type)) {
-                TrainingDomain d = domainsToSave.computeIfAbsent(targetId, id ->
-                        domains.findById(id).orElseThrow(() -> new ResourceNotFoundException("Domain", "id", id)));
-                d.getUnits().add(unit);
-                if (d.getUnitGrants() == null) d.setUnitGrants(new HashMap<>());
-                d.getUnitGrants().put(unit.getId(), grant);
+                namedParameterJdbcTemplate.update(
+                        "INSERT INTO domain_unit_grants (domain_id, unit_id, grant_type) " +
+                        "VALUES (:targetId, :unitId, :grant) " +
+                        "ON CONFLICT (domain_id, unit_id) DO UPDATE SET grant_type = EXCLUDED.grant_type", p);
+                namedParameterJdbcTemplate.update(
+                        "INSERT INTO training_domain_units (domain_id, unit_id) " +
+                        "VALUES (:targetId, :unitId) ON CONFLICT DO NOTHING", p);
                 domainsCount++;
 
-                List<TrainingProgram> domainPrograms = programs.findByDomainId(d.getId()).stream()
-                        .filter(p -> !"DELETED".equals(p.getStatus()))
-                        .toList();
-                for (TrainingProgram p : domainPrograms) {
-                    TrainingProgram pToSave = programsToSave.computeIfAbsent(p.getId(), pid -> p);
-                    pToSave.getUnits().add(unit);
-                    if (pToSave.getUnitGrants() == null) pToSave.setUnitGrants(new HashMap<>());
-                    pToSave.getUnitGrants().put(unit.getId(), grant);
+                String progSql = onlyUnallocated
+                        ? "INSERT INTO program_unit_grants (program_id, unit_id, grant_type) " +
+                          "SELECT p.id, :unitId, :grant FROM training_programs p " +
+                          "WHERE p.domain_id = :targetId AND p.status <> 'DELETED' " +
+                          "ON CONFLICT (program_id, unit_id) DO NOTHING"
+                        : "INSERT INTO program_unit_grants (program_id, unit_id, grant_type) " +
+                          "SELECT p.id, :unitId, :grant FROM training_programs p " +
+                          "WHERE p.domain_id = :targetId AND p.status <> 'DELETED' " +
+                          "ON CONFLICT (program_id, unit_id) DO UPDATE SET grant_type = EXCLUDED.grant_type";
+                namedParameterJdbcTemplate.update(progSql, p);
+                namedParameterJdbcTemplate.update(
+                        "INSERT INTO training_program_units (program_id, unit_id) " +
+                        "SELECT p.id, :unitId FROM training_programs p WHERE p.domain_id = :targetId AND p.status <> 'DELETED' " +
+                        "ON CONFLICT DO NOTHING", p);
 
-                    List<Course> pCourses = courses.findByProgramIdAndStatusNot(p.getId(), "DELETED");
-                    for (Course c : pCourses) {
-                        Course cToSave = coursesToSave.computeIfAbsent(c.getId(), cid -> c);
-                        if (cToSave.getUnitGrants() == null) cToSave.setUnitGrants(new HashMap<>());
-                        cToSave.getUnitGrants().put(unit.getId(), grant);
-                        if ("MANDATORY".equals(grant)) {
-                            mandatoryCourseIds.add(cToSave.getId());
-                            optionalCourseIds.remove(cToSave.getId());
-                        } else {
-                            optionalCourseIds.add(cToSave.getId());
-                            mandatoryCourseIds.remove(cToSave.getId());
-                        }
+                String findCoursesSql = onlyUnallocated
+                        ? "SELECT c.id FROM courses c JOIN training_programs p ON c.program_id = p.id " +
+                          "WHERE p.domain_id = :targetId AND c.status <> 'DELETED' AND c.id NOT IN (:excludeIds) " +
+                          "AND NOT EXISTS (SELECT 1 FROM course_unit_grants g WHERE g.course_id = c.id AND g.unit_id = :unitId)"
+                        : "SELECT c.id FROM courses c JOIN training_programs p ON c.program_id = p.id " +
+                          "WHERE p.domain_id = :targetId AND c.status <> 'DELETED' AND c.id NOT IN (:excludeIds)";
+                List<String> curCourseIds = namedParameterJdbcTemplate.queryForList(findCoursesSql, p, String.class);
+
+                if (!curCourseIds.isEmpty()) {
+                    org.springframework.jdbc.core.namedparam.MapSqlParameterSource cp =
+                            new org.springframework.jdbc.core.namedparam.MapSqlParameterSource()
+                                    .addValue("unitId", unit.getId())
+                                    .addValue("grant", grant)
+                                    .addValue("cIds", curCourseIds);
+                    namedParameterJdbcTemplate.update(
+                            "INSERT INTO course_unit_grants (course_id, unit_id, grant_type) " +
+                            "SELECT c.id, :unitId, :grant FROM courses c WHERE c.id IN (:cIds) " +
+                            "ON CONFLICT (course_id, unit_id) DO UPDATE SET grant_type = EXCLUDED.grant_type", cp);
+                    allAffectedCourseIds.addAll(curCourseIds);
+                    if ("MANDATORY".equals(grant)) {
+                        mandatoryCourseIds.addAll(curCourseIds);
+                        optionalCourseIds.removeAll(curCourseIds);
+                    } else {
+                        optionalCourseIds.addAll(curCourseIds);
+                        mandatoryCourseIds.removeAll(curCourseIds);
                     }
                 }
             } else if ("program".equals(type)) {
-                TrainingProgram p = programsToSave.computeIfAbsent(targetId, id ->
-                        programs.findById(id).orElseThrow(() -> new ResourceNotFoundException("Program", "id", id)));
-                p.getUnits().add(unit);
-                if (p.getUnitGrants() == null) p.setUnitGrants(new HashMap<>());
-                p.getUnitGrants().put(unit.getId(), grant);
-                if (p.getDomain() != null) {
-                    TrainingDomain d = domainsToSave.computeIfAbsent(p.getDomain().getId(), did -> p.getDomain());
-                    d.getUnits().add(unit);
-                }
+                namedParameterJdbcTemplate.update(
+                        "INSERT INTO program_unit_grants (program_id, unit_id, grant_type) " +
+                        "VALUES (:targetId, :unitId, :grant) " +
+                        "ON CONFLICT (program_id, unit_id) DO UPDATE SET grant_type = EXCLUDED.grant_type", p);
+                namedParameterJdbcTemplate.update(
+                        "INSERT INTO training_program_units (program_id, unit_id) " +
+                        "VALUES (:targetId, :unitId) ON CONFLICT DO NOTHING", p);
+                namedParameterJdbcTemplate.update(
+                        "INSERT INTO training_domain_units (domain_id, unit_id) " +
+                        "SELECT p.domain_id, :unitId FROM training_programs p WHERE p.id = :targetId " +
+                        "ON CONFLICT DO NOTHING", p);
                 programsCount++;
 
-                List<Course> pCourses = courses.findByProgramIdAndStatusNot(p.getId(), "DELETED");
-                for (Course c : pCourses) {
-                    Course cToSave = coursesToSave.computeIfAbsent(c.getId(), cid -> c);
-                    if (cToSave.getUnitGrants() == null) cToSave.setUnitGrants(new HashMap<>());
-                    cToSave.getUnitGrants().put(unit.getId(), grant);
+                String findCoursesSql = onlyUnallocated
+                        ? "SELECT c.id FROM courses c WHERE c.program_id = :targetId AND c.status <> 'DELETED' " +
+                          "AND c.id NOT IN (:excludeIds) " +
+                          "AND NOT EXISTS (SELECT 1 FROM course_unit_grants g WHERE g.course_id = c.id AND g.unit_id = :unitId)"
+                        : "SELECT c.id FROM courses c WHERE c.program_id = :targetId AND c.status <> 'DELETED' " +
+                          "AND c.id NOT IN (:excludeIds)";
+                List<String> curCourseIds = namedParameterJdbcTemplate.queryForList(findCoursesSql, p, String.class);
+
+                if (!curCourseIds.isEmpty()) {
+                    org.springframework.jdbc.core.namedparam.MapSqlParameterSource cp =
+                            new org.springframework.jdbc.core.namedparam.MapSqlParameterSource()
+                                    .addValue("unitId", unit.getId())
+                                    .addValue("grant", grant)
+                                    .addValue("cIds", curCourseIds);
+                    namedParameterJdbcTemplate.update(
+                            "INSERT INTO course_unit_grants (course_id, unit_id, grant_type) " +
+                            "SELECT c.id, :unitId, :grant FROM courses c WHERE c.id IN (:cIds) " +
+                            "ON CONFLICT (course_id, unit_id) DO UPDATE SET grant_type = EXCLUDED.grant_type", cp);
+                    allAffectedCourseIds.addAll(curCourseIds);
                     if ("MANDATORY".equals(grant)) {
-                        mandatoryCourseIds.add(cToSave.getId());
-                        optionalCourseIds.remove(cToSave.getId());
+                        mandatoryCourseIds.addAll(curCourseIds);
+                        optionalCourseIds.removeAll(curCourseIds);
                     } else {
-                        optionalCourseIds.add(cToSave.getId());
-                        mandatoryCourseIds.remove(cToSave.getId());
+                        optionalCourseIds.addAll(curCourseIds);
+                        mandatoryCourseIds.removeAll(curCourseIds);
                     }
                 }
             } else if ("course".equals(type)) {
-                Course c = coursesToSave.computeIfAbsent(targetId, id ->
-                        courses.findById(id).orElseThrow(() -> new ResourceNotFoundException("Course", "id", id)));
-                if (!"DELETED".equals(c.getStatus())) {
-                    if (c.getUnitGrants() == null) c.setUnitGrants(new HashMap<>());
-                    c.getUnitGrants().put(unit.getId(), grant);
-                    if (c.getProgram() != null) {
-                        TrainingProgram p = programsToSave.computeIfAbsent(c.getProgram().getId(), pid -> c.getProgram());
-                        p.getUnits().add(unit);
-                        if (p.getDomain() != null) {
-                            TrainingDomain d = domainsToSave.computeIfAbsent(p.getDomain().getId(), did -> p.getDomain());
-                            d.getUnits().add(unit);
-                        }
-                    }
-                    coursesCount++;
-                    if ("MANDATORY".equals(grant)) {
-                        mandatoryCourseIds.add(c.getId());
-                        optionalCourseIds.remove(c.getId());
-                    } else {
-                        optionalCourseIds.add(c.getId());
-                        mandatoryCourseIds.remove(c.getId());
-                    }
+                namedParameterJdbcTemplate.update(
+                        "INSERT INTO course_unit_grants (course_id, unit_id, grant_type) " +
+                        "VALUES (:targetId, :unitId, :grant) " +
+                        "ON CONFLICT (course_id, unit_id) DO UPDATE SET grant_type = EXCLUDED.grant_type", p);
+                namedParameterJdbcTemplate.update(
+                        "INSERT INTO training_program_units (program_id, unit_id) " +
+                        "SELECT c.program_id, :unitId FROM courses c WHERE c.id = :targetId " +
+                        "ON CONFLICT DO NOTHING", p);
+                namedParameterJdbcTemplate.update(
+                        "INSERT INTO training_domain_units (domain_id, unit_id) " +
+                        "SELECT p.domain_id, :unitId FROM courses c JOIN training_programs p ON c.program_id = p.id " +
+                        "WHERE c.id = :targetId ON CONFLICT DO NOTHING", p);
+
+                coursesCount++;
+                allAffectedCourseIds.add(targetId);
+                if ("MANDATORY".equals(grant)) {
+                    mandatoryCourseIds.add(targetId);
+                    optionalCourseIds.remove(targetId);
+                } else {
+                    optionalCourseIds.add(targetId);
+                    mandatoryCourseIds.remove(targetId);
                 }
             }
         }
 
-        domains.saveAll(domainsToSave.values());
-        programs.saveAll(programsToSave.values());
-        for (Course c : coursesToSave.values()) {
-            ensureCourseLearnableWhenAllocated(c);
+        if (!allAffectedCourseIds.isEmpty()) {
+            org.springframework.jdbc.core.namedparam.MapSqlParameterSource cp =
+                    new org.springframework.jdbc.core.namedparam.MapSqlParameterSource("cIds", allAffectedCourseIds);
+            namedParameterJdbcTemplate.update(
+                    "UPDATE courses SET status = 'PUBLISHED' WHERE id IN (:cIds) AND status = 'DRAFT'", cp);
+            namedParameterJdbcTemplate.update(
+                    "UPDATE chapters SET status = 'PUBLISHED' WHERE course_id IN (:cIds) AND status = 'DRAFT'", cp);
+            namedParameterJdbcTemplate.update(
+                    "UPDATE lessons SET status = 'PUBLISHED' " +
+                    "WHERE chapter_id IN (SELECT id FROM chapters WHERE course_id IN (:cIds)) " +
+                    "AND (status = 'DRAFT' OR status IS NULL)", cp);
         }
-        courses.saveAll(coursesToSave.values());
 
         int unitUsersCount = countActiveStaffInUnitsNative(Set.of(unit.getId()));
         int enrolledUsersCount = 0;
-
         if (!mandatoryCourseIds.isEmpty()) {
             enrollStaffForCoursesNative(new ArrayList<>(mandatoryCourseIds), Set.of(unit.getId()));
             enrolledUsersCount = unitUsersCount;
@@ -1094,14 +1373,13 @@ public class TrainingStructureService {
         result.put("domainsCount", domainsCount);
         result.put("programsCount", programsCount);
         result.put("coursesCount", coursesCount);
-        result.put("totalAffectedCourses", coursesToSave.size());
+        result.put("totalAffectedCourses", allAffectedCourseIds.size());
         result.put("unitUsersCount", unitUsersCount);
         result.put("enrolledUsersCount", enrolledUsersCount);
         result.put("status", "SUCCESS");
         return result;
     }
 
-    @org.springframework.transaction.annotation.Transactional
     public Map<String, Object> batchSyncUnitAllocations(
             String unitId,
             List<com.bidv.coretraining.controller.TrainingStructureController.BatchChangeItem> changes) {

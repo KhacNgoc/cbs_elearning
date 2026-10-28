@@ -57,7 +57,7 @@
         <p>Đang tải cấu trúc chương trình...</p>
       </div>
 
-      <div v-else-if="!filteredDomains.length" class="tree-empty-state">
+      <div v-else-if="!domains.length" class="tree-empty-state">
         <FolderTree :size="36" class="empty-icon" />
         <p v-if="searchQuery">Không tìm thấy mục nào khớp với "{{ searchQuery }}".</p>
         <p v-else>Chưa có cấu trúc đào tạo nào. Hãy bấm "Thêm Lĩnh vực" để bắt đầu.</p>
@@ -66,7 +66,7 @@
       <div v-else class="tree-root">
         <!-- LEVEL 1: DOMAIN (LĨNH VỰC) -->
         <div
-          v-for="domain in pagedDomains"
+          v-for="domain in domains"
           :key="domain.id"
           class="tree-branch domain-branch"
         >
@@ -570,11 +570,11 @@
     </div>
 
     <!-- TIER-1 ROOT TREE PAGINATION FOOTER BAR -->
-    <div v-if="!loading && filteredDomains.length > 0" class="tree-pagination-bar">
+    <div v-if="!loading && domains.length > 0" class="tree-pagination-bar">
       <div class="pagination-summary">
         <span>
-          Hiển thị <strong>{{ (treeDomainPage - 1) * treeDomainPageSize + 1 }}–{{ Math.min(treeDomainPage * treeDomainPageSize, filteredDomains.length) }}</strong>
-          trên tổng số <strong>{{ filteredDomains.length }}</strong> lĩnh vực
+          Hiển thị <strong>{{ (treeDomainPage - 1) * treeDomainPageSize + 1 }}–{{ Math.min(treeDomainPage * treeDomainPageSize, treeDomainTotalElements) }}</strong>
+          trên tổng số <strong>{{ treeDomainTotalElements }}</strong> lĩnh vực
           ({{ totalActiveProgramsCount }} chương trình)
         </span>
       </div>
@@ -1625,7 +1625,6 @@ const loadingMoreProgramCoursesMap = ref<Record<string, boolean>>({});
 const loadingCourseChaptersMap = ref<Record<string, boolean>>({});
 const courseBranchLimits = ref<Record<string, number>>({});
 const auxiliaryModalLoaded = ref(false);
-const searchCoursesLoaded = ref(false);
 
 function mergeCoursesIntoStore(newCourses: Course[]) {
   if (!newCourses?.length) return;
@@ -1830,13 +1829,44 @@ function expandOperatingBranch(type: string, id?: string, parentId?: string) {
   }
 }
 
-// Load lightweight catalog (Domains + Programs only) — True Lazy Fetch for Courses & Chapters
+// DB-Level Paged Tree Catalog (Domains + Programs) — True Lazy Fetch for Courses & Chapters
 async function loadTreeData(expandTarget?: { type: string; id?: string; parentId?: string }) {
   loading.value = true;
   try {
-    const catalog = await trainingApi.catalog();
-    domains.value = catalog.domains || [];
-    programs.value = catalog.programs || [];
+    const res = await trainingApi.domainsPaged({
+      search: searchQuery.value.trim() || undefined,
+      page: treeDomainPage.value - 1,
+      size: treeDomainPageSize.value,
+    });
+    domains.value = (res.items || []).filter((d) => d.status !== "DELETED");
+    treeDomainTotalPages.value = Math.max(1, res.totalPages || 1);
+    treeDomainTotalElements.value = res.totalElements || 0;
+
+    const domainIds = domains.value.map((d) => d.id);
+    if (domainIds.length > 0) {
+      const progResponses = await Promise.all(
+        domainIds.map((dId) =>
+          trainingApi.programsPaged({
+            domainId: dId,
+            search: searchQuery.value.trim() || undefined,
+            size: 100,
+          })
+        )
+      );
+      programs.value = progResponses.flatMap((r) => (r.items || []).filter((p) => p.status !== "DELETED"));
+    } else {
+      programs.value = [];
+    }
+
+    if (searchQuery.value.trim()) {
+      for (const d of domains.value) {
+        expandedIds.value.add(d.id);
+      }
+      for (const p of programs.value) {
+        expandedIds.value.add(p.id);
+        ensureProgramCoursesLoaded(p.id);
+      }
+    }
 
     // Load units lightly so unit badges on courses/programs have names
     if (!unitsList.value.length) {
@@ -1946,7 +1976,7 @@ function toggleAllNodes(expand: boolean) {
     expandedIds.value.clear();
   } else {
     // Chỉ mở rộng các Lĩnh vực & Chương trình thuộc TRANG HIỆN TẠI để tránh query ồ ạt
-    for (const d of pagedDomains.value) {
+    for (const d of domains.value) {
       expandedIds.value.add(d.id);
       const progs = getProgramsForDomain(d.id);
       for (const p of progs) {
@@ -2515,48 +2545,23 @@ function editLessonBlock(lesson: Lesson, blockType: string) {
   });
 }
 
-// Search Filter & 2-Tier Tree Pagination
-const filteredDomains = computed(() => {
-  const activeDomains = domains.value.filter((d) => d.status !== "DELETED");
-  if (!searchQuery.value.trim()) return activeDomains;
-  const q = searchQuery.value.toLowerCase().trim();
-  return activeDomains.filter(
-    (d) =>
-      d.name.toLowerCase().includes(q) ||
-      d.code.toLowerCase().includes(q) ||
-      getProgramsForDomain(d.id).some(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.code.toLowerCase().includes(q) ||
-          getCoursesForProgram(p.id).some((c) => c.name.toLowerCase().includes(q))
-      )
-  );
-});
-
+// 2-Tier Tree Pagination with DB-level Domains
 const treeDomainPage = ref(1);
 const treeDomainPageSize = ref(5);
-
-const treeDomainTotalPages = computed(() =>
-  Math.max(1, Math.ceil(filteredDomains.value.length / treeDomainPageSize.value))
-);
-
-const pagedDomains = computed(() => {
-  const start = (treeDomainPage.value - 1) * treeDomainPageSize.value;
-  return filteredDomains.value.slice(start, start + treeDomainPageSize.value);
-});
+const treeDomainTotalPages = ref(1);
+const treeDomainTotalElements = ref(0);
 
 const totalActiveProgramsCount = computed(() =>
-  filteredDomains.value.reduce((acc, d) => acc + getProgramsForDomain(d.id).length, 0)
+  programs.value.filter((p) => p.status !== "DELETED").length
 );
 
-watch([searchQuery, treeDomainPageSize], () => {
+watch(treeDomainPageSize, () => {
   treeDomainPage.value = 1;
+  loadTreeData();
 });
 
-watch(filteredDomains, () => {
-  if (treeDomainPage.value > treeDomainTotalPages.value) {
-    treeDomainPage.value = treeDomainTotalPages.value;
-  }
+watch(treeDomainPage, () => {
+  loadTreeData();
 });
 
 // Tier-2 In-Branch Course Pagination inside a Program (Server-Side Lazy Fetch)
@@ -2713,17 +2718,13 @@ function hideNodeTooltip() {
   hoverTooltip.value.visible = false;
 }
 
-// On-Demand Search: chỉ khi người dùng gõ từ khóa tìm kiếm mới tải danh sách khóa học phục vụ lọc toàn cây
+// On-Demand Search: debounced DB query across domains and programs
 let treeSearchDebounceTimer: any = null;
-watch(searchQuery, (q) => {
+watch(searchQuery, () => {
   if (treeSearchDebounceTimer) clearTimeout(treeSearchDebounceTimer);
-  if (!q.trim() || searchCoursesLoaded.value) return;
-  treeSearchDebounceTimer = setTimeout(async () => {
-    try {
-      const allCourses = await trainingApi.courses();
-      mergeCoursesIntoStore(allCourses || []);
-      searchCoursesLoaded.value = true;
-    } catch (e) {}
+  treeSearchDebounceTimer = setTimeout(() => {
+    treeDomainPage.value = 1;
+    loadTreeData();
   }, 300);
 });
 
