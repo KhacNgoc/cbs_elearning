@@ -116,8 +116,8 @@
           </div>
           <p v-for="warning in aiWarnings" :key="warning" class="ai-warning">{{ warning }}</p>
           <div v-if="aiDrafts.length" class="ai-drafts">
-<div class="admin-table-scroll"><table class="admin-data-table"><colgroup><col style="width:56px" /><col /></colgroup><thead><tr><th>Chọn</th><th>Bản nháp câu hỏi / đáp án</th></tr></thead><tbody>            <tr v-for="(draft,index) in paginatedDrafts" :key="(draftPage-1)*draftPageSize+index"><td>
-              <ToggleSwitch v-model="draft.selected" :label="`Chọn câu ${ (draftPage-1)*draftPageSize + index+1 }`" :disabled="savingDrafts" />
+<div class="admin-table-scroll"><table class="admin-data-table"><colgroup><col style="width:80px" /><col /></colgroup><thead><tr><th>Chọn</th><th>Bản nháp câu hỏi / đáp án</th></tr></thead><tbody>            <tr v-for="(draft,index) in paginatedDrafts" :key="(draftPage-1)*draftPageSize+index"><td>
+              <ToggleSwitch v-model="draft.selected" :show-label="false" :label="`Chọn câu ${ (draftPage-1)*draftPageSize + index+1 }`" :disabled="savingDrafts" />
 </td><td class="question-table-content"><div class="draft-heading-actions">
                 <span class="question-type-badge">{{ draft.type === "MULTIPLE_CHOICE" ? "Nhiều đáp án" : "Một đáp án" }}</span>
                 <button v-if="editingDraftIndex !== (draftPage-1)*draftPageSize+index" class="draft-edit-button" @click="startDraftEditing((draftPage-1)*draftPageSize+index)">
@@ -831,6 +831,15 @@ const importCsv = async (event: Event) => {
 .answer-editor .toggle-label,.ai-draft-answer-editor .toggle-label{font-size:.75rem}
 
 .question-table-content{min-width:320px;max-width:800px}.question-table-content .answer-grid{margin-top:.7rem}.question-type-badge{white-space:nowrap}.quiz-editor-page{width:100%!important;margin:0!important;padding:2rem!important;box-sizing:border-box}.quiz-editor-page.embedded{padding:0!important}@media(max-width:768px){.quiz-editor-page{padding:1rem!important}}
+.quiz-editor-page :deep(.admin-data-table),
+.quiz-editor-page :deep(.admin-data-table *) { font-family: var(--font-family); }
+.quiz-editor-page :deep(.admin-data-table) { font-size: var(--admin-text-body, .875rem); line-height: 1.5; }
+.quiz-editor-page :deep(.admin-data-table th) { font-size: var(--admin-text-label, .8125rem); font-weight: 600; }
+.quiz-editor-page :deep(.admin-data-table td) { font-weight: 400; }
+.quiz-editor-page :deep(.admin-data-table strong) { font-weight: 700; }
+.quiz-editor-page .admin-data-table .answer-grid span { font-size: inherit; font-weight: 400; }
+.quiz-editor-page .admin-data-table .question-type-badge,
+.quiz-editor-page .admin-data-table .bank-save-status { font-size: var(--admin-text-label, .8125rem); font-weight: 600; }
 .quiz-questions-table{min-width:960px}.quiz-question-actions{display:flex;align-items:center;flex-wrap:wrap;gap:.5rem}.quiz-question-actions button{white-space:nowrap}.bank-save-action{padding:.45rem .65rem;font-size:.8rem}.bank-save-action:disabled{opacity:.55;cursor:wait}.bank-save-status{display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .55rem;border-radius:6px;background:var(--surface-f1f5f9);color:var(--text-muted);font-size:.78rem;white-space:nowrap}.bank-save-status.saved{background:var(--primary-light);color:var(--primary-ink)}.bank-source-code{display:block;margin-top:.4rem;color:var(--text-muted);font-size:.72rem;overflow-wrap:anywhere}
 
 .required-quiz-setting{display:block;margin:1rem 0;color:var(--primary-ink);font-weight:600}.required-quiz-setting input{margin-right:.5rem}.required-quiz-setting small{display:block;margin-top:.5rem;font-weight:400;color:var(--text-muted)}
@@ -859,6 +868,11 @@ select, textarea, .question-text-field input { width: 100%; padding: .7rem; bord
 .settings-action { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color); }
 .settings-action p { margin: 0; color: var(--text-muted); font-size: var(--admin-text-body); }
 .primary-button, .secondary-button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; padding: .65rem .85rem; border-radius: var(--radius-sm); cursor: pointer; font-weight: 700; }
+.quiz-editor-page :deep(button),
+.quiz-editor-page :deep(input),
+.quiz-editor-page :deep(select),
+.quiz-editor-page :deep(textarea) { font-family: var(--font-family); }
+.primary-button, .secondary-button, .ai-button { font-size: var(--admin-text-label, .8125rem); font-weight: 700; }
 .primary-button { border: 1px solid var(--primary-color); background: var(--primary-color); color: white; }
 .secondary-button { border: 1px solid var(--border-color); background: var(--surface-ffffff); color: var(--primary-ink); }
 .primary-button:disabled { opacity: .5; cursor: not-allowed; }
@@ -868,7 +882,7 @@ select, textarea, .question-text-field input { width: 100%; padding: .7rem; bord
 .danger-zone button:disabled { opacity: .55; cursor: wait; }
 .question-section-heading { flex-wrap: wrap; }
 .question-tools { display: flex; gap: .45rem; margin-left: auto; }
-.ai-button { display: inline-flex; align-items: center; gap: .4rem; padding: .65rem .85rem; border: 1px solid #7c3aed; border-radius: var(--radius-sm); background: var(--surface-f5f3ff); color: var(--ink-6d28d9); cursor: pointer; font-weight: 800; }
+.ai-button { display: inline-flex; align-items: center; gap: .4rem; padding: .65rem .85rem; border: 1px solid #7c3aed; border-radius: var(--radius-sm); background: var(--surface-f5f3ff); color: var(--ink-6d28d9); cursor: pointer; }
 .ai-button:disabled { opacity: .65; cursor: wait; }
 .import-button { position: relative; }
 .import-button input { position: absolute; width: 1px; height: 1px; opacity: 0; }
