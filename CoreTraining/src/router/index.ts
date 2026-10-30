@@ -128,15 +128,12 @@ const router = createRouter({
 router.beforeEach(async (to, from, next) => {
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
   const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin);
-  const isMock = import.meta.env.VITE_USE_MOCK_API === 'true';
   let session = getCachedAuthSession();
-  let isAuthenticated = isMock
-    ? !!localStorage.getItem('accessToken')
-    : !!session;
+  let isAuthenticated = !!session;
   let mustChangePassword = session?.mustChangePassword
     ?? localStorage.getItem('mustChangePassword') === 'true';
 
-  if (!isMock && (requiresAuth || to.name === 'Login')) {
+  if (requiresAuth || to.name === 'Login') {
     try {
       session = await authApi.session();
       setCachedAuthSession(session);
@@ -148,6 +145,8 @@ router.beforeEach(async (to, from, next) => {
       isAuthenticated = true;
     } catch {
       clearAuthSession();
+      session = null;
+      isAuthenticated = false;
     }
   }
 

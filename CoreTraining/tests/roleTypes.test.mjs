@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
@@ -13,6 +13,7 @@ globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.win
 globalThis.cancelAnimationFrame = dom.window.cancelAnimationFrame.bind(dom.window);
 globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
 const vue = await import('vue');
+after(() => dom.window.close());
 const { createApp, nextTick, reactive } = vue;
 const transpile = source => ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
@@ -48,6 +49,9 @@ const fixture = (id, learnerRole) => ({
 });
 const roles = [fixture('LEARNER', true), fixture('MANAGER', false)];
 const saved = [];
+const rolePageReads = [];
+const memberReads = [], memberWrites = [];
+const people = Array.from({length:13},(_,i)=>({id:i+1,username:`person${i+1}`,fullName:`Person ${i+1}`,roles:[],unitId:"A",member:i<12,selectable:true}));
 const dependencies = {
   ...common,
   '../components/AdminModal.vue': modal,
@@ -59,6 +63,11 @@ const dependencies = {
   '../api/roleApi': { roleApi: {
     list: async () => roles, options: async () => roles, pages: async () => [], units: async () => [],
     save: async role => { saved.push(role); return role; },
+  } },
+  '../api/adminListApi': { adminListApi: {
+    roles: async params => { rolePageReads.push({ ...params }); return { items: roles.filter(r => !params.managementOnly || !r.learnerRole).map(r=>({...r,memberCount:0})), total: params.managementOnly ? 1 : 2, page: 1, pageCount: 1 }; },
+    roleMembers: async params => { memberReads.push({...params}); const rows = people.filter(m => m.username.includes(params.query)); return { items: rows.slice((params.page-1)*params.size,params.page*params.size), total: rows.length, page: params.page, pageCount: Math.max(1, Math.ceil(rows.length/params.size)) }; },
+    assignRoleChanges: async (roleId, changes) => { memberWrites.push({roleId,changes}); },
   } },
   '../api/axiosClient': { axiosClient: { get: async () => ({ data: { units: [] } }) } },
   '../stores/userStore': { useUserStore: () => ({ systemAdmin: true, canLearn: true, can: () => true, refreshAccess: async () => {} }) },
@@ -79,16 +88,18 @@ test('learner role hides detailed permissions and saves the learner toggle; mana
   app.mount('#app');
   try {
     await settle();
+    assert.equal(rolePageReads.length, 1);
+    assert.equal(rolePageReads[0].size, 10);
     const rows = document.querySelectorAll('.admin-data-table tbody tr');
     assert.ok(!rows[0].textContent.includes('Phân quyền'));
     assert.ok(rows[0].textContent.includes('Theo đơn vị của tài khoản'));
     assert.ok(rows[1].textContent.includes('Phân quyền'));
     click(document, 'Thêm role'); await settle();
-    assert.equal(document.querySelector('[aria-label="Role học viên"]').getAttribute('aria-checked'), 'true');
+    assert.equal(document.querySelector('[aria-label="Là học viên"]').getAttribute('aria-checked'), 'true');
     assert.equal(document.querySelector('[aria-label="Cho phép tham gia học tập"]'), null);
-    document.querySelector('[aria-label="Role học viên"]').click(); await nextTick();
+    document.querySelector('[aria-label="Là học viên"]').click(); await nextTick();
     assert.ok(document.querySelector('[aria-label="Cho phép tham gia học tập"]'));
-    document.querySelector('[aria-label="Role học viên"]').click(); await nextTick();
+    document.querySelector('[aria-label="Là học viên"]').click(); await nextTick();
     const form = document.querySelector('.admin-modal-dialog');
     const nameInput = form.querySelector('input');
     nameInput.value = 'Học viên mới';
@@ -98,7 +109,7 @@ test('learner role hides detailed permissions and saves the learner toggle; mana
     assert.equal(saved[0].learnerRole, true);
     assert.equal(saved[0].learningEnabled, true);
     click(rows[1], 'Sửa'); await settle();
-    document.querySelector('[aria-label="Role học viên"]').click(); await nextTick();
+    document.querySelector('[aria-label="Là học viên"]').click(); await nextTick();
     assert.ok(document.body.textContent.includes('toàn bộ quyền quản trị và phạm vi đơn vị của role này sẽ được gỡ'));
     app.unmount(); await settle();
     app = createApp(permissionView.default);
@@ -107,5 +118,25 @@ test('learner role hides detailed permissions and saves the learner toggle; mana
     assert.equal(choices.length, 1);
     assert.ok(choices[0].textContent.includes('Quản lý nội dung'));
     assert.ok(document.body.textContent.includes('Phạm vi quản trị dữ liệu'));
-  } finally { app.unmount(); await settle(); dom.window.close(); }
+  } finally { app.unmount(); await settle(); }
+});
+
+
+test('role member choices are lazy, bounded and retain edit deltas across pages and searches', async () => {
+  const app = createApp(roleView.default); app.mount('#app');
+  try {
+    await settle(); assert.equal(memberReads.length, 0);
+    click(document.querySelector('.admin-data-table tbody tr'), 'Gán tài khoản'); await settle();
+    assert.equal(memberReads.length, 1); assert.equal(memberReads[0].size, 10);
+    document.querySelector('input[aria-label="Gán Person 2"]').click(); await nextTick();
+    document.querySelector('[aria-label="Phân trang tài khoản"] button[aria-label="Trang sau"]').click(); await settle();
+    document.querySelector('input[aria-label="Gán Person 13"]').click(); await nextTick();
+    const search = document.querySelector('input[placeholder="Tìm họ tên hoặc tài khoản…"]');
+    search.value='person11'; search.dispatchEvent(new Event('input',{bubbles:true})); await new Promise(r=>setTimeout(r,300)); await settle();
+    document.querySelector('input[aria-label="Gán Person 11"]').click(); await nextTick();
+    search.value=''; search.dispatchEvent(new Event('input',{bubbles:true})); await new Promise(r=>setTimeout(r,300)); await settle();
+    assert.equal(document.querySelector('input[aria-label="Gán Person 2"]').checked,false);
+    document.querySelector('.admin-modal-dialog').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})); await settle();
+    assert.deepEqual(memberWrites[0],{roleId:'LEARNER',changes:{addUserIds:[13],removeUserIds:[2,11],version:0}});
+  } finally { app.unmount(); await settle(); }
 });

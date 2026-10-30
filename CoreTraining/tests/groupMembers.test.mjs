@@ -48,6 +48,7 @@ const people = Array.from({ length: 13 }, (_, i) => ({
 }));
 const committed = new Set([1]);
 const writes = [];
+const listReads = [];
 const group = () => ({ id: 'G1', name: 'Nhóm một', unitId: 'A', mandatoryCourseIds: [], allowedActions: ['read', 'update'], memberCount: committed.size });
 const axiosClient = {
   async get(url, { params = {} } = {}) {
@@ -81,6 +82,10 @@ const view = await component('../src/views/AccessAdmin.vue', {
   'vue-router': { useRoute: () => route, useRouter: () => ({ replace() {} }) },
   '../api/axiosClient': { axiosClient },
   '../api/adminApi': { adminApi: {} },
+  '../api/adminListApi': { adminListApi: {
+    groups: async params => { listReads.push({ ...params }); return { items: [group()], total: 21, page: params.page, pageCount: 3 }; },
+    users: async () => ({ items: [], total: 0, page: 1, pageCount: 1 }),
+  } },
   '../utils/toast': { showToast() {} },
   '../stores/userStore': { useUserStore: () => ({ systemAdmin: true, can: () => true, refreshAccess: async () => {} }) },
 });
@@ -101,6 +106,9 @@ test('membership choices survive page and search changes, then save only the cur
   app.mount('#app');
   try {
     await settle();
+    assert.equal(listReads.length, 1);
+    assert.equal(listReads[0].size, 10);
+    assert.ok(document.body.textContent.includes('21 nhóm'));
     clickText('Thành viên'); await settle();
     assert.equal(document.querySelectorAll('.group-members-table tbody input').length, 1);
     assert.ok([...document.querySelectorAll('.group-members-table th')].some(th => th.textContent === 'Mã nhân viên'));

@@ -50,7 +50,7 @@ Dự án được xây dựng bằng **Vue 3**, **TypeScript**, **Vite** và **P
   ├── api/             # Tầng Axios Client & gọi REST API từ Spring Boot
   ├── assets/          # Thư viện ảnh, CSS design system toàn cục
   ├── components/      # Các UI Component dùng chung (RadarChart, SlideViewer, VideoPlayer...)
-  ├── data/            # Dữ liệu tĩnh nghiệp vụ mẫu (phục vụ chế độ chạy Mock Offline)
+  ├── data/            # Dữ liệu tham chiếu lịch sử; không dùng trong luồng API
   ├── router/          # Cấu hình định tuyến Vue Router & Security Guard
   ├── stores/          # Quản lý trạng thái Pinia (userStore, courseStore, quizStore)
   ├── types/           # Khai báo kiểu dữ liệu TypeScript (Lesson, Topic, Question, Badge...)
@@ -72,18 +72,12 @@ npm install
 ### 2. Cấu hình biến môi trường kết nối API
 Mở file cấu hình môi trường [.env](file:///f:/CoreTraining/.env) hoặc [.env.development](file:///f:/CoreTraining/.env.development):
 
-*   **Chế độ Mock API (Chạy thử Offline không cần Backend):**
-    ```ini
-    VITE_API_URL=http://localhost:8000
-    VITE_USE_MOCK_API=true
-    VITE_RAG_CHAT_TIMEOUT_MS=330000
-    ```
-*   **Chế độ Live API (Kết nối trực tiếp đến Spring Boot Backend cổng 8000):**
-    ```ini
-    VITE_API_URL=http://localhost:8000
-    VITE_USE_MOCK_API=false
-    VITE_RAG_CHAT_TIMEOUT_MS=330000
-    ```
+Frontend chỉ dùng API thật và dữ liệu từ database. Không còn chế độ mock/offline; cấu hình `VITE_USE_MOCK_API` cũ không có tác dụng.
+
+```ini
+VITE_API_URL=http://localhost:8000
+VITE_RAG_CHAT_TIMEOUT_MS=330000
+```
 
 `VITE_RAG_CHAT_TIMEOUT_MS` chỉ áp dụng cho `POST /api/rag/chat`. Các API thông
 thường vẫn dùng timeout 15 giây. Giá trị mặc định 330 giây dành một khoảng đệm
@@ -97,7 +91,7 @@ npm run dev
 Truy cập ứng dụng theo địa chỉ hiển thị trong terminal (thường là `http://localhost:5173`).
 
 *   **Tài khoản đăng nhập mẫu:** `quantrh`
-*   **Mật khẩu mẫu:** Nhập bất kỳ mật khẩu nào (trong chế độ Mock) hoặc mật khẩu đăng ký trên DB (trong chế độ Live).
+*   **Mật khẩu mẫu:** Mật khẩu tài khoản đã được tạo trên DB.
 
 ### 4. Đóng gói mã nguồn (Production Build)
 Biên dịch dự án và tối ưu hóa code để sẵn sàng đưa lên hosting/môi trường thật:

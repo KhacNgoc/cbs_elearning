@@ -37,6 +37,16 @@ public class AdminOptionsController {
         auth.requireOperation(page, "read");
         var u = auth.current();
         String permission = page + ":read";
+        // These pages need the organization tree only. Modal course choices use
+        // their own bounded read; training/document option contracts stay below.
+        if (Set.of("users", "groups", "roles").contains(page)) {
+            return Map.of("canManageDomains", AccessPolicy.has(u, "catalog:create"), "units",
+                    units.findAll().stream().filter(n -> AccessPolicy.system(u) || AccessPolicy.inScope(u, n))
+                            .map(n -> new AccessManagementService.UnitDto(n.getId(), n.getName(), n.getType(),
+                                    n.getParent() == null ? null : n.getParent().getId(), n.isActive())).toList(),
+                    "groups", List.of(), "courses", List.of(), "domains", List.of(), "programs", List.of());
+        }
+
         return Map.of(
                 "canManageDomains", AccessPolicy.has(u, "catalog:create"), "units",
                 units.findAll().stream().filter(n -> AccessPolicy.system(u) || AccessPolicy.inScope(u, n))

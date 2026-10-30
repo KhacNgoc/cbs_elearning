@@ -31,7 +31,8 @@ public record AdminOperation(String page, String action) {
             default -> "denied";
         };
         String page;
-        if (p.equals("/api/admin/reports/training"))
+        if (java.util.Set.of("/api/admin/reports/training", "/api/admin/reports/training/read",
+                "/api/admin/reports/training/attempts", "/api/admin/reports/training/export").contains(p))
             page = "overview";
         else if (p.startsWith("/api/admin/options/"))
             page = p.substring("/api/admin/options/".length());

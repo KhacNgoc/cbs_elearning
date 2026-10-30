@@ -66,7 +66,7 @@
                   <span v-else-if="r.learnerRole"> · Học viên</span></small
                 ><small v-if="r.description">{{ r.description }}</small>
               </td>
-              <td>{{ r.userIds.length }}</td>
+              <td>{{ r.memberCount }}</td>
               <td>
                 {{
                   r.protectedRole
@@ -210,9 +210,11 @@
       @close="editor = ''"
     >
       <p class="admin-modal-help">
-        {{ memberIds.length }} tài khoản đã chọn. Các role khác của tài khoản
+        {{ memberChangeCount }} thay đổi thành viên. Các role khác của tài khoản
         được giữ nguyên.
       </p>
+      <p v-if="memberError" role="alert">{{ memberError }} <button type="button" @click="loadMembers">Thử lại</button></p>
+      <p v-if="memberLoading" role="status">Đang tải tài khoản…</p>
       <div class="admin-search-box">
         <Search :size="16" /><input
           v-model="memberQuery"
@@ -255,8 +257,9 @@
             <tr v-for="m in memberRows" :key="m.id">
               <td>
                 <input
-                  v-model="memberIds"
-                  :value="m.id"
+                  :checked="memberSelected(m)"
+                  :disabled="memberLoading || !m.selectable"
+                  @change="toggleMember(m, ($event.target as HTMLInputElement).checked)"
                   type="checkbox"
                   :aria-label="`Gán ${m.fullName}`"
                 />
@@ -288,7 +291,7 @@
       <TablePagination
         v-model:page="memberPage"
         v-model:page-size="memberSize"
-        :total="filteredMembers.length"
+        :total="memberTotal"
         :page-count="memberCount"
         unit="tài khoản"
         unit-label="Tài khoản"
@@ -306,14 +309,15 @@
   </main>
 </template>
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from "vue";
+import { adminListApi } from "../api/adminListApi";
 import { useRouter } from "vue-router";
 import { Plus, RefreshCw, Search, Users } from "lucide-vue-next";
 import { roleApi, type AccessRole, type RoleMember } from "../api/roleApi";
 import { axiosClient } from "../api/axiosClient";
 import type { OrganizationUnit } from "../types/organization";
 import { useUserStore } from "../stores/userStore";
-import { useTablePagination } from "../composables/useTablePagination";
+
 import { showToast } from "../utils/toast";
 import AdminModal from "../components/AdminModal.vue";
 import ConfirmModal from "../components/ConfirmModal.vue";
@@ -321,9 +325,9 @@ import TablePagination from "../components/TablePagination.vue";
 import ToggleSwitch from "../components/ToggleSwitch.vue";
 const user = useUserStore(),
   router = useRouter();
-const roles = ref<AccessRole[]>([]),
+const roles = ref<(AccessRole & { memberCount: number })[]>([]),
   units = ref<OrganizationUnit[]>([]),
-  members = ref<RoleMember[]>([]),
+  members = ref<(RoleMember & { member: boolean; selectable: boolean })[]>([]),
   loading = ref(false),
   busy = ref(false),
   query = ref(""),
@@ -351,68 +355,56 @@ const convertingToLearner = computed(() => {
       original.assignedCoursesOnly)
   );
 });
-const filtered = computed(() =>
-  roles.value.filter(
-    (r) =>
-      `${r.name} ${r.code}`
-        .toLocaleLowerCase("vi")
-        .includes(query.value.toLocaleLowerCase("vi")) &&
-      (!status.value || r.active === (status.value === "active")),
-  ),
-);
-const { page, pageSize, total, pageCount, paginated, reset } =
-  useTablePagination(filtered);
-watch([query, status], reset);
-const memberIds = ref<number[]>([]),
-  memberQuery = ref(""),
-  memberPage = ref(1),
-  memberSize = ref(10);
-const filteredMembers = computed(() =>
-  members.value.filter((m) =>
-    `${m.fullName} ${m.username}`
-      .toLocaleLowerCase("vi")
-      .includes(memberQuery.value.toLocaleLowerCase("vi")),
-  ),
-);
-const memberCount = computed(() =>
-  Math.max(1, Math.ceil(filteredMembers.value.length / memberSize.value)),
-);
-const memberRows = computed(() =>
-  filteredMembers.value.slice(
-    (memberPage.value - 1) * memberSize.value,
-    memberPage.value * memberSize.value,
-  ),
-);
-watch([memberQuery, memberSize], () => (memberPage.value = 1));
-const allMembers = computed(
-  () =>
-    !!filteredMembers.value.length &&
-    filteredMembers.value.every((m) => memberIds.value.includes(m.id)),
-);
-const someMembers = computed(() =>
-  filteredMembers.value.some((m) => memberIds.value.includes(m.id)),
-);
-function toggleMembers(yes: boolean) {
-  const ids = new Set(memberIds.value);
-  filteredMembers.value.forEach((m) =>
-    yes ? ids.add(m.id) : ids.delete(m.id),
-  );
-  memberIds.value = [...ids];
+const page = ref(1), pageSize = ref(10), total = ref(0), pageCount = ref(1);
+const filtered = roles, paginated = roles;
+const memberQuery = ref(""), memberPage = ref(1), memberSize = ref(10), memberTotal = ref(0), memberCount = ref(1), memberLoading = ref(false), memberError = ref("");
+const memberChanges = ref<Record<number, boolean>>({});
+const memberRows = members;
+const memberSelected = (m: { id: number; member: boolean }) => memberChanges.value[m.id] ?? m.member;
+const memberChangeCount = computed(() => Object.keys(memberChanges.value).length);
+const allMembers = computed(() => members.value.some(m => m.selectable) && members.value.filter(m => m.selectable).every(memberSelected));
+const someMembers = computed(() => members.value.some(memberSelected));
+function toggleMember(m: { id: number; member: boolean }, yes: boolean) {
+  if (yes === m.member) delete memberChanges.value[m.id]; else memberChanges.value[m.id] = yes;
 }
+function toggleMembers(yes: boolean) { members.value.filter(m => m.selectable).forEach(m => toggleMember(m, yes)); }
+let listRequest = 0, memberRequest = 0, openingMembers = false;
+let listTimer: ReturnType<typeof setTimeout> | undefined, memberTimer: ReturnType<typeof setTimeout> | undefined;
+watch([query, status, pageSize], () => {
+  ++listRequest; clearTimeout(listTimer); page.value = 1;
+  listTimer = setTimeout(() => { listTimer = undefined; void loadRoles(); }, 250);
+});
+watch(page, () => { if (!listTimer) void loadRoles(); });
+watch([memberQuery, memberSize], () => {
+  if (openingMembers) return;
+  ++memberRequest; clearTimeout(memberTimer); memberPage.value = 1;
+  memberTimer = setTimeout(() => { memberTimer = undefined; if (editor.value === "members") void loadMembers(); }, 250);
+});
+watch(memberPage, () => { if (!openingMembers && !memberTimer && editor.value === "members") void loadMembers(); });
+onBeforeUnmount(() => { ++listRequest; ++memberRequest; clearTimeout(listTimer); clearTimeout(memberTimer); });
 const message = (e: any) =>
   e.response?.data?.message || "Không thể lưu dữ liệu. Vui lòng thử lại.";
-async function load() {
-  loading.value = true;
+async function loadRoles() {
+  const request = ++listRequest; loading.value = true;
   try {
-    roles.value = await roleApi.list();
-    units.value = (
-      await axiosClient.get("/api/admin/options/roles")
-    ).data.units;
-  } catch (e) {
-    showToast(message(e), "error");
-  } finally {
-    loading.value = false;
-  }
+    const result = await adminListApi.roles({ query: query.value, status: status.value, page: page.value, size: pageSize.value });
+    if (request !== listRequest) return;
+    roles.value = result.items; total.value = result.total; pageCount.value = result.pageCount;
+  } catch (e) { if (request === listRequest) showToast(message(e), "error"); }
+  finally { if (request === listRequest) loading.value = false; }
+}
+async function load() {
+  await Promise.all([loadRoles(), axiosClient.get("/api/admin/options/roles").then(result => { units.value = result.data.units; }).catch(e => showToast(message(e), "error"))]);
+}
+async function loadMembers() {
+  if (!selected.value) return;
+  const request = ++memberRequest; memberLoading.value = true; memberError.value = "";
+  try {
+    const result = await adminListApi.roleMembers({ roleId: selected.value.id, query: memberQuery.value, page: memberPage.value, size: memberSize.value });
+    if (request !== memberRequest) return;
+    members.value = result.items; memberTotal.value = result.total; memberCount.value = result.pageCount;
+  } catch (e) { if (request === memberRequest) memberError.value = message(e); }
+  finally { if (request === memberRequest) memberLoading.value = false; }
 }
 function edit(r?: AccessRole) {
   form.value = {
@@ -446,22 +438,22 @@ async function save() {
   }
 }
 async function assign(r: AccessRole) {
-  selected.value = r;
-  memberIds.value = [...r.userIds];
-  memberQuery.value = "";
-  memberPage.value = 1;
-  try {
-    members.value = await roleApi.members();
-    editor.value = "members";
-  } catch (e) {
-    showToast(message(e), "error");
-  }
+  openingMembers = true;
+  ++memberRequest; clearTimeout(memberTimer); memberTimer = undefined;
+  selected.value = r; memberChanges.value = {}; members.value = [];
+  memberQuery.value = ""; memberPage.value = 1; editor.value = "members";
+  await nextTick(); openingMembers = false;
+  await loadMembers();
 }
 async function saveMembers() {
   if (!selected.value) return;
   busy.value = true;
   try {
-    await roleApi.assign(selected.value, memberIds.value);
+    await adminListApi.assignRoleChanges(selected.value.id, {
+      addUserIds: Object.entries(memberChanges.value).filter(([, yes]) => yes).map(([id]) => Number(id)),
+      removeUserIds: Object.entries(memberChanges.value).filter(([, yes]) => !yes).map(([id]) => Number(id)),
+      version: selected.value.version,
+    });
     editor.value = "";
     await load();
     await user.refreshAccess();

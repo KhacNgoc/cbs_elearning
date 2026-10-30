@@ -111,7 +111,6 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { useUserStore } from "./stores/userStore";
-import { useCourseStore } from "./stores/courseStore";
 import { useNavigationStore } from "./stores/navigationStore";
 import NotificationCenter from "./components/NotificationCenter.vue";
 import ThemeToggle from "./components/ThemeToggle.vue";
@@ -141,7 +140,6 @@ watch(
   () => { lessonNavigationOpen.value = false; },
 );
 const userStore = useUserStore();
-const courseStore = useCourseStore();
 const navigationStore = useNavigationStore();
 const showAdminSidebar = computed(
   () =>
@@ -193,11 +191,7 @@ const handleLogout = async () => {
 
 onMounted(async () => {
   if (userStore.isAuthenticated) {
-    await Promise.all([
-      userStore.fetchProgress(),
-      courseStore.fetchCourses(),
-      navigationStore.load(),
-    ]);
+    await navigationStore.load();
   }
 });
 </script>

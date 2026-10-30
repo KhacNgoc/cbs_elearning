@@ -157,50 +157,33 @@ public class RagChatService {
                 conversation.getId(), ragResponse.needsClarification());
     }
 
-    @Transactional(readOnly = true)
-    public List<RagChatHistoryDto> history(String username, String courseId, String conversationId) {
-        User user = requireUser(username);
-        Course course = requireAccessibleCourse(user, courseId);
-        Optional<RagConversation> selected = conversationId == null || conversationId.isBlank()
-                ? conversationRepository.findFirstByUserIdAndCourseIdOrderByUpdatedAtDesc(user.getId(), course.getId())
-                : Optional.of(requireOwnedConversation(user, course, conversationId));
-        if (selected.isEmpty())
-            return legacyHistory(user.getId(), course.getId());
+    public record HistoryPage(List<RagChatHistoryDto> items,Long nextBeforeId,boolean hasMore) {}
 
-        RagConversation conversation = selected.get();
-        List<RagConversationMessage> messages = messageRepository
-                .findByConversationIdOrderByIdAsc(conversation.getId());
-        List<RagChatHistoryDto> result = new ArrayList<>();
-        RagConversationMessage pendingUser = null;
-        for (RagConversationMessage message : messages) {
-            if ("user".equals(message.getRole())) {
-                pendingUser = message;
-            } else if ("assistant".equals(message.getRole()) && pendingUser != null) {
-                result.add(new RagChatHistoryDto(
-                        message.getId(), conversation.getId(), course.getId(), pendingUser.getContent(),
-                        message.getContent(), Boolean.TRUE.equals(message.getGrounded()),
-                        Boolean.TRUE.equals(message.getNeedsClarification()),
-                        message.getSources().stream().map(source -> new RagSourceDto(
-                                source.getDocumentId(), source.getDocumentName(), source.getPage(),
-                                source.getSection())).toList(),
-                        message.getCreatedAt()));
-                pendingUser = null;
-            }
-        }
-        return result.size() <= 50 ? result : result.subList(result.size() - 50, result.size());
+    @Transactional(readOnly=true)
+    public List<RagChatHistoryDto> history(String username,String courseId,String conversationId) {
+        return historyPage(username,courseId,conversationId,null,50).items();
     }
-
-    private List<RagChatHistoryDto> legacyHistory(Long userId, String courseId) {
-        List<RagChatMessage> messages = new ArrayList<>(
-                legacyMessageRepository.findTop50ByUserIdAndCourseIdOrderByCreatedAtDesc(userId, courseId));
-        Collections.reverse(messages);
-        return messages.stream().map(message -> new RagChatHistoryDto(
-                message.getId(), null, courseId, message.getQuestion(), message.getAnswer(),
-                message.isGrounded(), false,
-                message.getSources().stream().map(source -> new RagSourceDto(
-                        source.getDocumentId(), source.getDocumentName(), source.getPage(), source.getSection()))
-                        .toList(),
-                message.getCreatedAt())).toList();
+    @Transactional(readOnly=true)
+    public HistoryPage historyPage(String username,String courseId,String conversationId,Long beforeId,int size) {
+        User user=requireUser(username);Course course=requireAccessibleCourse(user,courseId);
+        Optional<RagConversation> selected=conversationId==null||conversationId.isBlank()
+            ? conversationRepository.findFirstByUserIdAndCourseIdOrderByUpdatedAtDesc(user.getId(),course.getId())
+            : Optional.of(requireOwnedConversation(user,course,conversationId));
+        int limit=Math.max(1,Math.min(50,size));long before=beforeId==null?Long.MAX_VALUE:beforeId;
+        var page=org.springframework.data.domain.PageRequest.of(0,limit+1);
+        if(selected.isEmpty()) {
+            var ids=legacyMessageRepository.findHistoryIds(user.getId(),course.getId(),before,page);
+            boolean more=ids.size()>limit;var kept=ids.subList(0,Math.min(limit,ids.size()));
+            var records=kept.isEmpty()?List.<RagChatMessage>of():legacyMessageRepository.findHistoryMessages(kept);
+            var items=records.stream().sorted(Comparator.comparing(RagChatMessage::getId)).map(message->new RagChatHistoryDto(message.getId(),null,courseId,message.getQuestion(),message.getAnswer(),message.isGrounded(),false,message.getSources().stream().map(source->new RagSourceDto(source.getDocumentId(),source.getDocumentName(),source.getPage(),source.getSection())).toList(),message.getCreatedAt())).toList();
+            return new HistoryPage(items,more?kept.get(kept.size()-1):null,more);
+        }
+        var conversation=selected.get();var pairs=messageRepository.findExchangeIds(conversation.getId(),before,page);
+        boolean more=pairs.size()>limit;var kept=pairs.subList(0,Math.min(limit,pairs.size()));
+        Set<Long> ids=new HashSet<>();kept.forEach(pair->{ids.add(((Number)pair[0]).longValue());ids.add(((Number)pair[1]).longValue());});
+        Map<Long,RagConversationMessage> messages=new HashMap<>();if(!ids.isEmpty())messageRepository.findHistoryMessages(ids).forEach(m->messages.put(m.getId(),m));
+        List<RagChatHistoryDto> result=new ArrayList<>();for(var pair:kept){var answer=messages.get(((Number)pair[0]).longValue());var question=messages.get(((Number)pair[1]).longValue());result.add(new RagChatHistoryDto(answer.getId(),conversation.getId(),courseId,question.getContent(),answer.getContent(),Boolean.TRUE.equals(answer.getGrounded()),Boolean.TRUE.equals(answer.getNeedsClarification()),answer.getSources().stream().map(source->new RagSourceDto(source.getDocumentId(),source.getDocumentName(),source.getPage(),source.getSection())).toList(),answer.getCreatedAt()));}
+        Collections.reverse(result);return new HistoryPage(result,more?((Number)kept.get(kept.size()-1)[0]).longValue():null,more);
     }
 
     private RagConversation resolveConversation(User user, Course course, String conversationId) {

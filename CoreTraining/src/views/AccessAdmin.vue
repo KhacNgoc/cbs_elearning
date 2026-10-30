@@ -637,7 +637,8 @@
   </main>
 </template>
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
+import { adminListApi } from "../api/adminListApi";
 import {
   Search,
   Plus,
@@ -736,42 +737,16 @@ const unitName = (id?: string | null) =>
 const matches = (text: string, query: string) =>
   text.toLocaleLowerCase("vi").includes(query.trim().toLocaleLowerCase("vi"));
 const groupCourseQuery = ref("");
-const normalizeCourseSearch = (text: string) =>
-  text
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[đĐ]/g, "d")
-    .toLocaleLowerCase("vi")
-    .trim();
-const filteredGroupCourses = computed(() => {
-  const search = normalizeCourseSearch(groupCourseQuery.value);
-  return courses.value.filter((course) =>
-    normalizeCourseSearch(
-      `${course.name} ${course.code || ""} ${course.id}`,
-    ).includes(search),
-  );
+const groupCoursePage = ref(1), groupCoursePageSize = ref(5), groupCourseTotal = ref(0), groupCoursePageCount = ref(1);
+const paginatedGroupCourses = courses;
+let groupCourseRequest = 0;
+let groupCourseTimer: ReturnType<typeof setTimeout> | undefined;
+function resetGroupCourses() { groupCoursePage.value = 1; }
+watch([groupCourseQuery, groupCoursePageSize], () => {
+  ++groupCourseRequest; clearTimeout(groupCourseTimer); resetGroupCourses();
+  groupCourseTimer = setTimeout(() => { groupCourseTimer = undefined; if (editor.value === "group") void loadGroupCourses(); }, 250);
 });
-const {
-  page: groupCoursePage,
-  pageSize: groupCoursePageSize,
-  total: groupCourseTotal,
-  pageCount: groupCoursePageCount,
-  paginated: paginatedGroupCourses,
-  reset: resetGroupCourses,
-} = useTablePagination(filteredGroupCourses);
-groupCoursePageSize.value = 5;
-watch(groupCourseQuery, resetGroupCourses);
-const filteredUsers = computed(() =>
-  users.value.filter(
-    (u) =>
-      matches(
-        `${u.username} ${u.fullName} ${u.employeeId || ""} ${u.email || ""}`,
-        query.value,
-      ) &&
-      (!unitFilter.value || u.unitId === unitFilter.value) &&
-      (!statusFilter.value || (u.status || "ACTIVE") === statusFilter.value),
-  ),
-);
+watch(groupCoursePage, () => { if (!groupCourseTimer && editor.value === "group") void loadGroupCourses(); });
 const unitForest = computed(() => buildUnitForest(units.value));
 const unitFiltering = computed(() =>
   Boolean(query.value.trim() || statusFilter.value),
@@ -833,21 +808,11 @@ function expandUnits(all: boolean) {
     : new Set();
 }
 
-const filteredGroups = computed(() =>
-  groups.value.filter(
-    (g) =>
-      matches(`${g.id} ${g.name}`, query.value) &&
-      (!unitFilter.value || g.unitId === unitFilter.value),
-  ),
-);
-const {
-  page: userPage,
-  pageSize: userPageSize,
-  total: userTotal,
-  pageCount: userPageCount,
-  paginated: paginatedUsers,
-  reset: resetUsers,
-} = useTablePagination(filteredUsers);
+const userPage = ref(1), userPageSize = ref(10), userTotal = ref(0), userPageCount = ref(1);
+const groupPage = ref(1), groupPageSize = ref(10), groupTotal = ref(0), groupPageCount = ref(1);
+const paginatedUsers = users, paginatedGroups = groups;
+function resetUsers() { userPage.value = 1; }
+function resetGroups() { groupPage.value = 1; }
 const {
   page: unitPage,
   pageSize: unitPageSize,
@@ -856,33 +821,27 @@ const {
   paginated: paginatedUnitRoots,
   reset: resetUnits,
 } = useTablePagination(filteredUnitForest);
-const {
-  page: groupPage,
-  pageSize: groupPageSize,
-  total: groupTotal,
-  pageCount: groupPageCount,
-  paginated: paginatedGroups,
-  reset: resetGroups,
-} = useTablePagination(filteredGroups);
 const visibleUnitRows = computed(() =>
   flattenUnitForest(paginatedUnitRoots.value, effectiveUnitExpansion.value),
 );
 const unitMatchCount = computed(() => units.value.filter(unitMatches).length);
-watch([query, unitFilter, statusFilter], () => {
-  resetUsers();
-  resetUnits();
-  resetGroups();
+let listRequest = 0;
+let listTimer: ReturnType<typeof setTimeout> | undefined;
+watch([query, unitFilter, statusFilter, userPageSize, groupPageSize], () => {
+  ++listRequest;
+  clearTimeout(listTimer);
+  resetUnits(); resetUsers(); resetGroups();
+  if (section.value !== "units") listTimer = setTimeout(() => { listTimer = undefined; void loadRows(); }, 250);
 });
+watch([userPage, groupPage], () => { if (!listTimer && section.value !== "units") void loadRows(); });
 watch(section, () => {
-  query.value = "";
-  unitFilter.value = "";
-  statusFilter.value = "";
-  editor.value = "";
-  resetUsers();
-  resetUnits();
-  resetGroups();
+  ++listRequest;
+  clearTimeout(listTimer);
+  query.value = ""; unitFilter.value = ""; statusFilter.value = ""; editor.value = "";
+  resetUsers(); resetUnits(); resetGroups();
   void load();
 });
+onBeforeUnmount(() => { ++listRequest; clearTimeout(listTimer); });
 function toggleSelection<T>(items: T[], item: T, enabled: boolean) {
   const index = items.indexOf(item);
   if (enabled && index < 0) items.push(item);
@@ -935,35 +894,40 @@ function error(e: any) {
     "error",
   );
 }
+async function loadRows() {
+  const request = ++listRequest;
+  const currentSection = section.value;
+  loading.value = true;
+  try {
+    if (currentSection === "users") {
+      const result = await adminListApi.users({ query: query.value, unitId: unitFilter.value, status: statusFilter.value, page: userPage.value, size: userPageSize.value });
+      if (request !== listRequest) return;
+      users.value = result.items; userTotal.value = result.total; userPageCount.value = result.pageCount;
+    } else if (currentSection === "groups") {
+      const result = await adminListApi.groups({ query: query.value, unitId: unitFilter.value, page: groupPage.value, size: groupPageSize.value });
+      if (request !== listRequest) return;
+      groups.value = result.items; groupTotal.value = result.total; groupPageCount.value = result.pageCount;
+    }
+  } catch (e) { if (request === listRequest) error(e); }
+  finally { if (request === listRequest) loading.value = false; }
+}
 async function load() {
+  const request = ++listRequest;
   loading.value = true;
   try {
     await user.refreshAccess();
+    if (request !== listRequest) return;
     if (section.value === "units") {
-      units.value = (await axiosClient.get<Unit[]>("/api/admin/units")).data;
-      return;
+      const result = await axiosClient.get<Unit[]>("/api/admin/units");
+      if (request === listRequest) units.value = result.data;
+    } else {
+      const options = (await axiosClient.get(`/api/admin/options/${section.value}`)).data;
+      if (request !== listRequest) return;
+      units.value = options.units;
+      await loadRows();
     }
-    const options = (
-      await axiosClient.get(`/api/admin/options/${section.value}`)
-    ).data;
-    units.value = options.units;
-    if (section.value === "users") {
-      users.value = (
-        await axiosClient.get<AdminUser[]>("/api/admin/users")
-      ).data;
-      groups.value = options.groups || [];
-    }
-    if (section.value === "groups") {
-      groups.value = (
-        await axiosClient.get<Group[]>("/api/admin/access/groups")
-      ).data;
-      courses.value = options.courses || [];
-    }
-  } catch (e) {
-    error(e);
-  } finally {
-    loading.value = false;
-  }
+  } catch (e) { if (request === listRequest) error(e); }
+  finally { if (request === listRequest) loading.value = false; }
 }
 function closeEditor() {
   if (!busy.value) {
@@ -993,6 +957,7 @@ function editUnit(u?: Unit, parentId = "") {
   editor.value = "unit";
 }
 function editGroup(g?: Group) {
+  void loadGroupCourses();
   groupCourseQuery.value = "";
   groupCoursePageSize.value = 5;
   resetGroupCourses();
@@ -1002,6 +967,15 @@ function editGroup(g?: Group) {
     : { id: "", name: "", unitId: "", mandatoryCourseIds: [] };
   editor.value = "group";
 }
+async function loadGroupCourses() {
+  const request = ++groupCourseRequest;
+  try {
+    const result = await adminListApi.groupCourses({ query: groupCourseQuery.value, page: groupCoursePage.value, size: groupCoursePageSize.value });
+    if (request !== groupCourseRequest) return;
+    courses.value = result.items as Course[]; groupCourseTotal.value = result.total; groupCoursePageCount.value = result.pageCount;
+  } catch (e) { if (request === groupCourseRequest) error(e); }
+}
+onBeforeUnmount(() => { ++groupCourseRequest; clearTimeout(groupCourseTimer); });
 const memberGroup = ref<Group | null>(null);
 const memberRows = ref<GroupMember[]>([]);
 const memberQuery = ref("");
