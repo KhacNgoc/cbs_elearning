@@ -371,9 +371,9 @@ public class AdminServiceImpl implements AdminService {
                 .lesson(resolveQuestionLesson(questionDto, course))
                 .text(questionDto.getText())
                 .explanation(questionDto.getExplanation())
-                .options(questionDto.getOptions() != null ? questionDto.getOptions() : new ArrayList<>())
+                .options(new ArrayList<>(questionDto.getOptions()))
                 .correctAnswer(questionDto.getCorrectAnswer())
-                .correctAnswers(questionDto.getCorrectAnswers())
+                .correctAnswers(new ArrayList<>(questionDto.getCorrectAnswers()))
                 .type(questionDto.getType())
                 .build();
 
@@ -403,9 +403,12 @@ public class AdminServiceImpl implements AdminService {
         question.setText(questionDto.getText());
         question.setExplanation(questionDto.getExplanation());
         question.setLesson(resolveQuestionLesson(questionDto, question.getCourse()));
-        question.setOptions(questionDto.getOptions() != null ? questionDto.getOptions() : new ArrayList<>());
+        // Keep Hibernate's managed collections; normalized DTO lists are immutable.
+        question.getOptions().clear();
+        question.getOptions().addAll(questionDto.getOptions());
         question.setCorrectAnswer(questionDto.getCorrectAnswer());
-        question.setCorrectAnswers(questionDto.getCorrectAnswers());
+        question.getCorrectAnswers().clear();
+        question.getCorrectAnswers().addAll(questionDto.getCorrectAnswers());
         question.setType(questionDto.getType());
 
         Question saved = questionRepository.save(question);

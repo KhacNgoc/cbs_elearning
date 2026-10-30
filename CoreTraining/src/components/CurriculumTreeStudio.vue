@@ -3135,7 +3135,7 @@ watch(
   border: 1px solid var(--border-color);
   padding: 0.12rem 0.42rem;
   border-radius: 6px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-family);
 }
 
 .node-desc-tooltip-trigger {
@@ -3718,7 +3718,7 @@ watch(
 
 .code-input {
   flex: 1;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-family);
   letter-spacing: 0.5px;
 }
 

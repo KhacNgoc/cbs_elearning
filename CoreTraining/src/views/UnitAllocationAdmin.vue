@@ -2422,7 +2422,7 @@ async function handleRemoveAllocation(item: AllocationRow) {
 }
 
 .step-number {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-family);
   font-size: 0.72rem;
   font-weight: 700;
   color: var(--primary-ink);
@@ -2741,7 +2741,7 @@ async function handleRemoveAllocation(item: AllocationRow) {
 }
 
 .kpi-val {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-family);
   font-weight: 700;
   font-size: 0.79rem;
   color: var(--text-main);
@@ -2857,7 +2857,7 @@ async function handleRemoveAllocation(item: AllocationRow) {
 .filter-count-badge {
   font-size: 0.74rem;
   color: var(--text-muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-family);
 }
 
 .btn-tree-expand-toggle {
@@ -3181,7 +3181,7 @@ async function handleRemoveAllocation(item: AllocationRow) {
 }
 
 .node-code-badge {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-family);
   font-size: 0.73rem;
   font-weight: 700;
   color: var(--primary-ink);
@@ -3573,7 +3573,7 @@ async function handleRemoveAllocation(item: AllocationRow) {
 
 /* CODE & NAME COLS */
 .code-col code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-family);
   font-size: 0.76rem;
   font-weight: 600;
   background: var(--bg-main);
@@ -3844,7 +3844,7 @@ async function handleRemoveAllocation(item: AllocationRow) {
 
 .item-code {
   color: var(--primary-ink);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-family);
   font-size: 0.76rem;
   font-weight: 600;
 }
@@ -3911,7 +3911,7 @@ async function handleRemoveAllocation(item: AllocationRow) {
 .course-count-badge {
   font-size: 0.73rem;
   font-weight: 600;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-family);
   background: var(--primary-light);
   color: var(--primary-ink);
   padding: 0.18rem 0.6rem;
@@ -4021,7 +4021,7 @@ async function handleRemoveAllocation(item: AllocationRow) {
 }
 
 .course-code-tag {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-family);
   color: var(--primary-ink);
   font-weight: 600;
   font-size: 0.75rem;
@@ -4135,7 +4135,7 @@ async function handleRemoveAllocation(item: AllocationRow) {
 }
 
 .impeccable-desc-popover .popover-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-family);
   font-size: 0.72rem;
   font-weight: 700;
   color: var(--primary-ink);

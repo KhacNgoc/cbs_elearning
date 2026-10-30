@@ -61,6 +61,17 @@ button, input, textarea, select {
   font-family: inherit;
 }
 
+/* Use a fixed bold weight: the browser's `bolder` can turn a semibold
+   table cell into extra-bold text, making the same label look unrelated. */
+b, strong {
+  font-weight: 700;
+}
+
+table, caption, th, td, button, input, textarea, select,
+input::file-selector-button {
+  font-family: var(--font-family);
+}
+
 /* Shared action cursors; component-specific text and drag cursors take precedence. */
 :where(
   button, a[href], select, summary,
