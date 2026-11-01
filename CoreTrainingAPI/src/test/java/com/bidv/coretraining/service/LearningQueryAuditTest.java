@@ -27,7 +27,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ContextConfiguration(classes = com.bidv.coretraining.CoreTrainingApiApplication.class)
 @Import({ QuizContextServiceImpl.class, QuizSummaryServiceImpl.class, LearningAccessServiceImpl.class, LearningOutlineServiceImpl.class, TrainingStructureServiceImpl.class,
         LearnerWorkspaceServiceImpl.class, CourseMapperImpl.class, LessonProgressServiceImpl.class, CourseServiceImpl.class,
-        com.bidv.coretraining.service.impl.QuizServiceImpl.class, QuizMapperImpl.class, com.fasterxml.jackson.databind.ObjectMapper.class })
+        com.bidv.coretraining.service.impl.QuizServiceImpl.class, QuizMapperImpl.class, com.fasterxml.jackson.databind.ObjectMapper.class,
+        com.bidv.coretraining.repository.impl.UnitAllocationNativeRepositoryImpl.class })
 class LearningQueryAuditTest {
     @Autowired QuizContextService quizContext;
 

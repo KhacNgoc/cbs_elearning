@@ -95,11 +95,11 @@ test('learner role hides detailed permissions and saves the learner toggle; mana
     assert.ok(rows[0].textContent.includes('Theo đơn vị của tài khoản'));
     assert.ok(rows[1].textContent.includes('Phân quyền'));
     click(document, 'Thêm role'); await settle();
-    assert.equal(document.querySelector('[aria-label="Là học viên"]').getAttribute('aria-checked'), 'true');
+    assert.equal(document.querySelector('[aria-label="Role học viên"]').getAttribute('aria-checked'), 'true');
     assert.equal(document.querySelector('[aria-label="Cho phép tham gia học tập"]'), null);
-    document.querySelector('[aria-label="Là học viên"]').click(); await nextTick();
+    document.querySelector('[aria-label="Role học viên"]').click(); await nextTick();
     assert.ok(document.querySelector('[aria-label="Cho phép tham gia học tập"]'));
-    document.querySelector('[aria-label="Là học viên"]').click(); await nextTick();
+    document.querySelector('[aria-label="Role học viên"]').click(); await nextTick();
     const form = document.querySelector('.admin-modal-dialog');
     const nameInput = form.querySelector('input');
     nameInput.value = 'Học viên mới';
@@ -109,7 +109,7 @@ test('learner role hides detailed permissions and saves the learner toggle; mana
     assert.equal(saved[0].learnerRole, true);
     assert.equal(saved[0].learningEnabled, true);
     click(rows[1], 'Sửa'); await settle();
-    document.querySelector('[aria-label="Là học viên"]').click(); await nextTick();
+    document.querySelector('[aria-label="Role học viên"]').click(); await nextTick();
     assert.ok(document.body.textContent.includes('toàn bộ quyền quản trị và phạm vi đơn vị của role này sẽ được gỡ'));
     app.unmount(); await settle();
     app = createApp(permissionView.default);

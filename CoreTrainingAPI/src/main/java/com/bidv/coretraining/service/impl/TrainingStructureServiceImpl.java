@@ -29,6 +29,7 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
 
     private final AuthorizationService authorization;
     private final OrganizationUnitRepository organizationUnits;
+    private final UnitAllocationNativeRepository catalogNative;
     private final TrainingDomainRepository domains;
     private final TrainingProgramRepository programs;
     private final CourseRepository courses;
@@ -41,7 +42,9 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
     public TrainingStructureServiceImpl(TrainingDomainRepository domains, TrainingProgramRepository programs,
             CourseRepository courses, ChapterRepository chapters, LessonRepository lessons, UserRepository users,
             CourseMapper mapper,
-            LearningOutlineService learningOutline, LearningAccessService learningAccess, CourseImageService courseImages, AuthorizationService authorization, OrganizationUnitRepository organizationUnits, LessonProgressRepository progress) {
+            LearningOutlineService learningOutline, LearningAccessService learningAccess, CourseImageService courseImages,
+            AuthorizationService authorization, OrganizationUnitRepository organizationUnits,
+            LessonProgressRepository progress, UnitAllocationNativeRepository catalogNative) {
         this.domains = domains;
         this.programs = programs;
         this.courses = courses;
@@ -55,6 +58,7 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
         this.authorization = authorization;
         this.organizationUnits = organizationUnits;
         this.progress = progress;
+        this.catalogNative = catalogNative;
     }
 
     private String required(String value, String label) {
@@ -129,9 +133,13 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
 
     private boolean canUpdateDomain(TrainingDomain d) {
         var u = authorization.current();
+        if (AccessPolicy.system(u)) {
+            return true;
+        }
         return AccessPolicy.has(u, "catalog:update")
-                && programs.findByDomainId(d.getId()).stream().allMatch(
-                        p -> AccessPolicy.allowsProgram(u, "catalog:update", p));
+                && programs.findByDomainId(d.getId()).stream()
+                        .filter(p -> !"DELETED".equals(p.getStatus()))
+                        .allMatch(p -> AccessPolicy.allowsProgram(u, "catalog:update", p));
     }
 
     private DomainDto domainDto(TrainingDomain d) {
@@ -363,46 +371,22 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
                 c.getUnitGrants().put(uId, "MANDATORY");
             }
             courses.save(c);
-            enrollStaffForCourse(c, mandatoryUnitIds);
+        }
+        if (!programCourses.isEmpty()) {
+            List<String> cIds = programCourses.stream().map(Course::getId).toList();
+            catalogNative.enrollStaffForCourses(cIds, mandatoryUnitIds);
         }
     }
 
-    private List<User> findActiveStaffInUnits(Set<String> rootUnitIds) {
-        if (rootUnitIds == null || rootUnitIds.isEmpty()) return List.of();
-        // The unit tree is small; resolve the subtree first so only its users are loaded.
-        Set<String> subtree = organizationUnits.findAll().stream()
-                .filter(n -> AccessPolicy.ancestors(n).stream()
-                        .anyMatch(rootUnitIds::contains))
-                .map(OrganizationUnit::getId).collect(java.util.stream.Collectors.toSet());
-        if (subtree.isEmpty()) return List.of();
-        return users.findByOrganizationUnitIdIn(subtree).stream().filter(User::activeAccount).toList();
-    }
-
     private void enrollStaffForCourse(Course course, Set<String> mandatoryUnitIds) {
-        List<User> staff = findActiveStaffInUnits(mandatoryUnitIds);
-        for (User u : staff) {
-            if (!u.getRegisteredCourses().contains(course)) {
-                u.getRegisteredCourses().add(course);
-                users.save(u);
-            }
+        if (course != null && course.getId() != null) {
+            catalogNative.enrollStaffForCourses(List.of(course.getId()), mandatoryUnitIds);
         }
     }
 
     private void unenrollUnstartedStaffForCourse(Course course, Set<String> unitIds) {
-        List<User> staff = findActiveStaffInUnits(unitIds);
-        Set<String> courseLessonIds = course.getChapters().stream()
-                .flatMap(ch -> ch.getLessons().stream())
-                .map(Lesson::getId)
-                .collect(java.util.stream.Collectors.toSet());
-        for (User u : staff) {
-            if (u.getRegisteredCourses().contains(course)) {
-                boolean hasCompletedAnyLesson = u.getCompletedLessons().stream()
-                        .anyMatch(l -> courseLessonIds.contains(l.getId()));
-                if (!hasCompletedAnyLesson) {
-                    u.getRegisteredCourses().remove(course);
-                    users.save(u);
-                }
-            }
+        if (course != null && course.getId() != null) {
+            catalogNative.unenrollUnstartedStaff(List.of(course.getId()), unitIds);
         }
     }
 
@@ -600,17 +584,26 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
                 .toList();
     }
 
+    public PagedResult<DomainListItem> adminDomainsPaged(String search, int page, int size) {
+        String query = (search != null && !search.isBlank()) ? search.trim() : null;
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+        org.springframework.data.domain.Page<TrainingDomain> result = domains.findByFilter(query, pageable);
+        return PagedResult.of(result, d -> DomainListItem.of(domainDto(d),
+                programs.countByDomainIdAndStatusNot(d.getId(), "DELETED")));
+    }
+
     public PagedResult<CourseDto> adminCoursesByProgramPaged(String programId, String search, int page, int size) {
         String query = (search != null && !search.isBlank()) ? search.trim() : null;
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
         return PagedResult.of(courses.findByProgramIdWithFilter(programId, query, pageable), this::mapToAdminCourseDto);
     }
 
-    public PagedResult<ProgramDto> adminProgramsPaged(String domainId, String search, int page, int size) {
+    public PagedResult<ProgramListItem> adminProgramsPaged(String domainId, String search, int page, int size) {
         String query = (search != null && !search.isBlank()) ? search.trim() : null;
         String dId = (domainId != null && !domainId.isBlank()) ? domainId.trim() : null;
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
-        return PagedResult.of(programs.findByDomainIdWithFilter(dId, query, pageable), this::programDto);
+        return PagedResult.of(programs.findByDomainIdWithFilter(dId, query, pageable),
+                p -> ProgramListItem.of(programDto(p), courses.countByProgramIdAndStatusNot(p.getId(), "DELETED")));
     }
 
     public void allocateCoursesToUnit(String unitId, String grantType, String programId, boolean allInProgram, List<String> courseIds) {
@@ -693,35 +686,209 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
             courses.save(c);
         }
 
-        List<User> staffInUnit = findActiveStaffInUnits(Set.of(unit.getId()));
+        List<String> targetCourseIds = targetCourses.stream().map(Course::getId).toList();
+        int unitUsersCount = catalogNative.countActiveStaffInUnits(Set.of(unit.getId()));
         int enrolledUsersCount = 0;
 
         if ("MANDATORY".equals(normalizedGrant)) {
-            // Bắt buộc: Tự động đăng ký toàn bộ khóa học cho tất cả nhân sự trong phòng ban (vào thẳng "Khóa học của tôi")
-            for (User u : staffInUnit) {
-                boolean changed = false;
-                for (Course c : targetCourses) {
-                    if (!u.getRegisteredCourses().contains(c)) {
-                        u.getRegisteredCourses().add(c);
-                        changed = true;
-                    }
-                }
-                if (changed) {
-                    users.save(u);
-                }
-                if (!targetCourses.isEmpty()) {
-                    enrolledUsersCount++;
-                }
+            // Bắt buộc: Tự động ghi danh tức thì toàn bộ nhân sự phòng ban (và phòng ban con) qua 1 câu Native SQL duy nhất
+            if (!targetCourseIds.isEmpty()) {
+                catalogNative.enrollStaffForCourses(targetCourseIds, Set.of(unit.getId()));
+                enrolledUsersCount = unitUsersCount;
             }
         } else {
-            // Tự chọn (OPTIONAL): Không tự động đăng ký, để hiển thị ở ngoài ("Khám phá & đăng ký") cho nhân sự tự đăng ký học
-            for (Course c : targetCourses) {
-                unenrollUnstartedStaffForCourse(c, Set.of(unit.getId()));
+            // Tự chọn (OPTIONAL): Rút đăng ký những người chưa bắt đầu học qua 1 câu Native SQL duy nhất
+            if (!targetCourseIds.isEmpty()) {
+                catalogNative.unenrollUnstartedStaff(targetCourseIds, Set.of(unit.getId()));
             }
         }
 
         return new UnitAllocationResultDto(unit.getId(), unit.getName(), type, normalizedGrant, targetCourses.size(),
-                staffInUnit.size(), enrolledUsersCount);
+                unitUsersCount, enrolledUsersCount);
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    public BatchAllocationResultDto batchAssignUnitAllocation(
+            String unitId,
+            List<BatchAllocationItem> items) {
+        authorization.permission("CATALOG_MANAGE");
+        OrganizationUnit unit = authorization.unit(required(unitId, "Đơn vị áp dụng"));
+        authorization.scope(unit);
+        if (!com.bidv.coretraining.security.AccessPolicy.activeUnit(unit)) {
+            throw new BadRequestException("Đơn vị " + unit.getName() + " đã ngừng hoạt động");
+        }
+
+        if (items == null || items.isEmpty()) {
+            throw new BadRequestException("Vui lòng chọn ít nhất 1 nội dung để phân bổ");
+        }
+
+        Set<String> mandatoryCourseIds = new HashSet<>();
+        Set<String> optionalCourseIds = new HashSet<>();
+        Map<String, Course> coursesToSave = new HashMap<>();
+        Map<String, TrainingProgram> programsToSave = new HashMap<>();
+        Map<String, TrainingDomain> domainsToSave = new HashMap<>();
+
+        int domainsCount = 0;
+        int programsCount = 0;
+        int coursesCount = 0;
+
+        // Process items in specificity order: domain first, then program, then individual courses
+        // so that specific child grant types override broader parent grant types.
+        List<BatchAllocationItem> sortedItems = items.stream()
+                .filter(i -> i != null && i.categoryType() != null && i.targetId() != null)
+                .sorted(java.util.Comparator.comparingInt(i -> {
+                    String t = i.categoryType().trim().toLowerCase();
+                    if ("domain".equals(t)) return 1;
+                    if ("program".equals(t)) return 2;
+                    return 3;
+                }))
+                .toList();
+
+        for (BatchAllocationItem item : sortedItems) {
+            String type = item.categoryType().trim().toLowerCase();
+            String grant = "MANDATORY".equalsIgnoreCase(item.grantType()) ? "MANDATORY" : "OPTIONAL";
+            String targetId = item.targetId();
+
+            if ("domain".equals(type)) {
+                TrainingDomain d = domainsToSave.computeIfAbsent(targetId, id ->
+                        domains.findById(id).orElseThrow(() -> new ResourceNotFoundException("Domain", "id", id)));
+                d.getUnits().add(unit);
+                if (d.getUnitGrants() == null) d.setUnitGrants(new HashMap<>());
+                d.getUnitGrants().put(unit.getId(), grant);
+                domainsCount++;
+
+                List<TrainingProgram> domainPrograms = programs.findByDomainId(d.getId()).stream()
+                        .filter(p -> !"DELETED".equals(p.getStatus()))
+                        .toList();
+                for (TrainingProgram p : domainPrograms) {
+                    TrainingProgram pToSave = programsToSave.computeIfAbsent(p.getId(), pid -> p);
+                    pToSave.getUnits().add(unit);
+                    if (pToSave.getUnitGrants() == null) pToSave.setUnitGrants(new HashMap<>());
+                    pToSave.getUnitGrants().put(unit.getId(), grant);
+
+                    List<Course> pCourses = courses.findByProgramIdAndStatusNot(p.getId(), "DELETED");
+                    for (Course c : pCourses) {
+                        Course cToSave = coursesToSave.computeIfAbsent(c.getId(), cid -> c);
+                        if (cToSave.getUnitGrants() == null) cToSave.setUnitGrants(new HashMap<>());
+                        cToSave.getUnitGrants().put(unit.getId(), grant);
+                        if ("MANDATORY".equals(grant)) {
+                            mandatoryCourseIds.add(cToSave.getId());
+                            optionalCourseIds.remove(cToSave.getId());
+                        } else {
+                            optionalCourseIds.add(cToSave.getId());
+                            mandatoryCourseIds.remove(cToSave.getId());
+                        }
+                    }
+                }
+            } else if ("program".equals(type)) {
+                TrainingProgram p = programsToSave.computeIfAbsent(targetId, id ->
+                        programs.findById(id).orElseThrow(() -> new ResourceNotFoundException("Program", "id", id)));
+                p.getUnits().add(unit);
+                if (p.getUnitGrants() == null) p.setUnitGrants(new HashMap<>());
+                p.getUnitGrants().put(unit.getId(), grant);
+                if (p.getDomain() != null) {
+                    TrainingDomain d = domainsToSave.computeIfAbsent(p.getDomain().getId(), did -> p.getDomain());
+                    d.getUnits().add(unit);
+                }
+                programsCount++;
+
+                List<Course> pCourses = courses.findByProgramIdAndStatusNot(p.getId(), "DELETED");
+                for (Course c : pCourses) {
+                    Course cToSave = coursesToSave.computeIfAbsent(c.getId(), cid -> c);
+                    if (cToSave.getUnitGrants() == null) cToSave.setUnitGrants(new HashMap<>());
+                    cToSave.getUnitGrants().put(unit.getId(), grant);
+                    if ("MANDATORY".equals(grant)) {
+                        mandatoryCourseIds.add(cToSave.getId());
+                        optionalCourseIds.remove(cToSave.getId());
+                    } else {
+                        optionalCourseIds.add(cToSave.getId());
+                        mandatoryCourseIds.remove(cToSave.getId());
+                    }
+                }
+            } else if ("course".equals(type)) {
+                Course c = coursesToSave.computeIfAbsent(targetId, id ->
+                        courses.findById(id).orElseThrow(() -> new ResourceNotFoundException("Course", "id", id)));
+                if (!"DELETED".equals(c.getStatus())) {
+                    if (c.getUnitGrants() == null) c.setUnitGrants(new HashMap<>());
+                    c.getUnitGrants().put(unit.getId(), grant);
+                    if (c.getProgram() != null) {
+                        TrainingProgram p = programsToSave.computeIfAbsent(c.getProgram().getId(), pid -> c.getProgram());
+                        p.getUnits().add(unit);
+                        if (p.getDomain() != null) {
+                            TrainingDomain d = domainsToSave.computeIfAbsent(p.getDomain().getId(), did -> p.getDomain());
+                            d.getUnits().add(unit);
+                        }
+                    }
+                    coursesCount++;
+                    if ("MANDATORY".equals(grant)) {
+                        mandatoryCourseIds.add(c.getId());
+                        optionalCourseIds.remove(c.getId());
+                    } else {
+                        optionalCourseIds.add(c.getId());
+                        mandatoryCourseIds.remove(c.getId());
+                    }
+                }
+            }
+        }
+
+        domains.saveAll(domainsToSave.values());
+        programs.saveAll(programsToSave.values());
+        for (Course c : coursesToSave.values()) {
+            ensureCourseLearnableWhenAllocated(c);
+        }
+        courses.saveAll(coursesToSave.values());
+
+        int unitUsersCount = catalogNative.countActiveStaffInUnits(Set.of(unit.getId()));
+        int enrolledUsersCount = 0;
+
+        if (!mandatoryCourseIds.isEmpty()) {
+            catalogNative.enrollStaffForCourses(new ArrayList<>(mandatoryCourseIds), Set.of(unit.getId()));
+            enrolledUsersCount = unitUsersCount;
+        }
+        if (!optionalCourseIds.isEmpty()) {
+            catalogNative.unenrollUnstartedStaff(new ArrayList<>(optionalCourseIds), Set.of(unit.getId()));
+        }
+
+        return new BatchAllocationResultDto(unit.getId(), unit.getName(), domainsCount, programsCount, coursesCount,
+                coursesToSave.size(), unitUsersCount, enrolledUsersCount, "SUCCESS");
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    public BatchSyncResultDto batchSyncUnitAllocations(
+            String unitId,
+            List<BatchChangeItem> changes) {
+        authorization.permission("CATALOG_MANAGE");
+        OrganizationUnit unit = authorization.unit(required(unitId, "Đơn vị áp dụng"));
+        authorization.scope(unit);
+        if (!com.bidv.coretraining.security.AccessPolicy.activeUnit(unit)) {
+            throw new BadRequestException("Đơn vị " + unit.getName() + " đã ngừng hoạt động");
+        }
+
+        if (changes == null || changes.isEmpty()) {
+            return BatchSyncResultDto.noChanges("Không có thay đổi nào cần lưu");
+        }
+
+        int updatedCount = 0;
+        int removedCount = 0;
+
+        for (BatchChangeItem item : changes) {
+            if (item == null || item.categoryType() == null || item.targetId() == null) continue;
+            String action = item.action() == null ? "UPDATE_GRANT" : item.action().trim().toUpperCase();
+            String type = item.categoryType().trim().toLowerCase();
+            String targetId = item.targetId();
+
+            if ("REMOVE".equals(action)) {
+                removeUnitAllocation(unitId, type, targetId);
+                removedCount++;
+            } else {
+                String grant = "MANDATORY".equalsIgnoreCase(item.grantType()) ? "MANDATORY" : "OPTIONAL";
+                toggleUnitAllocationGrantType(unitId, type, targetId, grant);
+                updatedCount++;
+            }
+        }
+
+        return new BatchSyncResultDto(unit.getId(), unit.getName(), updatedCount, removedCount,
+                updatedCount + removedCount, "SUCCESS", null);
     }
 
     public UnitAllocationResultDto toggleUnitAllocationGrantType(
@@ -781,14 +948,38 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
                 c.getUnitGrants().remove(unitId);
                 courses.save(c);
             }
-            unenrollUnstartedStaffForCourse(c, Set.of(unitId));
+        }
+        if (!affectedCourses.isEmpty()) {
+            List<String> cIds = affectedCourses.stream().map(Course::getId).toList();
+            catalogNative.unenrollUnstartedStaff(cIds, Set.of(unitId));
         }
 
         return new UnitAllocationRemovalDto(unitId, affectedCourses.size());
     }
 
     public List<CourseDto> adminCoursesByUnit(String unitId) {
-        return courses.findByUnitGrant(unitId).stream()
+        // Collect courses explicitly assigned to unit OR whose program/domain is assigned to unit
+        Set<String> courseIds = new HashSet<>();
+        for (Course c : courses.findByUnitGrant(unitId)) {
+            courseIds.add(c.getId());
+        }
+        for (Course c : courses.findAll()) {
+            if ("DELETED".equals(c.getStatus())) continue;
+            boolean hasCourseGrant = c.getUnitGrants() != null && c.getUnitGrants().containsKey(unitId);
+            boolean hasProgramGrant = c.getProgram() != null && (
+                    (c.getProgram().getUnitGrants() != null && c.getProgram().getUnitGrants().containsKey(unitId)) ||
+                    (c.getProgram().getUnits() != null && c.getProgram().getUnits().stream().anyMatch(u -> unitId.equals(u.getId())))
+            );
+            boolean hasDomainGrant = c.getProgram() != null && c.getProgram().getDomain() != null && (
+                    (c.getProgram().getDomain().getUnitGrants() != null && c.getProgram().getDomain().getUnitGrants().containsKey(unitId)) ||
+                    (c.getProgram().getDomain().getUnits() != null && c.getProgram().getDomain().getUnits().stream().anyMatch(u -> unitId.equals(u.getId())))
+            );
+            if (hasCourseGrant || hasProgramGrant || hasDomainGrant) {
+                courseIds.add(c.getId());
+            }
+        }
+        return courses.findAllById(courseIds).stream()
+                .filter(c -> !"DELETED".equals(c.getStatus()))
                 .map(this::mapToAdminCourseDto)
                 .toList();
     }
@@ -817,12 +1008,45 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
                     optional.add(entry.getKey());
                 }
             }
-        } else if (c.getProgram() != null && c.getProgram().getUnitGrants() != null) {
-            for (var entry : c.getProgram().getUnitGrants().entrySet()) {
-                if ("MANDATORY".equalsIgnoreCase(entry.getValue())) {
-                    mandatory.add(entry.getKey());
-                } else {
-                    optional.add(entry.getKey());
+        }
+        if (c.getProgram() != null) {
+            if (c.getProgram().getUnitGrants() != null) {
+                for (var entry : c.getProgram().getUnitGrants().entrySet()) {
+                    if (!mandatory.contains(entry.getKey()) && !optional.contains(entry.getKey())) {
+                        if ("MANDATORY".equalsIgnoreCase(entry.getValue())) {
+                            mandatory.add(entry.getKey());
+                        } else {
+                            optional.add(entry.getKey());
+                        }
+                    }
+                }
+            }
+            if (c.getProgram().getUnits() != null) {
+                for (OrganizationUnit u : c.getProgram().getUnits()) {
+                    if (!mandatory.contains(u.getId()) && !optional.contains(u.getId())) {
+                        optional.add(u.getId());
+                    }
+                }
+            }
+            if (c.getProgram().getDomain() != null) {
+                TrainingDomain d = c.getProgram().getDomain();
+                if (d.getUnitGrants() != null) {
+                    for (var entry : d.getUnitGrants().entrySet()) {
+                        if (!mandatory.contains(entry.getKey()) && !optional.contains(entry.getKey())) {
+                            if ("MANDATORY".equalsIgnoreCase(entry.getValue())) {
+                                mandatory.add(entry.getKey());
+                            } else {
+                                optional.add(entry.getKey());
+                            }
+                        }
+                    }
+                }
+                if (d.getUnits() != null) {
+                    for (OrganizationUnit u : d.getUnits()) {
+                        if (!mandatory.contains(u.getId()) && !optional.contains(u.getId())) {
+                            optional.add(u.getId());
+                        }
+                    }
                 }
             }
         }
@@ -891,42 +1115,20 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
 
     public void deleteDomain(String id) {
         authorization.permission("CATALOG_MANAGE");
-        TrainingDomain d = domains.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Domain", "id", id));
+        domains.findById(id).orElseThrow(() -> new ResourceNotFoundException("Domain", "id", id));
         String suffix = "_DEL_" + (System.currentTimeMillis() % 100000);
-        d.setStatus("DELETED");
-        if (d.getCode() != null && !d.getCode().contains("_DEL_")) {
-            d.setCode(d.getCode() + suffix);
-        }
-        domains.saveAndFlush(d);
-
-        List<TrainingProgram> childPrograms = programs.findByDomainId(id).stream()
-                .filter(p -> !"DELETED".equals(p.getStatus()))
-                .toList();
-        for (TrainingProgram p : childPrograms) {
-            deleteProgramInternal(p, suffix);
-        }
+        int negBase = -Math.abs((int) (System.currentTimeMillis() % 900000) + 1000);
+        catalogNative.unenrollUnstartedStaff(catalogNative.courseIdsInDomain(id));
+        catalogNative.softDeleteDomainTree(id, suffix, negBase);
     }
 
     public void deleteProgram(String id) {
         authorization.permission("CATALOG_MANAGE");
-        TrainingProgram p = programs.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Program", "id", id));
+        programs.findById(id).orElseThrow(() -> new ResourceNotFoundException("Program", "id", id));
         String suffix = "_DEL_" + (System.currentTimeMillis() % 100000);
-        deleteProgramInternal(p, suffix);
-    }
-
-    private void deleteProgramInternal(TrainingProgram p, String suffix) {
-        p.setStatus("DELETED");
-        if (p.getCode() != null && !p.getCode().contains("_DEL_")) {
-            p.setCode(p.getCode() + suffix);
-        }
-        programs.saveAndFlush(p);
-
-        List<Course> childCourses = courses.findByProgramIdAndStatusNot(p.getId(), "DELETED");
-        for (Course c : childCourses) {
-            deleteCourseInternal(c, suffix);
-        }
+        int negBase = -Math.abs((int) (System.currentTimeMillis() % 900000) + 1000);
+        catalogNative.unenrollUnstartedStaff(catalogNative.courseIdsInProgram(id));
+        catalogNative.softDeleteProgramTree(id, suffix, negBase);
     }
 
     public void deleteChapter(String id) {
@@ -962,29 +1164,9 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
         Course c = course(id);
         authorization.edit(c);
         String suffix = "_DEL_" + (System.currentTimeMillis() % 100000);
-        deleteCourseInternal(c, suffix);
-    }
-
-    private void deleteCourseInternal(Course c, String suffix) {
-        c.setStatus("DELETED");
-        if (c.getCode() != null && !c.getCode().contains("_DEL_")) {
-            c.setCode(c.getCode() + suffix);
-        }
         int negBase = -Math.abs((int) (System.currentTimeMillis() % 900000) + 1000);
-        int chIdx = 1;
-        for (Chapter ch : c.getChapters()) {
-            ch.setStatus("DELETED");
-            if (ch.getCode() != null && !ch.getCode().contains("_DEL_")) {
-                ch.setCode(ch.getCode() + suffix);
-            }
-            ch.setChapterOrder(negBase - (chIdx++));
-            int lIdx = 1;
-            for (Lesson l : ch.getLessons()) {
-                l.setStatus("DELETED");
-                l.setLessonOrder(negBase - (chIdx * 100) - (lIdx++));
-            }
-        }
-        courses.saveAndFlush(c);
+        catalogNative.unenrollUnstartedStaff(Set.of(id));
+        catalogNative.softDeleteCourseTree(id, suffix, negBase);
     }
 
     public void reorderChapters(String id, List<String> ids) {
@@ -1064,4 +1246,13 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
     public void requireCourse(String id, String username) {
         LearningPolicy.assertCourseAccess(user(username), course(id));
     }
+
+    public int countActiveStaffInUnitsNative(Collection<String> unitIds) {
+        return catalogNative.countActiveStaffInUnits(unitIds);
+    }
+
+    public UnitAllocationDirectoryDto getUnitAllocationDirectoryPaged(String search, String type, String status, int page, int size) {
+        return catalogNative.unitAllocationDirectory(search, type, status, page, size);
+    }
+
 }

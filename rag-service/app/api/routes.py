@@ -71,3 +71,11 @@ async def generate_quiz(request: QuizGenerationRequest):
 @router.post("/summarize", response_model=SummaryResponse)
 async def summarize(request: SummaryRequest):
     return await summarize_conversation(request)
+
+
+from app.schemas import LessonDiffSummaryRequest, LessonDiffSummaryResponse
+from app.services.summary import summarize_lesson_diff
+
+@router.post("/summarize-lesson-diff", response_model=LessonDiffSummaryResponse)
+async def summarize_diff(request: LessonDiffSummaryRequest):
+    return await summarize_lesson_diff(request)

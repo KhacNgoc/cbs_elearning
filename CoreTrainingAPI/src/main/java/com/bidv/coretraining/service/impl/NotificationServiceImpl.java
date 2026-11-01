@@ -8,11 +8,13 @@ import com.bidv.coretraining.repository.NotificationRepository;
 import com.bidv.coretraining.repository.UserRepository;
 import com.bidv.coretraining.service.NotificationService;
 import com.bidv.coretraining.websocket.NotificationWebSocketHandler;
+import com.bidv.coretraining.repository.NotificationNativeRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class NotificationServiceImpl implements NotificationService {
@@ -20,12 +22,16 @@ public class NotificationServiceImpl implements NotificationService {
     private final UserRepository userRepository;
     private final NotificationWebSocketHandler socketHandler;
 
+    private final NotificationNativeRepository nativeQueries;
+
     public NotificationServiceImpl(NotificationRepository repository,
             UserRepository userRepository,
-            NotificationWebSocketHandler socketHandler) {
+            NotificationWebSocketHandler socketHandler,
+            NotificationNativeRepository nativeQueries) {
         this.repository = repository;
         this.userRepository = userRepository;
         this.socketHandler = socketHandler;
+        this.nativeQueries = nativeQueries;
     }
 
     @Override
@@ -66,6 +72,52 @@ public class NotificationServiceImpl implements NotificationService {
                 .filter(u -> u.activeAccount() && (com.bidv.coretraining.security.AccessPolicy.system(u)
                         || com.bidv.coretraining.security.AccessPolicy.allows(u, "enrollments:update", unit)))
                 .forEach(u -> create(u.getUsername(), type, title, message, targetUrl));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public int countCompletedLearners(String lessonId) {
+        if (lessonId == null || lessonId.isBlank()) return 0;
+        return nativeQueries.countCompletedLearners(lessonId);
+    }
+
+    @Override
+    @Transactional
+    public int notifyLessonUpdateToCompletedLearners(String lessonId, String title, String message, String targetUrl) {
+        if (lessonId == null || lessonId.isBlank()) return 0;
+
+        // 1. Bulk insert notifications for users who completed this lesson
+        int inserted = nativeQueries.insertForCompletedLearners(lessonId, title, message, targetUrl);
+        if (inserted <= 0) return 0;
+
+        // 2. Fetch usernames of online users to push via WebSocket
+        List<String> usernames = nativeQueries.completedLearnerUsernames(lessonId);
+
+        NotificationDto dto = NotificationDto.builder()
+                .type(NotificationType.COURSE_CONTENT_UPDATED)
+                .title(title)
+                .message(message)
+                .targetUrl(targetUrl)
+                .read(false)
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager
+                    .registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            for (String uname : usernames) {
+                                socketHandler.sendToUser(uname, dto);
+                            }
+                        }
+                    });
+        } else {
+            for (String uname : usernames) {
+                socketHandler.sendToUser(uname, dto);
+            }
+        }
+        return inserted;
     }
 
     @Override

@@ -22,6 +22,15 @@ public class TrainingStructureController {
         return service.catalog();
     }
 
+    @GetMapping("/admin/catalog/units/staff-count")
+    public StaffCountDto countActiveStaffInUnits(
+            @RequestParam(name = "unitIds", required = false) Set<String> unitIds) {
+        long count = (unitIds == null || unitIds.isEmpty())
+                ? 0L
+                : service.countActiveStaffInUnitsNative(unitIds);
+        return new StaffCountDto(count);
+    }
+
     @GetMapping("/admin/training/next-code")
     public NextCodeDto nextCode(
             @RequestParam(defaultValue = "program") String type,
@@ -64,6 +73,26 @@ public class TrainingStructureController {
         return service.adminCourses();
     }
 
+    @GetMapping("/admin/unit-allocations/directory")
+    public UnitAllocationDirectoryDto getUnitAllocationDirectory(
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "ALL") String type,
+            @RequestParam(defaultValue = "ALL") String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return service.getUnitAllocationDirectoryPaged(search, type, status, page, size);
+    }
+
+    @PostMapping("/admin/unit-allocations/batch-assign")
+    public BatchAllocationResultDto batchAssignUnitAllocation(@RequestBody UnitBatchAllocationRequest request) {
+        return service.batchAssignUnitAllocation(request.unitId(), request.items());
+    }
+
+    @PostMapping("/admin/unit-allocations/batch-sync")
+    public BatchSyncResultDto batchSyncUnitAllocations(@RequestBody UnitBatchSyncRequest request) {
+        return service.batchSyncUnitAllocations(request.unitId(), request.changes());
+    }
+
     @PostMapping("/admin/unit-allocations/assign")
     public UnitAllocationResultDto assignUnitAllocation(@RequestBody UnitAllocationAssignRequest request) {
         return service.assignUnitAllocation(
@@ -95,8 +124,16 @@ public class TrainingStructureController {
         return service.removeUnitAllocation(unitId, categoryType, targetId);
     }
 
+    @GetMapping({"/admin/domains/paged", "/admin/domains", "/admin/training-domains/paged", "/admin/training/domains/paged"})
+    public PagedResult<DomainListItem> domainsPaged(
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return service.adminDomainsPaged(search, page, size);
+    }
+
     @GetMapping({"/admin/programs/paged", "/admin/programs/by-domain"})
-    public PagedResult<ProgramDto> programsPaged(
+    public PagedResult<ProgramListItem> programsPaged(
             @RequestParam(required = false) String domainId,
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,

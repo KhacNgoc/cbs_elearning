@@ -23,6 +23,28 @@
       @complete="markAsCompleted"
       @open-content="sidebarOpen = true"
     />
+        <!-- BANNER NỘI DUNG CẬP NHẬT MỚI -->
+    <div
+      v-if="latestChangelog && showChangelogBanner"
+      class="lesson-changelog-banner"
+    >
+      <div class="banner-content">
+        <span class="banner-badge">
+          <Sparkles :size="13" /> Cập nhật mới
+        </span>
+        <span class="banner-text">
+          <strong>Nội dung thay đổi:</strong> {{ latestChangelog.changeSummary }}
+        </span>
+      </div>
+      <button
+        type="button"
+        class="btn-close-banner"
+        title="Đóng thông báo"
+        @click="showChangelogBanner = false"
+      >
+        ×
+      </button>
+    </div>
     <div class="learning-stage" :class="{ 'sidebar-hidden': !sidebarOpen }">
       <LessonMediaStage
         v-if="lesson && chapter && !lessonLoading"
@@ -235,7 +257,7 @@ import {
   watch,
 } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { AlertTriangle, ChevronLeft, ChevronRight, X } from "lucide-vue-next";
+import { AlertTriangle, ChevronLeft, ChevronRight, X, Sparkles } from "lucide-vue-next";
 import { useCourseStore } from "../stores/courseStore";
 import { useUserStore } from "../stores/userStore";
 import { axiosClient } from "../api/axiosClient";
@@ -259,6 +281,24 @@ import LessonDiscussion from "../components/lesson/LessonDiscussion.vue";
 import LessonVideoNotes from "../components/lesson/LessonVideoNotes.vue";
 
 const props = defineProps<{ id: string }>();
+const latestChangelog = ref<{ changeSummary: string; createdAt: string } | null>(null);
+const showChangelogBanner = ref(true);
+
+async function loadLatestChangelog() {
+  if (!props.id) return;
+  try {
+    const res = await axiosClient.get(`/api/lessons/${props.id}/latest-changelog`);
+    if (res.data && res.data.changeSummary) {
+      latestChangelog.value = res.data;
+      showChangelogBanner.value = true;
+    } else {
+      latestChangelog.value = null;
+    }
+  } catch (e) {
+    latestChangelog.value = null;
+  }
+}
+
 const router = useRouter();
 const route = useRoute();
 const bookmarkReady = ref(false);
@@ -592,6 +632,7 @@ onBeforeUnmount(() => {
 watch(
   () => props.id,
   (newId) => {
+    void loadLatestChangelog();
     // Capture the old lesson's id and snapshot synchronously; network writes run in the background.
     void persistCurrentProgress();
     bookmarkReady.value = false;
@@ -2493,6 +2534,59 @@ const deleteComment = async (commentId: number) => {
     width: 100%;
   }
 }
+
+.lesson-changelog-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 1.25rem;
+  margin: 0.5rem 1.5rem 0;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 8px;
+  color: var(--text-main);
+  font-size: 0.84rem;
+  animation: slideDown 0.3s ease;
+}
+.banner-content {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex: 1;
+}
+.banner-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.18rem 0.55rem;
+  background: #f59e0b;
+  color: #111827;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+.banner-text {
+  line-height: 1.4;
+}
+.btn-close-banner {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 0.3rem;
+}
+.btn-close-banner:hover {
+  color: var(--text-main);
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* Lesson format controls in the learning header. */
 .learning-header .back-button,
 .learning-header .header-actions {

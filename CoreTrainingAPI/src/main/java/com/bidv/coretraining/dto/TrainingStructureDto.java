@@ -108,6 +108,67 @@ public final class TrainingStructureDto {
     public record UnitAllocationRemovalDto(String unitId, int removedCoursesCount) {
     }
 
+    /** Domain row of the admin domain list, with its live program count. */
+    public record DomainListItem(String id, String code, String name, String description, String status,
+            Set<String> allowedActions, String businessModule, Integer seqNumber, Set<String> unitIds,
+            Set<String> mandatoryUnitIds, Set<String> optionalUnitIds, long programsCount) {
+        public static DomainListItem of(DomainDto d, long programsCount) {
+            return new DomainListItem(d.id(), d.code(), d.name(), d.description(), d.status(), d.allowedActions(),
+                    d.businessModule(), d.seqNumber(), d.unitIds(), d.mandatoryUnitIds(), d.optionalUnitIds(),
+                    programsCount);
+        }
+    }
+
+    /** Program row of the admin program list, with its live course count. */
+    public record ProgramListItem(String id, String domainId, String code, String name, String description,
+            String status, Set<String> unitIds, Set<String> allowedActions, String businessModule, String level,
+            Set<String> mandatoryUnitIds, Set<String> optionalUnitIds, Boolean autoEnrollStaff, Integer seqNumber,
+            long coursesCount) {
+        public static ProgramListItem of(ProgramDto p, long coursesCount) {
+            return new ProgramListItem(p.id(), p.domainId(), p.code(), p.name(), p.description(), p.status(),
+                    p.unitIds(), p.allowedActions(), p.businessModule(), p.level(), p.mandatoryUnitIds(),
+                    p.optionalUnitIds(), p.autoEnrollStaff(), p.seqNumber(), coursesCount);
+        }
+    }
+
+    public record StaffCountDto(long count) {
+    }
+
+    public record BatchAllocationItem(String categoryType, String targetId, String grantType) {
+    }
+
+    public record UnitBatchAllocationRequest(String unitId, List<BatchAllocationItem> items) {
+    }
+
+    public record BatchChangeItem(String action, String categoryType, String targetId, String grantType) {
+    }
+
+    public record UnitBatchSyncRequest(String unitId, List<BatchChangeItem> changes) {
+    }
+
+    public record BatchAllocationResultDto(String unitId, String unitName, int domainsCount, int programsCount,
+            int coursesCount, int totalAffectedCourses, int unitUsersCount, int enrolledUsersCount, String status) {
+    }
+
+    public record BatchSyncResultDto(String unitId, String unitName, Integer updatedCount, Integer removedCount,
+            Integer totalChanges, String status, String message) {
+        public static BatchSyncResultDto noChanges(String message) {
+            return new BatchSyncResultDto(null, null, null, null, null, "SUCCESS", message);
+        }
+    }
+
+    public record UnitAllocationDirectoryDto(List<Item> items, int page, int size, int totalElements, int totalPages,
+            Stats stats) {
+        public record Item(String id, String name, String type, boolean active, String parentId, int domainCount,
+                int programCount, int courseCount,
+                @com.fasterxml.jackson.annotation.JsonProperty("isAllocated") boolean isAllocated) {
+        }
+
+        public record Stats(int totalCount, int allocatedCount, int unallocatedCount, int branchCount,
+                int departmentCount) {
+        }
+    }
+
     public record BatchCourseAllocationRequest(String unitId, String grantType, String programId, boolean allInProgram,
             List<String> courseIds) {
     }

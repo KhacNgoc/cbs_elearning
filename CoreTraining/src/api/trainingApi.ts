@@ -111,4 +111,68 @@ export const trainingApi = {
   async lesson(id: string) {
     return (await axiosClient.get<Lesson>(`/api/lessons/${id}`)).data;
   },
+  async domainsPaged(params?: { search?: string; page?: number; size?: number }) {
+    return (
+      await axiosClient.get<{
+        items: (TrainingDomain & { programsCount?: number })[];
+        page: number;
+        size: number;
+        totalElements: number;
+        totalPages: number;
+        hasNext: boolean;
+      }>("/api/admin/domains/paged", { params })
+    ).data;
+  },
+  async programsPaged(params?: { domainId?: string; search?: string; page?: number; size?: number }) {
+    return (
+      await axiosClient.get<{
+        items: (TrainingProgram & { coursesCount?: number })[];
+        page: number;
+        size: number;
+        totalElements: number;
+        totalPages: number;
+        hasNext: boolean;
+      }>("/api/admin/programs/paged", { params })
+    ).data;
+  },
+  async coursesByProgramPaged(programId: string, params?: { search?: string; page?: number; size?: number }) {
+    return (
+      await axiosClient.get<{
+        items: Course[];
+        page: number;
+        size: number;
+        totalElements: number;
+        totalPages: number;
+        hasNext: boolean;
+      }>(`/api/admin/programs/${encodeURIComponent(programId)}/courses`, { params })
+    ).data;
+  },
+  async unitDirectoryPaged(params?: { search?: string; type?: string; status?: string; page?: number; size?: number }) {
+    return (
+      await axiosClient.get<{
+        items: {
+          id: string;
+          name: string;
+          type: string;
+          active: boolean;
+          parentId?: string;
+          domainCount: number;
+          programCount: number;
+          courseCount: number;
+          isAllocated: boolean;
+        }[];
+        page: number;
+        size: number;
+        totalElements: number;
+        totalPages: number;
+        stats: {
+          totalCount: number;
+          allocatedCount: number;
+          unallocatedCount: number;
+          branchCount: number;
+          departmentCount: number;
+        };
+      }>("/api/admin/unit-allocations/directory", { params })
+    ).data;
+  },
 };

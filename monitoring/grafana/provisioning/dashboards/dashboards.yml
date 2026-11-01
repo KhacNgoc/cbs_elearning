@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: 'CBS E-Learning'
+    orgId: 1
+    folder: 'CBS E-Learning'
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/json

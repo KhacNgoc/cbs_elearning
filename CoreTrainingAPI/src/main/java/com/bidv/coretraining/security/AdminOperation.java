@@ -51,6 +51,7 @@ public record AdminOperation(String page, String action) {
         else if (p.startsWith("/api/admin/enrollment-requests"))
             page = "enrollments";
         else if (p.startsWith("/api/admin/training") || p.startsWith("/api/admin/programs")
+                || p.startsWith("/api/admin/domains")
                 || p.startsWith("/api/admin/unit-allocations"))
             page = "courses";
         else if (p.contains("/documents") && !p.equals("/api/admin/documents/upload"))

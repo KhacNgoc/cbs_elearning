@@ -33,7 +33,7 @@ public interface TrainingStructureService {
 
     public PagedResult<CourseDto> adminCoursesByProgramPaged(String programId, String search, int page, int size);
 
-    public PagedResult<ProgramDto> adminProgramsPaged(String domainId, String search, int page, int size);
+    public PagedResult<ProgramListItem> adminProgramsPaged(String domainId, String search, int page, int size);
 
     public void allocateCoursesToUnit(String unitId, String grantType, String programId, boolean allInProgram, List<String> courseIds);
 
@@ -86,4 +86,15 @@ public interface TrainingStructureService {
     public void requireLesson(String id, String username);
 
     public void requireCourse(String id, String username);
+
+    public int countActiveStaffInUnitsNative(java.util.Collection<String> unitIds);
+
+    public PagedResult<DomainListItem> adminDomainsPaged(String search, int page, int size);
+
+    public BatchAllocationResultDto batchAssignUnitAllocation(String unitId, List<BatchAllocationItem> items);
+
+    public BatchSyncResultDto batchSyncUnitAllocations(String unitId, List<BatchChangeItem> changes);
+
+    public UnitAllocationDirectoryDto getUnitAllocationDirectoryPaged(String search, String type, String status,
+            int page, int size);
 }
