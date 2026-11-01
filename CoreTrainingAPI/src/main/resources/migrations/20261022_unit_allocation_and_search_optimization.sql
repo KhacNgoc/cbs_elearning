@@ -263,21 +263,5 @@ BEGIN
 END $$;
 
 
--- ----------------------------------------------------------------------------
--- 7. KHỞI TẠO ĐƠN VỊ TỔ CHỨC CƠ BẢN (NẾU CHƯA CÓ)
--- ----------------------------------------------------------------------------
-INSERT INTO organization_units (id, name, type, active, parent_id) VALUES
-    ('HO', 'Hội sở chính BIDV', 'UNIT', true, NULL),
-    ('HO_QLRR', 'Ban Quản trị rủi ro & Tuân thủ', 'DEPARTMENT', true, 'HO'),
-    ('HO_KHDN', 'Ban Khách hàng doanh nghiệp', 'DEPARTMENT', true, 'HO'),
-    ('HO_KHCN', 'Ban Khách hàng cá nhân', 'DEPARTMENT', true, 'HO'),
-    ('HO_CNTT', 'Trung tâm Công nghệ thông tin', 'DEPARTMENT', true, 'HO'),
-    ('CN_HANOI', 'BIDV Chi nhánh Hà Nội', 'UNIT', true, NULL),
-    ('CN_HANOI_PGD1', 'Phòng Giao dịch Tràng Tiền', 'DEPARTMENT', true, 'CN_HANOI'),
-    ('CN_HOANKIEM', 'BIDV Chi nhánh Hoàn Kiếm', 'UNIT', true, NULL),
-    ('CN_HOANKIEM_PGD1', 'Phòng Giao dịch Lý Thường Kiệt', 'DEPARTMENT', true, 'CN_HOANKIEM'),
-    ('CN_SAIGON', 'BIDV Chi nhánh TP. Hồ Chí Minh', 'UNIT', true, NULL),
-    ('CN_SAIGON_PGD1', 'Phòng Giao dịch Bến Thành', 'DEPARTMENT', true, 'CN_SAIGON')
-ON CONFLICT (id) DO NOTHING;
 
 COMMIT;

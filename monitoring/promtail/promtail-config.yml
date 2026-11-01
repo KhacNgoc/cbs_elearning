@@ -1,0 +1,30 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: info
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: backend-service
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: backend
+          service: cbs-elearning-backend
+          __path__: /var/log/backend/*.log
+    pipeline_stages:
+      - multiline:
+          firstline: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}'
+          max_wait_time: 3s
+      - regex:
+          expression: '^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z?|[^\s]+)\s+(?P<level>[A-Z]+)\s+\[(?P<thread>[^\]]+)\]\s+\[traceId=(?P<traceId>[^\]]*)\]\s+(?P<logger>[^\s]+)\s+-\s+(?P<message>.*)$'
+      - labels:
+          level:
+          traceId:
+          logger:
