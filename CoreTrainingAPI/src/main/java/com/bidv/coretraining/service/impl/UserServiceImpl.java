@@ -1,22 +1,22 @@
 package com.bidv.coretraining.service.impl;
 
-import com.bidv.coretraining.dto.UserMapper;
+import com.bidv.coretraining.mapper.UserMapper;
 import com.bidv.coretraining.dto.UserProfileDto;
 import com.bidv.coretraining.dto.UserProgressDto;
 import com.bidv.coretraining.entity.Lesson;
 import com.bidv.coretraining.entity.User;
 import com.bidv.coretraining.entity.Course;
 import com.bidv.coretraining.entity.UserQuizScore;
-import com.bidv.coretraining.entity.EnrollmentStatus;
+import com.bidv.coretraining.enums.EnrollmentStatus;
 import com.bidv.coretraining.entity.CourseEnrollmentRequest;
-import com.bidv.coretraining.entity.NotificationType;
+import com.bidv.coretraining.enums.NotificationType;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
 import com.bidv.coretraining.repository.LessonRepository;
 import com.bidv.coretraining.repository.QuestionRepository;
 import com.bidv.coretraining.repository.UserRepository;
 import com.bidv.coretraining.repository.UserQuizScoreRepository;
 import com.bidv.coretraining.repository.CourseEnrollmentRequestRepository;
-import com.bidv.coretraining.service.LearningPolicy;
+import com.bidv.coretraining.policy.LearningPolicy;
 import com.bidv.coretraining.service.UserService;
 import com.bidv.coretraining.service.NotificationService;
 import com.bidv.coretraining.service.LessonProgressService;
@@ -65,26 +65,23 @@ public class UserServiceImpl implements UserService {
 
         @Override
         @Transactional
-        public UserProfileDto updateProfile(String username, java.util.Map<String, String> fields) {
-                if (!java.util.Set.of("fullName", "email", "avatarColor").containsAll(fields.keySet()))
-                        throw new com.bidv.coretraining.exception.BadRequestException(
-                                        "Chỉ được cập nhật tên, email và màu đại diện");
+        public UserProfileDto updateProfile(String username, com.bidv.coretraining.dto.UpdateProfileRequest request) {
                 User user = userRepository.findByUsername(username).orElseThrow();
-                String name = fields.get("fullName");
+                String name = request.fullName();
                 if (name != null) {
                         if (name.isBlank())
                                 throw new com.bidv.coretraining.exception.BadRequestException(
                                                 "Tên không được để trống");
                         user.setFullName(name.trim());
                 }
-                String email = fields.get("email");
+                String email = request.email();
                 if (email != null) {
                         if (!email.matches("[^\\s@]+@[^\\s@]+\\.[^\\s@]+"))
                                 throw new com.bidv.coretraining.exception.BadRequestException("Email không hợp lệ");
                         user.setEmail(email);
                 }
-                if (fields.get("avatarColor") != null)
-                        user.setAvatarColor(fields.get("avatarColor"));
+                if (request.avatarColor() != null)
+                        user.setAvatarColor(request.avatarColor());
                 userRepository.save(user);
                 return getUserProfile(username);
         }
@@ -133,7 +130,7 @@ public class UserServiceImpl implements UserService {
                 Lesson lesson = lessonRepository.findById(lessonId)
                                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
 
-                com.bidv.coretraining.service.LearningPolicy.assertLessonAccess(user, lesson);
+                com.bidv.coretraining.policy.LearningPolicy.assertLessonAccess(user, lesson);
                 lessonProgressService.completeContent(username, lessonId);
                 if (lesson.isQuizRequired()
                                 && !hasPassedLessonQuiz(user, lesson)) {
@@ -294,7 +291,9 @@ public class UserServiceImpl implements UserService {
         @Override
         @Transactional
         public void changePassword(String username, String newPassword) {
-                if (newPassword == null || newPassword.length() < 8)
+                if (newPassword == null || newPassword.isBlank())
+                        throw new com.bidv.coretraining.exception.BadRequestException("Mật khẩu mới không được để trống!");
+                if (newPassword.length() < 8)
                         throw new com.bidv.coretraining.exception.BadRequestException(
                                         "Mật khẩu phải có tối thiểu 8 ký tự");
                 User user = userRepository.findByUsername(username)

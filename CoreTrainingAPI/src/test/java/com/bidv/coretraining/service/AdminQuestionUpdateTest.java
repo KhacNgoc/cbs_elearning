@@ -1,21 +1,23 @@
 package com.bidv.coretraining.service;
+import com.bidv.coretraining.mapper.QuizMapper;
+import com.bidv.coretraining.enums.QuestionType;
 
 import com.bidv.coretraining.dto.*;
 import com.bidv.coretraining.entity.*;
 import com.bidv.coretraining.repository.*;
-import com.bidv.coretraining.service.impl.AdminServiceImpl;
+import com.bidv.coretraining.service.impl.QuizAdminServiceImpl;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.test.util.ReflectionTestUtils;
 import java.util.ArrayList;
 import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @DataJpaTest(showSql = false, properties = {"spring.config.location=classpath:access-test.yml", "spring.sql.init.mode=never"})
+@org.springframework.test.context.ContextConfiguration(classes = com.bidv.coretraining.CoreTrainingApiApplication.class)
 class AdminQuestionUpdateTest {
     @Autowired EntityManager em;
     @Autowired CourseRepository courses;
@@ -44,11 +46,8 @@ class AdminQuestionUpdateTest {
         var id = question.getId();
         em.clear();
 
-        var service = new AdminServiceImpl(courses, lessons, questions, mock(CourseMapper.class),
-                mock(QuizMapper.class), mock(UserRepository.class),
-                mock(org.springframework.security.crypto.password.PasswordEncoder.class),
-                mock(CourseEnrollmentRequestRepository.class), mock(NotificationService.class), mock(UserGroupRepository.class));
-        ReflectionTestUtils.setField(service, "authorization", mock(AuthorizationService.class));
+        var service = new QuizAdminServiceImpl(mock(AuthorizationService.class), courses, lessons, questions,
+                mock(QuizMapper.class), mock(TrainingStructureService.class), mock(QuizGenerationService.class));
         var answers = type == QuestionType.SINGLE_CHOICE ? List.of(2) : List.of(2, 0);
         var request = QuestionDto.builder().courseId("C").lessonId("L").text("Edited")
                 .options(List.of(" New A ", "New B", "New C", "New D"))

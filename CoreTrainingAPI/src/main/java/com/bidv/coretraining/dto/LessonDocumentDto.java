@@ -1,7 +1,7 @@
 package com.bidv.coretraining.dto;
 
-import com.bidv.coretraining.entity.DocumentType;
-import com.bidv.coretraining.entity.DocumentPurpose;
+import com.bidv.coretraining.enums.DocumentType;
+import com.bidv.coretraining.enums.DocumentPurpose;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

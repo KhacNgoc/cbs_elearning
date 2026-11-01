@@ -28,6 +28,7 @@ public interface CourseRepository extends JpaRepository<Course, String> {
             @Param("instructor") boolean instructor);
 
     List<Course> findByProgramIdAndStatusNot(String programId, String status);
+    List<Course> findByStatus(String status);
 
     @Query("SELECT c FROM Course c WHERE c.program.id = :programId AND c.status <> 'DELETED' " +
            "AND (:search IS NULL OR :search = '' OR c.name ILIKE CONCAT('%', :search, '%') OR c.code ILIKE CONCAT('%', :search, '%')) " +

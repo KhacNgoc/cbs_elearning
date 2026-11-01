@@ -2,7 +2,7 @@ package com.bidv.coretraining.service.impl;
 
 import com.bidv.coretraining.dto.NotificationDto;
 import com.bidv.coretraining.entity.Notification;
-import com.bidv.coretraining.entity.NotificationType;
+import com.bidv.coretraining.enums.NotificationType;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
 import com.bidv.coretraining.repository.NotificationRepository;
 import com.bidv.coretraining.repository.UserRepository;

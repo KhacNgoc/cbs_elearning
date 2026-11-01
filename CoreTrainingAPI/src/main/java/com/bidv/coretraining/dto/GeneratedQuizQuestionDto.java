@@ -1,6 +1,6 @@
 package com.bidv.coretraining.dto;
 
-import com.bidv.coretraining.entity.QuestionType;
+import com.bidv.coretraining.enums.QuestionType;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import lombok.Data;
 

@@ -23,6 +23,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
         @Query(value="select id from users where id=:id for update", nativeQuery=true)
         Optional<Long> lockForLearning(@Param("id") Long id);
 
+        @Query("select count(u) > 0 from User u join u.completedLessons l where l.id in :lessonIds")
+        boolean anyCompletedLessonIn(@Param("lessonIds") java.util.Collection<String> lessonIds);
+        @Query("select count(u) > 0 from User u join u.quizScores s where s.lesson.id in :lessonIds")
+        boolean anyQuizScoreForLessonIn(@Param("lessonIds") java.util.Collection<String> lessonIds);
         Optional<User> findByUsername(String username);
 
         boolean existsByUsername(String username);

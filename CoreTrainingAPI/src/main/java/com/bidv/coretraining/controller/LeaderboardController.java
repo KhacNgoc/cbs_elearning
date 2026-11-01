@@ -1,4 +1,5 @@
 package com.bidv.coretraining.controller;
+import com.bidv.coretraining.dto.LeaderboardReadDto;
 
 import com.bidv.coretraining.dto.LeaderboardUserDto;
 import com.bidv.coretraining.service.LeaderboardService;
@@ -23,7 +24,7 @@ public class LeaderboardController {
     }
 
     @GetMapping("/page")
-    public com.bidv.coretraining.service.LeaderboardReadService.Page page(@org.springframework.web.bind.annotation.RequestParam(defaultValue="0") int page, @org.springframework.web.bind.annotation.RequestParam(defaultValue="25") int size) {
+    public com.bidv.coretraining.dto.LeaderboardReadDto.Page page(@org.springframework.web.bind.annotation.RequestParam(defaultValue="0") int page, @org.springframework.web.bind.annotation.RequestParam(defaultValue="25") int size) {
         return reads.page(auth.current(),page,size);
     }
 

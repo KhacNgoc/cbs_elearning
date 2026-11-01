@@ -9,6 +9,7 @@ import org.springframework.data.domain.PageRequest;
 import java.time.LocalDateTime;
 import static org.assertj.core.api.Assertions.*;
 @DataJpaTest(showSql=false,properties={"spring.config.location=classpath:access-test.yml","spring.sql.init.mode=never"})
+@org.springframework.test.context.ContextConfiguration(classes = com.bidv.coretraining.CoreTrainingApiApplication.class)
 class RagHistoryRepositoryTest {
  @Autowired EntityManager em;@Autowired RagConversationMessageRepository repository;
  @Test void pagesCompleteExchangesIgnoresUnansweredQuestionsAndConsecutiveAssistants(){

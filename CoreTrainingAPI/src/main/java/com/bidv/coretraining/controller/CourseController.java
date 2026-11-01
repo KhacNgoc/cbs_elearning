@@ -78,10 +78,7 @@ public class CourseController {
             @PathVariable String lessonId,
             @PathVariable Long commentId,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
-        boolean isAdmin = userDetails.getAuthorities().stream()
-                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
-        courseService.deleteComment(
-                lessonId, commentId, userDetails.getUsername(), isAdmin);
+        courseService.deleteComment(lessonId, commentId, userDetails.getUsername());
         return ResponseEntity.noContent().build();
     }
 

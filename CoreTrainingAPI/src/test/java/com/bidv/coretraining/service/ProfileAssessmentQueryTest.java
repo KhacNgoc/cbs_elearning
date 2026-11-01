@@ -1,4 +1,8 @@
 package com.bidv.coretraining.service;
+import com.bidv.coretraining.repository.support.LearnerDashboardSqlRelations;
+import com.bidv.coretraining.repository.impl.*;
+import com.bidv.coretraining.service.impl.ProfileAssessmentServiceImpl;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import com.bidv.coretraining.entity.*;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
@@ -10,9 +14,11 @@ import static org.assertj.core.api.Assertions.*;
 // PostgreSQL is the production query engine; H2 2.2 loses bindings in nested parameterized CTEs.
 @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named="spring.datasource.driver-class-name",matches="org.postgresql.Driver")
 @DataJpaTest(showSql=false,properties={"spring.config.location=classpath:access-test.yml","spring.sql.init.mode=never"})
-@Import({LearnerDashboardQuery.class,ProfileAssessmentQuery.class})
+@Import({LearnerDashboardQueryRepositoryImpl.class,LearnerDashboardSqlRelations.class,ProfileAssessmentQueryRepositoryImpl.class,ProfileAssessmentServiceImpl.class})
 class ProfileAssessmentQueryTest {
- @Autowired EntityManager em;@Autowired ProfileAssessmentQuery query;
+ @Autowired EntityManager em;@Autowired ProfileAssessmentService query;
+ @MockBean AuthorizationService auth;
+ private ProfileAssessmentService queryFor(User user){org.mockito.Mockito.when(auth.current()).thenReturn(user);return query;}
  @Test void groupsBeforePageKeepsRevisionBestAndLatestAndBoundsHistory(){
   var domain=TrainingDomain.builder().id("PD").code("PD").name("Domain").build();em.persist(domain);
   var program=TrainingProgram.builder().id("PP").code("PP").name("Program").domain(domain).build();em.persist(program);
@@ -29,11 +35,11 @@ class ProfileAssessmentQueryTest {
   em.persist(UserQuizScore.builder().user(user).course(course).lesson(lesson).score(9).total(10).takenAt(LocalDateTime.of(2026,1,1,0,0)).build());
   em.persist(UserQuizScore.builder().user(user).course(course).score(8).total(10).takenAt(LocalDateTime.of(2026,1,1,0,0)).build());
   em.persist(QuizAttempt.builder().id("hiddenattempt").user(user).quiz(hq).revision(1).score(10).total(10).takenAt(LocalDateTime.of(2026,3,1,0,0)).build());em.flush();
-  var page=query.results(user,0,1,"");assertThat(page.total()).isEqualTo(2);assertThat(page.legacyTotal()).isEqualTo(1);assertThat(page.legacyScores()).hasSize(1);assertThat(page.items()).hasSize(1);assertThat(page.items().get(0).latest().revision()).isEqualTo(2);
-  assertThat(query.results(user,0,10,"dao tao").total()).isEqualTo(2);
-  var second=query.results(user,1,1,"").items().get(0);assertThat(second.attemptCount()).isEqualTo(30);assertThat(second.latest().id()).isEqualTo("A29");assertThat(second.best().id()).isEqualTo("A00");
-  var first=query.history(user,"PQ",1,null,20);assertThat(first.items()).hasSize(20);assertThat(first.hasMore()).isTrue();var older=query.history(user,"PQ",1,first.nextCursor(),20);assertThat(older.items()).hasSize(10);assertThat(older.items()).doesNotContainAnyElementsOf(first.items());
-  assertThat(query.history(user,"hq",1,null,20).items()).isEmpty();assertThatThrownBy(()->query.history(user,"PQ",2,first.nextCursor(),20)).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
-  assertThat(query.stats(user).get("competencies").toString()).contains("value=70");assertThat(page.bestScore()).isEqualTo(100);
+  var page=queryFor(user).results(0,1,"");assertThat(page.total()).isEqualTo(2);assertThat(page.legacyTotal()).isEqualTo(1);assertThat(page.legacyScores()).hasSize(1);assertThat(page.items()).hasSize(1);assertThat(page.items().get(0).latest().revision()).isEqualTo(2);
+  assertThat(queryFor(user).results(0,10,"dao tao").total()).isEqualTo(2);
+  var second=queryFor(user).results(1,1,"").items().get(0);assertThat(second.attemptCount()).isEqualTo(30);assertThat(second.latest().id()).isEqualTo("A29");assertThat(second.best().id()).isEqualTo("A00");
+  var first=queryFor(user).history("PQ",1,null,20);assertThat(first.items()).hasSize(20);assertThat(first.hasMore()).isTrue();var older=queryFor(user).history("PQ",1,first.nextCursor(),20);assertThat(older.items()).hasSize(10);assertThat(older.items()).doesNotContainAnyElementsOf(first.items());
+  assertThat(queryFor(user).history("hq",1,null,20).items()).isEmpty();assertThatThrownBy(()->queryFor(user).history("PQ",2,first.nextCursor(),20)).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+  assertThat(queryFor(user).stats().competencies().toString()).contains("value=70");assertThat(page.bestScore()).isEqualTo(100);
  }
 }

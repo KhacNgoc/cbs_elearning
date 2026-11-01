@@ -1,4 +1,6 @@
 package com.bidv.coretraining.entity;
+import com.bidv.coretraining.enums.DocumentType;
+import com.bidv.coretraining.enums.DocumentPurpose;
 
 import jakarta.persistence.*;
 import lombok.*;

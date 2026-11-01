@@ -23,5 +23,4 @@ public class RegisterRequest {
 
     private String avatarColor;
 
-
 }

@@ -1,6 +1,7 @@
 package com.bidv.coretraining.service;
+import com.bidv.coretraining.policy.LearningPolicy;
 
-import com.bidv.coretraining.dto.CourseMapper;
+import com.bidv.coretraining.mapper.CourseMapper;
 import com.bidv.coretraining.entity.*;
 import org.junit.jupiter.api.Test;
 import org.mapstruct.factory.Mappers;

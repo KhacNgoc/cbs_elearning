@@ -1,4 +1,7 @@
 package com.bidv.coretraining.security;
+import com.bidv.coretraining.enums.DocumentType;
+import com.bidv.coretraining.enums.EnrollmentStatus;
+import com.bidv.coretraining.enums.DocumentPurpose;
 
 import com.bidv.coretraining.entity.*;
 import com.bidv.coretraining.repository.*;
@@ -260,9 +263,11 @@ class AccessSecurityIntegrationTest {
         mvc.perform(get("/api/auth/session").cookie(jwt)).andExpect(status().isOk()).andExpect(jsonPath("$.roles.length()").value(2));
         mvc.perform(get("/api/admin/courses").cookie(jwt)).andExpect(status().isOk());
     }
-    @Test void disabledUnitRevokesAccessAndForeignEnrollmentCannotOverrideScope() throws Exception {
+    // A registration keeps course access even outside the learner's unit scope (e.g. after a unit allocation is removed).
+    @Test void disabledUnitRevokesAccessAndRegistrationKeepsForeignCourseAccess() throws Exception {
+        mvc.perform(get("/api/lessons/LB").cookie(login(learner))).andExpect(status().isForbidden());
         learner.getRegisteredCourses().add(cb);users.saveAndFlush(learner);Cookie jwt=login(learner);
-        mvc.perform(get("/api/lessons/LB").cookie(jwt)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/lessons/LB").cookie(jwt)).andExpect(status().isOk());
         a.setActive(false);units.saveAndFlush(a);
         mvc.perform(get("/api/auth/session").cookie(jwt)).andExpect(status().isUnauthorized());
     }
@@ -401,7 +406,6 @@ class AccessSecurityIntegrationTest {
         String teacher=mvc.perform(get("/api/navigation/me").cookie(login(instructor))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(teacher).doesNotContain("/admin/users","/admin/units","/admin/groups","/admin/permissions");
     }
-
 
     @Autowired AccessRoleRepository dynamicRoles;
     @Autowired com.bidv.coretraining.service.PermissionCache permissionCache;

@@ -1,5 +1,11 @@
 package com.bidv.coretraining.service.impl;
 
+import com.bidv.coretraining.service.PermissionCache;
+import com.bidv.coretraining.security.AccessPolicy;
+import com.bidv.coretraining.dto.ForgotPasswordRequest;
+import com.bidv.coretraining.dto.ResetPasswordOtpRequest;
+import com.bidv.coretraining.dto.ResetPasswordDirectRequest;
+
 import com.bidv.coretraining.dto.JwtAuthenticationResponse;
 import com.bidv.coretraining.dto.LoginRequest;
 import com.bidv.coretraining.dto.RegisterRequest;
@@ -15,33 +21,38 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthServiceImpl implements AuthService {
-    @org.springframework.beans.factory.annotation.Autowired
-    private org.springframework.beans.factory.ObjectProvider<org.springframework.mail.javamail.JavaMailSender> mailSender;
+    private final org.springframework.beans.factory.ObjectProvider<org.springframework.mail.javamail.JavaMailSender> mailSender;
     @org.springframework.beans.factory.annotation.Value("${app.password-reset.from:no-reply@localhost}")
     private String mailFrom;
 
     private final AuthenticationManager authenticationManager;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.bidv.coretraining.service.PermissionCache permissionCache;
+    private final PermissionCache permissionCache;
     private final JwtTokenProvider tokenProvider;
     private final PasswordResetOtpRepository passwordResetOtpRepository;
+    private final UserDetailsService userDetailsService;
 
     public AuthServiceImpl(AuthenticationManager authenticationManager, UserRepository userRepository,
             PasswordEncoder passwordEncoder, JwtTokenProvider tokenProvider,
-            PasswordResetOtpRepository passwordResetOtpRepository) {
+            PasswordResetOtpRepository passwordResetOtpRepository, UserDetailsService userDetailsService,
+            org.springframework.beans.factory.ObjectProvider<org.springframework.mail.javamail.JavaMailSender> mailSender, PermissionCache permissionCache) {
         this.authenticationManager = authenticationManager;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenProvider = tokenProvider;
         this.passwordResetOtpRepository = passwordResetOtpRepository;
+        this.userDetailsService = userDetailsService;
+        this.mailSender = mailSender;
+        this.permissionCache = permissionCache;
     }
 
     @Override
@@ -64,14 +75,28 @@ public class AuthServiceImpl implements AuthService {
         String jwt = tokenProvider.generateToken(authentication);
 
         CustomUserDetails userPrincipal = (CustomUserDetails) authentication.getPrincipal();
-        User user = userPrincipal.getUser();
+        return sessionResponse(userPrincipal.getUser(), jwt);
+    }
 
+    @Override
+    public JwtAuthenticationResponse session(CustomUserDetails principal) {
+        return sessionResponse(principal.getUser(), null);
+    }
+
+    @Override
+    public String reissueToken(String username) {
+        UserDetails fresh = userDetailsService.loadUserByUsername(username);
+        return tokenProvider.generateToken(
+                new UsernamePasswordAuthenticationToken(fresh, null, fresh.getAuthorities()));
+    }
+
+    private JwtAuthenticationResponse sessionResponse(User user, String jwt) {
         return JwtAuthenticationResponse.builder().permissionRevision(permissionCache.revision())
                 .accessToken(jwt)
                 .role(user.getRole())
-                .roles(user.effectiveRoles()).roleNames(com.bidv.coretraining.security.AccessPolicy.roleNames(user))
-                .systemAdmin(com.bidv.coretraining.security.AccessPolicy.system(user))
-                .permissions(com.bidv.coretraining.security.AccessPolicy.permissions(user))
+                .roles(user.effectiveRoles()).roleNames(AccessPolicy.roleNames(user))
+                .systemAdmin(AccessPolicy.system(user))
+                .permissions(AccessPolicy.permissions(user))
                 .unitId(user.getOrganizationUnit() == null ? null : user.getOrganizationUnit().getId())
                 .scopeUnitIds(user.getScopeUnitIds()).status(user.getStatus()).learnerType(user.getLearnerType())
                 .username(user.getUsername())
@@ -103,7 +128,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public void sendPasswordResetOtp(com.bidv.coretraining.dto.ForgotPasswordRequest request) {
+    public void sendPasswordResetOtp(ForgotPasswordRequest request) {
         var sender = mailSender.getIfAvailable();
         if (sender == null)
             throw new org.springframework.web.server.ResponseStatusException(
@@ -140,7 +165,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional(noRollbackFor = BadRequestException.class)
-    public void resetPasswordWithOtp(com.bidv.coretraining.dto.ResetPasswordOtpRequest request) {
+    public void resetPasswordWithOtp(ResetPasswordOtpRequest request) {
         User user = userRepository.findByUsername(request.getUsername())
                 .orElseThrow(() -> new BadRequestException("Mã xác minh không hợp lệ hoặc đã hết hạn"));
         PasswordResetOtp otp = passwordResetOtpRepository.findByUser(user)
@@ -162,7 +187,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public void resetPasswordDirect(com.bidv.coretraining.dto.ResetPasswordDirectRequest request) {
+    public void resetPasswordDirect(ResetPasswordDirectRequest request) {
         throw new org.springframework.security.access.AccessDeniedException(
                 "Đặt lại mật khẩu phải dùng mã xác minh một lần");
     }

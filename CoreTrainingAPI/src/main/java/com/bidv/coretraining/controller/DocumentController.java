@@ -1,5 +1,7 @@
 package com.bidv.coretraining.controller;
 
+import com.bidv.coretraining.service.AuthorizationService;
+
 import com.bidv.coretraining.dto.CourseDocumentDto;
 import com.bidv.coretraining.dto.RagChatRequest;
 import com.bidv.coretraining.dto.RagChatResponse;
@@ -17,14 +19,15 @@ import java.util.List;
 @RestController
 @RequestMapping("/api")
 public class DocumentController {
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.bidv.coretraining.service.AuthorizationService authorization;
+    private final AuthorizationService authorization;
     private final DocumentService documentService;
     private final RagChatService ragChatService;
 
-    public DocumentController(DocumentService documentService, RagChatService ragChatService) {
+    public DocumentController(DocumentService documentService, RagChatService ragChatService,
+            AuthorizationService authorization) {
         this.documentService = documentService;
         this.ragChatService = ragChatService;
+        this.authorization = authorization;
     }
 
     @PostMapping("/admin/courses/{courseId}/documents")

@@ -1,4 +1,6 @@
 package com.bidv.coretraining.service;
+import com.bidv.coretraining.enums.QuestionType;
+import com.bidv.coretraining.enums.EnrollmentStatus;
 
 import com.bidv.coretraining.entity.*;
 import com.bidv.coretraining.repository.*;
@@ -15,7 +17,8 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @DataJpaTest(showSql=false, properties = {"spring.config.location=classpath:access-test.yml", "spring.jpa.hibernate.ddl-auto=create-drop", "spring.sql.init.mode=never"})
-@Import(AdminListQueryService.class)
+@org.springframework.test.context.ContextConfiguration(classes = com.bidv.coretraining.CoreTrainingApiApplication.class)
+@Import({com.bidv.coretraining.service.impl.AdminListQueryServiceImpl.class, com.bidv.coretraining.repository.impl.AdminListQueryRepositoryImpl.class})
 class AdminListQueryTest {
     @Autowired AdminListQueryService query;
     @Autowired EntityManager em;

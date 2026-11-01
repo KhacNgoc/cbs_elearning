@@ -1,4 +1,5 @@
 package com.bidv.coretraining.service;
+import com.bidv.coretraining.service.impl.*;
 
 import com.bidv.coretraining.entity.User;
 import org.junit.jupiter.api.Test;
@@ -15,7 +16,7 @@ class LeaderboardReadServiceTest {
   jdbc.update("insert into organization_units values('a',null,true),('b',null,true)");
   jdbc.update("insert into users values(1,'hidden','Hidden',null,1000,'ACTIVE','ROLE_USER','b'),(2,'inactive','Inactive',null,900,'INACTIVE','ROLE_USER','a'),(3,'admin','Admin',null,800,'ACTIVE','ROLE_ADMIN','a'),(4,'first','First',null,100,'ACTIVE','ROLE_USER','a'),(5,'second','Second',null,100,'ACTIVE','ROLE_USER','a')");
   var actor = User.builder().id(5L).role("ROLE_USER").organizationUnit(com.bidv.coretraining.entity.OrganizationUnit.builder().id("a").build()).build();
-  var service = new LeaderboardReadService(new org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate(jdbc));
+  var service = new LeaderboardReadServiceImpl(new com.bidv.coretraining.repository.impl.LeaderboardQueryRepositoryImpl(new org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate(jdbc)));
   var page = service.page(actor, 0, 1);
   assertThat(page.total()).isEqualTo(2); assertThat(page.items()).hasSize(1);
   assertThat(page.items().get(0).getUsername()).isEqualTo("first");

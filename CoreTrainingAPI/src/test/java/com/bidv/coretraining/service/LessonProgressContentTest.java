@@ -1,4 +1,9 @@
 package com.bidv.coretraining.service;
+import com.bidv.coretraining.repository.projection.LessonAccessView;
+import com.bidv.coretraining.enums.DocumentType;
+import com.bidv.coretraining.enums.DocumentPurpose;
+import com.bidv.coretraining.service.impl.*;
+import com.bidv.coretraining.service.model.AuthorizedLesson;
 
 import com.bidv.coretraining.dto.LessonProgressRequest;
 import com.bidv.coretraining.entity.*;
@@ -6,7 +11,6 @@ import com.bidv.coretraining.exception.BadRequestException;
 import com.bidv.coretraining.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
 import java.util.List;
 import java.util.Optional;
 import static org.assertj.core.api.Assertions.*;
@@ -18,14 +22,12 @@ class LessonProgressContentTest {
     final LessonProgressRepository history = mock(LessonProgressRepository.class);
     final LessonDocumentRepository documents = mock(LessonDocumentRepository.class);
     final LearningAccessService access = mock(LearningAccessService.class);
-    final LessonProgressService service = spy(new LessonProgressService(users, lessons, history));
+    final LessonProgressService service = spy(new LessonProgressServiceImpl(users, lessons, history, access, documents));
     final User learner = User.builder().id(1L).username("learner").build();
     final Lesson lesson = Lesson.builder().id("L1").title("Lesson").version(1L).build();
     final LessonProgress saved = LessonProgress.builder().user(learner).lesson(lesson).completionVersion(1L).build();
 
     @BeforeEach void setup() {
-        ReflectionTestUtils.setField(service, "access", access);
-        ReflectionTestUtils.setField(service, "documents", documents);
         var row = mock(LessonAccessView.class);
         when(row.getId()).thenReturn("L1");
         when(row.getVersion()).thenReturn(1L);
@@ -33,7 +35,7 @@ class LessonProgressContentTest {
         when(row.getHasVideo()).thenAnswer(i -> lesson.getVideoUrl() != null && !lesson.getVideoUrl().isBlank());
         when(lessons.findAccess("L1")).thenReturn(Optional.of(row));
         when(lessons.findProgressRequirements(List.of("L1"))).thenReturn(List.of(row));
-        when(access.requireLesson("learner", "L1")).thenReturn(new LearningAccessService.AuthorizedLesson(learner, null, row));
+        when(access.requireLesson("learner", "L1")).thenReturn(new AuthorizedLesson(learner, null, row));
         when(users.lockForLearning(1L)).thenReturn(Optional.of(1L));
         when(lessons.getReferenceById("L1")).thenReturn(lesson);
         when(history.findByUserIdAndLessonId(1L, "L1")).thenReturn(Optional.of(saved));

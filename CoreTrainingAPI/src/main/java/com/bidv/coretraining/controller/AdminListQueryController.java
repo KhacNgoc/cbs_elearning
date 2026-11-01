@@ -1,9 +1,8 @@
 package com.bidv.coretraining.controller;
+import com.bidv.coretraining.dto.AccessManagementDto;
 
 import com.bidv.coretraining.service.AdminListQueryService;
-import com.bidv.coretraining.service.AdminListQueryService.*;
-import com.bidv.coretraining.service.AccessManagementService;
-import com.bidv.coretraining.service.RoleManagementService;
+import com.bidv.coretraining.dto.AdminListQueryDto.*;
 import com.bidv.coretraining.dto.*;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,7 +24,7 @@ public class AdminListQueryController {
         return reads.users(query, unitId, status, page, size);
     }
     @GetMapping("/access/groups/page")
-    public NumberedPage<AccessManagementService.GroupDto> groups(@RequestParam(defaultValue="") String query,
+    public NumberedPage<AccessManagementDto.GroupDto> groups(@RequestParam(defaultValue="") String query,
             @RequestParam(defaultValue="") String unitId, @RequestParam(defaultValue="1") int page,
             @RequestParam(defaultValue="10") int size) { return reads.groups(query, unitId, page, size); }
     @GetMapping("/access/groups/course-options")

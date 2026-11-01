@@ -1,5 +1,8 @@
 package com.bidv.coretraining.controller;
 
+import com.bidv.coretraining.dto.ResetPasswordDirectRequest;
+
+import com.bidv.coretraining.dto.CsrfTokenDto;
 import com.bidv.coretraining.dto.JwtAuthenticationResponse;
 import com.bidv.coretraining.dto.LoginRequest;
 import com.bidv.coretraining.dto.RegisterRequest;
@@ -20,9 +23,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.bidv.coretraining.service.PermissionCache permissionCache;
-
     private final AuthService authService;
     private final JwtCookieService jwtCookieService;
 
@@ -32,8 +32,8 @@ public class AuthController {
     }
 
     @org.springframework.web.bind.annotation.GetMapping("/csrf")
-    public java.util.Map<String, String> csrf(org.springframework.security.web.csrf.CsrfToken token) {
-        return java.util.Map.of("token", token.getToken());
+    public CsrfTokenDto csrf(org.springframework.security.web.csrf.CsrfToken token) {
+        return new CsrfTokenDto(token.getToken());
     }
 
     @PostMapping("/login")
@@ -58,20 +58,7 @@ public class AuthController {
     @org.springframework.web.bind.annotation.GetMapping("/session")
     public ResponseEntity<JwtAuthenticationResponse> session(
             @AuthenticationPrincipal CustomUserDetails user) {
-        return ResponseEntity.ok(JwtAuthenticationResponse.builder().permissionRevision(permissionCache.revision())
-                .role(user.getUser().getRole())
-                .roles(user.getUser().effectiveRoles())
-                .roleNames(com.bidv.coretraining.security.AccessPolicy.roleNames(user.getUser()))
-                .systemAdmin(com.bidv.coretraining.security.AccessPolicy.system(user.getUser()))
-                .permissions(com.bidv.coretraining.security.AccessPolicy.permissions(user.getUser()))
-                .unitId(user.getUser().getOrganizationUnit() == null ? null
-                        : user.getUser().getOrganizationUnit().getId())
-                .scopeUnitIds(user.getUser().getScopeUnitIds()).status(user.getUser().getStatus())
-                .learnerType(user.getUser().getLearnerType())
-                .username(user.getUsername())
-                .fullName(user.getUser().getFullName())
-                .mustChangePassword(user.getUser().isMustChangePassword())
-                .build());
+        return ResponseEntity.ok(authService.session(user));
     }
 
     @PostMapping("/register")
@@ -94,7 +81,7 @@ public class AuthController {
 
     @PostMapping("/reset-password-direct")
     public ResponseEntity<String> resetPasswordDirect(
-            @Valid @RequestBody com.bidv.coretraining.dto.ResetPasswordDirectRequest resetRequest) {
+            @Valid @RequestBody ResetPasswordDirectRequest resetRequest) {
         authService.resetPasswordDirect(resetRequest);
         return ResponseEntity.ok("Đặt lại mật khẩu thành công!");
     }

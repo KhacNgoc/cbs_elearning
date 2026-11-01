@@ -1,4 +1,5 @@
 package com.bidv.coretraining.service;
+import com.bidv.coretraining.enums.NotificationType;
 
 import com.bidv.coretraining.entity.*;
 import com.bidv.coretraining.repository.NotificationRepository;
