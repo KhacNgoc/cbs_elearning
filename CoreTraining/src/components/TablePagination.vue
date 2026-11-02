@@ -4,7 +4,10 @@
     :class="{ compact }"
     :aria-label="`Phân trang ${unit}`"
   >
-    <span class="page-summary"
+    <span v-if="total === undefined" class="page-summary"
+      >Trang {{ page }}</span
+    >
+    <span v-else class="page-summary"
       >{{ total }} {{ unit }} · Trang {{ page }} / {{ pageCount }}</span
     >
     <div class="page-controls">
@@ -32,7 +35,7 @@
         </button>
         <button
           type="button"
-          :disabled="page >= pageCount"
+          :disabled="hasNext === undefined ? page >= (pageCount ?? 1) : !hasNext"
           aria-label="Trang sau"
           title="Trang sau"
           @click="$emit('update:page', page + 1)"
@@ -48,9 +51,11 @@
 import { ChevronLeft, ChevronRight } from "lucide-vue-next";
 const props = withDefaults(
   defineProps<{
-    total: number;
+    // Omit total/pageCount and pass hasNext for cursor-based lists.
+    total?: number;
     page: number;
-    pageCount: number;
+    pageCount?: number;
+    hasNext?: boolean;
     pageSize: number;
     unit?: string;
     unitLabel?: string;
@@ -62,6 +67,9 @@ const props = withDefaults(
     unitLabel: "Bản ghi",
     compact: false,
     sizes: () => [10, 20, 50, 100],
+    total: undefined,
+    pageCount: undefined,
+    hasNext: undefined,
   },
 );
 const emit = defineEmits<{

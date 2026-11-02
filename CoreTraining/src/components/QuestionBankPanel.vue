@@ -120,12 +120,13 @@
         </tbody>
       </table>
     </div>
-    <nav class="bank-filters" aria-label="Phân trang câu hỏi">
-      <button :disabled="loading || page <= 1" @click="page--">Trang trước</button>
-      <span>Trang {{ page }}</span>
-      <button :disabled="loading || !hasMore" @click="page++">Trang sau</button>
-      <select v-model.number="pageSize" aria-label="Số câu hỏi mỗi trang"><option v-for="size in [10,20,50,100]" :key="size" :value="size">{{ size }}</option></select>
-    </nav>
+    <TablePagination
+      v-model:page="page"
+      v-model:page-size="pageSize"
+      :has-next="!loading && hasMore"
+      unit="câu hỏi"
+      unit-label="Câu hỏi"
+    />
     <div v-if="picker" class="bank-selection">
       <span>Đã chọn {{ selected.length }} câu</span
       ><button
@@ -301,6 +302,7 @@ import {
   type BankQuestion,
 } from "../api/contentToolsApi";
 import AdminModal from "./AdminModal.vue";
+import TablePagination from "./TablePagination.vue";
 import { adminListApi } from "../api/adminListApi";
 import { showToast } from "../utils/toast";
 const props = defineProps<{
