@@ -38,7 +38,7 @@
         >
           <header>
             <h2>Vai trò</h2>
-            <small>{{ roles.length }} role</small>
+            <small>{{ roleTotal }} role</small>
           </header>
           <div class="panel-tools">
             <div class="admin-search-box">
@@ -67,13 +67,14 @@
               <span
                 ><strong>{{ r.name }}</strong
                 ><small>{{ r.code }}</small
-                ><small>{{ r.userIds.length }} tài khoản</small></span
+                ><small>{{ r.memberCount ?? 0 }} tài khoản</small></span
               ><ChevronRight :size="16" />
             </button>
             <p v-if="!filteredRoles.length" class="admin-empty">
               {{ loading ? "Đang tải…" : "Không có role quản trị phù hợp." }}
             </p>
           </div>
+          <TablePagination v-model:page="rolePage" v-model:page-size="roleSize" :total="roleTotal" :page-count="rolePageCount" unit="role" unit-label="Role" compact />
         </section>
         <section
           id="permission-permissions-panel"
@@ -263,7 +264,9 @@
   </main>
 </template>
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
+import { adminListApi } from "../api/adminListApi";
+import TablePagination from "../components/TablePagination.vue";
 import { useRoute } from "vue-router";
 import { RefreshCw, Search, ChevronRight } from "lucide-vue-next";
 import { roleApi, type AccessRole, type AdminPage } from "../api/roleApi";
@@ -280,7 +283,7 @@ const panelTabs = [
 const mobilePanel = ref<"roles" | "permissions" | "units">("permissions");
 const user = useUserStore(),
   route = useRoute();
-const roles = ref<AccessRole[]>([]),
+const roles = ref<(AccessRole & { memberCount?: number })[]>([]),
   pages = ref<AdminPage[]>([]),
   units = ref<OrganizationUnit[]>([]),
   selected = ref<AccessRole | null>(null),
@@ -297,13 +300,16 @@ const actionNames: Record<string, string> = {
   update: "Sửa",
   delete: "Xóa",
 };
-const filteredRoles = computed(() =>
-  roles.value.filter((r) =>
-    `${r.name} ${r.code}`
-      .toLocaleLowerCase("vi")
-      .includes(search.value.toLocaleLowerCase("vi")),
-  ),
-);
+const filteredRoles = roles;
+const rolePage = ref(1), roleSize = ref(10), roleTotal = ref(0), rolePageCount = ref(1);
+let roleRequest = 0;
+let roleTimer: ReturnType<typeof setTimeout> | undefined;
+watch([search, roleSize], () => {
+  ++roleRequest; clearTimeout(roleTimer); rolePage.value = 1;
+  roleTimer = setTimeout(() => { roleTimer = undefined; void loadRoleChoices(); }, 250);
+});
+watch(rolePage, () => { if (!roleTimer) void loadRoleChoices(); });
+onBeforeUnmount(() => { ++roleRequest; clearTimeout(roleTimer); });
 const normalized = (values: string[]) => [...values].sort().join("|");
 const dirty = computed(
   () =>
@@ -378,32 +384,25 @@ function confirmSelect() {
 function reset() {
   if (selected.value) apply(selected.value);
 }
-async function load() {
-  loading.value = true;
+async function loadRoleChoices() {
+  const request = ++roleRequest; loading.value = true;
   try {
-    const data = await Promise.all([
-      roleApi.options(),
-      roleApi.pages(),
-      roleApi.units(),
-    ]);
-    [roles.value, pages.value, units.value] = data;
-    roles.value = roles.value.filter((r) => !r.learnerRole);
-    const r =
-      roles.value.find(
-        (r) => r.id === (route.query.role || selected.value?.id),
-      ) ||
-      roles.value.find((r) => !r.protectedRole) ||
-      roles.value[0];
-    if (r) apply(r);
-    else selected.value = null;
-  } catch (e: any) {
-    showToast(
-      e.response?.data?.message || "Không thể tải cấu hình phân quyền.",
-      "error",
-    );
-  } finally {
-    loading.value = false;
-  }
+    const result = await adminListApi.roles({ query: search.value, page: rolePage.value, size: roleSize.value, managementOnly: true });
+    if (request !== roleRequest) return;
+    roles.value = result.items; roleTotal.value = result.total; rolePageCount.value = result.pageCount;
+  } catch (e: any) { if (request === roleRequest) showToast(e.response?.data?.message || "Không thể tải role.", "error"); }
+  finally { if (request === roleRequest) loading.value = false; }
+}
+async function load() {
+  try {
+    const [, pageOptions, unitOptions] = await Promise.all([loadRoleChoices(), roleApi.pages(), roleApi.units()]);
+    pages.value = pageOptions; units.value = unitOptions;
+    const selectedId = String(route.query.role || selected.value?.id || "");
+    let role = roles.value.find(r => r.id === selectedId);
+    if (!role && selectedId) role = await adminListApi.roleOption(selectedId);
+    role ||= roles.value.find(r => !r.protectedRole) || roles.value[0];
+    if (role) apply(role); else selected.value = null;
+  } catch (e: any) { showToast(e.response?.data?.message || "Không thể tải cấu hình phân quyền.", "error"); }
 }
 async function save() {
   if (!selected.value) return;

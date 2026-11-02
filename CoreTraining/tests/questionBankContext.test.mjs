@@ -10,15 +10,17 @@ const vue = await import('vue');
 const { useTablePagination } = await import('../src/composables/useTablePagination.ts');
 const flush = async () => { for (let i = 0; i < 20; i++) { await Promise.resolve(); await vue.nextTick(); } };
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
-async function fixture(loader) {
+async function fixture(loader, listLoader = async () => ({ items: [], nextCursor: null, hasMore: false })) {
   const { descriptor } = parse(await readFile(new URL('../src/components/QuestionBankPanel.vue', import.meta.url), 'utf8'));
   let code = ts.transpileModule(compileScript(descriptor, { id: 'bank-context-test', inlineTemplate: true }).content,
     { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
   code = code.replace(/import\s+([\s\S]*?)\s+from\s+["']([^"']+)["'];/g, (_, bindings, module) =>
     `const ${bindings.replace(/\bas\b/g, ':')} = modules[${JSON.stringify(module)}];`).replace('export default', 'return');
   const calls = [];
+  const listCalls = [];
   const modules = {
     vue,
+    '../api/adminListApi': { adminListApi: { bank: params => { listCalls.push({ ...params }); return listLoader(params); } } },
     '../api/quizContextApi': { getQuizCourses: async () => ['c1', 'c2'].map(id => ({ id, name: id, lessons: [], adminActions: { exams: ['create', 'update'] } })),
       getQuizContext: params => { calls.push(params); return loader(params); } },
     '../api/contentToolsApi': { contentToolsApi: { bank: async () => [] }, contentToolsError: () => 'error', bankStatus: {}, difficultyLabel: {} },
@@ -27,7 +29,7 @@ async function fixture(loader) {
     '../composables/useTablePagination': { useTablePagination }, '../utils/toast': { showToast() {} },
   };
   const app = vue.createApp(new Function('modules', code)(modules)); app.mount('#app'); await flush();
-  return { app, calls };
+  return { app, calls, listCalls };
 }
 
 test('bank initially loads course options only; course switches ignore stale lesson options', async () => {
@@ -60,5 +62,24 @@ test('failed lesson options can retry without silently clearing the selected les
     assert.equal(attempts, 2);
     assert.equal(document.querySelector('.bank-form-grid [role="alert"]'), null);
     assert.match(document.querySelectorAll('.bank-form-grid select')[1].textContent, /Lesson/);
+  } finally { f.app.unmount(); }
+});
+
+
+test('bank mount fetches one bounded page; filters debounce and discard stale responses', async () => {
+  const old = deferred();
+  const f = await fixture(async () => ({ lessons: [] }), params => params.query === 'old' ? old.promise : Promise.resolve({ items: [], nextCursor: null, hasMore: false }));
+  try {
+    assert.equal(f.listCalls.length, 1);
+    assert.equal(f.listCalls[0].size, 10);
+    const search = document.querySelector('.bank-filters input');
+    search.value = 'old'; search.dispatchEvent(new dom.window.Event('input'));
+    await new Promise(r => setTimeout(r, 300)); await flush();
+    search.value = 'new'; search.dispatchEvent(new dom.window.Event('input'));
+    await new Promise(r => setTimeout(r, 300)); await flush();
+    old.resolve({ items: [{ id: 1, code: 'STALE', text: 'Stale question', options: [], correctAnswers: [], status: 'ACTIVE' }], nextCursor: null, hasMore: false });
+    await flush();
+    assert.equal(f.listCalls.at(-1).query, 'new');
+    assert.doesNotMatch(document.querySelector('.bank-table').textContent, /Stale question/);
   } finally { f.app.unmount(); }
 });

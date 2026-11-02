@@ -2775,7 +2775,7 @@ async function handleExecuteBatchSync() {
 
 .node-code {
   font-size: 0.7rem;
-  font-family: monospace;
+  font-family: var(--font-family);
   background: #e2e8f0;
   color: #475569;
   padding: 0.1rem 0.35rem;

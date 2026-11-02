@@ -1,4 +1,8 @@
 package com.bidv.coretraining.service;
+import com.bidv.coretraining.mapper.*;
+import com.bidv.coretraining.enums.DocumentType;
+import com.bidv.coretraining.enums.DocumentPurpose;
+import com.bidv.coretraining.service.impl.*;
 
 import com.bidv.coretraining.dto.*;
 import com.bidv.coretraining.entity.*;
@@ -21,9 +25,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DataJpaTest(showSql = false, properties = { "spring.config.location=classpath:access-test.yml",
         "spring.sql.init.mode=never", "spring.jpa.properties.hibernate.generate_statistics=true" })
 @ContextConfiguration(classes = com.bidv.coretraining.CoreTrainingApiApplication.class)
-@Import({ QuizContextService.class, QuizSummaryService.class, LearningAccessService.class, LearningOutlineService.class, TrainingStructureService.class,
-        LearnerWorkspaceService.class, CourseMapperImpl.class, LessonProgressService.class, CourseServiceImpl.class,
-        com.bidv.coretraining.service.impl.QuizServiceImpl.class, QuizMapperImpl.class, com.fasterxml.jackson.databind.ObjectMapper.class })
+@Import({ QuizContextServiceImpl.class, QuizSummaryServiceImpl.class, LearningAccessServiceImpl.class, LearningOutlineServiceImpl.class, TrainingStructureServiceImpl.class,
+        LearnerWorkspaceServiceImpl.class, CourseMapperImpl.class, LessonProgressServiceImpl.class, CourseServiceImpl.class,
+        com.bidv.coretraining.service.impl.QuizServiceImpl.class, QuizMapperImpl.class, com.fasterxml.jackson.databind.ObjectMapper.class,
+        com.bidv.coretraining.repository.impl.UnitAllocationNativeRepositoryImpl.class })
 class LearningQueryAuditTest {
     @Autowired QuizContextService quizContext;
 

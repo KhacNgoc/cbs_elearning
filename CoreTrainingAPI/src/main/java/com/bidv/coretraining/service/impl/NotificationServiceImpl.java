@@ -2,14 +2,13 @@ package com.bidv.coretraining.service.impl;
 
 import com.bidv.coretraining.dto.NotificationDto;
 import com.bidv.coretraining.entity.Notification;
-import com.bidv.coretraining.entity.NotificationType;
+import com.bidv.coretraining.enums.NotificationType;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
 import com.bidv.coretraining.repository.NotificationRepository;
 import com.bidv.coretraining.repository.UserRepository;
 import com.bidv.coretraining.service.NotificationService;
 import com.bidv.coretraining.websocket.NotificationWebSocketHandler;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import com.bidv.coretraining.repository.NotificationNativeRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,15 +22,16 @@ public class NotificationServiceImpl implements NotificationService {
     private final UserRepository userRepository;
     private final NotificationWebSocketHandler socketHandler;
 
-    @Autowired
-    private NamedParameterJdbcTemplate namedParameterJdbcTemplate;
+    private final NotificationNativeRepository nativeQueries;
 
     public NotificationServiceImpl(NotificationRepository repository,
             UserRepository userRepository,
-            NotificationWebSocketHandler socketHandler) {
+            NotificationWebSocketHandler socketHandler,
+            NotificationNativeRepository nativeQueries) {
         this.repository = repository;
         this.userRepository = userRepository;
         this.socketHandler = socketHandler;
+        this.nativeQueries = nativeQueries;
     }
 
     @Override
@@ -78,11 +78,7 @@ public class NotificationServiceImpl implements NotificationService {
     @Transactional(readOnly = true)
     public int countCompletedLearners(String lessonId) {
         if (lessonId == null || lessonId.isBlank()) return 0;
-        Integer count = namedParameterJdbcTemplate.queryForObject(
-                "SELECT COUNT(DISTINCT user_id) FROM user_completed_lessons WHERE lesson_id = :lessonId",
-                Map.of("lessonId", lessonId),
-                Integer.class);
-        return count != null ? count : 0;
+        return nativeQueries.countCompletedLearners(lessonId);
     }
 
     @Override
@@ -90,34 +86,12 @@ public class NotificationServiceImpl implements NotificationService {
     public int notifyLessonUpdateToCompletedLearners(String lessonId, String title, String message, String targetUrl) {
         if (lessonId == null || lessonId.isBlank()) return 0;
 
-        Map<String, Object> params = Map.of(
-                "lessonId", lessonId,
-                "title", title,
-                "message", message,
-                "targetUrl", targetUrl != null ? targetUrl : ""
-        );
-
         // 1. Bulk insert notifications for users who completed this lesson
-        String insertSql = """
-            INSERT INTO notifications (recipient_id, type, title, message, target_url, is_read, created_at)
-            SELECT DISTINCT
-                ucl.user_id,
-                'COURSE_CONTENT_UPDATED',
-                :title,
-                :message,
-                :targetUrl,
-                false,
-                NOW()
-            FROM user_completed_lessons ucl
-            WHERE ucl.lesson_id = :lessonId
-            """;
-        int inserted = namedParameterJdbcTemplate.update(insertSql, params);
+        int inserted = nativeQueries.insertForCompletedLearners(lessonId, title, message, targetUrl);
         if (inserted <= 0) return 0;
 
         // 2. Fetch usernames of online users to push via WebSocket
-        List<String> usernames = namedParameterJdbcTemplate.queryForList(
-                "SELECT DISTINCT u.username FROM users u JOIN user_completed_lessons ucl ON u.id = ucl.user_id WHERE ucl.lesson_id = :lessonId",
-                params, String.class);
+        List<String> usernames = nativeQueries.completedLearnerUsernames(lessonId);
 
         NotificationDto dto = NotificationDto.builder()
                 .type(NotificationType.COURSE_CONTENT_UPDATED)

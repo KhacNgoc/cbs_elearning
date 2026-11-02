@@ -7,7 +7,6 @@ import type { LoginRequest } from "../api/authApi";
 import { courseApi } from "../api/courseApi";
 import { userApi } from "../api/userApi";
 import { useNavigationStore } from "./navigationStore";
-import { isMockApi } from "../api/axiosClient";
 import { clearAuthSession, setCachedAuthSession } from "../utils/authSession";
 import { showToast } from "../utils/toast";
 import { useLearningStore } from "./learningStore";
@@ -155,8 +154,6 @@ export const useUserStore = defineStore("user", {
     async login(credentials: LoginRequest) {
       try {
         const res = await authApi.login(credentials);
-        if (isMockApi() && res.accessToken)
-          localStorage.setItem("accessToken", res.accessToken);
         localStorage.setItem("userRole", res.role);
         localStorage.setItem("username", res.username);
         localStorage.setItem("fullName", res.fullName);
@@ -176,7 +173,6 @@ export const useUserStore = defineStore("user", {
         this.mustChangePassword = res.mustChangePassword;
         setCachedAuthSession(res);
 
-        await this.fetchProgress();
         if (this.mustChangePassword) {
           await navigate("/change-password");
         } else {
@@ -284,11 +280,6 @@ export const useUserStore = defineStore("user", {
             this.mustChangePassword ? "true" : "false",
           );
 
-          // Save progress to localstorage for mock caching if active
-          localStorage.setItem(
-            "mockCompletedLessons",
-            JSON.stringify(this.completedLessons),
-          );
         } catch (error) {
           this.progressError =
             "Không thể tải tiến độ và thành tích. Vui lòng thử lại.";
@@ -313,11 +304,6 @@ export const useUserStore = defineStore("user", {
         this.completedLessons = updatedProgress.completedLessons;
         this.points = updatedProgress.points;
 
-        // Save mock complete to local cache
-        localStorage.setItem(
-          "mockCompletedLessons",
-          JSON.stringify(this.completedLessons),
-        );
       } catch (error) {
         console.error("Failed to mark lesson complete:", error);
         throw error;
@@ -332,10 +318,6 @@ export const useUserStore = defineStore("user", {
         progressWriters.delete(this);
         this.lessonProgress = updatedProgress.lessonProgress || {};
         this.points = updatedProgress.points;
-        localStorage.setItem(
-          "mockCompletedLessons",
-          JSON.stringify(this.completedLessons),
-        );
       } catch (error) {
         console.error("Failed to reset lesson:", error);
         throw error;

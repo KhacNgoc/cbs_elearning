@@ -1,4 +1,5 @@
 package com.bidv.coretraining.service;
+import com.bidv.coretraining.enums.NotificationType;
 
 import com.bidv.coretraining.entity.*;
 import com.bidv.coretraining.repository.NotificationRepository;
@@ -17,7 +18,7 @@ import static org.assertj.core.api.Assertions.*;
 
 @DataJpaTest(showSql=false, properties={"spring.config.location=classpath:access-test.yml", "spring.sql.init.mode=never"})
 @ContextConfiguration(classes=com.bidv.coretraining.CoreTrainingApiApplication.class)
-@Import(NotificationServiceImpl.class)
+@Import({ NotificationServiceImpl.class, com.bidv.coretraining.repository.impl.NotificationNativeRepositoryImpl.class })
 class NotificationPaginationTest {
     @Autowired EntityManager em;
     @Autowired NotificationService service;

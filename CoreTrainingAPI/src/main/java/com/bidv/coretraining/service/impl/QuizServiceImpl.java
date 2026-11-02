@@ -1,5 +1,11 @@
 package com.bidv.coretraining.service.impl;
 
+import com.bidv.coretraining.policy.LearningPolicy;
+import com.bidv.coretraining.service.LessonProgressService;
+import com.bidv.coretraining.service.TrainingStructureService;
+import com.bidv.coretraining.mapper.QuizMapper;
+import com.bidv.coretraining.enums.QuestionType;
+
 import com.bidv.coretraining.dto.*;
 import com.bidv.coretraining.entity.*;
 import com.bidv.coretraining.exception.BadRequestException;
@@ -32,7 +38,8 @@ public class QuizServiceImpl implements QuizService {
             LessonRepository lessonRepository,
             UserRepository userRepository, UserQuizScoreRepository userQuizScoreRepository,
             BadgeRepository badgeRepository, UserBadgeRepository userBadgeRepository,
-            QuizMapper quizMapper) {
+            QuizMapper quizMapper,
+            TrainingStructureService structure, LessonProgressService progress, QuizAttemptRepository attempts, com.fasterxml.jackson.databind.ObjectMapper json) {
         this.questionRepository = questionRepository;
         this.courseRepository = courseRepository;
         this.lessonRepository = lessonRepository;
@@ -41,16 +48,16 @@ public class QuizServiceImpl implements QuizService {
         this.badgeRepository = badgeRepository;
         this.userBadgeRepository = userBadgeRepository;
         this.quizMapper = quizMapper;
+        this.structure = structure;
+        this.progress = progress;
+        this.attempts = attempts;
+        this.json = json;
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.bidv.coretraining.service.TrainingStructureService structure;
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.bidv.coretraining.service.LessonProgressService progress;
-    @org.springframework.beans.factory.annotation.Autowired
-    private QuizAttemptRepository attempts;
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.fasterxml.jackson.databind.ObjectMapper json;
+    private final TrainingStructureService structure;
+    private final LessonProgressService progress;
+    private final QuizAttemptRepository attempts;
+    private final com.fasterxml.jackson.databind.ObjectMapper json;
 
     @Override
     @Transactional(readOnly = true)
@@ -84,7 +91,7 @@ public class QuizServiceImpl implements QuizService {
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
-        com.bidv.coretraining.service.LearningPolicy.assertLessonAccess(user, lesson);
+        LearningPolicy.assertLessonAccess(user, lesson);
         if (lesson.getQuiz() == null)
             throw new BadRequestException("Bài học chưa có kiểm tra");
         List<Question> questions = questionRepository.findByLessonId(lessonId);
@@ -179,7 +186,7 @@ public class QuizServiceImpl implements QuizService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course", "id", courseId));
-        com.bidv.coretraining.service.LearningPolicy.assertCourseAccess(user, course);
+        LearningPolicy.assertCourseAccess(user, course);
         UserQuizScore score = userQuizScoreRepository
                 .findByUserIdAndCourseIdAndLessonIsNull(user.getId(), courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz attempt", "courseId", courseId));
@@ -194,7 +201,7 @@ public class QuizServiceImpl implements QuizService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
         Lesson lesson = lessonRepository.findById(lessonId)
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
-        com.bidv.coretraining.service.LearningPolicy.assertLessonAccess(user, lesson);
+        LearningPolicy.assertLessonAccess(user, lesson);
         UserQuizScore score = userQuizScoreRepository.findByUserIdAndLessonId(user.getId(), lessonId)
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz attempt", "lessonId", lessonId));
         return buildReview(score, questionRepository.findByLessonId(lessonId), lesson.getQuizPassingScore());

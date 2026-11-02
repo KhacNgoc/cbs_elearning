@@ -1,13 +1,15 @@
 package com.bidv.coretraining.service;
+import com.bidv.coretraining.mapper.CourseMapper;
+import com.bidv.coretraining.enums.DocumentType;
+import com.bidv.coretraining.enums.DocumentPurpose;
 
 import com.bidv.coretraining.dto.*;
 import com.bidv.coretraining.entity.*;
 import com.bidv.coretraining.exception.BadRequestException;
 import com.bidv.coretraining.repository.*;
-import com.bidv.coretraining.service.impl.AdminServiceImpl;
+import com.bidv.coretraining.service.impl.CourseContentAdminServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
 import java.util.List;
 import java.util.Optional;
 import static org.assertj.core.api.Assertions.*;
@@ -15,18 +17,15 @@ import static org.mockito.Mockito.*;
 
 class AdminLessonContentTest {
     final LessonRepository lessons = mock(LessonRepository.class);
-    final AdminServiceImpl service = new AdminServiceImpl(mock(CourseRepository.class), lessons,
-            mock(QuestionRepository.class), mock(CourseMapper.class), mock(QuizMapper.class),
-            mock(UserRepository.class), mock(org.springframework.security.crypto.password.PasswordEncoder.class),
-            mock(CourseEnrollmentRequestRepository.class), mock(NotificationService.class), mock(UserGroupRepository.class));
+    final CourseContentAdminServiceImpl service = new CourseContentAdminServiceImpl(mock(AuthorizationService.class),
+            mock(AssetAccessService.class), mock(CourseRepository.class), lessons, mock(CourseMapper.class),
+            mock(TrainingStructureService.class), mock(DocumentStorageService.class), mock(VideoStorageService.class));
     final Lesson lesson = Lesson.builder().id("L1").title("Lesson").course(Course.builder().id("C1").build()).build();
     final LessonDocument original = LessonDocument.builder().id(10L).name("Slides").lesson(lesson)
             .documentType(DocumentType.POWERPOINT).fileUrl("/uploads/documents/a.pptx").documentOrder(0).build();
     final LessonDto request = LessonDto.builder().title("Lesson").build();
 
     @BeforeEach void setup() {
-        ReflectionTestUtils.setField(service, "authorization", mock(AuthorizationService.class));
-        ReflectionTestUtils.setField(service, "assets", mock(AssetAccessService.class));
         when(lessons.findById("L1")).thenReturn(Optional.of(lesson));
         when(lessons.saveAndFlush(lesson)).thenReturn(lesson);
         lesson.getDocuments().add(original);

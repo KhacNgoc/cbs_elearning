@@ -1,6 +1,6 @@
 package com.bidv.coretraining.dto;
 
-import com.bidv.coretraining.entity.QuestionType;
+import com.bidv.coretraining.enums.QuestionType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

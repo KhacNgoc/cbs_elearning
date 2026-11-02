@@ -1,4 +1,6 @@
 package com.bidv.coretraining.service;
+import com.bidv.coretraining.enums.DocumentStatus;
+import com.bidv.coretraining.service.impl.*;
 
 import com.bidv.coretraining.entity.*;
 import com.bidv.coretraining.exception.*;
@@ -22,7 +24,7 @@ class DocumentDeletionTest {
         documents = mock(CourseDocumentRepository.class);
         sources = mock(LessonKnowledgeSourceRepository.class);
         rag = mock(RagIngestionService.class);
-        service = new DocumentService(documents, mock(CourseRepository.class), rag, sources, directory.toString());
+        service = new DocumentServiceImpl(documents, mock(CourseRepository.class), rag, sources, directory.toString());
         Path file = Files.writeString(directory.resolve("doc.docx"), "test");
         document = CourseDocument.builder().id("D1").course(Course.builder().id("C1").build())
                 .storagePath(file.toString()).status(DocumentStatus.INDEXED).build();

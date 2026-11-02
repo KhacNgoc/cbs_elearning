@@ -123,8 +123,7 @@
     <TablePagination
       v-model:page="page"
       v-model:page-size="pageSize"
-      :total="filtered.length"
-      :page-count="pageCount"
+      :has-next="!loading && hasMore"
       unit="câu hỏi"
       unit-label="Câu hỏi"
     />
@@ -304,7 +303,7 @@ import {
 } from "../api/contentToolsApi";
 import AdminModal from "./AdminModal.vue";
 import TablePagination from "./TablePagination.vue";
-import { useTablePagination } from "../composables/useTablePagination";
+import { adminListApi } from "../api/adminListApi";
 import { showToast } from "../utils/toast";
 const props = defineProps<{
   picker?: boolean;
@@ -369,43 +368,38 @@ const formCourses = computed(() =>
 const relatedCourse = computed(() =>
   courses.value.find((c) => c.id === form.value.courseId),
 );
-const filtered = computed(() =>
-  items.value.filter(
-    (q) =>
-      (!status.value || q.status === status.value) &&
-      (!difficulty.value || q.difficulty === difficulty.value) &&
-      [q.code, q.text, q.lessonTitle, q.domainName, q.courseName]
-        .join(" ")
-        .toLocaleLowerCase("vi")
-        .includes(search.value.toLocaleLowerCase("vi")),
-  ),
-);
-const {
-  page,
-  pageSize,
-  pageCount,
-  paginated: pageItems,
-} = useTablePagination(filtered);
+const page = ref(1), pageSize = ref(10), hasMore = ref(false);
+const cursors = ref<(string | undefined)[]>([undefined]);
+const pageItems = items;
+const filtered = items;
+let listRequest = 0;
+let filterTimer: ReturnType<typeof setTimeout> | undefined;
 async function load() {
-  if (loading.value) return;
+  const request = ++listRequest;
   loading.value = true;
   error.value = "";
   try {
-    const results = await Promise.all([
-      contentToolsApi.bank(),
-      getQuizCourses(),
-    ]);
-    items.value = results[0];
-    courses.value = results[1];
-    selected.value = selected.value.filter((id) =>
-      items.value.some((q) => q.id === id && q.status === "ACTIVE"),
-    );
+    const result = await adminListApi.bank({ query: search.value, status: status.value,
+      difficulty: difficulty.value, size: pageSize.value, cursor: cursors.value[page.value - 1] });
+    if (request !== listRequest) return;
+    items.value = result.items;
+    hasMore.value = result.hasMore;
+    cursors.value[page.value] = result.nextCursor || undefined;
   } catch (e) {
-    error.value = contentToolsError(e);
+    if (request === listRequest) error.value = contentToolsError(e);
   } finally {
-    loading.value = false;
+    if (request === listRequest) loading.value = false;
   }
 }
+watch([search, status, difficulty, pageSize], () => {
+  ++listRequest;
+  clearTimeout(filterTimer);
+  cursors.value = [undefined];
+  if (page.value !== 1) page.value = 1;
+  filterTimer = setTimeout(() => { filterTimer = undefined; void load(); }, 250);
+});
+watch(page, () => { if (!filterTimer) void load(); });
+onBeforeUnmount(() => { ++listRequest; clearTimeout(filterTimer); });
 function inspect(q: BankQuestion) {
   detail.value = q;
 }
@@ -469,7 +463,10 @@ async function add() {
     saving.value = false;
   }
 }
-onMounted(load);
+onMounted(() => {
+  void load();
+  getQuizCourses().then(result => { courses.value = result; }).catch(e => { error.value = contentToolsError(e); });
+});
 </script>
 <style scoped>
 .bank-panel {

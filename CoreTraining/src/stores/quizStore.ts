@@ -4,6 +4,8 @@ import { quizApi } from "../api/quizApi";
 import type { QuizSubmitResponse } from "../api/quizApi";
 import { useUserStore } from "./userStore";
 
+let quizRequestId = 0;
+
 export const useQuizStore = defineStore("quiz", {
   state: () => ({
     currentCourseId: null as string | null,
@@ -42,6 +44,7 @@ export const useQuizStore = defineStore("quiz", {
 
   actions: {
     async startQuiz(courseId: string, lessonId?: string) {
+      const current = ++quizRequestId;
       this.isLoading = true;
       this.currentCourseId = courseId;
       this.currentLessonId = lessonId || null;
@@ -55,13 +58,15 @@ export const useQuizStore = defineStore("quiz", {
       this.stopTimer();
 
       try {
-        this.questions = await quizApi.getQuizQuestions(courseId, lessonId);
+        const questions = await quizApi.getQuizQuestions(courseId, lessonId);
+        if (current !== quizRequestId) return;
+        this.questions = questions;
         if (this.questions.length > 0) this.startTimer();
       } catch (error) {
         console.error(`Failed to load quiz questions for ${courseId}:`, error);
-        this.questions = [];
+        if (current === quizRequestId) this.questions = [];
       } finally {
-        this.isLoading = false;
+        if (current === quizRequestId) this.isLoading = false;
       }
     },
     selectAnswer(questionId: number, answerIndex: number) {

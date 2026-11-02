@@ -1,6 +1,6 @@
 package com.bidv.coretraining.dto;
 
-import com.bidv.coretraining.entity.EnrollmentStatus;
+import com.bidv.coretraining.enums.EnrollmentStatus;
 import lombok.*;
 
 import java.time.LocalDateTime;

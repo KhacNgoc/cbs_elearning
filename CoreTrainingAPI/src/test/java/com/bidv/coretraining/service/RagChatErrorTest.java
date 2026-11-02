@@ -1,4 +1,5 @@
 package com.bidv.coretraining.service;
+import com.bidv.coretraining.service.impl.*;
 
 import com.bidv.coretraining.dto.RagChatRequest;
 import com.bidv.coretraining.entity.*;
@@ -30,7 +31,7 @@ class RagChatErrorTest {
                 message.setId(1L);
                 return message;
             });
-            var service = new RagChatService(users, courses, conversations, messages,
+            var service = new RagChatServiceImpl(users, courses, conversations, messages,
                     mock(RagChatMessageRepository.class), mock(RagConversationSummaryService.class),
                     mock(TrainingStructureService.class),
                     "http://rag", 8, 12000, 5000, 90000);

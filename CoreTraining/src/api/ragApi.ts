@@ -23,6 +23,12 @@ export interface RagChatHistory extends RagAnswer {
 }
 
 export const ragApi = {
+  async courseChoices(search="") {
+    return (await axiosClient.get<{id:string;name:string}[]>("/api/users/me/learning/dashboard/choices",{params:{search,size:50}})).data;
+  },
+  async getHistoryPage(courseId:string,conversationId?:string,beforeId?:number) {
+    return (await axiosClient.get<{items:RagChatHistory[];nextBeforeId:number|null;hasMore:boolean}>("/api/rag/chat/history/page",{params:{courseId,conversationId,beforeId,size:20}})).data;
+  },
   async chat(
     question: string,
     courseId: string,

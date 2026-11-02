@@ -9,6 +9,11 @@ public interface AuthService {
 
     JwtAuthenticationResponse authenticateUser(LoginRequest loginRequest);
 
+    JwtAuthenticationResponse session(com.bidv.coretraining.security.CustomUserDetails principal);
+
+    /** Issues a fresh access token after the user's token version has changed. */
+    String reissueToken(String username);
+
     void registerUser(RegisterRequest registerRequest);
 
     void sendPasswordResetOtp(com.bidv.coretraining.dto.ForgotPasswordRequest request);

@@ -1,4 +1,6 @@
 package com.bidv.coretraining.security;
+import com.bidv.coretraining.enums.VideoSource;
+import com.bidv.coretraining.enums.DocumentType;
 
 import com.bidv.coretraining.dto.*;
 import com.bidv.coretraining.entity.*;

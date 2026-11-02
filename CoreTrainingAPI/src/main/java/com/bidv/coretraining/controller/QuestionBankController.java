@@ -34,11 +34,8 @@ public class QuestionBankController {
         return bank.capture(questionId);
     }
 
-    public record AddRequest(String lessonId, List<Long> questionIds) {
-    }
-
     @PostMapping("/add-to-quiz")
-    public List<QuestionDto> add(@RequestBody AddRequest request) {
+    public List<QuestionDto> add(@RequestBody QuestionBankAddRequest request) {
         return bank.addToQuiz(request.lessonId(), request.questionIds());
     }
 }

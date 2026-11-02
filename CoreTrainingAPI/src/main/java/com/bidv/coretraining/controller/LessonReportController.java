@@ -1,7 +1,7 @@
 package com.bidv.coretraining.controller;
 
 import com.bidv.coretraining.dto.LessonReportDto;
-import com.bidv.coretraining.entity.LessonReport;
+import com.bidv.coretraining.dto.LessonReportReviewRequest;
 import com.bidv.coretraining.service.LessonReportService;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,11 +28,8 @@ public class LessonReportController {
         return service.list();
     }
 
-    public record Review(Long version, LessonReport.Status status, String resolution) {
-    }
-
     @PutMapping("/api/admin/content-reports/{id}")
-    public LessonReportDto review(@PathVariable Long id, @RequestBody Review request) {
+    public LessonReportDto review(@PathVariable Long id, @RequestBody LessonReportReviewRequest request) {
         return service.review(id, request.version(), request.status(), request.resolution());
     }
 

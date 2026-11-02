@@ -1,7 +1,7 @@
 package com.bidv.coretraining.dto;
 
 import com.bidv.coretraining.entity.CourseDocument;
-import com.bidv.coretraining.entity.DocumentStatus;
+import com.bidv.coretraining.enums.DocumentStatus;
 import java.time.LocalDateTime;
 
 public record CourseDocumentDto(String id, String courseId, String fileName, String contentType, long sizeBytes,

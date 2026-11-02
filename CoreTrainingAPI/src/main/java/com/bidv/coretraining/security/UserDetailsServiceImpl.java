@@ -1,5 +1,7 @@
 package com.bidv.coretraining.security;
 
+import com.bidv.coretraining.service.PermissionCache;
+
 import com.bidv.coretraining.entity.User;
 import com.bidv.coretraining.repository.UserRepository;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -11,12 +13,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class UserDetailsServiceImpl implements UserDetailsService {
 
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.bidv.coretraining.service.PermissionCache permissionCache;
+    private final PermissionCache permissionCache;
     private final UserRepository userRepository;
 
-    public UserDetailsServiceImpl(UserRepository userRepository) {
+    public UserDetailsServiceImpl(UserRepository userRepository,
+            PermissionCache permissionCache) {
         this.userRepository = userRepository;
+        this.permissionCache = permissionCache;
     }
 
     @Transactional(readOnly = true)

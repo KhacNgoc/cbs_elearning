@@ -25,7 +25,7 @@ public interface CourseService {
 
     CommentDto replyToComment(String lessonId, Long commentId, CommentReplyRequest request, String username);
 
-    void deleteComment(String lessonId, Long commentId, String username, boolean isAdmin);
+    void deleteComment(String lessonId, Long commentId, String username);
 
     List<VideoNoteDto> getVideoNotes(String lessonId, String username);
 
