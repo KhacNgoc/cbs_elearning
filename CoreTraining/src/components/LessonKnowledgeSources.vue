@@ -127,6 +127,34 @@
                             {{ pageList(document.id) }}.
                           </p>
                           <div
+                            v-if="outlines[document.id]!.headings?.length"
+                            class="pdf-headings"
+                          >
+                            <span>Mục lục trong PDF (bấm để thêm khoảng trang)</span>
+                            <button
+                              v-for="heading in outlines[document.id]!.headings"
+                              :key="`${heading.section}-${heading.pageFrom}`"
+                              type="button"
+                              :style="{ paddingLeft: `${0.6 + heading.level * 1.25}rem` }"
+                              :title="heading.section"
+                              :disabled="disabled || saving || uploading"
+                              @click="
+                                addPageRange(
+                                  document.id,
+                                  heading.pageFrom,
+                                  heading.pageTo,
+                                )
+                              "
+                            >
+                              <span>{{ lastSegment(heading.section) }}</span>
+                              <small>{{
+                                heading.pageFrom === heading.pageTo
+                                  ? `Trang ${heading.pageFrom}`
+                                  : `Trang ${heading.pageFrom}–${heading.pageTo}`
+                              }}</small>
+                            </button>
+                          </div>
+                          <div
                             v-for="(range, index) in selections[document.id]!
                               .ranges"
                             :key="index"
@@ -173,23 +201,34 @@
                         <div v-else class="section-choices">
                           <p class="scope-help">
                             Chọn mục liên quan đến bài học. Các mục lấy từ tiêu
-                            đề trong file Word, không chia theo trang.
+                            đề và cấp đề mục (outline) trong file Word, theo
+                            thứ tự trong tài liệu. Chọn một chương sẽ chọn mọi
+                            mục con của chương đó.
                           </p>
                           <label
-                            v-for="section in outlines[document.id]!.sections"
-                            :key="section"
+                            v-for="row in sectionRows(document.id)"
+                            :key="row.path"
+                            class="section-row"
+                            :style="{ paddingLeft: `${row.depth * 1.25}rem` }"
+                            :title="row.path"
                           >
                             <ToggleSwitch
                               :model-value="
-                                selections[document.id]!.sections.includes(
-                                  section,
+                                row.sections.every((section) =>
+                                  selections[document.id]!.sections.includes(
+                                    section,
+                                  ),
                                 )
                               "
-                              :label="section"
+                              :label="row.label"
                               :disabled="disabled || saving || uploading"
                               @update:model-value="
                                 (enabled) =>
-                                  toggleSection(document.id, section, enabled)
+                                  toggleSections(
+                                    document.id,
+                                    row.sections,
+                                    enabled,
+                                  )
                               "
                             />
                           </label>
@@ -208,7 +247,9 @@
                           >
                             <strong>{{
                               isPdf(document)
-                                ? `Trang ${excerpt.page}`
+                                ? excerpt.heading
+                                  ? `Trang ${excerpt.page} · ${excerpt.heading}`
+                                  : `Trang ${excerpt.page}`
                                 : excerpt.section
                             }}</strong>
                             <p>{{ excerpt.excerpt }}</p>
@@ -323,12 +364,47 @@ const {
   paginated: paginatedDocuments,
   reset: resetDocumentPage,
 } = useTablePagination(documents);
-function toggleSection(id: string, section: string, enabled: boolean) {
+// Must match SECTION_SEPARATOR in rag-service/app/section_outline.py.
+const SECTION_SEPARATOR = " › ";
+const lastSegment = (path: string) =>
+  path.split(SECTION_SEPARATOR).at(-1) || path;
+type SectionRow = {
+  path: string;
+  label: string;
+  depth: number;
+  sections: string[];
+};
+/** One row per heading level, so a chapter row toggles all of its sections. */
+const sectionRows = (id: string): SectionRow[] => {
+  const rows = new Map<string, SectionRow>();
+  for (const section of outlines.value[id]?.sections || []) {
+    const parts = section.split(SECTION_SEPARATOR);
+    parts.forEach((label, depth) => {
+      const path = parts.slice(0, depth + 1).join(SECTION_SEPARATOR);
+      const row = rows.get(path) || { path, label, depth, sections: [] };
+      row.sections.push(section);
+      rows.set(path, row);
+    });
+  }
+  return [...rows.values()];
+};
+function toggleSections(id: string, sections: string[], enabled: boolean) {
   const choices = selections.value[id]?.sections;
   if (!choices) return;
-  const index = choices.indexOf(section);
-  if (enabled && index < 0) choices.push(section);
-  else if (!enabled && index >= 0) choices.splice(index, 1);
+  for (const section of sections) {
+    const index = choices.indexOf(section);
+    if (enabled && index < 0) choices.push(section);
+    else if (!enabled && index >= 0) choices.splice(index, 1);
+  }
+}
+function addPageRange(id: string, from: number, to: number) {
+  const ranges = selections.value[id]?.ranges;
+  if (!ranges) return;
+  if (ranges.some((range) => range.from === from && range.to === to)) return;
+  // Replace the untouched default range instead of keeping a stray "1–1".
+  if (ranges.length === 1 && ranges[0]!.from === 1 && ranges[0]!.to === 1)
+    ranges.splice(0, 1);
+  ranges.push({ from, to });
 }
 const selections = ref<Record<string, Selection>>({});
 watch([() => props.courseId, () => props.lessonId], resetDocumentPage);
@@ -790,8 +866,39 @@ input[type="number"] {
   overflow-wrap: anywhere;
 }
 .section-choices {
-  max-height: 260px;
+  max-height: 320px;
   overflow-y: auto;
+}
+.pdf-headings {
+  display: grid;
+  gap: 0.25rem;
+  max-height: 260px;
+  margin-bottom: 0.75rem;
+  overflow-y: auto;
+}
+.pdf-headings > span {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.pdf-headings button {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line-dce9e3);
+  border-radius: 7px;
+  background: var(--surface-ffffff);
+  color: var(--ink-334155);
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+}
+.pdf-headings button:hover:not(:disabled) {
+  border-color: var(--primary-color);
+}
+.pdf-headings small {
+  flex-shrink: 0;
+  color: var(--ink-64748b);
 }
 .source-preview {
   margin-top: 0.85rem;

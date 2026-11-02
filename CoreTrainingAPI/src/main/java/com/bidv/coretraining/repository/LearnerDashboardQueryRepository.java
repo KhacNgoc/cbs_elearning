@@ -8,6 +8,7 @@ public interface LearnerDashboardQueryRepository {
  Map<String,List<Choice>> choices(LearnerQueryScope scope,String tab);
  String resumeCourseId(LearnerQueryScope scope);
  List<CourseChoice> courseChoices(LearnerQueryScope scope,String search,int size);
+ List<CourseChoice> accessibleCourses(LearnerQueryScope scope,int limit);
  boolean canResume(LearnerQueryScope scope,String id);
  ResumeFacts resumeFacts(Long userId,String courseId);
  record ResumeScore(String lessonId,int score,int total) {}

@@ -18,6 +18,7 @@ from app.schemas import (
 )
 from app.utils import (
     diversify_course_summary_results,
+    find_mentioned_course,
     format_messages,
     is_course_summary_question,
     looks_like_internal_summary,
@@ -103,9 +104,52 @@ CÂU HỎI MỚI NHẤT:
         )
 
 
+def resolve_course_scope(
+    request: ChatRequest, question: str
+) -> tuple[list[str] | None, str | None]:
+    """Return (course ids to search, focus course).
+
+    None as the search list means no course filter (legacy callers without any
+    course). The focus course is the one the question is most likely about: a
+    course named in the question, else the learner's context course.
+    """
+    if request.course_ids is None:
+        allowed = [request.course_id] if request.course_id else None
+        return allowed, request.course_id
+    allowed = list(dict.fromkeys(request.course_ids))
+    names = {cid: request.course_names.get(cid, "") for cid in allowed}
+    if request.course_id and request.course_name and not names.get(request.course_id):
+        names[request.course_id] = request.course_name
+    mentioned = find_mentioned_course(question, names)
+    if mentioned:
+        return [mentioned], mentioned
+    if request.page and request.course_id in allowed:
+        # Page numbers only make sense inside the document being viewed.
+        return [request.course_id], request.course_id
+    focus = request.course_id if request.course_id in allowed else None
+    if focus is None and len(allowed) == 1:
+        focus = allowed[0]
+    return allowed, focus
+
+
+def course_label(request: ChatRequest, course_id: str | None) -> str:
+    if not course_id:
+        return ""
+    if course_id == request.course_id and request.course_name:
+        return request.course_name.strip()
+    return (request.course_names.get(course_id) or course_id).strip()
+
+
 async def answer_chat(request: ChatRequest) -> ChatResponse:
     started_at = asyncio.get_running_loop().time()
     stage_started_at = started_at
+    if request.course_ids is not None and not request.course_ids:
+        return ChatResponse(
+            answer=config.NO_ACCESSIBLE_COURSE_ANSWER,
+            grounded=False,
+            sources=[],
+            standaloneQuestion="",
+        )
     safe_summary = sanitize_conversation_summary(request.conversation_summary)
     contextual_request = request.model_copy(
         update={"conversation_summary": safe_summary}
@@ -123,19 +167,34 @@ async def answer_chat(request: ChatRequest) -> ChatResponse:
         )
 
     standalone_question = rewrite.standalone_question
-    course_summary_intent = bool(
-        request.course_id and is_course_summary_question(standalone_question)
+    search_course_ids, focus_course_id = resolve_course_scope(
+        request, standalone_question
     )
+    summary_question = is_course_summary_question(standalone_question)
+    if summary_question and not focus_course_id and search_course_ids:
+        # "Tóm tắt khóa học" across several courses has no single answer.
+        return ChatResponse(
+            answer=config.COURSE_SUMMARY_CLARIFICATION,
+            grounded=False,
+            sources=[],
+            standaloneQuestion=standalone_question,
+            needsClarification=True,
+            rewriteReason="course_summary_without_course",
+        )
+    course_summary_intent = bool(focus_course_id and summary_question)
     retrieval_question = standalone_question
     if course_summary_intent:
-        course_label = (request.course_name or request.course_id or "khóa học").strip()
+        search_course_ids = [focus_course_id]
         retrieval_question = (
-            f"{course_label}: tổng quan, nội dung chính, nghiệp vụ, quy trình, "
-            "trách nhiệm và lưu ý quan trọng"
+            f"{course_label(request, focus_course_id) or 'khóa học'}: tổng quan, nội dung chính, "
+            "nghiệp vụ, quy trình, trách nhiệm và lưu ý quan trọng"
         )
+    multi_course = search_course_ids is not None and len(search_course_ids) > 1
 
     stage_started_at = asyncio.get_running_loop().time()
     await infrastructure.ensure_collection(config.OLLAMA_QUERY_EMBEDDING_TIMEOUT_SECONDS)
+    if multi_course:
+        await infrastructure.ensure_course_index()
     query = (await infrastructure.embeddings(
         [retrieval_question],
         "search_query: ",
@@ -143,13 +202,19 @@ async def answer_chat(request: ChatRequest) -> ChatResponse:
     ))[0]
     embedding_ms = int((asyncio.get_running_loop().time() - stage_started_at) * 1000)
     must = []
-    if request.course_id:
+    if multi_course:
         must.append(
             models.FieldCondition(
-                key="course_id", match=models.MatchValue(value=request.course_id)
+                key="course_id", match=models.MatchAny(any=search_course_ids)
             )
         )
-    if request.page:
+    elif search_course_ids:
+        must.append(
+            models.FieldCondition(
+                key="course_id", match=models.MatchValue(value=search_course_ids[0])
+            )
+        )
+    if request.page and not multi_course:
         must.append(
             models.FieldCondition(
                 key="page", match=models.MatchValue(value=request.page)
@@ -161,30 +226,37 @@ async def answer_chat(request: ChatRequest) -> ChatResponse:
         collection_name=config.COLLECTION,
         query=query,
         query_filter=models.Filter(must=must) if must else None,
-        limit=config.RETRIEVAL_CANDIDATE_LIMIT,
+        limit=(
+            config.MULTI_COURSE_CANDIDATE_LIMIT
+            if multi_course else config.RETRIEVAL_CANDIDATE_LIMIT
+        ),
     )).points
     retrieval_ms = int((asyncio.get_running_loop().time() - stage_started_at) * 1000)
-    ranked_results = sorted(
-        results,
-        key=lambda item: relevance_score(
+
+    def item_relevance(item) -> float:
+        payload = item.payload or {}
+        return relevance_score(
             standalone_question,
-            f"{(item.payload or {}).get('section', '')} "
-            f"{(item.payload or {}).get('full_text', '')}",
+            f"{payload.get('section', '')} {payload.get('full_text', '')}",
             item.score,
-        ),
-        reverse=True,
-    )
+        )
+
+    def item_rank(item) -> float:
+        # The boost only reorders; the threshold below uses raw relevance.
+        score = item_relevance(item)
+        if multi_course and focus_course_id and (
+            str((item.payload or {}).get("course_id", "")) == focus_course_id
+        ):
+            score *= config.CONTEXT_COURSE_BOOST
+        return score
+
+    ranked_results = sorted(results, key=item_rank, reverse=True)
     if course_summary_intent:
         relevant_results = diversify_course_summary_results(ranked_results)
     else:
         relevant_results = [
             item for item in ranked_results
-            if relevance_score(
-                standalone_question,
-                f"{(item.payload or {}).get('section', '')} "
-                f"{(item.payload or {}).get('full_text', '')}",
-                item.score,
-            ) >= config.RETRIEVAL_SCORE_THRESHOLD
+            if item_relevance(item) >= config.RETRIEVAL_SCORE_THRESHOLD
         ]
     if not relevant_results:
         return ChatResponse(
@@ -224,6 +296,8 @@ async def answer_chat(request: ChatRequest) -> ChatResponse:
             continue
         seen_chunks.add(chunk_key)
         source_id = f"SOURCE_{len(retrieved_sources) + 1}"
+        source_course_id = str(payload.get("course_id", ""))
+        source_course_name = course_label(request, source_course_id)
         retrieved_sources.append({
             "source_id": source_id,
             "documentId": str(payload.get("document_id", "")),
@@ -232,9 +306,12 @@ async def answer_chat(request: ChatRequest) -> ChatResponse:
             "section": str(
                 payload.get("section") or f"Trang {payload.get('page', 1)}"
             ),
+            "courseId": source_course_id,
+            "courseName": source_course_name,
         })
         context_part = (
-            f'<source id="{source_id}" document="{payload.get("file_name", "Tài liệu")}" '
+            f'<source id="{source_id}" course="{source_course_name}" '
+            f'document="{payload.get("file_name", "Tài liệu")}" '
             f'document_id="{payload.get("document_id", "")}" page="{payload.get("page", 1)}" '
             f'section="{payload.get("section", "")}" score="{item.score:.4f}">\n'
             f"{full_text}\n</source>"
@@ -266,8 +343,16 @@ Không tự tạo quy trình, số liệu, điều kiện hay thuật ngữ. N�
 Nếu không đủ căn cứ, chỉ trả lời: \"{config.REFUSAL_ANSWER}\"
 Trả JSON hợp lệ gồm answer và source_ids. source_ids chỉ chứa id nguồn thực sự dùng trong reference_documents.
 Ví dụ: {{"answer":"...","source_ids":["SOURCE_1"]}}."""
-    user_prompt = f"""<course_scope knowledge_source="false" id="{request.course_id or ''}">
-{request.course_name or request.course_id or '(không xác định)'}
+    scope_courses = list(dict.fromkeys(
+        source["courseName"] for source in retrieved_sources if source["courseName"]
+    ))
+    if len(scope_courses) > 1:
+        system_prompt += (
+            "\nNguồn đến từ nhiều khóa học (thuộc tính course). Nếu nội dung giữa các "
+            "khóa khác nhau, nêu rõ từng ý thuộc khóa nào."
+        )
+    user_prompt = f"""<course_scope knowledge_source="false" id="{focus_course_id or ''}">
+{'; '.join(scope_courses) or course_label(request, focus_course_id) or '(không xác định)'}
 </course_scope>
 
 <standalone_retrieval_question>
@@ -311,7 +396,7 @@ Chỉ trả lời current_question dựa trên reference_documents."""
                     if attempt == 1:
                         raise
                     infrastructure.logger.warning(
-                        "Retrying incomplete chat output course_id=%s model=%s", request.course_id, answer_model
+                        "Retrying incomplete chat output course_id=%s model=%s", focus_course_id, answer_model
                     )
                     messages[0] = {"role": "system", "content": system_prompt +
                         "\nLần này chỉ trả lời tối đa 60 từ. Phải đóng đầy đủ JSON và nêu source_ids hợp lệ."}
@@ -326,10 +411,10 @@ Chỉ trả lời current_question dựa trên reference_documents."""
             if source["source_id"] in requested_source_ids
         ]
     except (TimeoutError, asyncio.TimeoutError, httpx.TimeoutException) as error:
-        infrastructure.logger.warning("RAG chat generation timed out course_id=%s", request.course_id)
+        infrastructure.logger.warning("RAG chat generation timed out course_id=%s", focus_course_id)
         raise HTTPException(504, "Trợ lý chưa hoàn tất câu trả lời trong thời gian cho phép. Vui lòng thử lại.") from error
     except (infrastructure.ModelOutputTruncated, ValueError) as error:
-        infrastructure.logger.warning("RAG chat output invalid course_id=%s error_type=%s", request.course_id, type(error).__name__)
+        infrastructure.logger.warning("RAG chat output invalid course_id=%s error_type=%s", focus_course_id, type(error).__name__)
         raise HTTPException(502, "Trợ lý chưa tạo được câu trả lời hoàn chỉnh. Vui lòng thử lại.") from error
     except (
         httpx.HTTPError,
@@ -341,7 +426,7 @@ Chỉ trả lời current_question dựa trên reference_documents."""
     ) as error:
         infrastructure.logger.exception(
             "RAG chat generation failed course_id=%s summary_intent=%s model=%s error_type=%s",
-            request.course_id,
+            focus_course_id,
             course_summary_intent,
             config.QUIZ_MODEL if course_summary_intent else config.CHAT_MODEL,
             type(error).__name__,
@@ -357,7 +442,7 @@ Chỉ trả lời current_question dựa trên reference_documents."""
         if looks_like_internal_summary(answer):
             infrastructure.logger.warning(
                 "Blocked internal summary leakage course_id=%s model=%s",
-                request.course_id,
+                focus_course_id,
                 answer_model,
             )
         return ChatResponse(
@@ -377,6 +462,8 @@ Chỉ trả lời current_question dựa trên reference_documents."""
                 documentName=source["documentName"],
                 page=source["page"],
                 section=source["section"],
+                courseId=source["courseId"],
+                courseName=source["courseName"],
             )
             for source in valid_sources
         ],
@@ -384,9 +471,11 @@ Chỉ trả lời current_question dựa trên reference_documents."""
         rewriteReason=rewrite.reason,
     )
     infrastructure.logger.info(
-        "RAG chat completed course_id=%s rewritten=%s summary_intent=%s retrieved=%d top_score=%.4f "
+        "RAG chat completed focus_course_id=%s course_count=%d rewritten=%s summary_intent=%s "
+        "retrieved=%d top_score=%.4f "
         "rewrite_ms=%d embedding_ms=%d retrieval_ms=%d generation_ms=%d elapsed_ms=%d model=%s",
-        request.course_id,
+        focus_course_id,
+        len(search_course_ids) if search_course_ids is not None else 0,
         standalone_question != request.question.strip(),
         course_summary_intent,
         len(retrieved_sources),

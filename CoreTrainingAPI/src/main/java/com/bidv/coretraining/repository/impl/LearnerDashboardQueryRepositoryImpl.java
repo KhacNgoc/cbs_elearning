@@ -116,16 +116,26 @@ public class LearnerDashboardQueryRepositoryImpl implements LearnerDashboardQuer
         return ids.isEmpty() ? null : ids.get(0);
     }
 
+    private static final String JOINED_COURSES = " select id,name from visible c where (editor_access=1 or exists(select 1 from facts f where f.id=c.id and f.source in ('ASSIGNED','REGISTERED')))";
+
     public List<CourseChoice> courseChoices(LearnerQueryScope u, String search, int size) {
         var c = relations.facts(u);
         var p = new HashMap<>(c.params());
         p.put("limit", Math.max(1, Math.min(size, 100)));
         p.put("choiceSearch", "%" + normalize(search == null ? "" : search.trim()).replace("!", "!!").replace("%", "!%")
                 .replace("_", "!_") + "%");
-        return jdbc.query(c.sql()
-                + " select id,name from visible c where (editor_access=1 or exists(select 1 from facts f where f.id=c.id and f.source in ('ASSIGNED','REGISTERED'))) and "
+        return jdbc.query(c.sql() + JOINED_COURSES + " and "
                 + normalizedSql("name || ' ' || code") + " like :choiceSearch escape '!' order by "
                 + normalizedSql("name") + ",id limit :limit", p,
+                (r, n) -> new CourseChoice(r.getString(1), r.getString(2)));
+    }
+
+    /** Same visibility as {@link #courseChoices}, unfiltered, for cross-course assistant retrieval. */
+    public List<CourseChoice> accessibleCourses(LearnerQueryScope u, int limit) {
+        var c = relations.facts(u);
+        var p = new HashMap<>(c.params());
+        p.put("limit", Math.max(1, Math.min(limit, 2000)));
+        return jdbc.query(c.sql() + JOINED_COURSES + " order by id limit :limit", p,
                 (r, n) -> new CourseChoice(r.getString(1), r.getString(2)));
     }
 

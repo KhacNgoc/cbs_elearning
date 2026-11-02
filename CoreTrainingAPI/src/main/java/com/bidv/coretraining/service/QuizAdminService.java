@@ -18,4 +18,8 @@ public interface QuizAdminService {
     void deleteQuiz(String courseId, String lessonId);
 
     QuizGenerationResponseDto generateQuiz(QuizGenerationRequestDto request);
+
+    QuizGenerationJobDto startQuizGenerationJob(QuizGenerationRequestDto request);
+
+    QuizGenerationJobDto getQuizGenerationJob(String jobId);
 }

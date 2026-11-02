@@ -4,5 +4,7 @@ public record RagSourceDto(
                 String documentId,
                 String documentName,
                 Integer page,
-                String section) {
+                String section,
+                String courseId,
+                String courseName) {
 }

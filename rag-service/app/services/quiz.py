@@ -27,13 +27,16 @@ from app.schemas import (
     QuizQuestionReview,
 )
 from app.utils import ollama_compatible_schema, strip_model_thinking
+from app.services.quiz_jobs import NULL_PROGRESS, QuizProgress
 
-async def generate_quiz(request: QuizGenerationRequest):
+async def generate_quiz(request: QuizGenerationRequest, progress: QuizProgress | None = None):
+    progress = progress or NULL_PROGRESS
     started_at = asyncio.get_running_loop().time()
     requested_total = request.single_choice_count + request.multiple_choice_count
     if requested_total < 1 or requested_total > 20:
         raise HTTPException(400, "The total number of questions must be between 1 and 20")
 
+    progress.retrieving()
     await infrastructure.ensure_collection(config.OLLAMA_QUERY_EMBEDDING_TIMEOUT_SECONDS)
     retrieval_queries = quiz_retrieval_queries(request)
     query_vectors = await infrastructure.embeddings(
@@ -146,7 +149,56 @@ Quy tắc bắt buộc:
 
     quality_feedback = ""
 
+    valid_source_ids = {source.id for source in sources}
+    valid_questions = []
+    remaining = {
+        "SINGLE_CHOICE": request.single_choice_count,
+        "MULTIPLE_CHOICE": request.multiple_choice_count,
+    }
+    seen_question_texts = set()
+    seen_option_sets = set()
+    rejection_counts: dict[str, int] = {}
+    def accept_candidates(candidates: list[GeneratedQuizQuestion]) -> None:
+        for question in candidates:
+            normalized_text = question.text.strip().casefold()
+            if remaining[question.type] <= 0:
+                rejection_counts["type_overflow"] = rejection_counts.get("type_overflow", 0) + 1
+                continue
+            if normalized_text in seen_question_texts:
+                rejection_counts["duplicate_question"] = rejection_counts.get("duplicate_question", 0) + 1
+                continue
+            validation_error = generated_question_validation_error(
+                question, request.option_count, valid_source_ids, source_text_by_id
+            )
+            if validation_error:
+                rejection_counts[validation_error] = rejection_counts.get(validation_error, 0) + 1
+                continue
+            if any(same_question_objective(question, existing) for existing in valid_questions):
+                rejection_counts["duplicate_objective"] = rejection_counts.get("duplicate_objective", 0) + 1
+                continue
+            normalized_option_set = tuple(sorted(option.casefold() for option in question.options))
+            if normalized_option_set in seen_option_sets:
+                rejection_counts["duplicate_option_set"] = rejection_counts.get("duplicate_option_set", 0) + 1
+                continue
+            seen_question_texts.add(normalized_text)
+            seen_option_sets.add(normalized_option_set)
+            remaining[question.type] -= 1
+            valid_questions.append(question)
+
+    # Lesson drafts always require the independent grounding/scope check.
+    verification_required = bool(
+        config.QUIZ_LLM_VERIFICATION_ENABLED or request.lesson_id or request.lesson_name
+    )
+    progress.plan(requested_total, verification_required)
+
     async def generate_one(question_type: str, candidate_index: int) -> GeneratedQuizQuestion:
+        question = await generate_candidate(question_type, candidate_index)
+        # Check each candidate as soon as it arrives, so progress counts usable questions.
+        accept_candidates([question])
+        progress.accepted(len(valid_questions))
+        return question
+
+    async def generate_candidate(question_type: str, candidate_index: int) -> GeneratedQuizQuestion:
         source = sources[candidate_index % len(sources)]
         full_source_text = source_text_by_id[source.id]
         if question_type == "SINGLE_CHOICE":
@@ -221,6 +273,7 @@ Schema: q là câu hỏi, o là lựa chọn, a là đáp án. Không trả sour
         + [("MULTIPLE_CHOICE", request.single_choice_count + index)
            for index in range(request.multiple_choice_count)]
     )
+    progress.generation_started(1, len(generation_specs))
     generation_results = await asyncio.gather(
         *(generate_one(question_type, index) for question_type, index in generation_specs),
         return_exceptions=True,
@@ -238,43 +291,6 @@ Schema: q là câu hỏi, o là lựa chọn, a là đáp án. Không trả sour
         raise HTTPException(503, "Quiz generation model is unavailable")
     model_result = QuizModelResult(questions=generated_questions)
 
-    valid_source_ids = {source.id for source in sources}
-    valid_questions = []
-    remaining = {
-        "SINGLE_CHOICE": request.single_choice_count,
-        "MULTIPLE_CHOICE": request.multiple_choice_count,
-    }
-    seen_question_texts = set()
-    seen_option_sets = set()
-    rejection_counts: dict[str, int] = {}
-    def accept_candidates(candidates: list[GeneratedQuizQuestion]) -> None:
-        for question in candidates:
-            normalized_text = question.text.strip().casefold()
-            if remaining[question.type] <= 0:
-                rejection_counts["type_overflow"] = rejection_counts.get("type_overflow", 0) + 1
-                continue
-            if normalized_text in seen_question_texts:
-                rejection_counts["duplicate_question"] = rejection_counts.get("duplicate_question", 0) + 1
-                continue
-            validation_error = generated_question_validation_error(
-                question, request.option_count, valid_source_ids, source_text_by_id
-            )
-            if validation_error:
-                rejection_counts[validation_error] = rejection_counts.get(validation_error, 0) + 1
-                continue
-            if any(same_question_objective(question, existing) for existing in valid_questions):
-                rejection_counts["duplicate_objective"] = rejection_counts.get("duplicate_objective", 0) + 1
-                continue
-            normalized_option_set = tuple(sorted(option.casefold() for option in question.options))
-            if normalized_option_set in seen_option_sets:
-                rejection_counts["duplicate_option_set"] = rejection_counts.get("duplicate_option_set", 0) + 1
-                continue
-            seen_question_texts.add(normalized_text)
-            seen_option_sets.add(normalized_option_set)
-            remaining[question.type] -= 1
-            valid_questions.append(question)
-
-    accept_candidates(model_result.questions)
     total_generated = len(model_result.questions)
     for attempt in range(1, config.QUIZ_GENERATION_MAX_ATTEMPTS):
         quality_feedback = (
@@ -290,6 +306,7 @@ Schema: q là câu hỏi, o là lựa chọn, a là đáp án. Không trả sour
                 retry_index += 1
         if not retry_specs:
             break
+        progress.generation_started(attempt + 1, len(retry_specs))
         retry_results = await asyncio.gather(
             *(generate_one(question_type, index) for question_type, index in retry_specs),
             return_exceptions=True,
@@ -309,7 +326,6 @@ Schema: q là câu hỏi, o là lựa chọn, a là đáp án. Không trả sour
                 "Quiz retry generation failed course_id=%s model=%s attempt=%d errors=%s",
                 request.course_id, config.QUIZ_MODEL, attempt, retry_errors,
             )
-        accept_candidates(retry_questions)
 
     if rejection_counts:
         infrastructure.logger.warning(
@@ -319,9 +335,8 @@ Schema: q là câu hỏi, o là lựa chọn, a là đáp án. Không trả sour
         )
 
     # Generated questions are drafts that an administrator reviews before saving.
-    # Lesson drafts always require the independent grounding/scope check.
     # The course-wide check remains configurable.
-    if valid_questions and (config.QUIZ_LLM_VERIFICATION_ENABLED or request.lesson_id or request.lesson_name):
+    if valid_questions and verification_required:
         async def verify_one(question: GeneratedQuizQuestion) -> bool:
             reference = "\n".join(
                 f'<source id="{source_id}">{source_text_by_id[source_id]}</source>'
@@ -361,10 +376,12 @@ well_formed=false nếu câu hỏi/lựa chọn vô nghĩa, lộ đáp án hoặ
                     json_schema=ollama_compatible_schema(QuizQuestionReview.model_json_schema()),
                     options={"temperature": 0, "num_predict": 256},
                 )
+            progress.step_done()
             review = QuizQuestionReview.model_validate(
                 json.loads(strip_model_thinking(raw_verification))
             )
             return review.well_formed and sorted(set(review.correct_answers)) == question.correct_answers
+        progress.verification_started(len(valid_questions))
         try:
             decisions = await asyncio.gather(*(verify_one(question) for question in valid_questions))
             valid_questions = [
@@ -377,6 +394,7 @@ well_formed=false nếu câu hỏi/lựa chọn vô nghĩa, lộ đáp án hoặ
             )
             raise HTTPException(503, "Quiz verification model is unavailable") from error
 
+    progress.finalizing()
     final_remaining = {
         "SINGLE_CHOICE": request.single_choice_count,
         "MULTIPLE_CHOICE": request.multiple_choice_count,
@@ -388,6 +406,7 @@ well_formed=false nếu câu hỏi/lựa chọn vô nghĩa, lộ đáp án hoặ
         final_remaining[question.type] -= 1
         selected_questions.append(question)
     valid_questions = selected_questions
+    progress.accepted(len(valid_questions))
 
     infrastructure.logger.info(
         "RAG quiz completed course_id=%s requested=%d generated=%d accepted=%d "

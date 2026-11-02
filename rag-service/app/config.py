@@ -17,6 +17,17 @@ EXCERPT_LENGTH = 500
 RETRIEVAL_LIMIT = int(os.getenv("RAG_TOP_K", "2"))
 RETRIEVAL_CANDIDATE_LIMIT = int(os.getenv("RAG_CANDIDATE_LIMIT", "25"))
 RETRIEVAL_CONTEXT_MAX_CHARS = int(os.getenv("RAG_CONTEXT_MAX_CHARS", "2400"))
+# Cross-course chat searches a larger pool and slightly favours the course the
+# learner is currently viewing without excluding the others.
+MULTI_COURSE_CANDIDATE_LIMIT = int(os.getenv("RAG_MULTI_COURSE_CANDIDATE_LIMIT", "40"))
+CONTEXT_COURSE_BOOST = float(os.getenv("RAG_CONTEXT_COURSE_BOOST", "1.08"))
+COURSE_SUMMARY_CLARIFICATION = (
+    "Bạn muốn tóm tắt khóa học nào? Hãy nêu tên khóa học trong câu hỏi "
+    "hoặc mở khóa học đó rồi hỏi lại."
+)
+NO_ACCESSIBLE_COURSE_ANSWER = (
+    "Bạn chưa có khóa học nào để trợ lý tra cứu tài liệu."
+)
 COURSE_SUMMARY_RETRIEVAL_LIMIT = int(os.getenv("RAG_COURSE_SUMMARY_TOP_K", "5"))
 COURSE_SUMMARY_CONTEXT_MAX_CHARS = int(
     os.getenv("RAG_COURSE_SUMMARY_CONTEXT_MAX_CHARS", "6500")

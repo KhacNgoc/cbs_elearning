@@ -200,4 +200,16 @@ public class QuizAdminServiceImpl implements QuizAdminService {
         authorization.edit(request.getCourseId());
         return quizGeneration.generate(request);
     }
+
+    @Override
+    public QuizGenerationJobDto startQuizGenerationJob(QuizGenerationRequestDto request) {
+        authorization.edit(request.getCourseId());
+        return quizGeneration.startJob(request);
+    }
+
+    @Override
+    public QuizGenerationJobDto getQuizGenerationJob(String jobId) {
+        authorization.edit(quizGeneration.jobCourseId(jobId));
+        return quizGeneration.jobStatus(jobId);
+    }
 }

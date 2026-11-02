@@ -7,4 +7,6 @@ import java.util.Optional;
 
 public interface RagConversationRepository extends JpaRepository<RagConversation, String> {
     Optional<RagConversation> findFirstByUserIdAndCourseIdOrderByUpdatedAtDesc(Long userId, String courseId);
+
+    Optional<RagConversation> findFirstByUserIdOrderByUpdatedAtDesc(Long userId);
 }

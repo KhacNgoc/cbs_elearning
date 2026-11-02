@@ -12,8 +12,14 @@ class ConversationMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
+    # Optional context course (e.g. the lesson the learner is viewing). It is a
+    # ranking hint only when course_ids is provided.
     course_id: str | None = None
     course_name: str | None = Field(default=None, max_length=500)
+    # Courses the learner may search. None keeps the legacy single-course
+    # behaviour; an empty list means the learner has no searchable course.
+    course_ids: list[str] | None = Field(default=None, max_length=2000)
+    course_names: dict[str, str] = Field(default_factory=dict)
     page: int | None = Field(default=None, ge=1)
     conversation_summary: str = Field(default="", max_length=20000)
     recent_messages: list[ConversationMessage] = Field(default_factory=list, max_length=30)
@@ -54,6 +60,8 @@ class Source(BaseModel):
     documentName: str
     page: int
     section: str
+    courseId: str = ""
+    courseName: str = ""
 
 
 class ChatResponse(BaseModel):

@@ -5,6 +5,8 @@ export interface RagSource {
   documentName: string;
   page: number;
   section: string;
+  courseId?: string | null;
+  courseName?: string | null;
 }
 
 export interface RagAnswer {
@@ -17,21 +19,21 @@ export interface RagAnswer {
 
 export interface RagChatHistory extends RagAnswer {
   id: number;
-  courseId: string;
+  courseId: string | null;
   question: string;
   createdAt: string;
 }
 
 export const ragApi = {
-  async courseChoices(search="") {
-    return (await axiosClient.get<{id:string;name:string}[]>("/api/users/me/learning/dashboard/choices",{params:{search,size:50}})).data;
+  // The assistant searches every course the learner can access, so history is
+  // per learner: without a conversation id the server returns the latest one.
+  async getHistoryPage(conversationId?:string,beforeId?:number) {
+    return (await axiosClient.get<{items:RagChatHistory[];nextBeforeId:number|null;hasMore:boolean}>("/api/rag/chat/history/page",{params:{conversationId,beforeId,size:20}})).data;
   },
-  async getHistoryPage(courseId:string,conversationId?:string,beforeId?:number) {
-    return (await axiosClient.get<{items:RagChatHistory[];nextBeforeId:number|null;hasMore:boolean}>("/api/rag/chat/history/page",{params:{courseId,conversationId,beforeId,size:20}})).data;
-  },
+  /** `contextCourseId` (the course being viewed) is only a ranking hint. */
   async chat(
     question: string,
-    courseId: string,
+    contextCourseId?: string,
     page?: number,
     conversationId?: string,
   ): Promise<RagAnswer> {
@@ -39,7 +41,7 @@ export const ragApi = {
       "/api/rag/chat",
       {
         question,
-        courseId,
+        courseId: contextCourseId,
         page,
         conversationId,
       },
@@ -51,7 +53,7 @@ export const ragApi = {
   },
 
   async getHistory(
-    courseId: string,
+    courseId?: string,
     conversationId?: string,
   ): Promise<RagChatHistory[]> {
     const response = await axiosClient.get<RagChatHistory[]>(

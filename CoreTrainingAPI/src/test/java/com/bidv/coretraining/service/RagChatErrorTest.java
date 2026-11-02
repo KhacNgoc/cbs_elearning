@@ -31,9 +31,12 @@ class RagChatErrorTest {
                 message.setId(1L);
                 return message;
             });
+            var scope = mock(RagCourseScopeService.class);
+            when(scope.searchableCourses("admin")).thenReturn(java.util.List.of(
+                    new com.bidv.coretraining.dto.LearnerDashboardDto.CourseChoice("C1", "Cho vay")));
             var service = new RagChatServiceImpl(users, courses, conversations, messages,
                     mock(RagChatMessageRepository.class), mock(RagConversationSummaryService.class),
-                    mock(TrainingStructureService.class),
+                    mock(TrainingStructureService.class), scope,
                     "http://rag", 8, 12000, 5000, 90000);
             var http = mock(RestTemplate.class);
             when(http.postForObject(anyString(), any(), eq(com.bidv.coretraining.dto.RagServiceChatResponse.class)))

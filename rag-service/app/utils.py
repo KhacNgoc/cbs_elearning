@@ -2,6 +2,7 @@
 
 import json
 import re
+import unicodedata
 
 from app.config import QUERY_STOP_WORDS
 from app.schemas import ConversationMessage, RewriteResult
@@ -51,6 +52,26 @@ def looks_like_internal_summary(answer: str) -> bool:
 
 def is_course_summary_question(question: str) -> bool:
     return bool(COURSE_SUMMARY_PATTERN.search(question))
+
+
+def fold_vietnamese(text: str) -> str:
+    """Lowercase and strip diacritics so "Tín dụng" matches "tin dung"."""
+    decomposed = unicodedata.normalize("NFD", text.lower().replace("đ", "d"))
+    folded = "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn")
+    return " ".join(re.findall(r"\w+", folded, flags=re.UNICODE))
+
+
+def find_mentioned_course(question: str, course_names: dict[str, str]) -> str | None:
+    """Return the id of the longest course name written in the question."""
+    folded_question = f" {fold_vietnamese(question)} "
+    best_id, best_length = None, 0
+    for course_id, name in course_names.items():
+        folded_name = fold_vietnamese(name or "")
+        if len(folded_name) < 4 or len(folded_name) <= best_length:
+            continue
+        if f" {folded_name} " in folded_question:
+            best_id, best_length = course_id, len(folded_name)
+    return best_id
 
 
 def diversify_course_summary_results(results: list) -> list:

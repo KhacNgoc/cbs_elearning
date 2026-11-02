@@ -30,4 +30,10 @@ public class RagConversationSource {
 
     @Column(nullable = false)
     private String section;
+
+    @Column(name = "course_id")
+    private String courseId;
+
+    @Column(name = "course_name", length = 500)
+    private String courseName;
 }

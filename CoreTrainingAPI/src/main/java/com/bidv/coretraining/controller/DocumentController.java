@@ -59,7 +59,7 @@ public class DocumentController {
 
     @GetMapping("/rag/chat/history")
     public ResponseEntity<List<RagChatHistoryDto>> history(
-            @RequestParam String courseId,
+            @RequestParam(required = false) String courseId,
             @RequestParam(required = false) String conversationId,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         return ResponseEntity.ok(ragChatService.history(userDetails.getUsername(), courseId, conversationId));

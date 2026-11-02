@@ -572,7 +572,9 @@ CREATE TABLE public.rag_conversation_sources (
     document_name character varying(255) NOT NULL,
     page integer NOT NULL,
     section character varying(255) NOT NULL,
-    message_id bigint NOT NULL
+    message_id bigint NOT NULL,
+    course_id character varying(255),
+    course_name character varying(500)
 );
 
 
@@ -601,7 +603,7 @@ CREATE TABLE public.rag_conversations (
     summary text,
     title character varying(255),
     updated_at timestamp(6) without time zone NOT NULL,
-    course_id character varying(255) NOT NULL,
+    course_id character varying(255),
     user_id bigint NOT NULL
 );
 
@@ -1234,6 +1236,7 @@ CREATE INDEX idx_rag_conversation_message_order ON public.rag_conversation_messa
 --
 
 CREATE INDEX idx_rag_conversation_owner_course_updated ON public.rag_conversations USING btree (user_id, course_id, updated_at);
+CREATE INDEX idx_rag_conversation_owner_updated ON public.rag_conversations USING btree (user_id, updated_at);
 
 
 --

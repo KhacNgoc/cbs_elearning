@@ -27,6 +27,8 @@ class LearnerDashboardQueryTest {
   for(String id:java.util.List.of("D","E","V")){var c=Course.builder().id(id).code(id).name(id).program(p).ownerUnit(unit).status(id.equals("D")?"DRAFT":"PUBLISHED").build();em.persist(c);if(id.equals("E"))user.getRegisteredCourses().add(c);}
   em.flush();
   assertThat(query.courseChoices(LearnerQueryScopeFactory.from(user),"",50)).extracting(c->c.id()).containsExactly("E");
+  // The assistant searches exactly the learner's picker scope: unregistered V and draft D stay hidden.
+  assertThat(query.accessibleCourses(LearnerQueryScopeFactory.from(user),500)).extracting(c->c.id()).containsExactly("E");
   user.setRole("ROLE_ADMIN");
   assertThat(query.courseChoices(LearnerQueryScopeFactory.from(user),"",50)).extracting(c->c.id()).containsExactly("D","E","V");
  }

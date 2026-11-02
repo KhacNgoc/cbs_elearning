@@ -17,6 +17,7 @@ from app.schemas import (
 from app.services.chat import answer_chat
 from app.services.documents import ingest_document, document_outline, delete_document
 from app.services.quiz import generate_quiz as generate_quiz_service
+from app.services.quiz_jobs import QuizGenerationJob, get_quiz_job, start_quiz_job
 from app.services.summary import summarize_conversation
 
 
@@ -66,6 +67,16 @@ async def delete(document_id: str, course_id: str):
 @router.post("/quiz/generate", response_model=QuizGenerationResponse)
 async def generate_quiz(request: QuizGenerationRequest):
     return await generate_quiz_service(request)
+
+
+@router.post("/quiz/jobs", response_model=QuizGenerationJob, status_code=202)
+async def create_quiz_job(request: QuizGenerationRequest):
+    return start_quiz_job(request)
+
+
+@router.get("/quiz/jobs/{job_id}", response_model=QuizGenerationJob)
+async def quiz_job_status(job_id: str):
+    return get_quiz_job(job_id)
 
 
 @router.post("/summarize", response_model=SummaryResponse)

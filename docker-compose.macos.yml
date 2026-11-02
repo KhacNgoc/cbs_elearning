@@ -7,6 +7,6 @@ services:
 
   rag-service:
     environment:
-      OLLAMA_URL: http://host.docker.internal:11435
+      OLLAMA_URL: http://host.docker.internal:11434
       QUIZ_GENERATION_CONCURRENCY: 2
     depends_on: !reset {}

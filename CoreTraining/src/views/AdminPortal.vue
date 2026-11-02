@@ -878,7 +878,7 @@
                       Đang tải danh sách tài liệu...
                     </td>
                   </tr>
-                  <tr v-for="document in paginatedDocuments" :key="document.id">
+                  <tr v-for="document in paginatedDocuments" :key="document.id" style="text-align: center;">
                     <td>
                       <strong>{{ document.fileName }}</strong>
                     </td>

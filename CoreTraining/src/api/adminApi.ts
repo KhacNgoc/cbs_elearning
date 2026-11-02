@@ -7,6 +7,10 @@ import {
   QUIZ_GENERATION_TIMEOUT_MS,
 } from "./axiosClient";
 import type { Course, Lesson, LessonDocument, Question } from "../types";
+import {
+  runQuizGenerationJob,
+  type QuizGenerationJob,
+} from "../utils/quizGenerationJob";
 
 const configuredVideoMaxBytes = Number(
   import.meta.env.VITE_VIDEO_MAX_UPLOAD_BYTES,
@@ -31,8 +35,11 @@ export interface LessonKnowledgeSource {
 export interface DocumentOutline {
   documentId: string;
   pages: number[];
+  /** Word sections in document order, named by heading path ("Chương 1 › 1.1 ..."). */
   sections: string[];
-  excerpts: { page: number; section: string; excerpt: string }[];
+  excerpts: { page: number; section: string; heading?: string; excerpt: string }[];
+  /** PDF headings with suggested page ranges; absent for Word or older indexes. */
+  headings?: { section: string; level: number; pageFrom: number; pageTo: number }[];
 }
 
 export interface AdminUser {
@@ -106,6 +113,16 @@ export interface QuizGenerationResponse {
   sources: QuizGenerationSource[];
   warnings: string[];
 }
+
+export interface QuizGenerationRequest {
+  courseId: string;
+  lessonId?: string;
+  singleChoiceCount: number;
+  multipleChoiceCount: number;
+  optionCount: number;
+}
+
+export type QuizGenerationJobSnapshot = QuizGenerationJob<QuizGenerationResponse>;
 
 export const adminApi = {
   async getEnrollmentRequests(): Promise<EnrollmentRequest[]> {
@@ -370,6 +387,40 @@ export const adminApi = {
       { timeout: QUIZ_GENERATION_TIMEOUT_MS },
     );
     return response.data;
+  },
+
+  async startQuizGenerationJob(
+    request: QuizGenerationRequest,
+  ): Promise<QuizGenerationJobSnapshot> {
+    const response = await axiosClient.post<QuizGenerationJobSnapshot>(
+      "/api/admin/quizzes/generate/jobs",
+      request,
+    );
+    return response.data;
+  },
+
+  async getQuizGenerationJob(jobId: string): Promise<QuizGenerationJobSnapshot> {
+    const response = await axiosClient.get<QuizGenerationJobSnapshot>(
+      `/api/admin/quizzes/generate/jobs/${encodeURIComponent(jobId)}`,
+    );
+    return response.data;
+  },
+
+  generateQuizWithProgress(
+    request: QuizGenerationRequest,
+    options: {
+      onProgress?: (job: QuizGenerationJobSnapshot) => void;
+      signal?: AbortSignal;
+    } = {},
+  ): Promise<QuizGenerationResponse> {
+    return runQuizGenerationJob(
+      {
+        start: (body) => adminApi.startQuizGenerationJob(body),
+        status: (jobId) => adminApi.getQuizGenerationJob(jobId),
+      },
+      request,
+      { ...options, timeoutMs: QUIZ_GENERATION_TIMEOUT_MS },
+    );
   },
 
   async createQuestion(question: Omit<Question, "id">): Promise<Question> {

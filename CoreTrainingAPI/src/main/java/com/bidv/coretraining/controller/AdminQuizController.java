@@ -2,6 +2,7 @@ package com.bidv.coretraining.controller;
 
 import com.bidv.coretraining.dto.QuestionDto;
 import com.bidv.coretraining.dto.QuizContextDto;
+import com.bidv.coretraining.dto.QuizGenerationJobDto;
 import com.bidv.coretraining.dto.QuizGenerationRequestDto;
 import com.bidv.coretraining.dto.QuizGenerationResponseDto;
 import com.bidv.coretraining.dto.QuizSettingsDto;
@@ -56,6 +57,17 @@ public class AdminQuizController {
     public ResponseEntity<QuizGenerationResponseDto> generateQuiz(
             @Valid @RequestBody QuizGenerationRequestDto request) {
         return ResponseEntity.ok(service.generateQuiz(request));
+    }
+
+    @PostMapping("/quizzes/generate/jobs")
+    public ResponseEntity<QuizGenerationJobDto> startQuizGenerationJob(
+            @Valid @RequestBody QuizGenerationRequestDto request) {
+        return ResponseEntity.accepted().body(service.startQuizGenerationJob(request));
+    }
+
+    @GetMapping("/quizzes/generate/jobs/{jobId}")
+    public ResponseEntity<QuizGenerationJobDto> getQuizGenerationJob(@PathVariable String jobId) {
+        return ResponseEntity.ok(service.getQuizGenerationJob(jobId));
     }
 
     @PostMapping("/questions")

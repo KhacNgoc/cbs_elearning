@@ -111,8 +111,15 @@
             <button class="primary-button" :disabled="generating || (Boolean(lessonId) && !sourceReady)" @click="generateQuestions">
               <LoaderCircle v-if="generating" class="spin" :size="17" />
               <Sparkles v-else :size="17" />
-              {{ generating ? "Đang truy xuất và tạo..." : "Tạo bản nháp" }}
+              {{ generating ? `Đang tạo... ${generationProgress?.percent ?? 0}%` : "Tạo bản nháp" }}
             </button>
+          </div>
+          <div v-if="generationProgress" class="ai-progress" :class="{ failed: generationProgress.failed }" role="status" aria-live="polite">
+            <div class="ai-progress-header"><span>{{ generationProgress.label }}</span><strong>{{ generationProgress.percent }}%</strong></div>
+            <div class="ai-progress-track" role="progressbar" aria-label="Tiến độ tạo câu hỏi" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="generationProgress.percent">
+              <div class="ai-progress-fill" :style="{ width: `${generationProgress.percent}%` }" />
+            </div>
+            <small v-if="generationProgress.detail">{{ generationProgress.detail }}</small>
           </div>
           <p v-for="warning in aiWarnings" :key="warning" class="ai-warning">{{ warning }}</p>
           <div v-if="aiDrafts.length" class="ai-drafts">
@@ -263,7 +270,8 @@ import { useRoute, useRouter } from "vue-router";
 import { ArrowLeft, ArrowRight, CheckCircle2, Download, Edit, FileUp, LoaderCircle, Plus, Search, Sparkles, Trash2, X } from "lucide-vue-next";
 
 import { adminApi } from "../api/adminApi";
-import type { GeneratedQuizQuestion, QuizGenerationSource } from "../api/adminApi";
+import type { GeneratedQuizQuestion, QuizGenerationJobSnapshot, QuizGenerationSource } from "../api/adminApi";
+import { describeQuizJob, describeQuizJobDetail, QuizGenerationJobError } from "../utils/quizGenerationJob";
 import type { Question, Lesson } from "../types";
 import AdminModal from '../components/AdminModal.vue';
 import ToggleSwitch from '../components/ToggleSwitch.vue';
@@ -310,6 +318,16 @@ const aiDrafts = ref<AiDraft[]>([]);
 const editingDraftIndex = ref<number | null>(null);
 const draftBackup = ref<GeneratedQuizQuestion | null>(null);
 const aiConfig = reactive({ singleChoiceCount: 5, multipleChoiceCount: 0, optionCount: 4 });
+const generationProgress = ref<{ percent: number; label: string; detail: string; failed: boolean } | null>(null);
+let generationAbort: AbortController | null = null;
+const showGenerationProgress = (job: QuizGenerationJobSnapshot) => {
+  generationProgress.value = {
+    percent: job.percent,
+    label: describeQuizJob(job),
+    detail: describeQuizJobDetail(job),
+    failed: false,
+  };
+};
 const confirmationModal = ref<{
   show: boolean;
   title: string;
@@ -440,7 +458,7 @@ const loadQuestions = async () => {
   if (id === questionRequestId) questions.value = data;
 };
 watch(() => [route.name, route.params.scopeType, route.params.scopeId, props.lesson?.id], initialize, { immediate: true });
-onBeforeUnmount(() => { ++initialRequestId; ++questionRequestId; ++scopeRequestId; });
+onBeforeUnmount(() => { ++initialRequestId; ++questionRequestId; ++scopeRequestId; generationAbort?.abort(); });
 const confirmScope = () => {
   pendingCreationSettings = { courseId: courseId.value, lessonId: lessonId.value,
     passingScore: passingScore.value, requiredForProgress: requiredForProgress.value };
@@ -672,12 +690,16 @@ const generateQuestions = async () => {
   }
   generating.value = true;
   aiWarnings.value = [];
+  generationProgress.value = { percent: 0, label: "Đang gửi yêu cầu tạo câu hỏi", detail: "", failed: false };
+  const abort = new AbortController();
+  generationAbort = abort;
   try {
-    const result = await adminApi.generateQuizQuestions({
+    const result = await adminApi.generateQuizWithProgress({
       courseId: courseId.value,
       lessonId: lessonId.value || undefined,
       ...aiConfig,
-    });
+    }, { onProgress: showGenerationProgress, signal: abort.signal });
+    generationProgress.value = null;
     aiSources.value = result.sources || [];
     aiWarnings.value = result.warnings || [];
     editingDraftIndex.value = null;
@@ -687,8 +709,12 @@ const generateQuestions = async () => {
       selected: true,
     }));
   } catch (error) {
-    showToast(error instanceof Error ? error.message : "Không thể tạo câu hỏi. Vui lòng thử lại.", "error");
+    if (error instanceof QuizGenerationJobError && error.kind === "cancelled") return;
+    const message = error instanceof Error ? error.message : "Không thể tạo câu hỏi. Vui lòng thử lại.";
+    generationProgress.value = { percent: generationProgress.value?.percent ?? 0, label: message, detail: "", failed: true };
+    showToast(message, "error");
   } finally {
+    if (generationAbort === abort) generationAbort = null;
     generating.value = false;
   }
 };
@@ -896,6 +922,13 @@ select, textarea, .question-text-field input { width: 100%; padding: .7rem; bord
 .ai-settings { display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)) auto; gap: .7rem; align-items: end; }
 .ai-settings label span, .question-type-field > span { display: block; margin-bottom: .3rem; font-size: var(--admin-text-label); font-weight: 700; }
 .ai-settings input { width: 100%; padding: .65rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); }
+.ai-progress { margin: .85rem 0 0; padding: .7rem .8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); }
+.ai-progress-header { display: flex; justify-content: space-between; gap: .75rem; margin-bottom: .45rem; font-size: var(--admin-text-label); font-weight: 700; }
+.ai-progress-track { height: 8px; overflow: hidden; border-radius: 999px; background: var(--border-color); }
+.ai-progress-fill { height: 100%; border-radius: inherit; background: var(--primary-color); transition: width .4s ease; }
+.ai-progress small { display: block; margin-top: .4rem; color: var(--text-muted); }
+.ai-progress.failed .ai-progress-header { color: var(--ink-9a3412); }
+.ai-progress.failed .ai-progress-fill { background: var(--ink-9a3412); }
 .ai-warning { margin: .75rem 0 0; padding: .65rem .75rem; border-radius: var(--radius-sm); background: var(--surface-fff7ed); color: var(--ink-9a3412); }
 .ai-drafts { display: grid; gap: .75rem; margin-top: 1rem; }
 .ai-draft-card { position: relative; padding: 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--surface-ffffff); }
