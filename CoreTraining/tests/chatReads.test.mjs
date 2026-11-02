@@ -21,9 +21,38 @@ test('chat opens without a course picker and prepends complete older exchanges',
  try{assert.equal(calls.length,0);document.querySelector('.chat-launcher').click();await flush();
   assert.equal(calls.length,1);assert.equal(calls[0].conversation,undefined);assert.equal(document.querySelector('#chat-course'),null);assert.equal(document.querySelector('.chat-context'),null);
   assert.equal(document.querySelector('.source-course').textContent,'Tiền gửi');
-  [...document.querySelectorAll('button')].find(b=>b.textContent.includes('Tải trao đổi trước')).click();await flush();
+  scrollChatToTop();await flush();
   assert.deepEqual(calls[1],{conversation:'conversation',before:2});const text=document.querySelector('.chat-body').textContent;assert.ok(text.indexOf('Older question')<text.indexOf('Recent question'));
+  scrollChatToTop();await flush();assert.equal(calls.length,2,'the last page was reached');
  }finally{try{app.unmount()}catch{}}
+});
+const scrollChatToTop=()=>{const body=document.querySelector('.chat-body');body.scrollTop=0;body.dispatchEvent(new window.Event('scroll'))};
+test('scrolling up loads one older page at a time and offers a retry after a failure',async()=>{
+ const calls=[];let release,fail=false;
+ const app=await mountChat({history:async(conversation,before)=>{calls.push(before);if(!before)return {items:[row(5,'Recent question')],nextBeforeId:5};
+  if(fail)throw new Error('offline');await new Promise(resolve=>{release=resolve});return {items:[row(4,'Older question')],nextBeforeId:4}}});
+ try{document.querySelector('.chat-launcher').click();await flush();
+  scrollChatToTop();scrollChatToTop();await flush();
+  assert.deepEqual(calls,[undefined,5],'a scroll during loading does not start a second request');
+  assert.match(document.querySelector('.chat-loading-older').textContent,/Đang tải trao đổi trước/);
+  release();await flush();assert.equal(document.querySelector('.chat-loading-older'),null);
+  fail=true;scrollChatToTop();await flush();assert.deepEqual(calls,[undefined,5,4]);
+  scrollChatToTop();await flush();assert.equal(calls.length,3,'a failed page is not retried on every scroll');
+  fail=false;[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Tải lại trao đổi trước')).click();await flush();
+  assert.deepEqual(calls,[undefined,5,4,4]);release();await flush();
+  assert.equal([...document.querySelectorAll('button')].some(b=>b.textContent.includes('Tải lại trao đổi trước')),false);
+ }finally{try{app.unmount()}catch{}}
+});
+test('a first page shorter than the panel keeps loading until the history ends',async()=>{
+ const calls=[];
+ const heights=Object.getOwnPropertyDescriptors(dom.window.HTMLElement.prototype);
+ Object.defineProperty(dom.window.HTMLElement.prototype,'clientHeight',{configurable:true,get(){return this.classList?.contains('chat-body')?400:0}});
+ Object.defineProperty(dom.window.HTMLElement.prototype,'scrollHeight',{configurable:true,get(){return this.classList?.contains('chat-body')?200:0}});
+ const app=await mountChat({history:async(conversation,before)=>{calls.push(before);return before===undefined?{items:[row(3,'Q3')],nextBeforeId:3}:before===3?{items:[row(2,'Q2')],nextBeforeId:2}:{items:[row(1,'Q1')],nextBeforeId:null}}});
+ try{document.querySelector('.chat-launcher').click();await flush();
+  assert.deepEqual(calls,[undefined,3,2]);
+ }finally{try{app.unmount()}catch{}
+  for(const key of ['clientHeight','scrollHeight']){if(heights[key])Object.defineProperty(dom.window.HTMLElement.prototype,key,heights[key]);else delete dom.window.HTMLElement.prototype[key];}}
 });
 test('question inside a lesson sends the viewed course only as context',async()=>{
  const sent=[];

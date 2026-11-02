@@ -54,8 +54,11 @@
             Ưu tiên tài liệu khóa <strong>{{ contextCourse.name }}</strong>
           </p>
 
-          <div ref="chatBody" class="chat-body">
-            <button v-if="historyBeforeId" class="btn btn-secondary" :disabled="loadingOlder" @click="loadOlderHistory">{{ loadingOlder ? "Đang tải..." : "Tải trao đổi trước" }}</button>
+          <div ref="chatBody" class="chat-body" @scroll.passive="onChatScroll">
+            <div v-if="loadingOlder" class="chat-loading-older" role="status">
+              Đang tải trao đổi trước...
+            </div>
+            <button v-else-if="historyBeforeId && olderFailed" class="btn btn-secondary" @click="loadOlderHistory">Tải lại trao đổi trước</button>
             <div class="chat-date">Hôm nay</div>
             <div v-if="loadingHistory" class="chat-loading">
               Đang tải lịch sử trao đổi...
@@ -265,8 +268,10 @@ const clearLongWaitTimer = () => {
   longWait.value = false;
 };
 
-const historyBeforeId=ref<number|null>(null),loadingOlder=ref(false);
+const historyBeforeId=ref<number|null>(null),loadingOlder=ref(false),olderFailed=ref(false);
 let historyVersion=0;
+// Older exchanges load once the reader scrolls this close to the top.
+const OLDER_HISTORY_THRESHOLD_PX=120;
 
 const scrollToLatest = async () => {
   await nextTick();
@@ -276,15 +281,30 @@ const scrollToLatest = async () => {
 const loadHistory = async () => {
  const version=++historyVersion;historyBeforeId.value=null;messages.value=[];
  loadingHistory.value=true;chatError.value="";
+ olderFailed.value=false;
  try{const page=await ragApi.getHistoryPage(conversationId.value||undefined);if(version!==historyVersion)return;messages.value=page.items;historyBeforeId.value=page.nextBeforeId;const conversation=page.items[0]?.conversationId;if(conversation)conversationId.value=conversation;await scrollToLatest();}
  catch{if(version===historyVersion)chatError.value="Không thể tải lịch sử trợ lý.";}
  finally{if(version===historyVersion)loadingHistory.value=false;}
+ if(version===historyVersion)await fillChatBody();
 };
 const loadOlderHistory = async () => {
- const version=historyVersion;if(!historyBeforeId.value||loadingOlder.value)return;loadingOlder.value=true;chatError.value="";const body=chatBody.value,oldHeight=body?.scrollHeight||0;
- try{const page=await ragApi.getHistoryPage(conversationId.value||undefined,historyBeforeId.value);if(version!==historyVersion)return;const ids=new Set(messages.value.map(m=>m.id));messages.value=[...page.items.filter(m=>!ids.has(m.id)),...messages.value];historyBeforeId.value=page.nextBeforeId;await nextTick();if(body)body.scrollTop+=body.scrollHeight-oldHeight;}
- catch{if(version===historyVersion)chatError.value="Không thể tải trao đổi trước. Vui lòng thử lại.";}
+ const version=historyVersion;if(!historyBeforeId.value||loadingOlder.value)return;loadingOlder.value=true;olderFailed.value=false;chatError.value="";const body=chatBody.value,oldHeight=body?.scrollHeight||0;
+ let loaded=false;
+ try{const page=await ragApi.getHistoryPage(conversationId.value||undefined,historyBeforeId.value);if(version!==historyVersion)return;const ids=new Set(messages.value.map(m=>m.id));messages.value=[...page.items.filter(m=>!ids.has(m.id)),...messages.value];historyBeforeId.value=page.nextBeforeId;await nextTick();if(body)body.scrollTop+=body.scrollHeight-oldHeight;loaded=true;}
+ catch{if(version===historyVersion){olderFailed.value=true;chatError.value="Không thể tải trao đổi trước. Vui lòng thử lại.";}}
  finally{loadingOlder.value=false;}
+ if(loaded)await fillChatBody();
+};
+// Scrolling up near the top pulls in the previous page, so history loads gradually.
+const onChatScroll = () => {
+ const body=chatBody.value;
+ if(body&&body.scrollTop<=OLDER_HISTORY_THRESHOLD_PX&&!olderFailed.value)void loadOlderHistory();
+};
+// A first page shorter than the panel has no scrollbar to scroll up with, so keep loading
+// until the panel overflows or the history ends. Skipped before layout (clientHeight 0).
+const fillChatBody = async () => {
+ await nextTick();const body=chatBody.value;
+ if(body&&body.clientHeight>0&&body.scrollHeight<=body.clientHeight&&historyBeforeId.value&&!olderFailed.value)await loadOlderHistory();
 };
 
 const sendQuestion = async () => {
@@ -794,6 +814,7 @@ onBeforeUnmount(() => {
 }
 
 .chat-loading,
+.chat-loading-older,
 .chat-error {
   margin: 12px 0;
   color: var(--ink-64748b);
