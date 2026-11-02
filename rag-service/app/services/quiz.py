@@ -374,7 +374,7 @@ well_formed=false nếu câu hỏi/lựa chọn vô nghĩa, lộ đáp án hoặ
                      {"role": "user", "content": verification_prompt}],
                     config.OLLAMA_QUIZ_VERIFICATION_TIMEOUT_SECONDS,
                     json_schema=ollama_compatible_schema(QuizQuestionReview.model_json_schema()),
-                    options={"temperature": 0, "num_predict": 256},
+                    options={"temperature": 0, "num_predict": config.QUIZ_VERIFICATION_NUM_PREDICT},
                 )
             progress.step_done()
             review = QuizQuestionReview.model_validate(
@@ -382,17 +382,28 @@ well_formed=false nếu câu hỏi/lựa chọn vô nghĩa, lộ đáp án hoặ
             )
             return review.well_formed and sorted(set(review.correct_answers)) == question.correct_answers
         progress.verification_started(len(valid_questions))
-        try:
-            decisions = await asyncio.gather(*(verify_one(question) for question in valid_questions))
-            valid_questions = [
-                question for question, accepted in zip(valid_questions, decisions) if accepted
-            ]
-        except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError, RuntimeError) as error:
-            infrastructure.logger.exception(
-                "Quiz verification failed course_id=%s lesson=%s candidates=%d error_type=%s",
-                request.course_id, request.lesson_name, len(valid_questions), type(error).__name__,
+        decisions = await asyncio.gather(
+            *(verify_one(question) for question in valid_questions), return_exceptions=True
+        )
+        verification_errors = [
+            decision for decision in decisions if isinstance(decision, BaseException)
+        ]
+        for error in verification_errors:
+            if not isinstance(error, (httpx.HTTPError, KeyError, TypeError, ValueError, RuntimeError)):
+                raise error
+        if verification_errors:
+            infrastructure.logger.warning(
+                "Quiz verification failed course_id=%s lesson=%s candidates=%d failures=%d errors=%s",
+                request.course_id, request.lesson_name, len(valid_questions),
+                len(verification_errors), sorted({type(error).__name__ for error in verification_errors}),
             )
-            raise HTTPException(503, "Quiz verification model is unavailable") from error
+        # One unverifiable question is dropped; only a check that failed for every question
+        # means the model is unavailable.
+        if len(verification_errors) == len(valid_questions):
+            raise HTTPException(503, "Quiz verification model is unavailable") from verification_errors[0]
+        valid_questions = [
+            question for question, accepted in zip(valid_questions, decisions) if accepted is True
+        ]
 
     progress.finalizing()
     final_remaining = {

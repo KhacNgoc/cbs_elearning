@@ -3,6 +3,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from pydantic import ValidationError
 from qdrant_client import QdrantClient, models
+from fastapi import HTTPException
+from app import infrastructure
 from app.quiz_scope import quiz_source_filter
 from app.schemas import QuizGenerationRequest
 from app.services.quiz import generate_quiz
@@ -92,6 +94,35 @@ class SourceFlowTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("trực tiếp phù hợp với bài học", verification)
             self.assertIn("Giải ngân", verification)
             self.assertIn("Phạm vi nguồn được giữ nguyên", result.warnings[-1])
+
+    async def run_verified_quiz(self, verifications):
+        point = SimpleNamespace(score=1.0, payload={"document_id": "D1", "course_id": "C1",
+            "page": 2, "section": "Giải ngân",
+            "full_text": "Kiểm tra thông tin khách hàng trước khi giải ngân. Đối chiếu chữ ký với hồ sơ trước khi giải ngân."})
+        model = AsyncMock(side_effect=[
+            '{"q":"Trước giải ngân cần kiểm tra thông tin nào?","o":["Khách hàng","Lịch nghỉ","Văn phòng","Trang phục"],"a":0}',
+            '{"q":"Chữ ký cần đối chiếu với tài liệu nào?","o":["Hồ sơ","Thực đơn","Báo cáo thời tiết","Lịch họp"],"a":0}',
+            *verifications,
+        ])
+        with patch("app.infrastructure.ensure_collection", new=AsyncMock()), \
+             patch("app.infrastructure.embeddings", new=AsyncMock(return_value=[[1., 0.]] * 4)), \
+             patch("app.infrastructure.qdrant.query_points", new=AsyncMock(return_value=SimpleNamespace(points=[point]))), \
+             patch("app.infrastructure.ollama_chat", new=model), \
+             patch("app.config.QUIZ_LLM_VERIFICATION_ENABLED", True):
+            request = QuizGenerationRequest(course_id="C1", course_name="Cho vay", single_choice_count=2)
+            return await generate_quiz(request)
+
+    async def test_truncated_verification_drops_only_that_question(self):
+        result = await self.run_verified_quiz([
+            '{"reason":"Đáp án đúng theo nguồn.","correct_answers":[0],"well_formed":true}',
+            infrastructure.ModelOutputTruncated("length"),
+        ])
+        self.assertEqual(1, len(result.questions))
+
+    async def test_verification_failing_for_every_question_is_unavailable(self):
+        with self.assertRaises(HTTPException) as raised:
+            await self.run_verified_quiz([infrastructure.ModelOutputTruncated("length")] * 2)
+        self.assertEqual(503, raised.exception.status_code)
 
     async def test_no_results_reports_insufficient_sources_without_broadening(self):
         query = AsyncMock(return_value=SimpleNamespace(points=[]))
