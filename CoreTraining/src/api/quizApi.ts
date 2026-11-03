@@ -4,6 +4,14 @@ import type { QuizQuestion } from "../types";
 export interface QuizSubmitRequest {
   selectedAnswers: Record<string, number[]>;
   timeElapsed: number;
+  sessionId?: string | null;
+}
+
+/** Server-side attempt clock; every field is null for an untimed quiz. */
+export interface QuizSession {
+  sessionId: string | null;
+  timeLimitMinutes: number | null;
+  remainingSeconds: number | null;
 }
 
 export interface QuizSubmitResponse {
@@ -36,6 +44,13 @@ export const quizApi = {
       ? `/api/quizzes/lessons/${lessonId}/questions`
       : `/api/quizzes/${courseId}/questions`;
     const response = await axiosClient.get<QuizQuestion[]>(url);
+    return response.data;
+  },
+
+  async startLessonQuiz(lessonId: string): Promise<QuizSession> {
+    const response = await axiosClient.post<QuizSession>(
+      `/api/quizzes/lessons/${lessonId}/start`,
+    );
     return response.data;
   },
 

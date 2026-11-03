@@ -12,6 +12,7 @@ import com.bidv.coretraining.exception.BadRequestException;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
 import com.bidv.coretraining.repository.*;
 import com.bidv.coretraining.service.QuizService;
+import com.bidv.coretraining.service.QuizSessionService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,7 +40,8 @@ public class QuizServiceImpl implements QuizService {
             UserRepository userRepository, UserQuizScoreRepository userQuizScoreRepository,
             BadgeRepository badgeRepository, UserBadgeRepository userBadgeRepository,
             QuizMapper quizMapper,
-            TrainingStructureService structure, LessonProgressService progress, QuizAttemptRepository attempts, com.fasterxml.jackson.databind.ObjectMapper json) {
+            TrainingStructureService structure, LessonProgressService progress, QuizAttemptRepository attempts, com.fasterxml.jackson.databind.ObjectMapper json,
+            QuizSessionService quizSessions) {
         this.questionRepository = questionRepository;
         this.courseRepository = courseRepository;
         this.lessonRepository = lessonRepository;
@@ -52,12 +54,14 @@ public class QuizServiceImpl implements QuizService {
         this.progress = progress;
         this.attempts = attempts;
         this.json = json;
+        this.quizSessions = quizSessions;
     }
 
     private final TrainingStructureService structure;
     private final LessonProgressService progress;
     private final QuizAttemptRepository attempts;
     private final com.fasterxml.jackson.databind.ObjectMapper json;
+    private final QuizSessionService quizSessions;
 
     @Override
     @Transactional(readOnly = true)
@@ -97,6 +101,7 @@ public class QuizServiceImpl implements QuizService {
         List<Question> questions = questionRepository.findByLessonId(lessonId);
         if (questions.isEmpty())
             throw new BadRequestException("Bài học chưa có câu hỏi kiểm tra");
+        quizSessions.consume(user, lesson, request.getSessionId());
         Map<Long, List<Integer>> submittedAnswers = request.getSelectedAnswers() == null
                 ? Map.of()
                 : request.getSelectedAnswers();

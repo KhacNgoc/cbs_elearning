@@ -11,7 +11,10 @@ import com.bidv.coretraining.dto.ResetPasswordOtpRequest;
 import com.bidv.coretraining.service.AuthService;
 import com.bidv.coretraining.security.CustomUserDetails;
 import com.bidv.coretraining.security.JwtCookieService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -25,10 +28,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
     private final AuthService authService;
     private final JwtCookieService jwtCookieService;
+    private final CsrfTokenRepository csrfTokens;
 
-    public AuthController(AuthService authService, JwtCookieService jwtCookieService) {
+    public AuthController(AuthService authService, JwtCookieService jwtCookieService, CsrfTokenRepository csrfTokens) {
         this.authService = authService;
         this.jwtCookieService = jwtCookieService;
+        this.csrfTokens = csrfTokens;
     }
 
     @org.springframework.web.bind.annotation.GetMapping("/csrf")
@@ -37,8 +42,11 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<JwtAuthenticationResponse> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
+    public ResponseEntity<JwtAuthenticationResponse> authenticateUser(@Valid @RequestBody LoginRequest loginRequest,
+            HttpServletRequest request, HttpServletResponse servletResponse) {
         JwtAuthenticationResponse response = authService.authenticateUser(loginRequest);
+        // A token issued before login must not survive it (CSRF token fixation).
+        csrfTokens.saveToken(null, request, servletResponse);
         String token = response.getAccessToken();
         response.setAccessToken(null);
         return ResponseEntity.ok()
@@ -47,9 +55,11 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(@AuthenticationPrincipal CustomUserDetails user) {
+    public ResponseEntity<Void> logout(@AuthenticationPrincipal CustomUserDetails user,
+            HttpServletRequest request, HttpServletResponse response) {
         if (user != null)
             authService.revokeSessions(user.getUsername());
+        csrfTokens.saveToken(null, request, response);
         return ResponseEntity.noContent()
                 .header(HttpHeaders.SET_COOKIE, jwtCookieService.clear())
                 .build();

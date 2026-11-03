@@ -448,12 +448,14 @@ export const adminApi = {
     lessonId: string | undefined,
     passingScore: number,
     requiredForProgress = true,
+    timeLimitMinutes: number | null = null,
   ): Promise<void> {
     await axiosClient.put("/api/admin/quizzes/settings", {
       courseId,
       lessonId,
       passingScore,
       requiredForProgress,
+      timeLimitMinutes,
     });
   },
 

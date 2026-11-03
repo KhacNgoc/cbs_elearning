@@ -51,7 +51,8 @@ public class LessonKnowledgeSourceServiceImpl implements LessonKnowledgeSourceSe
         return save(lessonId, request);
     }
 
-    @Transactional(readOnly = true)
+    // No surrounding transaction: the RAG call below can take up to the read timeout and must not
+    // hold a pooled connection. Authorization and the document lookup run in their own short ones.
     public DocumentOutlineDto outlineAuthorized(String courseId, String documentId) {
         authorization.edit(courseId);
         return outline(courseId, documentId);
@@ -98,7 +99,6 @@ public class LessonKnowledgeSourceServiceImpl implements LessonKnowledgeSourceSe
         return selected.stream().map(this::dto).toList();
     }
 
-    @Transactional(readOnly = true)
     public DocumentOutlineDto outline(String courseId, String documentId) {
         requireDocument(courseId, documentId);
         try {

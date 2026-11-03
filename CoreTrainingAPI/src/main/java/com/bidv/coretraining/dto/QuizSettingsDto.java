@@ -14,4 +14,6 @@ public class QuizSettingsDto {
     private String lessonId;
     private Integer passingScore;
     private Boolean requiredForProgress;
+    /** Null or absent means the quiz has no time limit. */
+    private Integer timeLimitMinutes;
 }

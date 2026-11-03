@@ -20,7 +20,9 @@ import com.bidv.coretraining.service.FlashcardGenerationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
@@ -42,6 +44,7 @@ public class FlashcardAdminServiceImpl implements FlashcardAdminService {
     private final FlashcardReviewRepository reviews;
     private final CourseDocumentRepository documents;
     private final FlashcardGenerationService generation;
+    private final PlatformTransactionManager transactionManager;
 
     @Override
     @Transactional(readOnly = true)
@@ -109,20 +112,27 @@ public class FlashcardAdminServiceImpl implements FlashcardAdminService {
         return flashcards.saveAllAndFlush(cards).stream().map(FlashcardAdminServiceImpl::toAdminCard).toList();
     }
 
+    // The two generation methods read the DB in a short transaction and call the RAG service
+    // outside it, so a slow AI service cannot hold pooled connections other requests need.
     @Override
-    @Transactional(readOnly = true)
     public FlashcardGenerationJobDto startGeneration(String lessonId, FlashcardDto.GenerationRequest request) {
-        Lesson lesson = writableLesson(lessonId);
-        return generation.startJob(lesson, request);
+        FlashcardGenerationService.Target target =
+                readOnly().execute(status -> generation.target(writableLesson(lessonId)));
+        return generation.startJob(target, request);
     }
 
     @Override
-    @Transactional(readOnly = true)
     public FlashcardGenerationJobDto generationStatus(String lessonId, String jobId) {
         if (!lessonId.equals(generation.jobLessonId(jobId)))
             throw new ResourceNotFoundException("Không tìm thấy tiến trình tạo flashcard");
-        authorization.edit(lesson(lessonId).getCourse());
+        readOnly().executeWithoutResult(status -> authorization.edit(lesson(lessonId).getCourse()));
         return generation.jobStatus(jobId);
+    }
+
+    private TransactionTemplate readOnly() {
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        template.setReadOnly(true);
+        return template;
     }
 
     private Flashcard newCard(Lesson lesson, FlashcardDto.CardRequest request, int order) {

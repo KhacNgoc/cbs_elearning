@@ -1212,12 +1212,16 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
         if (!Set.of("DRAFT", "PUBLISHED", "ARCHIVED", "DELETED").contains(status))
             throw new BadRequestException("Trạng thái không hợp lệ");
         if ("PUBLISHED".equals(status)) {
-            if (c.getChapters().isEmpty())
+            List<Chapter> activeChapters = c.getChapters().stream()
+                    .filter(ch -> !"DELETED".equals(ch.getStatus())).toList();
+            if (activeChapters.isEmpty())
                 throw new BadRequestException("Khóa chưa có chương");
-            for (Chapter ch : c.getChapters()) {
-                if (ch.getLessons().isEmpty())
-                    throw new BadRequestException("Chương " + ch.getTitle() + " chưa có bài");
-                for (Lesson l : ch.getLessons()) {
+            for (Chapter ch : activeChapters) {
+                List<Lesson> activeLessons = ch.getLessons().stream()
+                        .filter(l -> !"DELETED".equals(l.getStatus())).toList();
+                if (activeLessons.isEmpty())
+                    throw new BadRequestException(chapterLabel(ch) + " chưa có bài học");
+                for (Lesson l : activeLessons) {
                     LessonContentPolicy.requirePublishable(l);
                     l.setStatus("PUBLISHED");
                 }
@@ -1226,6 +1230,11 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
         }
         c.setStatus(status);
         return mapper.toCourseDto(courses.save(c));
+    }
+
+    private String chapterLabel(Chapter ch) {
+        String title = ch.getTitle() == null ? "" : ch.getTitle().trim();
+        return title.toLowerCase(java.util.Locale.ROOT).startsWith("chương") ? title : "Chương " + title;
     }
 
     private boolean blank(String s) {

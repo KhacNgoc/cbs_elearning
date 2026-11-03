@@ -225,6 +225,21 @@ class AccessSecurityIntegrationTest {
         mvc.perform(get("/uploads/documents/protected.pdf").cookie(login(ub))).andExpect(status().isForbidden());
         mvc.perform(get("/uploads/documents/protected.pdf").cookie(login(learner))).andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store"));
     }
+    @Test void csrfCookieSurvivesAuthenticatedRequestsAndRotatesOnLoginAndLogout() throws Exception {
+        Cookie jwt=login(learner);
+        var csrf=new Cookie("XSRF-TOKEN","kept-token");
+        // An authenticated read must not clear the cookie, or the UI needs a token round trip per write.
+        var read=mvc.perform(get("/api/auth/session").cookie(jwt,csrf)).andExpect(status().isOk()).andReturn();
+        assertThat(read.getResponse().getCookie("XSRF-TOKEN")).isNull();
+        // The cookie value alone is a valid header token for a write.
+        var comment=mvc.perform(post("/api/lessons/"+la.getId()+"/comments").cookie(jwt,csrf).header("X-XSRF-TOKEN","kept-token")
+                .contentType("application/json").content("{\"content\":\"Hello\"}")).andReturn();
+        assertThat(comment.getResponse().getStatus()).isNotEqualTo(403);
+        var login=write(post("/api/auth/login"),null,Map.of("username",learner.getUsername(),"password",password)).andReturn();
+        assertThat(login.getResponse().getCookie("XSRF-TOKEN").getMaxAge()).isZero();
+        var logout=write(post("/api/auth/logout"),jwt,null).andExpect(status().isNoContent()).andReturn();
+        assertThat(logout.getResponse().getCookie("XSRF-TOKEN").getMaxAge()).isZero();
+    }
     @Test void logoutAndLockInvalidateExistingTokens() throws Exception {
         Cookie jwt=login(learner);write(post("/api/auth/logout"),jwt,null).andExpect(status().isNoContent());
         mvc.perform(get("/api/auth/session").cookie(jwt)).andExpect(status().isUnauthorized());

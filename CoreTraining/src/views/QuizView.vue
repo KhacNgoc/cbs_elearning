@@ -49,7 +49,13 @@
           >Câu hỏi {{ quizStore.currentQuestionIndex + 1 }} /
           {{ totalQuestions }}</span
         >
-        <div class="quiz-timer">
+        <div
+          class="quiz-timer"
+          :class="{
+            warning: quizStore.remainingSeconds != null && quizStore.remainingSeconds <= 60,
+          }"
+          :title="quizStore.timeLimitSeconds ? `Giới hạn ${quizStore.timeLimitSeconds / 60} phút, hết giờ sẽ tự động nộp bài` : undefined"
+        >
           <svg
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 24 24"
@@ -63,9 +69,17 @@
             <circle cx="12" cy="12" r="10" />
             <polyline points="12 6 12 12 16 14" />
           </svg>
-          <span>{{ quizStore.formattedTime }}</span>
+          <span v-if="quizStore.timeLimitSeconds != null">Còn {{ quizStore.formattedRemaining }}</span>
+          <span v-else>{{ quizStore.formattedTime }}</span>
         </div>
       </div>
+      <p v-if="quizStore.submitError" class="time-up-note" role="alert">
+        {{ quizStore.submitError }}
+        <button type="button" class="btn btn-secondary btn-retake" @click="retakeQuiz">Làm lại bài</button>
+      </p>
+      <p v-else-if="quizStore.isTimeUp" class="time-up-note" role="status">
+        Đã hết thời gian làm bài. Đang tự động nộp bài...
+      </p>
 
       <!-- Question Text -->
       <div class="question-container" v-if="currentQuestion">
@@ -110,16 +124,11 @@
           Câu trước
         </button>
         <button
+          v-if="!quizStore.isLastQuestion"
           class="btn btn-primary"
           @click="quizStore.nextQuestion"
-          :disabled="quizStore.isLastQuestion && unansweredCount > 0"
-          :title="
-            quizStore.isLastQuestion && unansweredCount
-              ? `Còn ${unansweredCount} câu chưa làm`
-              : undefined
-          "
         >
-          {{ quizStore.isLastQuestion ? "Nộp bài" : "Câu tiếp theo" }}
+          Câu tiếp theo
           <svg
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 24 24"
@@ -178,12 +187,12 @@
       <button
         type="button"
         class="btn btn-primary navigator-submit"
-        :disabled="unansweredCount > 0 || quizStore.isLoading"
+        :disabled="(unansweredCount > 0 && !quizStore.isTimeUp) || quizStore.isLoading"
         @click="quizStore.submitQuiz"
       >
         Nộp bài
       </button>
-      <p v-if="unansweredCount" class="navigator-note">
+      <p v-if="unansweredCount && !quizStore.isTimeUp" class="navigator-note">
         Còn {{ unansweredCount }} câu chưa làm. Hoàn thành tất cả để nộp bài.
       </p>
     </aside>
@@ -295,6 +304,9 @@
         <p class="passing-note">
           Ngưỡng đạt:
           <strong>{{ quizResult?.passingScore ?? passingScore }}%</strong>
+        </p>
+        <p v-if="quizStore.isTimeUp" class="time-up-result">
+          Bài làm đã được tự động nộp khi hết giờ.
         </p>
         <p class="time-spent-desc">
           Thời gian hoàn thành: <strong>{{ quizStore.formattedTime }}</strong>
@@ -773,6 +785,27 @@ const getBadgeIcon = (icon: string) => {
   font-size: 1.1rem;
   font-weight: 700;
   color: var(--text-main);
+}
+
+.quiz-timer.warning,
+.quiz-timer.warning .timer-icon {
+  color: var(--danger-ink);
+}
+
+.time-up-note,
+.time-up-result {
+  margin: 0.75rem 0 0;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-sm);
+  background: var(--warning-surface);
+  color: var(--warning-ink);
+  font-size: 0.9rem;
+}
+
+.btn-retake {
+  margin-left: 0.5rem;
+  padding: 0.25rem 0.75rem;
 }
 
 .timer-icon {

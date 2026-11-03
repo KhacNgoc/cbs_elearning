@@ -6,6 +6,8 @@ import com.bidv.coretraining.dto.QuizSubmitRequest;
 import com.bidv.coretraining.dto.QuizReviewDto;
 import com.bidv.coretraining.security.CustomUserDetails;
 import com.bidv.coretraining.service.QuizService;
+import com.bidv.coretraining.service.QuizSessionService;
+import com.bidv.coretraining.dto.QuizSessionDto;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -17,14 +19,24 @@ import java.util.List;
 public class QuizController {
 
     private final QuizService quizService;
+    private final QuizSessionService quizSessions;
 
-    public QuizController(QuizService quizService) {
+    public QuizController(QuizService quizService, QuizSessionService quizSessions) {
         this.quizService = quizService;
+        this.quizSessions = quizSessions;
     }
 
     @GetMapping("/lessons/{lessonId}/questions")
     public ResponseEntity<List<QuizQuestionDto>> getQuestionsForLesson(@PathVariable String lessonId) {
         return ResponseEntity.ok(quizService.getQuestionsForLesson(lessonId));
+    }
+
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('LEARN')")
+    @PostMapping("/lessons/{lessonId}/start")
+    public ResponseEntity<QuizSessionDto> startLessonQuiz(
+            @PathVariable String lessonId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return ResponseEntity.ok(quizSessions.start(lessonId, userDetails.getUsername()));
     }
 
     @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('LEARN')")

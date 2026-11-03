@@ -12,10 +12,13 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class WebConfig implements WebMvcConfigurer {
     /**
      * Requests that wait synchronously on the RAG service. An open-in-view session would hold
-     * a pooled DB connection for the whole AI call, so ten concurrent chats starve every other
-     * request. These endpoints only touch entities inside short repository transactions.
+     * a pooled DB connection for the whole AI call, so a few slow calls starve every other
+     * request, including the CSRF and session checks the UI waits on. These endpoints only
+     * touch entities inside short transactions.
      */
-    static final String[] RAG_WAITING_PATHS = {"/api/rag/chat", "/api/admin/quizzes/generate"};
+    static final String[] RAG_WAITING_PATHS = {"/api/rag/chat", "/api/admin/quizzes/generate",
+            "/api/admin/quizzes/generate/jobs/**", "/api/admin/lessons/*/flashcards/generate/**",
+            "/api/admin/lessons/*/ai-summarize-changes", "/api/admin/courses/*/documents/*/outline"};
 
     private final ObjectProvider<OpenEntityManagerInViewInterceptor> openInView;
 

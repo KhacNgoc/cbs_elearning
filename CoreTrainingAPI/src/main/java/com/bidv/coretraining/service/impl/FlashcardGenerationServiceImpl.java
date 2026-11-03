@@ -57,17 +57,23 @@ public class FlashcardGenerationServiceImpl implements FlashcardGenerationServic
     }
 
     @Override
-    public FlashcardGenerationJobDto startJob(Lesson lesson, FlashcardDto.GenerationRequest request) {
+    public Target target(Lesson lesson) {
+        // Same rule as lesson quizzes: drafting never widens past the saved sources.
+        return new Target(lesson.getCourse().getId(), lesson.getCourse().getName(), lesson.getId(),
+                lesson.getTitle(), knowledgeSources.generationSources(lesson));
+    }
+
+    @Override
+    public FlashcardGenerationJobDto startJob(Target target, FlashcardDto.GenerationRequest request) {
         List<FlashcardType> types = request.types() == null || request.types().isEmpty()
                 ? List.of(FlashcardType.TERM, FlashcardType.CLOZE)
                 : request.types().stream().distinct().toList();
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("course_id", lesson.getCourse().getId());
-        body.put("course_name", lesson.getCourse().getName());
-        body.put("lesson_id", lesson.getId());
-        body.put("lesson_name", lesson.getTitle());
-        // Same rule as lesson quizzes: drafting never widens past the saved sources.
-        body.put("sources", knowledgeSources.generationSources(lesson));
+        body.put("course_id", target.courseId());
+        body.put("course_name", target.courseName());
+        body.put("lesson_id", target.lessonId());
+        body.put("lesson_name", target.lessonName());
+        body.put("sources", target.sources());
         body.put("count", request.count());
         body.put("types", types.stream().map(Enum::name).toList());
 
@@ -82,10 +88,10 @@ public class FlashcardGenerationServiceImpl implements FlashcardGenerationServic
                             "Hệ thống AI đang bận. Vui lòng thử lại sau ít phút.");
                 }
                 log.error("RAG flashcard job start failed lessonId={} status={} response={}",
-                        lesson.getId(), status.getStatusCode(), status.getResponseBodyAsString());
+                        target.lessonId(), status.getStatusCode(), status.getResponseBodyAsString());
             } else {
                 log.error("RAG flashcard job start request failed lessonId={} errorType={} message={}",
-                        lesson.getId(), exception.getClass().getSimpleName(), exception.getMessage());
+                        target.lessonId(), exception.getClass().getSimpleName(), exception.getMessage());
             }
             throw new RagServiceUnavailableException(UNAVAILABLE, exception);
         }
@@ -94,7 +100,7 @@ public class FlashcardGenerationServiceImpl implements FlashcardGenerationServic
         }
         Instant now = Instant.now();
         jobOwners.values().removeIf(owner -> owner.startedAt().isBefore(now.minus(JOB_OWNER_RETENTION)));
-        jobOwners.put(job.getJobId(), new JobOwner(lesson.getId(), now));
+        jobOwners.put(job.getJobId(), new JobOwner(target.lessonId(), now));
         return localize(job);
     }
 

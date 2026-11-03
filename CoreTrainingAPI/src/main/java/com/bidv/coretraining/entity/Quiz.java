@@ -26,6 +26,9 @@ public class Quiz {
     @Builder.Default
     @Column(nullable = false)
     private boolean requiredForProgress = true;
+    /** Minutes allowed per attempt; null means no time limit. */
+    @Column(name = "time_limit_minutes")
+    private Integer timeLimitMinutes;
     @Builder.Default
     private Integer revision = 1;
     @OneToMany(mappedBy = "quiz", cascade = CascadeType.ALL, orphanRemoval = true)

@@ -33,6 +33,7 @@ public class LearnerQuizEntryServiceImpl implements LearnerQuizEntryService {
   var latest=scores.latestScore(user.getId(),courseId,lessonId).orElse(null);
   Integer score=latest==null?null:latest.score();
   Integer total=latest==null?null:latest.total();
-  return new Context(courseId,course.getName(),lessonId,lesson==null?course.getQuizPassingScore():lesson.getQuizPassingScore(),score,total);
+  return new Context(courseId,course.getName(),lessonId,lesson==null?course.getQuizPassingScore():lesson.getQuizPassingScore(),score,total,
+   lesson==null||lesson.getQuiz()==null?null:lesson.getQuiz().getTimeLimitMinutes());
  }
 }

@@ -198,6 +198,11 @@ export const useUserStore = defineStore("user", {
       localStorage.removeItem("username");
       localStorage.removeItem("fullName");
       localStorage.removeItem("mustChangePassword");
+      // Unsubmitted quiz answers must not outlive the session on a shared machine.
+      // Literal mirrors QUIZ_DRAFT_PREFIX in quizStore (importing it would create a cycle).
+      Object.keys(localStorage)
+        .filter((key) => key.startsWith("quiz-draft:"))
+        .forEach((key) => localStorage.removeItem(key));
 
       this.isAuthenticated = false;
       this.role = "";

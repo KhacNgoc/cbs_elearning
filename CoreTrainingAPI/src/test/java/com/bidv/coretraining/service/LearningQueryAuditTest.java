@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ContextConfiguration(classes = com.bidv.coretraining.CoreTrainingApiApplication.class)
 @Import({ QuizContextServiceImpl.class, QuizSummaryServiceImpl.class, LearningAccessServiceImpl.class, LearningOutlineServiceImpl.class, TrainingStructureServiceImpl.class,
         LearnerWorkspaceServiceImpl.class, CourseMapperImpl.class, LessonProgressServiceImpl.class, CourseServiceImpl.class,
-        com.bidv.coretraining.service.impl.QuizServiceImpl.class, QuizMapperImpl.class, com.fasterxml.jackson.databind.ObjectMapper.class,
+        com.bidv.coretraining.service.impl.QuizServiceImpl.class, com.bidv.coretraining.service.impl.QuizSessionServiceImpl.class, QuizMapperImpl.class, com.fasterxml.jackson.databind.ObjectMapper.class,
         com.bidv.coretraining.repository.impl.UnitAllocationNativeRepositoryImpl.class })
 class LearningQueryAuditTest {
     @Autowired QuizContextService quizContext;
@@ -390,6 +390,54 @@ class LearningQueryAuditTest {
             var content = new LessonProgressRequest(); content.setContentType("TEXT"); content.setTextCompleted(true);
             assertThat(progress.saveProgress(f.user(), f.lesson(), content).isLessonCompleted()).isTrue();
         }
+    }
+
+    @Autowired com.bidv.coretraining.service.QuizSessionService quizSessions;
+
+    private QuizSubmitRequest timedAnswer(Fixture f, String sessionId) {
+        var lesson = em.find(Lesson.class, f.lesson());
+        var request = new QuizSubmitRequest();
+        request.setSelectedAnswers(Map.of(lesson.getQuiz().getQuestions().get(0).getId(), List.of(0)));
+        request.setSessionId(sessionId);
+        return request;
+    }
+
+    @Test void timedQuizRequiresLiveServerSessionAndAcceptsItOnce() {
+        var f = seed(1);
+        em.find(Lesson.class, f.lesson()).getQuiz().setTimeLimitMinutes(10);
+        reset();
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> quizService.submitLessonQuiz(f.lesson(), timedAnswer(f, null), f.user()))
+                .isInstanceOf(com.bidv.coretraining.exception.BadRequestException.class);
+        var session = quizSessions.start(f.lesson(), f.user());
+        assertThat(session.timeLimitMinutes()).isEqualTo(10);
+        assertThat(session.remainingSeconds()).isBetween(590L, 600L);
+        // Reopening the quiz resumes the same clock instead of granting a fresh one.
+        assertThat(quizSessions.start(f.lesson(), f.user()).sessionId()).isEqualTo(session.sessionId());
+        assertThat(quizService.submitLessonQuiz(f.lesson(), timedAnswer(f, session.sessionId()), f.user()).getPassed()).isTrue();
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> quizService.submitLessonQuiz(f.lesson(), timedAnswer(f, session.sessionId()), f.user()))
+                .isInstanceOf(com.bidv.coretraining.exception.BadRequestException.class);
+        assertThat(quizSessions.start(f.lesson(), f.user()).sessionId()).isNotEqualTo(session.sessionId());
+    }
+
+    @Test void timedQuizRejectsSubmissionPastDeadlineGrace() {
+        var f = seed(1);
+        em.find(Lesson.class, f.lesson()).getQuiz().setTimeLimitMinutes(5);
+        reset();
+        var session = quizSessions.start(f.lesson(), f.user());
+        em.find(QuizSession.class, session.sessionId()).setDeadlineAt(LocalDateTime.now().minusMinutes(1));
+        reset();
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> quizService.submitLessonQuiz(f.lesson(), timedAnswer(f, session.sessionId()), f.user()))
+                .isInstanceOf(com.bidv.coretraining.exception.BadRequestException.class)
+                .hasMessageContaining("hết thời gian");
+    }
+
+    @Test void untimedQuizNeedsNoSession() {
+        var f = seed(1);
+        assertThat(quizSessions.start(f.lesson(), f.user()).sessionId()).isNull();
+        assertThat(quizService.submitLessonQuiz(f.lesson(), timedAnswer(f, null), f.user()).getPassed()).isTrue();
     }
 
     @Test void requiredQuizPassAfterContentAwardsCompletionOnce() {

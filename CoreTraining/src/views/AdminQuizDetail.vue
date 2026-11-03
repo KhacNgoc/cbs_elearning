@@ -56,6 +56,14 @@
         </label>
       </div>
       <div class="required-quiz-setting"><ToggleSwitch v-model="requiredForProgress" :disabled="!canAction('update') && !isNew" label="Bắt buộc đạt để sang bài tiếp theo" /><small>Tắt tùy chọn: bài kiểm tra tự luyện, không chặn hoàn thành bài, chương hoặc khóa.</small></div>
+      <div class="required-quiz-setting time-limit-setting">
+        <ToggleSwitch v-model="hasTimeLimit" :disabled="!canAction('update') && !isNew" label="Giới hạn thời gian làm bài" />
+        <div v-if="hasTimeLimit" class="score-input time-limit-input">
+          <input v-model.number="timeLimitMinutes" :disabled="!canAction('update') && !isNew" type="number" min="1" max="300" aria-label="Số phút làm bài" />
+          <strong>phút</strong>
+        </div>
+        <small>{{ hasTimeLimit ? 'Hết giờ, bài làm sẽ được tự động nộp; câu chưa trả lời tính là sai.' : 'Không giới hạn: học viên làm bài đến khi tự nộp.' }}</small>
+      </div>
       <div v-if="isNew && canEdit" class="settings-action">
         <p>Phạm vi sẽ tự động áp dụng cho mọi câu hỏi được thêm hoặc import.</p>
         <button class="primary-button" :disabled="!courseId || !lessonId || scopeLoading || !!scopeError" @click="confirmScope">
@@ -63,10 +71,10 @@
         </button>
       </div>
       <div v-else-if="canAction('update')" class="settings-action">
-        <p>{{ questions.length ? 'Thay đổi ngưỡng đạt sẽ áp dụng cho những lượt làm bài tiếp theo.' : 'Lưu ít nhất một câu hỏi để tạo bài kiểm tra và lưu cấu hình.' }}</p>
+        <p>{{ questions.length ? 'Thay đổi ngưỡng đạt và thời gian sẽ áp dụng cho những lượt làm bài tiếp theo.' : 'Lưu ít nhất một câu hỏi để tạo bài kiểm tra và lưu cấu hình.' }}</p>
         <button class="primary-button" :disabled="savingSettings || !questions.length" @click="saveSettings"
           :title="!questions.length ? 'Thêm ít nhất một câu hỏi trước khi lưu cấu hình' : undefined">
-          {{ savingSettings ? "Đang lưu..." : "Lưu ngưỡng đạt" }}
+          {{ savingSettings ? "Đang lưu..." : "Lưu cấu hình" }}
         </button>
       </div>
     </section>
@@ -286,6 +294,9 @@ import {contentToolsApi,contentToolsError} from '../api/contentToolsApi';
 const props=defineProps<{embedded?:boolean; lesson?:Lesson; readOnly?:boolean}>();
 const emit=defineEmits<{saved:[]}>();
 const requiredForProgress=ref(true);
+const hasTimeLimit=ref(false);
+const timeLimitMinutes=ref(30);
+const applyTimeLimit=(minutes?:number|null)=>{hasTimeLimit.value=!!minutes;timeLimitMinutes.value=minutes||30;};
 const route = useRoute();
 const router = useRouter();
 const quizCourses = ref<QuizCourseContext[]>([]);
@@ -382,7 +393,7 @@ async function refreshQuizContext() {
 
 let initialRequestId = 0;
 let questionRequestId = 0;
-let pendingCreationSettings: { courseId: string; lessonId: string; passingScore: number; requiredForProgress: boolean } | null = null;
+let pendingCreationSettings: { courseId: string; lessonId: string; passingScore: number; requiredForProgress: boolean; timeLimitMinutes: number | null } | null = null;
 async function initialize() {
   const id = ++initialRequestId;
   ++questionRequestId;
@@ -416,9 +427,11 @@ async function initialize() {
     const lesson = course?.lessons.find((item) => item.id === lessonId.value);
     passingScore.value = lesson?.quizPassingScore ?? course?.quizPassingScore ?? 80;
     requiredForProgress.value = lesson?.quizRequired ?? true;
+    applyTimeLimit(lesson?.quizTimeLimitMinutes);
     if (pendingCreationSettings?.courseId === context.id && pendingCreationSettings.lessonId === lessonId.value) {
       passingScore.value = pendingCreationSettings.passingScore;
       requiredForProgress.value = pendingCreationSettings.requiredForProgress;
+      applyTimeLimit(pendingCreationSettings.timeLimitMinutes);
     }
     await loadQuestions();
     if (id === initialRequestId) pendingCreationSettings = null;
@@ -461,7 +474,8 @@ watch(() => [route.name, route.params.scopeType, route.params.scopeId, props.les
 onBeforeUnmount(() => { ++initialRequestId; ++questionRequestId; ++scopeRequestId; generationAbort?.abort(); });
 const confirmScope = () => {
   pendingCreationSettings = { courseId: courseId.value, lessonId: lessonId.value,
-    passingScore: passingScore.value, requiredForProgress: requiredForProgress.value };
+    passingScore: passingScore.value, requiredForProgress: requiredForProgress.value,
+    timeLimitMinutes: hasTimeLimit.value ? timeLimitMinutes.value : null };
   return router.replace(lessonId.value
     ? `/admin/quizzes/lesson/${encodeURIComponent(lessonId.value)}`
     : `/admin/quizzes/course/${encodeURIComponent(courseId.value)}`);
@@ -471,9 +485,14 @@ const saveSettings = async () => {
     showToast("Ngưỡng đạt phải là số nguyên từ 1 đến 100.", "warning");
     return;
   }
+  if (hasTimeLimit.value && (!Number.isInteger(timeLimitMinutes.value) || timeLimitMinutes.value < 1 || timeLimitMinutes.value > 300)) {
+    showToast("Thời gian làm bài phải là số nguyên từ 1 đến 300 phút.", "warning");
+    return;
+  }
   savingSettings.value = true;
   try {
-    await adminApi.updateQuizSettings(courseId.value, lessonId.value || undefined, passingScore.value, requiredForProgress.value);
+    await adminApi.updateQuizSettings(courseId.value, lessonId.value || undefined, passingScore.value, requiredForProgress.value,
+      hasTimeLimit.value ? timeLimitMinutes.value : null);
     showToast("Đã lưu cấu hình bài kiểm tra.");
     await refreshQuizContext();
     emit("saved");
@@ -868,7 +887,7 @@ const importCsv = async (event: Event) => {
 .quiz-editor-page .admin-data-table .bank-save-status { font-size: var(--admin-text-label, .8125rem); font-weight: 600; }
 .quiz-questions-table{min-width:960px}.quiz-question-actions{display:flex;align-items:center;flex-wrap:wrap;gap:.5rem}.quiz-question-actions button{white-space:nowrap}.bank-save-action{padding:.45rem .65rem;font-size:.8rem}.bank-save-action:disabled{opacity:.55;cursor:wait}.bank-save-status{display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .55rem;border-radius:6px;background:var(--surface-f1f5f9);color:var(--text-muted);font-size:.78rem;white-space:nowrap}.bank-save-status.saved{background:var(--primary-light);color:var(--primary-ink)}.bank-source-code{display:block;margin-top:.4rem;color:var(--text-muted);font-size:.72rem;overflow-wrap:anywhere}
 
-.required-quiz-setting{display:block;margin:1rem 0;color:var(--primary-ink);font-weight:600}.required-quiz-setting input{margin-right:.5rem}.required-quiz-setting small{display:block;margin-top:.5rem;font-weight:400;color:var(--text-muted)}
+.required-quiz-setting{display:block;margin:1rem 0;color:var(--primary-ink);font-weight:600}.required-quiz-setting input{margin-right:.5rem}.time-limit-input{max-width:12rem;margin-top:.75rem}.time-limit-input input{padding-right:3.5rem}.required-quiz-setting small{display:block;margin-top:.5rem;font-weight:400;color:var(--text-muted)}
 .quiz-editor-page { width: min(1240px, calc(100% - 3rem)); min-height: 100%; margin: 0 auto; padding: 1.5rem; color: var(--text-color); }
 .quiz-editor-header { display: grid; grid-template-columns: 180px 1fr; gap: 1rem; align-items: start; margin-bottom: 1.2rem; }
 .back-button { display: flex; align-items: center; gap: .65rem; min-width: 170px; padding: .7rem .85rem; border: 1px solid var(--primary-color); border-radius: var(--radius-md); background: var(--primary-color); color: white; cursor: pointer; text-align: left; box-shadow: 0 5px 14px rgba(0,91,65,.18); }

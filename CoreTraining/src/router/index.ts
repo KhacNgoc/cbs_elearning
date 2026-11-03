@@ -131,33 +131,88 @@ const router = createRouter({
   routes
 });
 
+type AuthSession = NonNullable<ReturnType<typeof getCachedAuthSession>>;
+type GuardedRoute = { path: string; query: Record<string, unknown>; matched: { meta: Record<string, unknown> }[] };
+
+// The backend authorizes every request, so after the first check the guard trusts the cached
+// session and menu and refreshes them in the background. Awaiting both requests on every click
+// used to freeze navigation whenever the backend was slow.
+const SESSION_REVALIDATE_MS = 30_000;
+let sessionCheckedAt = 0;
+let revalidation: Promise<void> | null = null;
+
+function applySession(session: AuthSession) {
+  setCachedAuthSession(session);
+  sessionCheckedAt = Date.now();
+  localStorage.setItem('userRole', session.role);
+  localStorage.setItem('username', session.username);
+  localStorage.setItem('fullName', session.fullName);
+  localStorage.setItem('mustChangePassword', session.mustChangePassword ? 'true' : 'false');
+}
+
+function patchUserStore(session: AuthSession) {
+  useUserStore().$patch({isAuthenticated:true,role:session.role,roles:session.roles || [session.role],permissions:session.permissions || [],roleNames:session.roleNames || {},systemAdmin:!!session.systemAdmin,username:session.username,fullName:session.fullName,mustChangePassword:session.mustChangePassword});
+}
+
+function pageKeyOf(route: GuardedRoute) {
+  const tabKey = route.path === '/admin' && typeof route.query.tab === 'string'
+    ? `admin.${route.query.tab}`
+    : undefined;
+  return tabKey || [...route.matched].reverse()
+    .map(record => record.meta.pageKey as string | undefined)
+    .find(Boolean);
+}
+
+function revalidateInBackground() {
+  if (revalidation || Date.now() - sessionCheckedAt < SESSION_REVALIDATE_MS) return;
+  revalidation = (async () => {
+    try {
+      const session = await authApi.session();
+      applySession(session);
+      patchUserStore(session);
+      const navigationStore = useNavigationStore();
+      await navigationStore.load(true);
+      // Permissions may have changed since the page opened: leave a page that is no longer allowed.
+      const current = router.currentRoute.value;
+      if (!current.matched.some(record => record.meta.requiresAuth)) return;
+      if (session.mustChangePassword && current.name !== 'ChangePassword') {
+        await router.replace('/change-password');
+        return;
+      }
+      const pageKey = pageKeyOf(current);
+      if (pageKey && !navigationStore.allowedPageIds.has(pageKey)) await router.replace(navigationStore.homeRoute);
+    } catch {
+      // A 401 already redirects to login in the axios interceptor; other failures keep the cache.
+    } finally {
+      revalidation = null;
+    }
+  })();
+}
+
 // Navigation Guard to protect routes
 router.beforeEach(async (to, from, next) => {
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
   const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin);
   let session = getCachedAuthSession();
-  let isAuthenticated = !!session;
-  let mustChangePassword = session?.mustChangePassword
-    ?? localStorage.getItem('mustChangePassword') === 'true';
 
   if (requiresAuth || to.name === 'Login') {
-    try {
-      session = await authApi.session();
-      setCachedAuthSession(session);
-      localStorage.setItem('userRole', session.role);
-      localStorage.setItem('username', session.username);
-      localStorage.setItem('fullName', session.fullName);
-      localStorage.setItem('mustChangePassword', session.mustChangePassword ? 'true' : 'false');
-      mustChangePassword = session.mustChangePassword;
-      isAuthenticated = true;
-    } catch {
-      clearAuthSession();
-      session = null;
-      isAuthenticated = false;
+    if (session) {
+      revalidateInBackground();
+    } else {
+      try {
+        session = await authApi.session();
+        applySession(session);
+      } catch {
+        clearAuthSession();
+        session = null;
+      }
     }
   }
+  const isAuthenticated = !!session;
+  const mustChangePassword = session?.mustChangePassword
+    ?? localStorage.getItem('mustChangePassword') === 'true';
 
-  if(session) useUserStore().$patch({isAuthenticated:true,role:session.role,roles:session.roles || [session.role],permissions:session.permissions || [],roleNames:session.roleNames || {},systemAdmin:!!session.systemAdmin,username:session.username,fullName:session.fullName,mustChangePassword:session.mustChangePassword});
+  if(session) patchUserStore(session);
 
   if (requiresAuth && !isAuthenticated) {
     next('/login');
@@ -172,17 +227,12 @@ router.beforeEach(async (to, from, next) => {
     if (requiresAuth) {
       try {
         const navigationStore = useNavigationStore();
-        await navigationStore.load(true);
+        if (!navigationStore.loaded) await navigationStore.load();
         if (to.name === 'Dashboard' && (!from.matched.length || from.name === 'Login' || from.name === 'ChangePassword') && navigationStore.homeRoute !== '/') {
           next({path:navigationStore.homeRoute,replace:true});
           return;
         }
-        const tabKey = to.path === '/admin' && typeof to.query.tab === 'string'
-          ? `admin.${to.query.tab}`
-          : undefined;
-        const pageKey = tabKey || [...to.matched].reverse()
-          .map(record => record.meta.pageKey as string | undefined)
-          .find(Boolean);
+        const pageKey = pageKeyOf(to);
         if (pageKey && !navigationStore.allowedPageIds.has(pageKey)) {
           next(requiresAdmin && to.path==='/admin' ? navigationStore.homeRoute : '/');
           return;

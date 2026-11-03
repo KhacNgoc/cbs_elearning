@@ -6,6 +6,7 @@ export interface QuizLessonContext {
   courseId: string;
   quizPassingScore: number;
   quizRequired: boolean;
+  quizTimeLimitMinutes: number | null;
 }
 export interface QuizCourseContext {
   id: string;

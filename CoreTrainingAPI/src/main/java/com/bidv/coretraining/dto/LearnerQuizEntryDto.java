@@ -6,5 +6,5 @@ import java.util.*;
 public final class LearnerQuizEntryDto {
     private LearnerQuizEntryDto() {}
 
-    public record Context(String id,String name,String lessonId,Integer quizPassingScore,Integer score,Integer total) {}
+    public record Context(String id,String name,String lessonId,Integer quizPassingScore,Integer score,Integer total,Integer timeLimitMinutes) {}
 }

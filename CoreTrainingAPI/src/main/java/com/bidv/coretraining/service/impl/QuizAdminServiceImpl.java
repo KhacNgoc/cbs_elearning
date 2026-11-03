@@ -158,6 +158,9 @@ public class QuizAdminServiceImpl implements QuizAdminService {
         int passingScore = settings.getPassingScore() == null ? 80 : settings.getPassingScore();
         if (passingScore < 1 || passingScore > 100)
             throw new BadRequestException("Ngưỡng đạt phải từ 1 đến 100");
+        Integer timeLimit = settings.getTimeLimitMinutes();
+        if (timeLimit != null && (timeLimit < 1 || timeLimit > 300))
+            throw new BadRequestException("Thời gian làm bài phải từ 1 đến 300 phút");
         if (settings.getLessonId() == null)
             throw new BadRequestException("Kiểm tra phải gắn với bài học");
         Lesson lesson = structure.lesson(settings.getLessonId());
@@ -170,6 +173,7 @@ public class QuizAdminServiceImpl implements QuizAdminService {
             throw new BadRequestException("Thêm ít nhất một câu hỏi trước khi lưu cấu hình bài kiểm tra");
         lesson.getQuiz().setPassingScore(passingScore);
         lesson.getQuiz().setRequiredForProgress(!Boolean.FALSE.equals(settings.getRequiredForProgress()));
+        lesson.getQuiz().setTimeLimitMinutes(timeLimit);
         lessonRepository.save(lesson);
         settings.setPassingScore(passingScore);
         return settings;
