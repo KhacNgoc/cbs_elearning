@@ -774,23 +774,59 @@
             <div class="upload-controls-flow">
               <!-- Course Select Row -->
               <div class="course-picker-row">
-                <label class="form-label" for="upload-course-select">
+                <label class="form-label">
                   Khóa học tiếp nhận tài liệu <span class="required-mark">*</span>:
                 </label>
-                <select
-                  id="upload-course-select"
-                  v-model="selectedCourseId"
-                  class="form-control select-control upload-course-select"
-                  @change="loadDocuments()"
-                >
-                  <option
-                    v-for="course in undeletedCourses"
-                    :key="course.id"
-                    :value="course.id"
+                <div ref="coursePickerRef" class="searchable-course-picker">
+                  <button
+                    type="button"
+                    class="form-control course-select-trigger"
+                    :class="{ 'is-open': courseDropdownOpen }"
+                    @click="toggleCourseDropdown"
                   >
-                    [{{ course.code || course.id }}] {{ course.name }}
-                  </option>
-                </select>
+                    <span class="selected-course-label">
+                      {{ selectedCourseName || "Chọn khóa học..." }}
+                    </span>
+                    <ChevronDown :size="16" class="dropdown-chevron" :class="{ rotated: courseDropdownOpen }" />
+                  </button>
+                  <div v-if="courseDropdownOpen" class="course-dropdown-popover" @click.stop>
+                    <div class="course-dropdown-search">
+                      <Search :size="15" />
+                      <input
+                        ref="courseSearchInputRef"
+                        v-model="courseSearchQuery"
+                        type="text"
+                        placeholder="Gõ tên khóa học để tìm nhanh..."
+                        @input="onCourseSearchInput"
+                      />
+                      <LoaderCircle v-if="courseSearchLoading" :size="14" class="spin-icon" />
+                      <button
+                        v-else-if="courseSearchQuery"
+                        type="button"
+                        class="btn-clear-search"
+                        title="Xóa từ khóa"
+                        @click="clearCourseSearch"
+                      >
+                        <X :size="13" />
+                      </button>
+                    </div>
+                    <div class="course-dropdown-list">
+                      <button
+                        v-for="course in displayedCourseOptions"
+                        :key="course.id"
+                        type="button"
+                        class="course-dropdown-option"
+                        :class="{ 'is-selected': course.id === selectedCourseId }"
+                        @click="selectCourseOption(course)"
+                      >
+                        <span class="course-option-name">{{ course.name }}</span>
+                      </button>
+                      <div v-if="displayedCourseOptions.length === 0 && !courseSearchLoading" class="course-dropdown-empty">
+                        Không tìm thấy khóa học phù hợp.
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <!-- Dropzone Upload Area -->
@@ -847,7 +883,7 @@
               <div class="header-left">
                 <div class="title-with-badge">
                   <h3 class="card-title">DANH SÁCH TÀI LIỆU THEO KHÓA HỌC</h3>
-                  <span class="rag-count-pill">{{ courseDocuments.length }} tài liệu</span>
+                  <span class="rag-count-pill">{{ documentStats.total }} tài liệu</span>
                 </div>
               </div>
               <div class="header-actions">
@@ -894,7 +930,7 @@
                   class="form-control select-control status-select"
                   aria-label="Lọc trạng thái"
                 >
-                  <option value="ALL">Tất cả trạng thái ({{ courseDocuments.length }})</option>
+                  <option value="ALL">Tất cả trạng thái ({{ documentStats.total }})</option>
                   <option value="INDEXED">Đã index ({{ documentStats.indexed }})</option>
                   <option value="INDEXING">Đang embedding ({{ documentStats.indexing }})</option>
                   <option value="FAILED">Thất bại ({{ documentStats.failed }})</option>
@@ -933,7 +969,7 @@
                   </tr>
 
                   <!-- Data Rows -->
-                  <tr v-for="document in paginatedDocuments" :key="document.id">
+                  <tr v-for="document in courseDocuments" :key="document.id">
                     <td>
                       <div class="doc-file-item">
                         <FileText :size="17" class="doc-file-icon" />
@@ -986,7 +1022,7 @@
                   </tr>
 
                   <!-- Empty State -->
-                  <tr v-if="!documentListLoading && courseDocuments.length === 0">
+                  <tr v-if="!documentListLoading && documentStats.total === 0 && courseDocuments.length === 0">
                     <td colspan="6" class="admin-empty">
                       <FileText :size="32" class="empty-icon" style="opacity: 0.5; margin-bottom: 0.5rem;" />
                       <p>Khóa học này chưa có tài liệu tri thức nào.</p>
@@ -994,7 +1030,7 @@
                     </td>
                   </tr>
 
-                  <tr v-if="!documentListLoading && courseDocuments.length > 0 && filteredDocuments.length === 0">
+                  <tr v-if="!documentListLoading && documentStats.total > 0 && courseDocuments.length === 0">
                     <td colspan="6" class="admin-empty">
                       Không tìm thấy tài liệu phù hợp với bộ lọc tìm kiếm.
                     </td>
@@ -1004,12 +1040,14 @@
             </div>
 
             <TablePagination
-              v-model:page="documentPage"
-              v-model:page-size="documentPageSize"
-              :total="filteredDocuments.length"
+              :page="documentPage"
+              :page-size="documentPageSize"
+              :total="documentTotalElements"
               :page-count="documentPageCount"
               unit="tài liệu"
               unit-label="Tài liệu"
+              @update:page="onDocumentPageChange"
+              @update:page-size="onDocumentPageSizeChange"
             />
           </div>
         </div></div>
@@ -1567,6 +1605,7 @@ import {
   XCircle,
   LoaderCircle,
   RefreshCw,
+  ChevronDown,
 } from "lucide-vue-next";
 
 // Chart.js imports & registrations
@@ -1897,20 +1936,93 @@ const enrollmentQuery = ref(""),
   isDraggingOver = ref(false);
 
 const undeletedCourses = computed(() =>
-  courseStore.courses.filter(
-    (c) => c.status !== "DELETED" && !c.code?.includes("_DEL_"),
-  ),
+  [...courseStore.courses]
+    .filter((c) => c.status !== "DELETED" && !c.code?.includes("_DEL_"))
+    .sort((a, b) => a.name.localeCompare(b.name, "vi")),
 );
 
+const coursePickerRef = ref<HTMLElement | null>(null);
+const courseSearchInputRef = ref<HTMLInputElement | null>(null);
+const courseDropdownOpen = ref(false);
+const courseSearchQuery = ref("");
+const courseSearchLoading = ref(false);
+const searchedCourseOptions = ref<{ id: string; code?: string; name: string; status: string }[] | null>(null);
+let courseSearchTimer: ReturnType<typeof setTimeout> | null = null;
 
-const documentStats = computed(() => {
-  const total = courseDocuments.value.length;
-  const indexed = courseDocuments.value.filter((d) => d.status === "INDEXED").length;
-  const indexing = courseDocuments.value.filter((d) =>
-    ["PENDING", "INDEXING"].includes(d.status),
-  ).length;
-  const failed = courseDocuments.value.filter((d) => d.status === "FAILED").length;
-  return { total, indexed, indexing, failed };
+const selectedCourseName = computed(() => {
+  const found =
+    undeletedCourses.value.find((c) => c.id === selectedCourseId.value) ||
+    searchedCourseOptions.value?.find((c) => c.id === selectedCourseId.value);
+  return found ? found.name : "";
+});
+
+const displayedCourseOptions = computed(() => {
+  if (searchedCourseOptions.value !== null) {
+    return searchedCourseOptions.value;
+  }
+  return undeletedCourses.value;
+});
+
+const toggleCourseDropdown = () => {
+  courseDropdownOpen.value = !courseDropdownOpen.value;
+  if (courseDropdownOpen.value) {
+    void nextTick(() => {
+      courseSearchInputRef.value?.focus();
+    });
+  }
+};
+
+const onCourseSearchInput = () => {
+  if (courseSearchTimer) clearTimeout(courseSearchTimer);
+  const q = courseSearchQuery.value.trim();
+  if (!q) {
+    searchedCourseOptions.value = null;
+    courseSearchLoading.value = false;
+    return;
+  }
+  courseSearchLoading.value = true;
+  courseSearchTimer = setTimeout(async () => {
+    try {
+      searchedCourseOptions.value = await adminApi.searchCourses(q, 50);
+    } catch (err) {
+      console.error("Failed to search courses:", err);
+    } finally {
+      courseSearchLoading.value = false;
+    }
+  }, 250);
+};
+
+const clearCourseSearch = () => {
+  courseSearchQuery.value = "";
+  searchedCourseOptions.value = null;
+  courseSearchLoading.value = false;
+  void nextTick(() => {
+    courseSearchInputRef.value?.focus();
+  });
+};
+
+const selectCourseOption = (course: { id: string; name: string }) => {
+  courseDropdownOpen.value = false;
+  if (selectedCourseId.value !== course.id) {
+    selectedCourseId.value = course.id;
+  }
+};
+
+const handleOutsideCourseDropdownClick = (event: MouseEvent) => {
+  if (
+    courseDropdownOpen.value &&
+    coursePickerRef.value &&
+    !coursePickerRef.value.contains(event.target as Node)
+  ) {
+    courseDropdownOpen.value = false;
+  }
+};
+
+const documentStats = ref({
+  total: 0,
+  indexed: 0,
+  indexing: 0,
+  failed: 0,
 });
 
 const filteredEnrollments = computed(() =>
@@ -1922,17 +2034,13 @@ const filteredEnrollments = computed(() =>
       (!enrollmentStatus.value || r.status === enrollmentStatus.value),
   ),
 );
-const filteredDocuments = computed(() => {
-  const q = documentQuery.value.trim().toLocaleLowerCase("vi");
-  return courseDocuments.value.filter((d) => {
-    const matchQuery = !q || d.fileName.toLocaleLowerCase("vi").includes(q);
-    const matchStatus =
-      documentStatusFilter.value === "ALL" ||
-      d.status === documentStatusFilter.value ||
-      (documentStatusFilter.value === "INDEXING" && d.status === "PENDING");
-    return matchQuery && matchStatus;
-  });
-});
+const documentPage = ref(1);
+const documentPageSize = ref(10);
+const documentTotalElements = ref(0);
+const documentPageCount = ref(1);
+const resetDocuments = () => {
+  documentPage.value = 1;
+};
 const {
   page: summaryPage,
   pageSize: summaryPageSize,
@@ -1960,13 +2068,7 @@ const {
   paginated: paginatedLegacyLessons,
   reset: resetLegacyLessons,
 } = useTablePagination(currentCourseLessons);
-const {
-  page: documentPage,
-  pageSize: documentPageSize,
-  pageCount: documentPageCount,
-  paginated: paginatedDocuments,
-  reset: resetDocuments,
-} = useTablePagination(filteredDocuments);
+// Server-side pagination handlers for AI documents
 const {
   page: quizPage,
   pageSize: quizPageSize,
@@ -1976,11 +2078,44 @@ const {
 } = useTablePagination(filteredQuizDefinitions);
 watch(userSearchQuery, resetLegacyUsers);
 watch([enrollmentQuery, enrollmentStatus], resetEnrollments);
-watch([documentQuery, documentStatusFilter], resetDocuments);
+let documentFetchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+const scheduleLoadDocuments = (delayMs = 0) => {
+  if (documentFetchDebounceTimer) clearTimeout(documentFetchDebounceTimer);
+  documentFetchDebounceTimer = setTimeout(() => {
+    documentFetchDebounceTimer = null;
+    if (activeTab.value === "documents") {
+      void loadDocuments();
+    }
+  }, delayMs);
+};
+
+const onDocumentPageChange = (newPage: number) => {
+  if (documentPage.value === newPage) return;
+  documentPage.value = newPage;
+  scheduleLoadDocuments(0);
+};
+
+const onDocumentPageSizeChange = (newSize: number) => {
+  documentPageSize.value = newSize;
+  documentPage.value = 1;
+  scheduleLoadDocuments(0);
+};
+
+watch(documentQuery, () => {
+  resetDocuments();
+  scheduleLoadDocuments(300);
+});
+
+watch(documentStatusFilter, () => {
+  resetDocuments();
+  scheduleLoadDocuments(0);
+});
+
 watch([quizSearchQuery, selectedCourseId], resetQuizzes);
 watch(selectedCourseId, () => {
   resetLegacyLessons();
   resetDocuments();
+  scheduleLoadDocuments(0);
 });
 
 const navigationRoute = (id: string, params: Record<string, string> = {}) => {
@@ -2111,19 +2246,32 @@ const loadDocuments = async (silent = false) => {
       selectedCourseId.value = undeletedCourses.value[0].id;
     } else {
       courseDocuments.value = [];
+      documentTotalElements.value = 0;
+      documentPageCount.value = 1;
+      documentStats.value = { total: 0, indexed: 0, indexing: 0, failed: 0 };
       return;
     }
   }
   if (!silent) documentListLoading.value = true;
   try {
-    courseDocuments.value = await adminApi.getCourseDocuments(
-      selectedCourseId.value,
-    );
-    if (
-      courseDocuments.value.some((document) =>
-        ["PENDING", "INDEXING"].includes(document.status),
-      )
-    ) {
+    const res = await adminApi.getCourseDocumentsPaged(selectedCourseId.value, {
+      search: documentQuery.value.trim() || undefined,
+      status: documentStatusFilter.value,
+      page: Math.max(0, documentPage.value - 1),
+      size: documentPageSize.value,
+    });
+    courseDocuments.value = res.items || [];
+    documentTotalElements.value = res.totalElements ?? 0;
+    documentPageCount.value = Math.max(1, res.totalPages ?? 1);
+    if (res.stats) {
+      documentStats.value = {
+        total: res.stats.total ?? 0,
+        indexed: res.stats.indexed ?? 0,
+        indexing: res.stats.indexing ?? 0,
+        failed: res.stats.failed ?? 0,
+      };
+    }
+    if ((res.stats && res.stats.indexing > 0) || courseDocuments.value.some((d) => ["PENDING", "INDEXING"].includes(d.status))) {
       documentPollingTimer = setTimeout(() => {
         if (activeTab.value === "documents") void loadDocuments(true);
       }, 2500);
@@ -2562,9 +2710,10 @@ const deleteCourseDocument = (document: CourseDocument) => {
       try {
         await adminApi.deleteCourseDocument(courseId, document.id);
         if (selectedCourseId.value === courseId) {
-          courseDocuments.value = courseDocuments.value.filter(
-            (item) => item.id !== document.id,
-          );
+          if (courseDocuments.value.length <= 1 && documentPage.value > 1) {
+            documentPage.value -= 1;
+          }
+          await loadDocuments();
         }
         showToast("Đã xóa tài liệu và dữ liệu embedding.");
       } catch (error: any) {
@@ -2671,9 +2820,13 @@ const loadAllData = async () => {
 
 onMounted(() => {
   loadAllData();
+  window.addEventListener("click", handleOutsideCourseDropdownClick);
 });
 
-onBeforeUnmount(clearDocumentPolling);
+onBeforeUnmount(() => {
+  clearDocumentPolling();
+  window.removeEventListener("click", handleOutsideCourseDropdownClick);
+});
 
 // ==========================================
 // COURSE ACTIONS
@@ -4752,6 +4905,136 @@ select:disabled {
   max-width: 580px;
   min-width: 280px;
   height: 40px;
+}
+
+.searchable-course-picker {
+  position: relative;
+  flex: 1;
+  min-width: 280px;
+}
+
+.course-select-trigger {
+  width: 100%;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0 0.85rem;
+  text-align: left;
+  cursor: pointer;
+  background: var(--bg-input, var(--bg-surface));
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm, 8px);
+  color: var(--text-main);
+  font-size: 0.875rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.course-select-trigger:hover,
+.course-select-trigger.is-open {
+  border-color: var(--primary-color);
+}
+
+.selected-course-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.dropdown-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+
+.dropdown-chevron.rotated {
+  transform: rotate(180deg);
+}
+
+.course-dropdown-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  background: var(--bg-surface, #1e293b);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.course-dropdown-search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-subtle, rgba(15, 23, 42, 0.4));
+  color: var(--text-muted);
+}
+
+.course-dropdown-search input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  font-size: 0.84rem;
+  outline: none;
+}
+
+.course-dropdown-list {
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 0.3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.course-dropdown-option {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-main);
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.course-dropdown-option:hover {
+  background: var(--primary-light, rgba(16, 185, 129, 0.12));
+  color: var(--primary-ink, #10b981);
+}
+
+.course-dropdown-option.is-selected {
+  background: var(--primary-light, rgba(16, 185, 129, 0.18));
+  color: var(--primary-ink, #10b981);
+  font-weight: 600;
+}
+
+.course-option-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.course-dropdown-empty {
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.82rem;
 }
 
 .rag-dropzone-box {

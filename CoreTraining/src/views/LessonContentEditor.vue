@@ -2,34 +2,22 @@
   <section class="card embedded-content">
     <form class="lesson-modal-form" @submit.prevent="saveLesson">
       <div ref="lessonModalBodyRef" class="lesson-modal-body lesson-authoring-fields">
-        <div class="form-row">
-          <div class="form-group col">
-            <label>Khóa học trực thuộc <span class="required-mark" aria-hidden="true">*</span></label>
-            <select
-              v-model="lessonForm.courseId"
-              class="form-control"
-              disabled
-              required
+                <div class="form-group">
+          <label>Khóa học trực thuộc <span class="required-mark" aria-hidden="true">*</span></label>
+          <select
+            v-model="lessonForm.courseId"
+            class="form-control"
+            disabled
+            required
+          >
+            <option
+              v-for="t in courseStore.courses"
+              :key="t.id"
+              :value="t.id"
             >
-              <option
-                v-for="t in courseStore.courses"
-                :key="t.id"
-                :value="t.id"
-              >
-                {{ t.name }}
-              </option>
-            </select>
-          </div>
-          <div class="form-group col">
-            <label>Mã bài học (Ví dụ: 'LN03', 'CIF05') <span class="required-mark" aria-hidden="true">*</span></label>
-            <input
-              v-model="lessonForm.id"
-              type="text"
-              class="form-control"
-              required
-              :disabled="lessonModal.isEdit"
-            />
-          </div>
+              {{ t.name }}
+            </option>
+          </select>
         </div>
 
         <div class="form-group">
@@ -307,7 +295,8 @@
         </div>
       </div>
               <!-- KHỐI THÔNG BÁO CẬP NHẬT KIẾN THỨC CHO HỌC VIÊN ĐÃ HOÀN THÀNH -->
-        <div v-if="lessonModal.isEdit && !readOnly" class="change-notify-card">
+        <!-- CHỈ HIỆN KHI SỬA BÀI HỌC ĐÃ CÓ CÁN BỘ HOÀN THÀNH -->
+        <div v-if="!readOnly && completedLearnersCount > 0" class="change-notify-card">
           <div class="change-notify-header">
             <label class="notify-checkbox-label">
               <input type="checkbox" v-model="notifyLearners" />
@@ -356,6 +345,35 @@
         </button>
       </footer>
     </form>
+
+    <!-- FULLSCREEN LOADING OVERLAY KHI ĐANG LƯU BÀI HỌC HOẶC TẢI LÊN TÁC VỤ LÂU -->
+    <Teleport to="body">
+      <div v-if="loading" class="fullscreen-loading-overlay">
+        <div class="loading-modal-card">
+          <Loader2 :size="42" class="spin-icon text-primary loading-spinner" />
+          <h4 v-if="videoUploadProgress !== null">
+            Đang tải lên video ({{ videoUploadProgress }}%)...
+          </h4>
+          <h4 v-else-if="uploadingDocs">
+            Đang tải lên và xử lý tài liệu đính kèm...
+          </h4>
+          <h4 v-else>
+            Đang lưu trữ nội dung bài học...
+          </h4>
+
+          <div v-if="videoUploadProgress !== null" class="upload-progress-track">
+            <div
+              class="upload-progress-bar"
+              :style="{ width: videoUploadProgress + '%' }"
+            ></div>
+          </div>
+
+          <p>
+            Vui lòng chờ trong giây lát, hệ thống đang xử lý và chuyển thẳng sang màn hình xem trước.
+          </p>
+        </div>
+      </div>
+    </Teleport>
   </section>
 </template>
 <script setup lang="ts">
@@ -364,11 +382,12 @@ import LessonContentSelection from '../components/lesson/LessonContentSelection.
 import { lessonContentTypes, selectedLessonContent, validateSelectedLessonContent, type LessonContentType } from '../utils/lessonContent';
 import { scrollWithin } from "../utils/scrollWithin";
 import { ref, computed, nextTick, watch, defineAsyncComponent } from "vue";
-import { Upload, Link2, Plus, FileText, X, Trash2, Sparkles, ShieldAlert } from "lucide-vue-next";
+import { Upload, Link2, Plus, FileText, X, Trash2, Sparkles, ShieldAlert, Loader2 } from "lucide-vue-next";
 import { axiosClient } from "../api/axiosClient";
 import { onMounted } from "vue";
 import { useCourseStore } from "../stores/courseStore";
 import { adminApi, VIDEO_UPLOAD_MAX_BYTES } from "../api/adminApi";
+import { trainingApi } from "../api/trainingApi";
 import { validateVideoUpload } from "../utils/videoAccess";
 import { showToast } from "../utils/toast";
 import type { Lesson, LessonDocument } from "../types";
@@ -376,10 +395,16 @@ const LessonTextEditor = defineAsyncComponent(
   () => import("../components/lesson/LessonTextEditor.vue"),
 );
 const props = defineProps<{ lesson: Lesson; readOnly?: boolean }>();
-const emit = defineEmits<{ saved: []; cancel: []; dirty: [value: boolean] }>();
+const emit = defineEmits<{
+  saved: [];
+  cancel: [];
+  dirty: [value: boolean];
+  'title-change': [title: string];
+}>();
 const courseStore = useCourseStore();
 const loading = ref(false),
-  videoUploadProgress = ref<number | null>(null);
+  videoUploadProgress = ref<number | null>(null),
+  uploadingDocs = ref(false);
 const lessonModal = ref({ show: true, isEdit: true });
 type LessonDocumentForm = LessonDocument & { file?: File };
 const lessonForm = ref({
@@ -399,6 +424,18 @@ const lessonForm = ref({
 const selectedContentTypes = ref<LessonContentType[]>(lessonContentTypes(props.lesson));
 watch(selectedContentTypes, () => emit("dirty", true), { deep: true });
 watch(lessonForm, () => emit("dirty", true), { deep: true });
+watch(() => lessonForm.value.title, (t) => emit("title-change", t));
+watch(
+  () => props.lesson,
+  (newLesson) => {
+    if (newLesson) {
+      lessonForm.value.title = newLesson.title;
+      lessonForm.value.hint = newLesson.hint;
+      lessonForm.value.version = newLesson.version;
+    }
+  },
+  { deep: true }
+);
 const lessonModalBodyRef = ref<HTMLElement | null>(null);
 
 const selectedVideoFileName = computed(() => {
@@ -566,6 +603,7 @@ const saveLesson = async () => {
           })
         : lessonForm.value.videoUrl.trim();
     videoUploadProgress.value = null;
+    uploadingDocs.value = activeContent.documents.some((d) => !!d.file);
     const documents = await Promise.all(
       activeContent.documents.map(async (document, index) => {
         const uploaded = document.file
@@ -592,9 +630,21 @@ const saveLesson = async () => {
     };
     delete (payload as Partial<typeof lessonForm.value>).videoFile;
 
-    const saved = lessonModal.value.isEdit
-      ? await adminApi.updateLesson(lessonForm.value.id, payload)
-      : await adminApi.createLesson(payload);
+    let saved: Lesson;
+    try {
+      saved = lessonModal.value.isEdit
+        ? await adminApi.updateLesson(lessonForm.value.id, payload)
+        : await adminApi.createLesson(payload);
+    } catch (saveErr: any) {
+      if (saveErr.response?.status === 409) {
+        // Tự động đồng bộ version mới nhất và lưu lại để không gián đoạn người dùng
+        const fresh = await trainingApi.lesson(lessonForm.value.id);
+        payload.version = fresh.version;
+        saved = await adminApi.updateLesson(lessonForm.value.id, payload);
+      } else {
+        throw saveErr;
+      }
+    }
     lessonForm.value = {
       ...lessonForm.value,
       ...saved,
@@ -2290,4 +2340,45 @@ textarea {
   color: var(--text-muted);
 }
 
+
+.fullscreen-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  background: rgba(10, 16, 26, 0.78);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.loading-modal-card {
+  background: var(--bg-surface, #1e293b);
+  border: 1px solid var(--border-color, #334155);
+  border-radius: 16px;
+  padding: 2.2rem 3rem;
+  text-align: center;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.65);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+}
+.loading-modal-card h4 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #fff;
+}
+.loading-modal-card p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #94a3b8;
+}
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 </style>

@@ -319,7 +319,8 @@ public class TrainingStructureService {
                 d.setSeqNumber(nextSeq);
             }
         } else {
-            d.setCode(required(request.code(), "Mã lĩnh vực"));
+            String dCode = (request.code() != null && !request.code().isBlank()) ? request.code().trim() : (d.getCode() != null ? d.getCode() : java.util.UUID.randomUUID().toString());
+            d.setCode(dCode);
             if (d.getSeqNumber() == null) {
                 d.setSeqNumber(extractTrailingNumber(d.getCode(), 1));
             }
@@ -420,7 +421,8 @@ public class TrainingStructureService {
                 p.setSeqNumber(nextSeq);
             }
         } else {
-            p.setCode(required(request.code(), "Mã chương trình"));
+            String pCode = (request.code() != null && !request.code().isBlank()) ? request.code().trim() : (p.getCode() != null ? p.getCode() : java.util.UUID.randomUUID().toString());
+            p.setCode(pCode);
             if (p.getSeqNumber() == null) {
                 p.setSeqNumber(extractTrailingNumber(p.getCode(), 1));
             }
@@ -617,7 +619,8 @@ public class TrainingStructureService {
                 c.setSeqNumber(nextSeq);
             }
         } else {
-            c.setCode(required(r.code(), "Mã khóa"));
+            String cCode = (r.code() != null && !r.code().isBlank()) ? r.code().trim() : (c.getCode() != null ? c.getCode() : java.util.UUID.randomUUID().toString());
+            c.setCode(cCode);
             if (c.getSeqNumber() == null) {
                 c.setSeqNumber(extractTrailingNumber(c.getCode(), 1));
             }
@@ -1644,7 +1647,8 @@ public class TrainingStructureService {
         if (!c.getCourse().getId().equals(courseId))
             throw new BadRequestException("Chương không thuộc khóa");
         version(c.getVersion(), r.version());
-        c.setCode(required(r.code(), "Mã chương"));
+        String chCode = (r.code() != null && !r.code().isBlank()) ? r.code().trim() : (c.getCode() != null ? c.getCode() : java.util.UUID.randomUUID().toString());
+        c.setCode(chCode);
         c.setTitle(required(r.title(), "Tên chương"));
         c.setDescription(r.description());
         return chapterDto(chapters.saveAndFlush(c), null);

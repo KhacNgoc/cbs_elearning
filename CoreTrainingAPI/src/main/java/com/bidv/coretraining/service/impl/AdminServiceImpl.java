@@ -92,9 +92,11 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional
     public LessonDto createLesson(LessonDto lessonDto) {
-        if (lessonDto.getId() == null || lessonDto.getId().isBlank() || lessonDto.getTitle() == null
-                || lessonDto.getTitle().isBlank())
-            throw new BadRequestException("Mã và tên bài học không được để trống");
+        if (lessonDto.getTitle() == null || lessonDto.getTitle().isBlank())
+            throw new BadRequestException("Tên bài học không được để trống");
+        if (lessonDto.getId() == null || lessonDto.getId().isBlank()) {
+            lessonDto.setId(java.util.UUID.randomUUID().toString());
+        }
         Chapter chapter = structure.chapter(lessonDto.getChapterId());
         Course course = chapter.getCourse();
         authorization.edit(course);
@@ -104,7 +106,6 @@ public class AdminServiceImpl implements AdminService {
         Lesson existing = lessonRepository.findById(targetLessonId).orElse(null);
         Lesson lesson;
         int nextOrder = chapter.getLessons().stream()
-                .filter(l -> !"DELETED".equals(l.getStatus()))
                 .mapToInt(l -> l.getLessonOrder() == null ? 0 : l.getLessonOrder())
                 .max().orElse(-1) + 1;
         if (existing != null) {
