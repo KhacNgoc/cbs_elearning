@@ -7,6 +7,7 @@ import com.bidv.coretraining.entity.Course;
 import com.bidv.coretraining.exception.RagServiceUnavailableException;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
 import com.bidv.coretraining.mapper.QuizMapper;
+import com.bidv.coretraining.repository.BankQuestionRepository;
 import com.bidv.coretraining.repository.CourseRepository;
 import com.bidv.coretraining.repository.LessonRepository;
 import com.bidv.coretraining.repository.QuestionRepository;
@@ -28,7 +29,8 @@ class QuizGenerationJobTest {
             + "\"percent\":0,\"requested_questions\":3,\"accepted_questions\":0,\"attempt\":0,\"max_attempts\":2}";
     CourseRepository courses = mock(CourseRepository.class);
     LessonKnowledgeSourceService sources = mock(LessonKnowledgeSourceService.class);
-    QuizGenerationService service = new QuizGenerationServiceImpl(courses, mock(LessonRepository.class), sources, "http://rag", 5000, 30000);
+    QuizGenerationService service = new QuizGenerationServiceImpl(courses, mock(LessonRepository.class), sources,
+            mock(QuestionRepository.class), mock(BankQuestionRepository.class), "http://rag", 5000, 30000);
     MockRestServiceServer server = MockRestServiceServer.bindTo(
             (RestTemplate) ReflectionTestUtils.getField(service, "restTemplate")).build();
 

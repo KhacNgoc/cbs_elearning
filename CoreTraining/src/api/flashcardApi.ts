@@ -36,6 +36,16 @@ export interface Flashcard {
   back: string;
   source: FlashcardSource | null;
   progress: FlashcardProgress | null;
+  /** The learner's own personal card; only these carry a version for editing. */
+  mine: boolean;
+  version: number | null;
+}
+
+export interface PersonalFlashcardRequest {
+  type: FlashcardType;
+  front: string;
+  back: string;
+  version?: number;
 }
 
 export interface FlashcardStats {
@@ -154,6 +164,23 @@ export const flashcardApi = {
       { rating },
     );
     return response.data;
+  },
+
+  async createMine(lessonId: string, card: PersonalFlashcardRequest): Promise<Flashcard> {
+    const response = await axiosClient.post<Flashcard>(
+      `/api/lessons/${encodeURIComponent(lessonId)}/flashcards/mine`,
+      card,
+    );
+    return response.data;
+  },
+
+  async updateMine(id: number, card: PersonalFlashcardRequest): Promise<Flashcard> {
+    const response = await axiosClient.put<Flashcard>(`/api/flashcards/mine/${id}`, card);
+    return response.data;
+  },
+
+  async removeMine(id: number): Promise<void> {
+    await axiosClient.delete(`/api/flashcards/mine/${id}`);
   },
 
   async summary(): Promise<FlashcardSummary> {

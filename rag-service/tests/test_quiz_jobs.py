@@ -41,17 +41,18 @@ class QuizJobTests(unittest.IsolatedAsyncioTestCase):
     async def test_job_reports_each_stage_and_returns_final_result(self):
         snapshots = []
 
-        async def model(*args, **kwargs):
+        async def model(_model, messages, *args, **kwargs):
             job = next(iter(quiz_jobs._jobs.values()))
             snapshots.append((job.stage, job.attempt, job.percent, job.accepted_questions))
-            return [BAD, GOOD, REVIEW][len(snapshots) - 1]
+            if messages[0]["content"].startswith("Bạn kiểm định"):
+                return REVIEW
+            return [BAD, GOOD][len(snapshots) - 1]
 
         with patch("app.infrastructure.ensure_collection", AsyncMock()), \
              patch("app.infrastructure.embeddings", AsyncMock(return_value=[[1., 0.]] * 4)), \
              patch("app.infrastructure.qdrant.query_points", AsyncMock(return_value=SimpleNamespace(points=[POINT]))), \
              patch("app.infrastructure.ollama_chat", side_effect=model), \
-             patch("app.config.QUIZ_LLM_VERIFICATION_ENABLED", True), \
-             patch("app.config.QUIZ_GENERATION_MAX_ATTEMPTS", 2):
+             patch("app.config.QUIZ_LLM_VERIFICATION_ENABLED", True):
             started = start_quiz_job(request())
             self.assertEqual("queued", started.status)
             self.assertEqual(0, started.percent)
@@ -62,14 +63,12 @@ class QuizJobTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(100, job.percent)
         self.assertEqual(1, job.accepted_questions)
         self.assertEqual("CIF dùng để nhận diện đối tượng nào?", job.result.questions[0].text)
-        # first candidate, retry after rejection, then verification
-        self.assertEqual([("generating", 1), ("generating", 2), ("verifying", 2)],
-                         [(stage, attempt) for stage, attempt, _, _ in snapshots])
-        # The bar follows usable questions: the rejected first candidate adds nothing,
-        # generation done is half of the bar, verification is the other half.
-        self.assertEqual([0, 0, 50, 100], [percent for _, _, percent, _ in snapshots] + [job.percent])
-        self.assertEqual(1, snapshots[-1][3])
-        self.assertEqual((2, 2), (job.phase, job.phase_count))
+        # Two candidates in flight, then the review of the one that passed local checks;
+        # all of it is one generating phase.
+        self.assertEqual([("generating", 1)] * 3, [(stage, attempt) for stage, attempt, _, _ in snapshots])
+        # The bar counts questions that passed every check, review included.
+        self.assertEqual([0, 0, 0, 100], [percent for _, _, percent, _ in snapshots] + [job.percent])
+        self.assertEqual((1, 1), (job.phase, job.phase_count))
 
     async def test_generation_error_marks_job_failed_with_status(self):
         with patch("app.services.quiz.generate_quiz",

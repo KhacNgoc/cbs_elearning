@@ -717,6 +717,7 @@ const generateQuestions = async () => {
       courseId: courseId.value,
       lessonId: lessonId.value || undefined,
       ...aiConfig,
+      excludeQuestions: aiDrafts.value.map(draft => draft.text).filter(Boolean).slice(0, 40),
     }, { onProgress: showGenerationProgress, signal: abort.signal });
     generationProgress.value = null;
     aiSources.value = result.sources || [];

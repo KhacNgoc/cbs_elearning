@@ -24,6 +24,7 @@ public interface FlashcardReviewRepository extends JpaRepository<FlashcardReview
             + "from FlashcardReview review join review.flashcard card join card.lesson lesson "
             + "join lesson.chapter chapter join card.course course "
             + "where review.user.id = :userId and review.dueAt <= :now and card.status = 'PUBLISHED' "
+            + "and (card.owner is null or card.owner.id = :userId) "
             + "and lesson.status = 'PUBLISHED' and chapter.status = 'PUBLISHED' and course.status = 'PUBLISHED' "
             + "group by course.id, course.name order by count(review) desc")
     List<FlashcardCourseDueView> dueByCourse(@Param("userId") Long userId, @Param("now") LocalDateTime now);
@@ -31,6 +32,7 @@ public interface FlashcardReviewRepository extends JpaRepository<FlashcardReview
     @Query("select review from FlashcardReview review join fetch review.flashcard card join fetch card.lesson lesson "
             + "join lesson.chapter chapter where review.user.id = :userId and card.course.id = :courseId "
             + "and review.dueAt <= :now and card.status = 'PUBLISHED' and lesson.status = 'PUBLISHED' "
+            + "and (card.owner is null or card.owner.id = :userId) "
             + "and chapter.status = 'PUBLISHED' order by review.dueAt asc, review.id asc")
     List<FlashcardReview> findDueInCourse(@Param("userId") Long userId, @Param("courseId") String courseId,
             @Param("now") LocalDateTime now, Pageable page);

@@ -51,7 +51,7 @@ public class FlashcardAdminServiceImpl implements FlashcardAdminService {
     public List<FlashcardDto.AdminCard> list(String lessonId) {
         Lesson lesson = lesson(lessonId);
         authorization.edit(lesson.getCourse());
-        return flashcards.findByLessonIdOrderByCardOrderAscIdAsc(lessonId).stream()
+        return flashcards.findByLessonIdAndOwnerIsNullOrderByCardOrderAscIdAsc(lessonId).stream()
                 .map(FlashcardAdminServiceImpl::toAdminCard).toList();
     }
 
@@ -101,7 +101,7 @@ public class FlashcardAdminServiceImpl implements FlashcardAdminService {
     @Transactional
     public List<FlashcardDto.AdminCard> updateStatus(String lessonId, FlashcardDto.StatusRequest request) {
         writableLesson(lessonId);
-        List<Flashcard> cards = flashcards.findByLessonIdAndIdIn(lessonId, new HashSet<>(request.ids()));
+        List<Flashcard> cards = flashcards.findByLessonIdAndOwnerIsNullAndIdIn(lessonId, new HashSet<>(request.ids()));
         if (cards.size() != new HashSet<>(request.ids()).size())
             throw new BadRequestException("Có thẻ không thuộc bài học này");
         LocalDateTime now = LocalDateTime.now();
@@ -136,6 +136,8 @@ public class FlashcardAdminServiceImpl implements FlashcardAdminService {
     }
 
     private Flashcard newCard(Lesson lesson, FlashcardDto.CardRequest request, int order) {
+        if (request.origin() == FlashcardOrigin.PERSONAL)
+            throw new BadRequestException("Thẻ cá nhân chỉ do học viên tạo");
         LocalDateTime now = LocalDateTime.now();
         Flashcard card = Flashcard.builder()
                 .course(lesson.getCourse())
@@ -151,19 +153,7 @@ public class FlashcardAdminServiceImpl implements FlashcardAdminService {
     }
 
     private void apply(Flashcard card, Course course, FlashcardDto.CardRequest request) {
-        String front = request.front().trim();
-        String back = request.back().trim();
-        if (front.isEmpty() || back.isEmpty())
-            throw new BadRequestException("Mặt trước và mặt sau của thẻ không được để trống");
-        if (request.type() == FlashcardType.CLOZE) {
-            if (!CLOZE_BLANK.matcher(front).find())
-                throw new BadRequestException("Thẻ điền khuyết cần có chỗ trống ___ ở mặt trước");
-            if (back.length() >= 4 && front.toLowerCase().contains(back.toLowerCase()))
-                throw new BadRequestException("Đáp án của thẻ điền khuyết đang lộ ở mặt trước");
-        }
-        card.setType(request.type());
-        card.setFront(front);
-        card.setBack(back);
+        applyContent(card, request.type(), request.front(), request.back());
         String documentId = blankToNull(request.sourceDocumentId());
         if (documentId == null) {
             card.setSourceDocumentId(null);
@@ -198,8 +188,25 @@ public class FlashcardAdminServiceImpl implements FlashcardAdminService {
     }
 
     private Flashcard card(String lessonId, Long id) {
-        return flashcards.findByIdAndLessonId(id, lessonId)
+        return flashcards.findByIdAndLessonIdAndOwnerIsNull(id, lessonId)
                 .orElseThrow(() -> new ResourceNotFoundException("Flashcard", "id", id));
+    }
+
+    /** Validates and sets type, front and back; shared with learners' personal cards. */
+    static void applyContent(Flashcard card, FlashcardType type, String rawFront, String rawBack) {
+        String front = rawFront.trim();
+        String back = rawBack.trim();
+        if (front.isEmpty() || back.isEmpty())
+            throw new BadRequestException("Mặt trước và mặt sau của thẻ không được để trống");
+        if (type == FlashcardType.CLOZE) {
+            if (!CLOZE_BLANK.matcher(front).find())
+                throw new BadRequestException("Thẻ điền khuyết cần có chỗ trống ___ ở mặt trước");
+            if (back.length() >= 4 && front.toLowerCase().contains(back.toLowerCase()))
+                throw new BadRequestException("Đáp án của thẻ điền khuyết đang lộ ở mặt trước");
+        }
+        card.setType(type);
+        card.setFront(front);
+        card.setBack(back);
     }
 
     private static String blankToNull(String value) {

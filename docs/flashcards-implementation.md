@@ -60,7 +60,25 @@ Hibernate `ddl-auto=update` tự tạo bảng `flashcards` và `flashcard_review
 - Frontend: `vue-tsc`, `vite build`, 174 test node qua, thêm `tests/flashcards.test.mjs`.
 - Chạy thật trên Docker local: sinh thẻ AI, duyệt và phát hành, thêm thẻ thủ công, ôn thẻ trong bài học, banner Dashboard và trang ôn theo khóa.
 
+## Thẻ cá nhân của học viên (04/11/2026)
+
+Học viên tự viết thẻ cho từng bài: nút **Flashcard** trên thanh tiêu đề luôn hiện (kể cả bài chưa có thẻ), modal có chế độ
+**Thẻ của tôi** để thêm/sửa/xóa thẻ thuật ngữ hoặc điền khuyết. Bài chưa có thẻ nào thì modal mở thẳng vào chế độ này.
+
+- Dữ liệu: dùng chung bảng `flashcards`, thêm cột `owner_user_id` (NULL = thẻ của bài) và origin `PERSONAL`. Thẻ cá nhân
+  luôn `PUBLISHED`, không cần duyệt, nên dùng luôn lịch ôn SM-2, hàng đợi theo khóa và banner Dashboard.
+- Mọi truy vấn phía quản trị lọc `owner IS NULL`; admin không thấy, không sửa và không phát hành được thẻ của học viên,
+  `maxCardOrder` không bị ảnh hưởng. Admin gửi origin `PERSONAL` bị từ chối.
+- Bộ thẻ của bài = thẻ của bài theo thứ tự soạn, sau đó là thẻ của học viên theo thứ tự tạo. `Card` có thêm `mine`
+  và `version` (chỉ có trên thẻ của mình).
+- Thẻ của người khác trả 404 khi sửa, xóa hoặc ôn. Tối đa 200 thẻ cá nhân mỗi bài. Xóa thẻ không cần còn quyền vào bài.
+- API: `POST /api/lessons/{id}/flashcards/mine`, `PUT`/`DELETE /api/flashcards/mine/{cardId}` (sửa có khóa lạc quan theo `version`).
+- Migration **bắt buộc ở mọi môi trường**, kể cả khi dùng `ddl-auto=update`:
+  `CoreTrainingAPI/src/main/resources/migrations/20261104_personal_flashcards.sql` (idempotent). Hibernate tự thêm cột
+  nhưng không nới ràng buộc `flashcards_origin_check` nó đã sinh, nên thiếu script này thì tạo thẻ cá nhân lỗi 409.
+- Test: `PersonalFlashcardTest`, bổ sung `FlashcardControllerContractTest`, `upsertCard` trong `tests/flashcards.test.mjs`.
+
 ## Chưa làm (giai đoạn sau)
 
-Thẻ từ câu làm sai, thẻ quy trình từ `ProcedureSection`, thẻ cá nhân (ghi chú video, bôi đen văn bản, chatbot),
+Thẻ từ câu làm sai, thẻ quy trình từ `ProcedureSection`, tạo thẻ cá nhân từ ghi chú video, bôi đen văn bản, chatbot,
 đánh dấu thẻ lỗi thời khi tài liệu đổi, báo lỗi thẻ, thống kê thẻ khó, nhắc ôn qua thông báo, chuyển sang FSRS.

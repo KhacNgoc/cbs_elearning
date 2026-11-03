@@ -13,7 +13,7 @@
     </div>
     <div class="header-actions">
       <div
-        v-if="hasText || hasVideo || hasSlides || flashcardTotal"
+        v-if="hasText || hasVideo || hasSlides || flashcardsEnabled"
         class="lesson-content-switch"
         role="group"
         aria-label="Chọn nội dung bài học"
@@ -35,16 +35,16 @@
           <PlayCircle :size="17" /><span>Video</span>
         </button>
         <button v-if="hasSlides" type="button" :aria-pressed="activeContent === 'SLIDE'" @click="$emit('select-content', 'SLIDE')"><FileText :size="17" /><span>Slide</span></button>
-        <template v-if="flashcardTotal">
+        <template v-if="flashcardsEnabled">
           <span class="switch-divider" aria-hidden="true"></span>
           <button
             type="button"
             class="flashcard-shortcut"
-            :title="flashcardPending ? `${flashcardPending} thẻ cần ôn` : `${flashcardTotal} flashcard`"
+            :title="flashcardPending ? `${flashcardPending} thẻ cần ôn` : flashcardTotal ? `${flashcardTotal} flashcard` : 'Tạo flashcard của bạn'"
             @click="$emit('open-flashcards')"
           >
             <Layers3 :size="17" /><span>Flashcard</span>
-            <strong :class="{ pending: flashcardPending }">{{ flashcardPending || flashcardTotal }}</strong>
+            <strong v-if="flashcardTotal" :class="{ pending: flashcardPending }">{{ flashcardPending || flashcardTotal }}</strong>
           </button>
         </template>
       </div>
@@ -127,6 +127,8 @@ defineProps<{
   completed: boolean;
   canComplete?: boolean;
   flashcardTotal?: number;
+  /** Shown even with no cards so learners can write their own. */
+  flashcardsEnabled?: boolean;
   flashcardPending?: number;
 }>();
 defineEmits<{

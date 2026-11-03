@@ -1,6 +1,6 @@
 """Pydantic request, response, and structured-model schemas."""
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr, model_validator
 
@@ -99,6 +99,10 @@ class QuizGenerationRequest(BaseModel):
     single_choice_count: int = Field(default=5, ge=0, le=10)
     multiple_choice_count: int = Field(default=0, ge=0, le=10)
     option_count: int = Field(default=4, ge=3, le=6)
+    # Saved questions and earlier drafts; new candidates repeating them are rejected.
+    existing_questions: list[Annotated[str, Field(max_length=2000)]] = Field(
+        default_factory=list, max_length=300
+    )
 
     @model_validator(mode="after")
     def require_lesson_sources(self):

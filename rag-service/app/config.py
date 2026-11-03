@@ -25,6 +25,11 @@ COURSE_SUMMARY_CLARIFICATION = (
     "Bạn muốn tóm tắt khóa học nào? Hãy nêu tên khóa học trong câu hỏi "
     "hoặc mở khóa học đó rồi hỏi lại."
 )
+# {courses} is the comma-separated list of course names the learner can search.
+GENERIC_QUESTION_CLARIFICATION = (
+    "Câu hỏi này có thể áp dụng cho nhiều khóa học ({courses}). Bạn muốn hỏi về "
+    "khóa nào? Hãy nêu tên khóa học trong câu hỏi hoặc mở khóa học đó rồi hỏi lại."
+)
 NO_ACCESSIBLE_COURSE_ANSWER = (
     "Bạn chưa có khóa học nào để trợ lý tra cứu tài liệu."
 )
@@ -33,14 +38,23 @@ COURSE_SUMMARY_CONTEXT_MAX_CHARS = int(
     os.getenv("RAG_COURSE_SUMMARY_CONTEXT_MAX_CHARS", "6500")
 )
 QUIZ_RETRIEVAL_LIMIT = int(os.getenv("QUIZ_RETRIEVAL_LIMIT", "5"))
+# Retrieval grows with the requested count (about 1.5 chunks per question) up to this cap.
+QUIZ_RETRIEVAL_MAX_LIMIT = int(os.getenv("QUIZ_RETRIEVAL_MAX_LIMIT", "24"))
 QUIZ_RETRIEVAL_CANDIDATE_LIMIT = int(os.getenv("QUIZ_RETRIEVAL_CANDIDATE_LIMIT", "12"))
-QUIZ_CONTEXT_MAX_CHARS = int(os.getenv("QUIZ_CONTEXT_MAX_CHARS", "5000"))
 QUIZ_SOURCE_MAX_CHARS = int(os.getenv("QUIZ_SOURCE_MAX_CHARS", "650"))
 QUIZ_GENERATION_CONCURRENCY = max(1, int(os.getenv("QUIZ_GENERATION_CONCURRENCY", "2")))
 QUIZ_GENERATION_MAX_ATTEMPTS = max(1, int(os.getenv("QUIZ_GENERATION_MAX_ATTEMPTS", "2")))
-QUIZ_NUM_CTX = int(os.getenv("QUIZ_NUM_CTX", "2048"))
-QUIZ_SINGLE_NUM_PREDICT = int(os.getenv("QUIZ_SINGLE_NUM_PREDICT", "180"))
-QUIZ_MULTIPLE_NUM_PREDICT = int(os.getenv("QUIZ_MULTIPLE_NUM_PREDICT", "220"))
+# Candidates in flight per missing question, and the total candidate budget per question.
+QUIZ_OVERGENERATION_FACTOR = max(1.0, float(os.getenv("QUIZ_OVERGENERATION_FACTOR", "1.5")))
+QUIZ_CANDIDATE_BUDGET_FACTOR = max(1.0, float(os.getenv("QUIZ_CANDIDATE_BUDGET_FACTOR", "3")))
+# No new candidates start after this; the draft returns what passed so far.
+QUIZ_GENERATION_TIME_BUDGET_SECONDS = float(os.getenv("QUIZ_GENERATION_TIME_BUDGET_SECONDS", "200"))
+QUIZ_TEMPERATURE = float(os.getenv("QUIZ_TEMPERATURE", "0.6"))
+OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "8192"))
+# Ollama reloads a model whose num_ctx changes, so quiz calls share the chat context size.
+QUIZ_NUM_CTX = int(os.getenv("QUIZ_NUM_CTX", str(OLLAMA_NUM_CTX)))
+QUIZ_SINGLE_NUM_PREDICT = int(os.getenv("QUIZ_SINGLE_NUM_PREDICT", "320"))
+QUIZ_MULTIPLE_NUM_PREDICT = int(os.getenv("QUIZ_MULTIPLE_NUM_PREDICT", "400"))
 # The review's reason may be up to 600 characters, which is over 300 tokens in Vietnamese.
 QUIZ_VERIFICATION_NUM_PREDICT = int(os.getenv("QUIZ_VERIFICATION_NUM_PREDICT", "512"))
 # Flashcards share the quiz model, semaphore and job cap so AI load stays bounded.
@@ -62,7 +76,6 @@ OLLAMA_QUERY_EMBEDDING_TIMEOUT_SECONDS = float(
 )
 OLLAMA_SUMMARY_TIMEOUT_SECONDS = float(os.getenv("OLLAMA_SUMMARY_TIMEOUT_SECONDS", "30"))
 OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
-OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "8192"))
 OLLAMA_CHAT_NUM_PREDICT = int(os.getenv("OLLAMA_CHAT_NUM_PREDICT", "384"))
 COURSE_SUMMARY_NUM_PREDICT = int(os.getenv("RAG_COURSE_SUMMARY_NUM_PREDICT", "256"))
 OLLAMA_REWRITE_NUM_PREDICT = int(os.getenv("OLLAMA_REWRITE_NUM_PREDICT", "96"))

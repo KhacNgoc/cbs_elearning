@@ -7,7 +7,7 @@ from qdrant_client import models
 from app import config
 from app.schemas import ChatRequest
 from app.services.chat import answer_chat, resolve_course_scope
-from app.utils import find_mentioned_course
+from app.utils import find_mentioned_course, is_course_summary_question, is_generic_question
 
 
 def point(course_id, document_id, score=0.95):
@@ -63,6 +63,44 @@ class CrossCourseChatTests(unittest.IsolatedAsyncioTestCase):
         request = ChatRequest(question="Tóm tắt nội dung chính của khóa học", course_ids=["C1", "C2"],
                               course_names={"C1": "Cho vay", "C2": "Tiền gửi"})
         result, query, _ = await self.run_chat(request, [])
+        self.assertTrue(result.needsClarification)
+        query.assert_not_awaited()
+
+    async def test_generic_question_without_focus_asks_which_course(self):
+        request = ChatRequest(question="Các bước nghiệp vụ quan trọng là gì?", course_ids=["C1", "C2"],
+                              course_names={"C1": "Cho vay", "C2": "Tiền gửi"})
+        result, query, model = await self.run_chat(request, [point("C1", "D1")])
+        self.assertTrue(result.needsClarification)
+        self.assertIn("Cho vay, Tiền gửi", result.answer)
+        query.assert_not_awaited()
+        model.assert_not_awaited()
+
+    async def test_generic_question_inside_a_course_is_answered(self):
+        request = ChatRequest(question="Những điều kiện nào cần lưu ý?", course_id="C1", course_name="Cho vay",
+                              course_ids=["C1", "C2"], course_names={"C1": "Cho vay", "C2": "Tiền gửi"})
+        result, _, _ = await self.run_chat(request, [point("C1", "D1", 0.95)])
+        self.assertFalse(result.needsClarification)
+        self.assertTrue(result.grounded)
+
+    def test_generic_question_detection_keeps_topic_words(self):
+        self.assertTrue(is_generic_question("Cac buoc nghiep vu quan trong la gi"))
+        self.assertTrue(is_generic_question("Những điều kiện nào cần lưu ý?"))
+        self.assertFalse(is_generic_question("Các bước giải ngân là gì?"))
+        self.assertFalse(is_generic_question("Điều kiện mở thẻ là gì?"))
+        self.assertFalse(is_generic_question("Tín dụng là gì?"))
+        self.assertTrue(is_generic_question("Nội dung chính là gì?"))
+        self.assertFalse(is_generic_question("Nội dung tín dụng tiêu dùng là gì?"))
+
+    def test_course_summary_detection_allows_words_between_and_any_accent_style(self):
+        self.assertTrue(is_course_summary_question("nội dung chính của khoá học?"))
+        self.assertTrue(is_course_summary_question("noi dung chinh cua khoa hoc"))
+        self.assertTrue(is_course_summary_question("Tóm tắt giúp tôi"))
+        self.assertFalse(is_course_summary_question("Nội dung tờ trình gồm gì?"))
+
+    async def test_course_summary_with_accent_variant_asks_which_course(self):
+        request = ChatRequest(question="nội dung chính của khoá học?", course_ids=["C1", "C2"],
+                              course_names={"C1": "Cho vay", "C2": "Tiền gửi"})
+        result, query, _ = await self.run_chat(request, [point("C1", "D1")])
         self.assertTrue(result.needsClarification)
         query.assert_not_awaited()
 

@@ -10,10 +10,13 @@ import com.bidv.coretraining.entity.Course;
 import com.bidv.coretraining.exception.BadRequestException;
 import com.bidv.coretraining.exception.RagServiceUnavailableException;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
+import com.bidv.coretraining.repository.BankQuestionRepository;
 import com.bidv.coretraining.repository.LessonRepository;
 import com.bidv.coretraining.repository.CourseRepository;
+import com.bidv.coretraining.repository.QuestionRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
@@ -23,8 +26,12 @@ import org.springframework.web.client.HttpStatusCodeException;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
@@ -35,10 +42,16 @@ public class QuizGenerationServiceImpl implements QuizGenerationService {
     private static final Pattern JOB_ID = Pattern.compile("[A-Za-z0-9_-]{1,64}");
     // Outlives the RAG service's own retention so an expired job surfaces as its 404.
     private static final Duration JOB_OWNER_RETENTION = Duration.ofHours(1);
+    // Bounds the payload and the RAG service's duplicate checks; recent questions come first.
+    private static final int MAX_EXISTING_QUESTIONS = 300;
+    private static final int MAX_BANK_QUESTIONS = 200;
+    private static final int MAX_QUESTION_LENGTH = 2000;
 
     private final CourseRepository courseRepository;
     private final LessonRepository lessonRepository;
     private final LessonKnowledgeSourceService knowledgeSources;
+    private final QuestionRepository questionRepository;
+    private final BankQuestionRepository bankQuestionRepository;
     private final RestTemplate restTemplate;
     private final String ragUrl;
     private final Map<String, JobOwner> jobOwners = new ConcurrentHashMap<>();
@@ -53,12 +66,16 @@ public class QuizGenerationServiceImpl implements QuizGenerationService {
             CourseRepository courseRepository,
             LessonRepository lessonRepository,
             LessonKnowledgeSourceService knowledgeSources,
+            QuestionRepository questionRepository,
+            BankQuestionRepository bankQuestionRepository,
             @Value("${app.rag-url}") String ragUrl,
             @Value("${app.rag.connect-timeout-ms:5000}") int connectTimeoutMs,
             @Value("${app.rag.quiz-read-timeout-ms:300000}") int readTimeoutMs) {
         this.courseRepository = courseRepository;
         this.lessonRepository = lessonRepository;
         this.knowledgeSources = knowledgeSources;
+        this.questionRepository = questionRepository;
+        this.bankQuestionRepository = bankQuestionRepository;
         this.ragUrl = ragUrl;
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(connectTimeoutMs);
@@ -198,6 +215,35 @@ public class QuizGenerationServiceImpl implements QuizGenerationService {
         ragRequest.put("single_choice_count", request.getSingleChoiceCount());
         ragRequest.put("multiple_choice_count", request.getMultipleChoiceCount());
         ragRequest.put("option_count", request.getOptionCount());
+        ragRequest.put("existing_questions", existingQuestions(course.getId(),
+                selectedSources != null ? request.getLessonId() : null, request.getExcludeQuestions()));
         return new RagQuizRequest(course.getId(), request.getLessonId(), ragRequest);
+    }
+
+    /**
+     * Questions a new draft must not repeat: the admin's unsaved drafts, the quiz's saved
+     * questions and recent question-bank entries for the same lesson (or course).
+     */
+    private List<String> existingQuestions(String courseId, String lessonId, List<String> drafts) {
+        var page = PageRequest.of(0, MAX_BANK_QUESTIONS);
+        List<String> saved = lessonId != null
+                ? questionRepository.findTextsByLessonId(lessonId)
+                : questionRepository.findCourseQuizTexts(courseId);
+        List<String> bank = lessonId != null
+                ? bankQuestionRepository.findRecentTextsByLessonId(lessonId, page)
+                : bankQuestionRepository.findRecentTextsByCourseId(courseId, page);
+        Set<String> texts = new LinkedHashSet<>();
+        for (List<String> group : List.of(drafts == null ? List.<String>of() : drafts, saved, bank)) {
+            for (String text : group) {
+                if (texts.size() >= MAX_EXISTING_QUESTIONS) {
+                    return new ArrayList<>(texts);
+                }
+                if (text != null && !text.isBlank()) {
+                    String trimmed = text.strip();
+                    texts.add(trimmed.length() > MAX_QUESTION_LENGTH ? trimmed.substring(0, MAX_QUESTION_LENGTH) : trimmed);
+                }
+            }
+        }
+        return new ArrayList<>(texts);
     }
 }

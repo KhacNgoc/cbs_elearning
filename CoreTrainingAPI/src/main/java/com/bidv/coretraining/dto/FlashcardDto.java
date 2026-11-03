@@ -26,8 +26,9 @@ public final class FlashcardDto {
             FlashcardRating lastRating, boolean due, boolean mastered) {
     }
 
+    /** mine is true on the learner's own personal cards, which they may edit using version. */
     public record Card(Long id, String courseId, String lessonId, String lessonTitle, FlashcardType type,
-            String front, String back, Source source, Progress progress) {
+            String front, String back, Source source, Progress progress, boolean mine, Long version) {
     }
 
     public record Stats(int total, int newCount, int dueCount, int learningCount, int masteredCount) {
@@ -37,6 +38,13 @@ public final class FlashcardDto {
     }
 
     public record ReviewRequest(@NotNull FlashcardRating rating) {
+    }
+
+    public record PersonalCardRequest(
+            @NotNull FlashcardType type,
+            @NotBlank @Size(max = 1000) String front,
+            @NotBlank @Size(max = 4000) String back,
+            Long version) {
     }
 
     public record CourseDue(String courseId, String courseName, int due) {

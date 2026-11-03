@@ -124,14 +124,27 @@ Context-aware chat uses `OLLAMA_REWRITE_MODEL` and `OLLAMA_SUMMARY_MODEL`
 `RAG_CANDIDATE_LIMIT`, and `RAG_CONTEXT_MAX_CHARS`. Ollama timeouts are
 configured independently through `OLLAMA_CHAT_TIMEOUT_SECONDS`,
 `OLLAMA_REWRITE_TIMEOUT_SECONDS`, and `OLLAMA_SUMMARY_TIMEOUT_SECONDS`.
-Quiz generation defaults to `OLLAMA_QUIZ_MODEL=qwen3:4b`. It runs one compact,
-single-source generation per requested question. Runtime capacity is configurable:
-use `QUIZ_GENERATION_CONCURRENCY=1` on constrained CPU machines, and increase it
-to match the inference server's parallel slots on GPU servers. `QUIZ_NUM_CTX`,
-`QUIZ_SOURCE_MAX_CHARS`, `QUIZ_SINGLE_NUM_PREDICT`, and
-`QUIZ_MULTIPLE_NUM_PREDICT` bound memory and token costs without changing code.
-`QUIZ_GENERATION_MAX_ATTEMPTS` controls targeted retries for questions rejected
-by structural or grounding checks; the default `2` performs one replacement pass.
+Quiz generation defaults to `OLLAMA_QUIZ_MODEL=qwen3:4b`. Each candidate is a compact,
+single-source generation. Retrieval scales with the request: about 1.5 chunks per
+question, between `QUIZ_RETRIEVAL_LIMIT` (5) and `QUIZ_RETRIEVAL_MAX_LIMIT` (24),
+spread across the selected documents and sampled among the most relevant chunks,
+so repeated drafts use different passages. Candidates run as a pipeline:
+generate, structural and duplicate checks, then review; every rejection is
+replaced until each type is filled. `QUIZ_OVERGENERATION_FACTOR` (1.5) sets the
+candidates in flight per missing question, `QUIZ_CANDIDATE_BUDGET_FACTOR` (3) caps
+total candidates per requested question, and `QUIZ_GENERATION_TIME_BUDGET_SECONDS`
+(200) stops starting new candidates so a slow model still returns a partial draft.
+Requests may carry `existing_questions` (saved quiz, question bank and unsaved
+drafts); candidates repeating them are rejected and the closest ones are listed
+in the prompt. `QUIZ_TEMPERATURE` (0.6) controls wording variety.
+Runtime capacity is configurable: use `QUIZ_GENERATION_CONCURRENCY=1` on
+constrained CPU machines, and increase it to match the inference server's
+parallel slots on GPU servers. `QUIZ_NUM_CTX` defaults to `OLLAMA_NUM_CTX`: Ollama
+reloads a model whose context size changes, so a different value makes chat,
+quiz generation and review evict each other when they share a model.
+`QUIZ_SOURCE_MAX_CHARS`, `QUIZ_SINGLE_NUM_PREDICT`, and `QUIZ_MULTIPLE_NUM_PREDICT`
+bound token costs without changing code. `QUIZ_GENERATION_MAX_ATTEMPTS` now only
+applies to flashcards.
 The per-question timeout is controlled by
 `OLLAMA_QUIZ_GENERATION_TIMEOUT_SECONDS` (120s). A second LLM verification pass
 is always enabled for lesson quizzes and enabled by default for course-wide

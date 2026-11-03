@@ -101,7 +101,7 @@ async def generate_flashcards(
     started_at = asyncio.get_running_loop().time()
 
     progress.retrieving()
-    sources, source_text_by_id = await retrieve_grounded_sources(request)
+    sources, source_text_by_id = await retrieve_grounded_sources(request, request.count)
     if not sources:
         return FlashcardGenerationResponse(
             cards=[], sources=[],

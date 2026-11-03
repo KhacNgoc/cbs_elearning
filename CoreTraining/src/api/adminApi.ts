@@ -120,6 +120,8 @@ export interface QuizGenerationRequest {
   singleChoiceCount: number;
   multipleChoiceCount: number;
   optionCount: number;
+  /** Unsaved drafts from the previous run, so the next draft does not repeat them. */
+  excludeQuestions?: string[];
 }
 
 export type QuizGenerationJobSnapshot = QuizGenerationJob<QuizGenerationResponse>;

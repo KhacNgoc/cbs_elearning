@@ -23,6 +23,7 @@
       @complete="markAsCompleted"
       @open-content="sidebarOpen = true"
       :flashcard-total="flashcardStats?.total || 0"
+      :flashcards-enabled="!!flashcardStats"
       :flashcard-pending="flashcardPending"
       @open-flashcards="openFlashcards"
     />

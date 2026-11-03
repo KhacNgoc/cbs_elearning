@@ -5,8 +5,10 @@ import com.bidv.coretraining.dto.QuizGenerationRequestDto;
 import com.bidv.coretraining.entity.Course;
 import com.bidv.coretraining.entity.Lesson;
 import com.bidv.coretraining.exception.BadRequestException;
+import com.bidv.coretraining.repository.BankQuestionRepository;
 import com.bidv.coretraining.repository.CourseRepository;
 import com.bidv.coretraining.repository.LessonRepository;
+import com.bidv.coretraining.repository.QuestionRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -24,7 +26,10 @@ class QuizGenerationSourceTest {
     CourseRepository courses = mock(CourseRepository.class);
     LessonRepository lessons = mock(LessonRepository.class);
     LessonKnowledgeSourceService sources = mock(LessonKnowledgeSourceService.class);
-    QuizGenerationService service = new QuizGenerationServiceImpl(courses, lessons, sources, "http://rag", 5000, 30000);
+    QuestionRepository questions = mock(QuestionRepository.class);
+    BankQuestionRepository bank = mock(BankQuestionRepository.class);
+    QuizGenerationService service = new QuizGenerationServiceImpl(courses, lessons, sources, questions, bank,
+            "http://rag", 5000, 30000);
     Course course = Course.builder().id("C1").name("Cho vay").build();
     Lesson lesson = Lesson.builder().id("L1").course(course).title("Giải ngân").build();
     QuizGenerationRequestDto request() {
@@ -52,6 +57,23 @@ class QuizGenerationSourceTest {
                 .andRespond(withSuccess("{\"questions\":[],\"sources\":[],\"warnings\":[]}", MediaType.APPLICATION_JSON));
         service.generate(request);
         server.verify();
+    }
+    @Test void sendsDraftsSavedAndBankQuestionsOnceAsExistingQuestions() {
+        var request = request();
+        request.setExcludeQuestions(List.of("Câu nháp A", "  ", "Câu đã lưu B"));
+        when(sources.generationSources(lesson)).thenReturn(List.of(Map.of("document_id", "D1")));
+        when(questions.findTextsByLessonId("L1")).thenReturn(List.of("Câu đã lưu B", "Câu đã lưu C"));
+        when(bank.findRecentTextsByLessonId(eq("L1"), any())).thenReturn(List.of("Câu ngân hàng D"));
+        var server = server();
+        server.expect(requestTo("http://rag/quiz/generate"))
+                .andExpect(jsonPath("$.existing_questions.length()").value(4))
+                .andExpect(jsonPath("$.existing_questions[0]").value("Câu nháp A"))
+                .andExpect(jsonPath("$.existing_questions[1]").value("Câu đã lưu B"))
+                .andExpect(jsonPath("$.existing_questions[3]").value("Câu ngân hàng D"))
+                .andRespond(withSuccess("{\"questions\":[],\"sources\":[],\"warnings\":[]}", MediaType.APPLICATION_JSON));
+        service.generate(request);
+        server.verify();
+        verify(questions, never()).findCourseQuizTexts(any());
     }
     @Test void missingLessonSourcesNeverCallsRag() {
         var request = request();

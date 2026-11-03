@@ -41,6 +41,13 @@ export function deckStats(cards: readonly StudyCard[], now = Date.now()): DeckSt
   return stats;
 }
 
+/** Replaces a saved card in place, or appends it when it is new (the deck lists own cards last). */
+export function upsertCard<T extends { id: number }>(cards: readonly T[], saved: T): T[] {
+  return cards.some((card) => card.id === saved.id)
+    ? cards.map((card) => (card.id === saved.id ? saved : card))
+    : [...cards, saved];
+}
+
 /** Splits a cloze front into text and blank parts; other cards are one text part. */
 export function frontParts(card: Pick<StudyCard, "type" | "front"> | null): { text: string; blank: boolean }[] {
   const text = card?.front ?? "";

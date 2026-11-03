@@ -8,13 +8,15 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 /**
- * A lesson flashcard authored by an instructor or drafted by AI and approved by one.
+ * A lesson flashcard authored by an instructor or drafted by AI and approved by one, or a
+ * personal card a learner wrote for themselves (owner set), which only that learner sees.
  * Flashcards support learning only: they never count towards lesson completion.
  */
 @Entity
 @Table(name = "flashcards", indexes = {
         @Index(name = "idx_flashcards_lesson_order", columnList = "lesson_id,card_order"),
-        @Index(name = "idx_flashcards_course_status", columnList = "course_id,status")
+        @Index(name = "idx_flashcards_course_status", columnList = "course_id,status"),
+        @Index(name = "idx_flashcards_owner_lesson", columnList = "owner_user_id,lesson_id")
 })
 @Getter
 @Setter
@@ -36,6 +38,11 @@ public class Flashcard {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "lesson_id", nullable = false)
     private Lesson lesson;
+
+    /** Null on lesson cards; the learner who wrote a personal card. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_user_id")
+    private User owner;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

@@ -21,6 +21,7 @@ from app.utils import (
     find_mentioned_course,
     format_messages,
     is_course_summary_question,
+    is_generic_question,
     looks_like_internal_summary,
     ollama_compatible_schema,
     parse_rewrite_result,
@@ -180,6 +181,24 @@ async def answer_chat(request: ChatRequest) -> ChatResponse:
             standaloneQuestion=standalone_question,
             needsClarification=True,
             rewriteReason="course_summary_without_course",
+        )
+    if (
+        not focus_course_id
+        and search_course_ids is not None
+        and len(search_course_ids) > 1
+        and is_generic_question(standalone_question)
+    ):
+        # Without a topic, retrieval would pick whichever course's wording matches best.
+        courses = ", ".join(
+            label for label in (course_label(request, cid) for cid in search_course_ids) if label
+        )
+        return ChatResponse(
+            answer=config.GENERIC_QUESTION_CLARIFICATION.format(courses=courses),
+            grounded=False,
+            sources=[],
+            standaloneQuestion=standalone_question,
+            needsClarification=True,
+            rewriteReason="generic_question_without_course",
         )
     course_summary_intent = bool(focus_course_id and summary_question)
     retrieval_question = standalone_question

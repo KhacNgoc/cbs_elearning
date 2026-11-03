@@ -45,3 +45,10 @@ test('source labels use pages for PDF and headings for Word documents', () => {
   assert.equal(flashcards.sourceLabel({ documentName: 'Quy trinh.docx', page: 1, section: 'Mở CIF' }), 'Quy trinh.docx · Mở CIF');
   assert.equal(flashcards.sourceLabel(null), '');
 });
+
+test('saving a personal card replaces it in place or appends a new one', () => {
+  const cards = [{ id: 1, front: 'CIF' }, { id: 2, front: 'GL' }];
+  assert.deepEqual(flashcards.upsertCard(cards, { id: 2, front: 'Sổ cái' }).map((card) => card.front), ['CIF', 'Sổ cái']);
+  assert.deepEqual(flashcards.upsertCard(cards, { id: 3, front: 'KYC' }).map((card) => card.id), [1, 2, 3]);
+  assert.equal(cards.length, 2);
+});

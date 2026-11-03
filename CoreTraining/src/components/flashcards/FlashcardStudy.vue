@@ -4,6 +4,7 @@
       <div class="study-toolbar">
         <span class="study-count">Thẻ {{ position + 1 }}/{{ queue.length }}</span>
         <span v-if="showLesson" class="study-lesson" :title="current.lessonTitle">{{ current.lessonTitle }}</span>
+        <span v-if="current.mine" class="study-mine">Thẻ của tôi</span>
         <button type="button" class="study-exit" @click="$emit('exit')">
           <X :size="15" /> Kết thúc
         </button>
@@ -197,6 +198,16 @@ function onKey(event: KeyboardEvent) {
   font-size: 0.74rem;
   font-weight: 600;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.study-mine {
+  flex-shrink: 0;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  background: var(--surface-ede9fe);
+  color: var(--ink-6d28d9);
+  font-size: 0.74rem;
+  font-weight: 700;
   white-space: nowrap;
 }
 .study-exit {
