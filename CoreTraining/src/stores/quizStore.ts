@@ -93,6 +93,11 @@ export const useQuizStore = defineStore("quiz", {
         this.currentQuestionIndex--;
       }
     },
+    goToQuestion(index: number) {
+      if (index >= 0 && index < this.questions.length) {
+        this.currentQuestionIndex = index;
+      }
+    },
     startTimer() {
       this.timerIntervalId = setInterval(() => {
         this.timeElapsed++;

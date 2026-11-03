@@ -54,10 +54,13 @@ watch(
       }
       openDialogs.push(key);
       await nextTick();
+      // Content that handles its own keys (e.g. flashcard study) asks for focus explicitly.
       (
+        dialog.value?.querySelector<HTMLElement>("[data-autofocus]") ||
         dialog.value?.querySelector<HTMLElement>(
           "input:not([disabled]), select:not([disabled]), textarea:not([disabled])",
-        ) || dialog.value
+        ) ||
+        dialog.value
       )?.focus();
     } else release();
   },

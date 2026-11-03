@@ -39,6 +39,13 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true, pageKey: 'lesson' }
   },
   {
+    path: '/flashcards/review',
+    name: 'FlashcardReview',
+    component: () => import('../views/FlashcardReview.vue'),
+    // Reviewing belongs to studying lessons, so it shares the lesson page permission.
+    meta: { requiresAuth: true, pageKey: 'lesson' }
+  },
+  {
     path: '/lesson-reports/:id',
     name: 'LessonReportDetail',
     component: () => import('../views/LessonReportDetail.vue'),

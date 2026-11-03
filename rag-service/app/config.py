@@ -43,6 +43,9 @@ QUIZ_SINGLE_NUM_PREDICT = int(os.getenv("QUIZ_SINGLE_NUM_PREDICT", "180"))
 QUIZ_MULTIPLE_NUM_PREDICT = int(os.getenv("QUIZ_MULTIPLE_NUM_PREDICT", "220"))
 # The review's reason may be up to 600 characters, which is over 300 tokens in Vietnamese.
 QUIZ_VERIFICATION_NUM_PREDICT = int(os.getenv("QUIZ_VERIFICATION_NUM_PREDICT", "512"))
+# Flashcards share the quiz model, semaphore and job cap so AI load stays bounded.
+FLASHCARD_NUM_PREDICT = int(os.getenv("FLASHCARD_NUM_PREDICT", "200"))
+FLASHCARD_SOURCE_MAX_CHARS = int(os.getenv("FLASHCARD_SOURCE_MAX_CHARS", "650"))
 OLLAMA_CHAT_TIMEOUT_SECONDS = float(os.getenv("OLLAMA_CHAT_TIMEOUT_SECONDS", "180"))
 OLLAMA_QUIZ_GENERATION_TIMEOUT_SECONDS = float(
     os.getenv("OLLAMA_QUIZ_GENERATION_TIMEOUT_SECONDS", "210")

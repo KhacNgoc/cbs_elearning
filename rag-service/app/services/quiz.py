@@ -29,14 +29,13 @@ from app.schemas import (
 from app.utils import ollama_compatible_schema, strip_model_thinking
 from app.services.quiz_jobs import NULL_PROGRESS, QuizProgress
 
-async def generate_quiz(request: QuizGenerationRequest, progress: QuizProgress | None = None):
-    progress = progress or NULL_PROGRESS
-    started_at = asyncio.get_running_loop().time()
-    requested_total = request.single_choice_count + request.multiple_choice_count
-    if requested_total < 1 or requested_total > 20:
-        raise HTTPException(400, "The total number of questions must be between 1 and 20")
+async def retrieve_grounded_sources(request) -> tuple[list[QuizGenerationSource], dict[str, str]]:
+    """Retrieve diverse chunks inside the request's course and lesson source bounds.
 
-    progress.retrieving()
+    Quiz and flashcard requests both qualify: ``request`` needs ``course_id``,
+    ``course_name``, ``lesson_name`` and ``sources``. Returns no sources when nothing
+    relevant is found; callers report that instead of widening the scope.
+    """
     await infrastructure.ensure_collection(config.OLLAMA_QUERY_EMBEDDING_TIMEOUT_SECONDS)
     retrieval_queries = quiz_retrieval_queries(request)
     query_vectors = await infrastructure.embeddings(
@@ -88,12 +87,7 @@ async def generate_quiz(request: QuizGenerationRequest, progress: QuizProgress |
         selected.append(item)
 
     if not selected:
-        return QuizGenerationResponse(
-            questions=[], sources=[],
-            warnings=["Không tìm thấy đủ nội dung liên quan trong nguồn đã chọn cho bài học. Hãy kiểm tra nguồn hoặc bổ sung tài liệu."
-                      if request.lesson_id or request.lesson_name else
-                      "Không tìm thấy đủ nội dung liên quan trong tài liệu của khóa học."],
-        )
+        return [], {}
 
     sources = []
     source_text_by_id = {}
@@ -121,6 +115,25 @@ async def generate_quiz(request: QuizGenerationRequest, progress: QuizProgress |
         )
         context_parts.append(part)
         context_length += len(part)
+    return sources, source_text_by_id
+
+
+async def generate_quiz(request: QuizGenerationRequest, progress: QuizProgress | None = None):
+    progress = progress or NULL_PROGRESS
+    started_at = asyncio.get_running_loop().time()
+    requested_total = request.single_choice_count + request.multiple_choice_count
+    if requested_total < 1 or requested_total > 20:
+        raise HTTPException(400, "The total number of questions must be between 1 and 20")
+
+    progress.retrieving()
+    sources, source_text_by_id = await retrieve_grounded_sources(request)
+    if not sources:
+        return QuizGenerationResponse(
+            questions=[], sources=[],
+            warnings=["Không tìm thấy đủ nội dung liên quan trong nguồn đã chọn cho bài học. Hãy kiểm tra nguồn hoặc bổ sung tài liệu."
+                      if request.lesson_id or request.lesson_name else
+                      "Không tìm thấy đủ nội dung liên quan trong tài liệu của khóa học."],
+        )
 
     lesson_scope = (
         f"Bài học được chọn: {request.lesson_name}."

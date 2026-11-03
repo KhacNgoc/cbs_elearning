@@ -168,6 +168,53 @@ class QuizGenerationResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+FlashcardType = Literal["TERM", "CLOZE"]
+
+
+class FlashcardGenerationRequest(BaseModel):
+    """Flashcards are always drafted from a lesson's explicitly assigned sources."""
+
+    model_config = ConfigDict(extra="forbid")
+    course_id: str = Field(min_length=1, max_length=200)
+    course_name: str = Field(min_length=1, max_length=500)
+    lesson_id: str = Field(min_length=1, max_length=200)
+    lesson_name: str = Field(min_length=1, max_length=500)
+    sources: list[QuizKnowledgeSource] = Field(min_length=1, max_length=50)
+    count: int = Field(default=10, ge=1, le=20)
+    types: list[FlashcardType] = Field(default_factory=lambda: ["TERM", "CLOZE"], min_length=1, max_length=2)
+
+
+class CompactFlashcard(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    f: StrictStr = Field(min_length=1, max_length=300)
+    b: StrictStr = Field(min_length=1, max_length=400)
+
+
+class GeneratedFlashcard(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: FlashcardType
+    front: StrictStr = Field(min_length=1, max_length=1000)
+    back: StrictStr = Field(min_length=1, max_length=4000)
+    source_ids: list[StrictStr]
+
+
+class FlashcardReview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Only the verdict matters; a verbose reason must not discard a valid card.
+    reason: StrictStr = Field(min_length=1, max_length=4000)
+    grounded: StrictBool
+    well_formed: StrictBool
+
+
+class FlashcardGenerationResponse(BaseModel):
+    cards: list[GeneratedFlashcard]
+    sources: list[QuizGenerationSource]
+    warnings: list[str] = Field(default_factory=list)
+
+
 class LessonDiffSummaryRequest(BaseModel):
     lesson_title: str = Field(default="", max_length=500)
     old_content: str = Field(default="", max_length=50000)

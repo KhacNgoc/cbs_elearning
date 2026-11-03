@@ -1,4 +1,4 @@
-"""Background quiz generation jobs with pollable progress.
+"""Background AI generation jobs (quizzes and flashcards) with pollable progress.
 
 Jobs live in process memory: the RAG service runs as a single worker, and a job
 only needs to outlive the request that started it, not a restart.
@@ -14,13 +14,19 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
 from app import config, infrastructure
-from app.schemas import QuizGenerationRequest, QuizGenerationResponse
+from app.schemas import (
+    FlashcardGenerationRequest,
+    FlashcardGenerationResponse,
+    QuizGenerationRequest,
+    QuizGenerationResponse,
+)
 
 
 QUIZ_JOB_RETENTION_SECONDS = float(os.getenv("QUIZ_JOB_RETENTION_SECONDS", "900"))
 QUIZ_JOB_MAX_ACTIVE = max(1, int(os.getenv("QUIZ_JOB_MAX_ACTIVE", "20")))
 QUIZ_JOB_TIMEOUT_SECONDS = float(os.getenv("QUIZ_JOB_TIMEOUT_SECONDS", "300"))
 
+QuizJobKind = Literal["quiz", "flashcard"]
 QuizJobStatus = Literal["queued", "running", "completed", "failed"]
 QuizJobStage = Literal["queued", "retrieving", "generating", "verifying", "finalizing", "completed", "failed"]
 
@@ -34,12 +40,26 @@ STAGE_MESSAGES = {
     "failed": "Tạo câu hỏi thất bại",
 }
 
+FLASHCARD_STAGE_MESSAGES = {
+    **STAGE_MESSAGES,
+    "generating": "Đang sinh flashcard",
+    "verifying": "Đang kiểm định flashcard",
+    "failed": "Tạo flashcard thất bại",
+}
+
+
+def stage_message(job: "QuizGenerationJob") -> str:
+    messages = FLASHCARD_STAGE_MESSAGES if job.kind == "flashcard" else STAGE_MESSAGES
+    return messages[job.stage]
+
 class QuizGenerationJob(BaseModel):
     job_id: str
+    kind: QuizJobKind = "quiz"
     status: QuizJobStatus
     stage: QuizJobStage
     message: str
     percent: int = Field(ge=0, le=100)
+    # Counted in flashcards for flashcard jobs.
     requested_questions: int
     # Questions that passed the automatic checks so far.
     accepted_questions: int = 0
@@ -53,7 +73,7 @@ class QuizGenerationJob(BaseModel):
     total_steps: int = 0
     error: str | None = None
     error_status: int | None = None
-    result: QuizGenerationResponse | None = None
+    result: QuizGenerationResponse | FlashcardGenerationResponse | None = None
 
 
 class QuizProgress:
@@ -85,7 +105,7 @@ class QuizProgress:
     def _set_stage(self, stage: QuizJobStage) -> None:
         self.job.status = "running"
         self.job.stage = stage
-        self.job.message = STAGE_MESSAGES[stage]
+        self.job.message = stage_message(self.job)
 
     def plan(self, requested: int, verification: bool) -> None:
         self.job.requested_questions = requested
@@ -149,20 +169,19 @@ def _prune_finished_jobs() -> None:
 def _finish(job: QuizGenerationJob, **fields) -> None:
     for name, value in fields.items():
         setattr(job, name, value)
-    job.message = STAGE_MESSAGES[job.stage]
+    job.message = stage_message(job)
     _finished_at[job.job_id] = time.monotonic()
     _tasks.pop(job.job_id, None)
 
 
-async def _run_job(job: QuizGenerationJob, request: QuizGenerationRequest) -> None:
-    # Imported lazily so tests can patch app.services.quiz.generate_quiz.
-    from app.services import quiz
+async def _run_job(job: QuizGenerationJob, request) -> None:
+    # Imported lazily so tests can patch the generator functions.
+    from app.services import flashcards, quiz
 
     progress = QuizProgress(job)
+    generate = flashcards.generate_flashcards if job.kind == "flashcard" else quiz.generate_quiz
     try:
-        result = await asyncio.wait_for(
-            quiz.generate_quiz(request, progress=progress), QUIZ_JOB_TIMEOUT_SECONDS
-        )
+        result = await asyncio.wait_for(generate(request, progress=progress), QUIZ_JOB_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
         _finish(job, status="failed", stage="failed", error_status=504,
                 error="Quá thời gian tạo câu hỏi")
@@ -171,25 +190,36 @@ async def _run_job(job: QuizGenerationJob, request: QuizGenerationRequest) -> No
                 error=str(error.detail))
     except Exception as error:  # noqa: BLE001 - a background job must always settle.
         infrastructure.logger.exception(
-            "Quiz job failed job_id=%s course_id=%s error_type=%s",
-            job.job_id, request.course_id, type(error).__name__,
+            "AI job failed kind=%s job_id=%s course_id=%s error_type=%s",
+            job.kind, job.job_id, request.course_id, type(error).__name__,
         )
         _finish(job, status="failed", stage="failed", error_status=500,
                 error="Quiz generation failed")
     else:
+        accepted = len(result.cards) if job.kind == "flashcard" else len(result.questions)
         _finish(job, status="completed", stage="completed", percent=100,
-                accepted_questions=len(result.questions), result=result)
+                accepted_questions=accepted, result=result)
 
 
 def start_quiz_job(request: QuizGenerationRequest) -> QuizGenerationJob:
     requested_total = request.single_choice_count + request.multiple_choice_count
     if requested_total < 1 or requested_total > 20:
         raise HTTPException(400, "The total number of questions must be between 1 and 20")
+    return _start_job("quiz", request, requested_total)
+
+
+def start_flashcard_job(request: FlashcardGenerationRequest) -> QuizGenerationJob:
+    return _start_job("flashcard", request, request.count)
+
+
+def _start_job(kind: QuizJobKind, request, requested_total: int) -> QuizGenerationJob:
     _prune_finished_jobs()
+    # One cap for every AI job kind: they all queue on the same Ollama instance.
     if len(_tasks) >= QUIZ_JOB_MAX_ACTIVE:
-        raise HTTPException(429, "Too many quiz generation jobs are running")
+        raise HTTPException(429, "Too many AI generation jobs are running")
     job = QuizGenerationJob(
         job_id=uuid.uuid4().hex,
+        kind=kind,
         status="queued",
         stage="queued",
         message=STAGE_MESSAGES["queued"],
@@ -203,8 +233,16 @@ def start_quiz_job(request: QuizGenerationRequest) -> QuizGenerationJob:
 
 
 def get_quiz_job(job_id: str) -> QuizGenerationJob:
+    return _get_job(job_id, "quiz")
+
+
+def get_flashcard_job(job_id: str) -> QuizGenerationJob:
+    return _get_job(job_id, "flashcard")
+
+
+def _get_job(job_id: str, kind: QuizJobKind) -> QuizGenerationJob:
     _prune_finished_jobs()
     job = _jobs.get(job_id)
-    if job is None:
-        raise HTTPException(404, "Quiz generation job not found")
+    if job is None or job.kind != kind:
+        raise HTTPException(404, "Generation job not found")
     return job

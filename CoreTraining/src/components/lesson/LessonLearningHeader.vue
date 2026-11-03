@@ -13,7 +13,7 @@
     </div>
     <div class="header-actions">
       <div
-        v-if="hasText || hasVideo || hasSlides"
+        v-if="hasText || hasVideo || hasSlides || flashcardTotal"
         class="lesson-content-switch"
         role="group"
         aria-label="Chọn nội dung bài học"
@@ -35,6 +35,18 @@
           <PlayCircle :size="17" /><span>Video</span>
         </button>
         <button v-if="hasSlides" type="button" :aria-pressed="activeContent === 'SLIDE'" @click="$emit('select-content', 'SLIDE')"><FileText :size="17" /><span>Slide</span></button>
+        <template v-if="flashcardTotal">
+          <span class="switch-divider" aria-hidden="true"></span>
+          <button
+            type="button"
+            class="flashcard-shortcut"
+            :title="flashcardPending ? `${flashcardPending} thẻ cần ôn` : `${flashcardTotal} flashcard`"
+            @click="$emit('open-flashcards')"
+          >
+            <Layers3 :size="17" /><span>Flashcard</span>
+            <strong :class="{ pending: flashcardPending }">{{ flashcardPending || flashcardTotal }}</strong>
+          </button>
+        </template>
       </div>
       <div
         class="header-completion"
@@ -96,6 +108,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   FileText,
+  Layers3,
   ListVideo,
   PlayCircle,
   Trophy,
@@ -113,10 +126,13 @@ defineProps<{
   totalLessons: number;
   completed: boolean;
   canComplete?: boolean;
+  flashcardTotal?: number;
+  flashcardPending?: number;
 }>();
 defineEmits<{
   complete: [];
   "open-content": [];
+  "open-flashcards": [];
   "select-content": [type: "VIDEO" | "TEXT" | "SLIDE"];
 }>();
 </script>

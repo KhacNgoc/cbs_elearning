@@ -37,6 +37,16 @@
         >
           Nội dung bài học</button
         ><button
+          id="flashcard-tab"
+          role="tab"
+          :aria-selected="tab === 'flashcards'"
+          aria-controls="flashcard-panel"
+          :class="{ active: tab === 'flashcards' }"
+          @click="tab = 'flashcards'"
+        >
+          Flashcard
+        </button
+        ><button
           v-if="user.can('exams')"
           id="quiz-tab"
           role="tab"
@@ -99,6 +109,19 @@
             @saved="refreshLesson"
           />
         </section>
+        <section
+          id="flashcard-panel"
+          v-if="tab === 'flashcards'"
+          role="tabpanel"
+          aria-labelledby="flashcard-tab"
+        >
+          <LessonFlashcardManager
+            :course-id="chapter.courseId"
+            :lesson-id="lesson.id"
+            :actions="course?.allowedActions || []"
+            :read-only="!canEdit"
+          />
+        </section>
       </fieldset>
     </template>
     <p v-else-if="loading">Đang tải bài học...</p>
@@ -118,6 +141,7 @@ import type { Lesson, Chapter, Course } from "../types";
 import LessonContentEditor from "./LessonContentEditor.vue";
 import AdminQuizDetail from "./AdminQuizDetail.vue";
 import AdminBackButton from "../components/AdminBackButton.vue";
+import LessonFlashcardManager from "../components/flashcards/LessonFlashcardManager.vue";
 const route = useRoute(),
   router = useRouter(),
   courseStore = useCourseStore(),

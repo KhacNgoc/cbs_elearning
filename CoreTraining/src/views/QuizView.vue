@@ -1,5 +1,9 @@
 <template>
-  <div class="quiz-view animate-fade-in" v-if="course">
+  <div
+    class="quiz-view animate-fade-in"
+    :class="{ 'is-taking': isTaking }"
+    v-if="course"
+  >
     <!-- Quiz Header -->
     <div class="quiz-header-bar">
       <div class="header-left">
@@ -36,8 +40,9 @@
     </div>
     <div
       v-else-if="!isReviewMode && !quizStore.isQuizFinished"
-      class="quiz-main-card card"
+      class="quiz-workspace"
     >
+    <div class="quiz-main-card card">
       <!-- Question progress and timer row -->
       <div class="quiz-status-row">
         <span class="question-progress"
@@ -107,7 +112,12 @@
         <button
           class="btn btn-primary"
           @click="quizStore.nextQuestion"
-          :disabled="!selectedAnswers[currentQuestion?.id || 0]?.length"
+          :disabled="quizStore.isLastQuestion && unansweredCount > 0"
+          :title="
+            quizStore.isLastQuestion && unansweredCount
+              ? `Còn ${unansweredCount} câu chưa làm`
+              : undefined
+          "
         >
           {{ quizStore.isLastQuestion ? "Nộp bài" : "Câu tiếp theo" }}
           <svg
@@ -125,6 +135,58 @@
           </svg>
         </button>
       </div>
+    </div>
+
+    <!-- Question navigator: jump to any question and see what is left -->
+    <aside class="quiz-navigator card" aria-labelledby="quiz-navigator-title">
+      <div class="navigator-head">
+        <h2 id="quiz-navigator-title">Danh sách câu hỏi</h2>
+        <span class="navigator-count">{{ answeredCount }}/{{ totalQuestions }} đã làm</span>
+      </div>
+      <div
+        class="navigator-progress"
+        role="progressbar"
+        aria-label="Số câu đã làm"
+        aria-valuemin="0"
+        :aria-valuemax="totalQuestions"
+        :aria-valuenow="answeredCount"
+      >
+        <span :style="{ width: `${(answeredCount / totalQuestions) * 100}%` }"></span>
+      </div>
+      <div class="navigator-grid">
+        <button
+          v-for="(question, index) in quizStore.quizQuestions"
+          :key="question.id"
+          type="button"
+          class="navigator-item"
+          :class="{
+            answered: isAnswered(question.id),
+            current: index === quizStore.currentQuestionIndex,
+          }"
+          :aria-current="index === quizStore.currentQuestionIndex ? 'step' : undefined"
+          :aria-label="`Câu ${index + 1}, ${isAnswered(question.id) ? 'đã làm' : 'chưa làm'}`"
+          @click="quizStore.goToQuestion(index)"
+        >
+          {{ index + 1 }}
+        </button>
+      </div>
+      <ul class="navigator-legend">
+        <li><span class="legend-swatch answered"></span>Đã làm ({{ answeredCount }})</li>
+        <li><span class="legend-swatch"></span>Chưa làm ({{ unansweredCount }})</li>
+        <li><span class="legend-swatch current"></span>Đang xem</li>
+      </ul>
+      <button
+        type="button"
+        class="btn btn-primary navigator-submit"
+        :disabled="unansweredCount > 0 || quizStore.isLoading"
+        @click="quizStore.submitQuiz"
+      >
+        Nộp bài
+      </button>
+      <p v-if="unansweredCount" class="navigator-note">
+        Còn {{ unansweredCount }} câu chưa làm. Hoàn thành tất cả để nộp bài.
+      </p>
+    </aside>
     </div>
 
     <div
@@ -315,6 +377,24 @@ const lessonId = computed(() =>
 const passingScore = computed(() => context.value?.quizPassingScore ?? 80);
 const isReviewMode = ref(false);
 const review = ref<QuizReview | null>(null);
+const isAnswered = (questionId: number) =>
+  Boolean(selectedAnswers.value[questionId]?.length);
+const answeredCount = computed(
+  () =>
+    quizStore.quizQuestions.filter((question) => isAnswered(question.id))
+      .length,
+);
+const unansweredCount = computed(
+  () => totalQuestions.value - answeredCount.value,
+);
+// Only the answering screen uses the wide two-column layout.
+const isTaking = computed(
+  () =>
+    !quizStore.isLoading &&
+    !isReviewMode.value &&
+    !quizStore.isQuizFinished &&
+    totalQuestions.value > 0,
+);
 
 const highScore = computed(() => {
   if (lessonId.value) return userStore.lessonQuizScores[lessonId.value] ?? context.value?.score ?? null;
@@ -475,6 +555,150 @@ const getBadgeIcon = (icon: string) => {
   gap: 1.5rem;
   max-width: 800px;
   margin: 0 auto;
+}
+.quiz-view.is-taking {
+  max-width: 1200px;
+}
+
+/* Question on the left (2/3), navigator on the right (1/3). */
+.quiz-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+.quiz-navigator {
+  position: sticky;
+  top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.5rem;
+}
+.navigator-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.navigator-head h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.navigator-count {
+  color: var(--primary-ink);
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.navigator-progress {
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--border-color);
+}
+.navigator-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary-color);
+  transition: width 0.25s ease;
+}
+.navigator-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(42px, 1fr));
+  gap: 0.5rem;
+}
+.navigator-item {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.navigator-item:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-ink);
+}
+.navigator-item.answered {
+  border-color: var(--primary-color);
+  background: var(--primary-light);
+  color: var(--primary-ink);
+}
+.navigator-item.current {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px var(--primary-color);
+  color: var(--primary-ink);
+  font-weight: 800;
+}
+.navigator-item:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+.navigator-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  margin: 0;
+  padding: 0.75rem 0 0;
+  border-top: 1px solid var(--border-color);
+  list-style: none;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+.navigator-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.legend-swatch {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-card);
+}
+.legend-swatch.answered {
+  border-color: var(--primary-color);
+  background: var(--primary-light);
+}
+.legend-swatch.current {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 1.5px var(--primary-color);
+}
+.navigator-submit {
+  width: 100%;
+  justify-content: center;
+}
+.quiz-workspace .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.navigator-note {
+  margin: -0.4rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+@media (max-width: 900px) {
+  .quiz-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .quiz-navigator {
+    position: static;
+  }
 }
 
 .quiz-header-bar {

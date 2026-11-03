@@ -59,6 +59,7 @@
             Khám phá khóa học
           </button>
         </section>
+        <FlashcardDueBanner v-if="user.canLearn" />
         <section class="progress-overview" aria-label="Tiến độ học tập">
           <div class="overall">
             <div>
@@ -336,6 +337,7 @@ import TablePagination from "../components/TablePagination.vue";
 import AdminModal from "../components/AdminModal.vue";
 import MotionCollapse from "../components/MotionCollapse.vue";
 import PageLoading from "../components/PageLoading.vue";
+import FlashcardDueBanner from "../components/flashcards/FlashcardDueBanner.vue";
 import { showToast } from "../utils/toast";
 import { courseRegistrationError } from "../utils/courseRegistrationError";
 const user = useUserStore(),
