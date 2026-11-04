@@ -34,9 +34,40 @@ export const updateCachedAuthSession = (updates: Partial<AuthSession>) => {
   if (cachedSession) cachedSession = { ...cachedSession, ...updates };
 };
 
+export const clearUserDraftsAndTemporaryState = () => {
+  // 1. Clear all sessionStorage (modal drafts, tree states, etc.)
+  try {
+    sessionStorage.clear();
+  } catch (e) {
+    console.warn("Failed to clear sessionStorage on logout", e);
+  }
+
+  // 2. Clear modal drafts and temporary state stored in localStorage
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (
+        key &&
+        (key.toLowerCase().includes("draft") ||
+          key.toLowerCase().includes("modal") ||
+          key.startsWith("cbs_quick_curriculum") ||
+          key.startsWith("curriculum_") ||
+          key.includes("tree_state"))
+      ) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+  } catch (e) {
+    console.warn("Failed to clear draft keys from localStorage on logout", e);
+  }
+};
+
 export const clearAuthSession = () => {
   cachedSession = null;
   AUTH_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+  clearUserDraftsAndTemporaryState();
 };
 
 export const redirectToLogin = () => {

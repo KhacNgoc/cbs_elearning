@@ -409,38 +409,54 @@
 
       <!-- Modal Footer -->
       <div class="modal-footer">
-        <button
-          type="button"
-          class="btn btn-secondary"
-          :disabled="processing"
-          @click="$emit('close')"
-        >
-          Hủy bỏ
-        </button>
+        <div class="footer-left">
+          <button
+            v-if="hasAnyDraftContent"
+            type="button"
+            class="btn btn-outline-danger btn-reset-draft"
+            :disabled="processing"
+            @click="resetAllDrafts(true)"
+            title="Xóa toàn bộ nội dung đang nhập để làm lại từ đầu"
+          >
+            <RotateCcw :size="13" />
+            <span>Làm mới</span>
+          </button>
+        </div>
 
-        <button
-          v-if="activeTab === 'outline'"
-          type="button"
-          class="btn btn-primary btn-submit-wizard"
-          :disabled="processing || !canSubmitOutline"
-          @click="executeOutlineCreation"
-        >
-          <Loader2 v-if="processing" :size="15" class="spin-icon" />
-          <Zap v-else :size="15" />
-          <span>{{ processing ? "Đang khởi tạo cấu trúc..." : "Khởi tạo cấu trúc ngay" }}</span>
-        </button>
+        <div class="footer-right">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            :disabled="processing"
+            @click="handleCancel"
+          >
+            Hủy bỏ
+          </button>
 
-        <button
-          v-else
-          type="button"
-          class="btn btn-primary btn-submit-wizard"
-          :disabled="processing || !csvParsedRows.length"
-          @click="executeCsvImport"
-        >
-          <Loader2 v-if="processing" :size="15" class="spin-icon" />
-          <UploadCloud v-else :size="15" />
-          <span>{{ processing ? "Đang import..." : `Xác nhận Import (${csvParsedRows.length} bài học)` }}</span>
-        </button>
+          <button
+            v-if="activeTab === 'outline'"
+            type="button"
+            class="btn btn-primary btn-submit-wizard"
+            :disabled="processing || !canSubmitOutline"
+            @click="executeOutlineCreation"
+          >
+            <Loader2 v-if="processing" :size="15" class="spin-icon" />
+            <Zap v-else :size="15" />
+            <span>{{ processing ? "Đang khởi tạo cấu trúc..." : "Khởi tạo cấu trúc ngay" }}</span>
+          </button>
+
+          <button
+            v-else
+            type="button"
+            class="btn btn-primary btn-submit-wizard"
+            :disabled="processing || !csvParsedRows.length"
+            @click="executeCsvImport"
+          >
+            <Loader2 v-if="processing" :size="15" class="spin-icon" />
+            <UploadCloud v-else :size="15" />
+            <span>{{ processing ? "Đang import..." : `Xác nhận Import (${csvParsedRows.length} bài học)` }}</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -650,6 +666,50 @@ function clearDraft() {
   } catch (e) {
     // ignore
   }
+}
+
+const hasAnyDraftContent = computed(() => {
+  return (
+    !!courseName.value.trim() ||
+    !!newDomainName.value.trim() ||
+    !!newProgramName.value.trim() ||
+    !!outlineRawText.value.trim() ||
+    !!courseDeadline.value ||
+    csvParsedRows.value.length > 0 ||
+    !!csvFile.value ||
+    !!csvFileInfo.value
+  );
+});
+
+function resetAllDrafts(notify = true) {
+  clearDraft();
+  isNewDomain.value = false;
+  selectedDomainId.value = "";
+  newDomainName.value = "";
+  isNewProgram.value = false;
+  selectedProgramId.value = "";
+  newProgramName.value = "";
+  courseName.value = "";
+  courseLevel.value = "BASIC";
+  courseDeadline.value = "";
+  outlineRawText.value = "";
+  openFirstLessonAfterCreate.value = false;
+
+  csvFile.value = null;
+  csvFileInfo.value = null;
+  csvParsedRows.value = [];
+  csvError.value = "";
+  if (fileInputRef.value) fileInputRef.value.value = "";
+
+  if (notify) {
+    showToast("Đã xóa dữ liệu nháp và làm mới giao diện.", "info");
+  }
+}
+
+function handleCancel() {
+  clearDraft();
+  resetAllDrafts(false);
+  emit("close");
 }
 
 // Watch inputs and auto save
@@ -1595,6 +1655,7 @@ async function executeOutlineCreation() {
     progressPercent.value = 100;
     progressStatusText.value = "Hoàn tất!";
     clearDraft();
+    resetAllDrafts(false);
     showToast(`Đã khởi tạo thành công khóa học "${courseName.value}" cùng ${chaptersToCreate.length} chương và ${totalParsedLessons.value} bài học!`, "success");
 
     emit("completed", {
@@ -1764,6 +1825,8 @@ async function executeCsvImport() {
 
     progressPercent.value = 100;
     progressStatusText.value = "Import hoàn tất!";
+    clearDraft();
+    resetAllDrafts(false);
     showToast(
       `Import thành công ${totalRows} bài học vào cấu trúc đào tạo!`,
       "success"
