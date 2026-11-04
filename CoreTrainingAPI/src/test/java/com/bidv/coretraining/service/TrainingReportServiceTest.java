@@ -1,4 +1,5 @@
 package com.bidv.coretraining.service;
+import com.bidv.coretraining.service.impl.*;
 import com.bidv.coretraining.entity.*;
 import com.bidv.coretraining.repository.*;
 import org.junit.jupiter.api.*;
@@ -12,7 +13,7 @@ import java.time.*;
 import java.util.*;
 
 @DataJpaTest(properties={"spring.config.location=classpath:access-test.yml","spring.sql.init.mode=never"})
-@Import(TrainingReportService.class)
+@Import(TrainingReportServiceImpl.class)
 @org.springframework.test.context.ContextConfiguration(classes=com.bidv.coretraining.CoreTrainingApiApplication.class)
 class TrainingReportServiceTest {
     @Autowired TrainingReportService reports;

@@ -52,6 +52,9 @@
         <template v-else>
           <div class="chat-course-filter">
             <label for="chat-course">Khóa học</label>
+            <input v-model="courseSearch" type="search" aria-label="Tìm khóa học cho trợ lý" placeholder="Tìm khóa học..." />
+            <span v-if="loadingChoices" role="status">Đang tìm khóa học...</span>
+            <p v-if="choicesError" role="alert">{{ choicesError }} <button @click="loadChoices">Thử lại</button></p>
             <select
               id="chat-course"
               v-model="selectedCourseId"
@@ -69,6 +72,7 @@
           </div>
 
           <div ref="chatBody" class="chat-body">
+            <button v-if="historyBeforeId" class="btn btn-secondary" :disabled="loadingOlder" @click="loadOlderHistory">{{ loadingOlder ? "Đang tải..." : "Tải trao đổi trước" }}</button>
             <div class="chat-date">Hôm nay</div>
             <div v-if="loadingHistory" class="chat-loading">
               Đang tải lịch sử trao đổi...
@@ -215,7 +219,6 @@
 
 <script setup lang="ts">
 import {
-  computed,
   nextTick,
   onBeforeUnmount,
   onMounted,
@@ -224,7 +227,6 @@ import {
 } from "vue";
 import { useRoute } from "vue-router";
 import { useCourseStore } from "../stores/courseStore";
-import { useUserStore } from "../stores/userStore";
 import { ragApi } from "../api/ragApi";
 import { isTimeoutError } from "../api/axiosClient";
 import type { RagChatHistory } from "../api/ragApi";
@@ -243,7 +245,6 @@ import {
 const props = defineProps<{ locked: boolean }>();
 const route = useRoute();
 const courseStore = useCourseStore();
-const userStore = useUserStore();
 const open = ref(false);
 const launcherButton = ref<HTMLButtonElement | null>(null);
 const closeButton = ref<HTMLButtonElement | null>(null);
@@ -274,11 +275,11 @@ const clearLongWaitTimer = () => {
   longWait.value = false;
 };
 
-const accessibleCourses = computed(() =>
-  courseStore.courses.filter((course) =>
-    userStore.isCourseAccessible(course.id),
-  ),
-);
+const accessibleCourses = ref<{id:string;name:string}[]>([]),courseSearch=ref(""),loadingChoices=ref(false),choicesError=ref("");
+const historyBeforeId=ref<number|null>(null),loadingOlder=ref(false);
+let choiceVersion=0,historyVersion=0,choiceTimer:ReturnType<typeof setTimeout>|undefined;
+async function loadChoices(){const version=++choiceVersion;loadingChoices.value=true;choicesError.value="";try{let choices=await ragApi.courseChoices(courseSearch.value);const context=route.name === "LessonDetail" ? courseStore.currentCourse : null;if(!courseSearch.value && context && !choices.some(c=>c.id===context.id)){const contextual=await ragApi.courseChoices(context.name);choices=[...contextual.filter(c=>c.id===context.id),...choices];}if(version!==choiceVersion)return;const selected=accessibleCourses.value.find(c=>c.id===selectedCourseId.value);accessibleCourses.value=selected&&!choices.some(c=>c.id===selected.id)?[selected,...choices]:choices;}catch{if(version===choiceVersion)choicesError.value="Không tải được danh sách khóa học.";}finally{if(version===choiceVersion)loadingChoices.value=false;}}
+watch(courseSearch,()=>{++choiceVersion;clearTimeout(choiceTimer);choiceTimer=setTimeout(()=>void loadChoices(),250)});
 
 const scrollToLatest = async () => {
   await nextTick();
@@ -304,27 +305,17 @@ const selectCourseFromContext = () => {
 };
 
 const loadHistory = async () => {
-  if (!selectedCourseId.value) {
-    messages.value = [];
-    return;
-  }
-  loadingHistory.value = true;
-  chatError.value = "";
-  try {
-    messages.value = await ragApi.getHistory(
-      selectedCourseId.value,
-      conversationIds.value[selectedCourseId.value],
-    );
-    const loadedConversationId = messages.value[0]?.conversationId;
-    if (loadedConversationId)
-      conversationIds.value[selectedCourseId.value] = loadedConversationId;
-    await scrollToLatest();
-  } catch (error) {
-    console.error("Failed to load chat history:", error);
-    chatError.value = "Không thể tải lịch sử trợ lý.";
-  } finally {
-    loadingHistory.value = false;
-  }
+ const version=++historyVersion,course=selectedCourseId.value;historyBeforeId.value=null;messages.value=[];
+ if(!course)return;loadingHistory.value=true;chatError.value="";
+ try{const page=await ragApi.getHistoryPage(course,conversationIds.value[course]);if(version!==historyVersion)return;messages.value=page.items;historyBeforeId.value=page.nextBeforeId;const conversation=page.items[0]?.conversationId;if(conversation)conversationIds.value[course]=conversation;await scrollToLatest();}
+ catch{if(version===historyVersion)chatError.value="Không thể tải lịch sử trợ lý.";}
+ finally{if(version===historyVersion)loadingHistory.value=false;}
+};
+const loadOlderHistory = async () => {
+ const version=historyVersion,course=selectedCourseId.value;if(!historyBeforeId.value||loadingOlder.value)return;loadingOlder.value=true;chatError.value="";const body=chatBody.value,oldHeight=body?.scrollHeight||0;
+ try{const page=await ragApi.getHistoryPage(course,conversationIds.value[course],historyBeforeId.value);if(version!==historyVersion)return;const ids=new Set(messages.value.map(m=>m.id));messages.value=[...page.items.filter(m=>!ids.has(m.id)),...messages.value];historyBeforeId.value=page.nextBeforeId;await nextTick();if(body)body.scrollTop+=body.scrollHeight-oldHeight;}
+ catch{if(version===historyVersion)chatError.value="Không thể tải trao đổi trước. Vui lòng thử lại.";}
+ finally{loadingOlder.value=false;}
 };
 
 const sendQuestion = async () => {
@@ -449,6 +440,8 @@ const toggleChat = async () => {
   await nextTick();
   await placeAtBottomRight();
   closeButton.value?.focus({ preventScroll: true });
+  if (props.locked) return;
+  await loadChoices();
   selectCourseFromContext();
   await loadHistory();
 };
@@ -484,11 +477,11 @@ watch(
   () => [
     route.name,
     courseStore.currentCourse?.id,
-    accessibleCourses.value.map((course) => course.id).join(","),
   ],
-  () => {
+  async () => {
+    if (open.value) await loadChoices();
     const changed = selectCourseFromContext();
-    if (open.value && changed) void loadHistory();
+    if (open.value && changed) await loadHistory();
   },
   { immediate: true },
 );
@@ -499,6 +492,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearLongWaitTimer();
+  clearTimeout(choiceTimer);
+  ++choiceVersion; ++historyVersion;
   window.removeEventListener("resize", clampPosition);
   window.removeEventListener("pointermove", moveChatbot);
   window.removeEventListener("pointerup", stopDrag);

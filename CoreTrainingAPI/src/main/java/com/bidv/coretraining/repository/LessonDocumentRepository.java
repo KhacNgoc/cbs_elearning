@@ -12,7 +12,7 @@ public interface LessonDocumentRepository extends JpaRepository<LessonDocument, 
 
         String getName();
 
-        com.bidv.coretraining.entity.DocumentType getDocumentType();
+        com.bidv.coretraining.enums.DocumentType getDocumentType();
 
         String getFileUrl();
 
@@ -22,7 +22,7 @@ public interface LessonDocumentRepository extends JpaRepository<LessonDocument, 
 
         Integer getDocumentOrder();
 
-        com.bidv.coretraining.entity.DocumentPurpose getPurpose();
+        com.bidv.coretraining.enums.DocumentPurpose getPurpose();
     }
 
     @org.springframework.data.jpa.repository.Query("""
@@ -49,21 +49,21 @@ public interface LessonDocumentRepository extends JpaRepository<LessonDocument, 
 
     @org.springframework.data.jpa.repository.Query("""
             select d.lesson.id as lessonId, d.id as id from LessonDocument d
-            where d.lesson.id in :lessonIds and d.purpose = com.bidv.coretraining.entity.DocumentPurpose.SLIDE
+            where d.lesson.id in :lessonIds and d.purpose = com.bidv.coretraining.enums.DocumentPurpose.SLIDE
             """)
     java.util.List<SlideId> findSlideIds(
             @org.springframework.data.repository.query.Param("lessonIds") java.util.Collection<String> lessonIds);
 
     java.util.List<IdOnly> findAllByLessonId(String lessonId);
     java.util.List<IdOnly> findAllByLessonIdAndPurpose(String lessonId,
-            com.bidv.coretraining.entity.DocumentPurpose purpose);
+            com.bidv.coretraining.enums.DocumentPurpose purpose);
     boolean existsByIdAndLessonId(Long id, String lessonId);
 
     Optional<IdOnly> findFirstByLessonIdOrderByDocumentOrderAscIdAsc(String lessonId);
 
     Optional<IdOnly> findFirstByLessonIdAndPurposeOrderByDocumentOrderAscIdAsc(
-            String lessonId, com.bidv.coretraining.entity.DocumentPurpose purpose);
+            String lessonId, com.bidv.coretraining.enums.DocumentPurpose purpose);
 
     boolean existsByIdAndLessonIdAndPurpose(Long id, String lessonId,
-            com.bidv.coretraining.entity.DocumentPurpose purpose);
+            com.bidv.coretraining.enums.DocumentPurpose purpose);
 }

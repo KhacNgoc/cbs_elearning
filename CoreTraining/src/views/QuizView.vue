@@ -274,13 +274,16 @@
       </div>
     </div>
   </div>
+  <div v-else-if="contextError" class="loading-state" role="alert">
+    {{ contextError }} <button class="btn btn-primary" @click="loadEntry">Thử lại</button>
+  </div>
   <div v-else class="loading-state">Đang tải thông tin bài thi...</div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import { useCourseStore } from "../stores/courseStore";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
+import { getLearnerQuizContext, type LearnerQuizContext } from "../api/learnerQuizApi";
 import { useQuizStore } from "../stores/quizStore";
 import { useUserStore } from "../stores/userStore";
 import { quizApi } from "../api/quizApi";
@@ -293,15 +296,14 @@ const props = defineProps({
     required: true,
   },
 });
-const router = useRouter();
 const route = useRoute();
-const courseStore = useCourseStore();
+const context = ref<LearnerQuizContext | null>(null);
+const contextError = ref("");
+let entryRequest = 0;
 const quizStore = useQuizStore();
 const userStore = useUserStore();
 
-const course = computed(() => {
-  return courseStore.courses.find((t) => t.id === props.courseId);
-});
+const course = computed(() => context.value);
 
 const totalQuestions = computed(() => quizStore.quizQuestions.length);
 const currentQuestion = computed(() => quizStore.currentQuestion);
@@ -310,74 +312,61 @@ const quizResult = computed(() => quizStore.quizResult);
 const lessonId = computed(() =>
   typeof route.query.lessonId === "string" ? route.query.lessonId : undefined,
 );
-const activeLesson = computed(() =>
-  course.value?.lessons.find((item) => item.id === lessonId.value),
-);
-const passingScore = computed(
-  () =>
-    activeLesson.value?.quizPassingScore ??
-    course.value?.quizPassingScore ??
-    80,
-);
+const passingScore = computed(() => context.value?.quizPassingScore ?? 80);
 const isReviewMode = ref(false);
 const review = ref<QuizReview | null>(null);
 
 const highScore = computed(() => {
-  if (lessonId.value) return userStore.lessonQuizScores[lessonId.value] ?? null;
-  return userStore.quizScores[props.courseId] ?? null;
+  if (lessonId.value) return userStore.lessonQuizScores[lessonId.value] ?? context.value?.score ?? null;
+  return userStore.quizScores[props.courseId] ?? context.value?.score ?? null;
 });
 const highScoreTotal = computed(() => {
   if (lessonId.value)
-    return userStore.lessonQuizTotals[lessonId.value] ?? totalQuestions.value;
-  return userStore.quizTotals[props.courseId] ?? totalQuestions.value;
+    return userStore.lessonQuizTotals[lessonId.value] ?? context.value?.total ?? totalQuestions.value;
+  return userStore.quizTotals[props.courseId] ?? context.value?.total ?? totalQuestions.value;
 });
 
 // Capture recently unlocked badge if any
 const unlockedBadge = ref<any | null>(null);
 
-onMounted(async () => {
-  if (courseStore.courses.length === 0) {
-    await courseStore.fetchCourses();
+async function loadEntry() {
+  const current = ++entryRequest;
+  const requestedCourse = props.courseId, requestedLesson = lessonId.value;
+  context.value = null;
+  contextError.value = "";
+  quizStore.stopTimer();
+  try {
+    const data = await getLearnerQuizContext(requestedCourse, requestedLesson);
+    if (current !== entryRequest) return;
+    context.value = data;
+    await openQuizOrReview(current);
+  } catch {
+    if (current === entryRequest) contextError.value = "Không thể tải thông tin bài thi. Vui lòng thử lại.";
   }
-  if (userStore.mandatoryCourses.length === 0) {
-    await userStore.fetchProgress();
-  }
-  await openQuizOrReview();
-});
-
-watch([() => props.courseId, lessonId], async () => {
-  await openQuizOrReview();
-});
+}
+onMounted(loadEntry);
+watch([() => props.courseId, lessonId], loadEntry);
+onUnmounted(() => { entryRequest++; quizStore.stopTimer(); });
 
 const startNewQuiz = () => {
-  if (!userStore.isCourseAccessible(props.courseId)) {
-    alert("Bạn cần đăng ký học khóa học nghiệp vụ này trước khi thi!");
-    router.push("/");
-    return;
-  }
   isReviewMode.value = false;
   review.value = null;
   unlockedBadge.value = null;
   quizStore.startQuiz(props.courseId, lessonId.value);
 };
 
-const openQuizOrReview = async () => {
-  const score = lessonId.value
-    ? userStore.lessonQuizScores[lessonId.value]
-    : userStore.quizScores[props.courseId];
-  const total = lessonId.value
-    ? userStore.lessonQuizTotals[lessonId.value]
-    : userStore.quizTotals[props.courseId];
+const openQuizOrReview = async (current = entryRequest) => {
+  const score = context.value?.score;
+  const total = context.value?.total ?? 0;
   const passed =
-    score !== undefined &&
+    score != null &&
     total > 0 &&
     Math.round((score / total) * 100) >= passingScore.value;
   if (passed) {
     try {
-      review.value = await quizApi.getQuizReview(
-        props.courseId,
-        lessonId.value,
-      );
+      const data = await quizApi.getQuizReview(props.courseId, lessonId.value);
+      if (current !== entryRequest) return;
+      review.value = data;
       isReviewMode.value = true;
       quizStore.stopTimer();
       return;
@@ -388,7 +377,7 @@ const openQuizOrReview = async () => {
       );
     }
   }
-  startNewQuiz();
+  if (current === entryRequest) startNewQuiz();
 };
 
 const selectOption = (questionId: number, optionIdx: number) => {

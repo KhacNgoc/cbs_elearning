@@ -51,7 +51,6 @@ export const axiosClient = axios.create({
 axiosClient.interceptors.request.use(
   async (config) => {
     if (
-      !isMockApi() &&
       !["get", "head", "options"].includes(
         (config.method || "get").toLowerCase(),
       )
@@ -101,13 +100,3 @@ axiosClient.interceptors.response.use(
     return Promise.reject(error);
   },
 );
-
-// Helper to check if mock mode is active
-export const isMockApi = (): boolean => {
-  return import.meta.env.VITE_USE_MOCK_API === "true";
-};
-
-// Helper to simulate network delay for mock endpoints
-export const mockDelay = (ms: number = 300): Promise<void> => {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-};

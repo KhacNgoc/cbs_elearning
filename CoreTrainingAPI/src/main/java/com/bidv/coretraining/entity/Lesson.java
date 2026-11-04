@@ -1,4 +1,5 @@
 package com.bidv.coretraining.entity;
+import com.bidv.coretraining.enums.VideoSource;
 
 import jakarta.persistence.*;
 import lombok.*;

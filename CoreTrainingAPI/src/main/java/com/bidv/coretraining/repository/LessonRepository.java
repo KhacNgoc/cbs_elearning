@@ -1,4 +1,6 @@
 package com.bidv.coretraining.repository;
+import com.bidv.coretraining.repository.projection.LessonOutlineView;
+import com.bidv.coretraining.repository.projection.LessonAccessView;
 
 import com.bidv.coretraining.entity.Lesson;
 import org.springframework.data.jpa.repository.JpaRepository;

@@ -1,4 +1,5 @@
 package com.bidv.coretraining.service;
+import com.bidv.coretraining.service.impl.*;
 
 import com.bidv.coretraining.dto.QuizGenerationRequestDto;
 import com.bidv.coretraining.entity.Course;
@@ -23,7 +24,7 @@ class QuizGenerationSourceTest {
     CourseRepository courses = mock(CourseRepository.class);
     LessonRepository lessons = mock(LessonRepository.class);
     LessonKnowledgeSourceService sources = mock(LessonKnowledgeSourceService.class);
-    QuizGenerationService service = new QuizGenerationService(courses, lessons, sources, "http://rag", 5000, 30000);
+    QuizGenerationService service = new QuizGenerationServiceImpl(courses, lessons, sources, "http://rag", 5000, 30000);
     Course course = Course.builder().id("C1").name("Cho vay").build();
     Lesson lesson = Lesson.builder().id("L1").course(course).title("Giải ngân").build();
     QuizGenerationRequestDto request() {

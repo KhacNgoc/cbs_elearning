@@ -1,7 +1,9 @@
 package com.bidv.coretraining.controller;
 
+import com.bidv.coretraining.dto.AccessManagementDto;
+
 import com.bidv.coretraining.service.RoleManagementService;
-import com.bidv.coretraining.service.RoleManagementService.*;
+import com.bidv.coretraining.dto.RoleManagementDto.*;
 import org.springframework.web.bind.annotation.*;
 import java.util.*;
 
@@ -55,12 +57,12 @@ public class RoleManagementController {
     }
 
     @GetMapping("/pages")
-    public List<com.bidv.coretraining.entity.AdminPage> pages() {
+    public List<PageDto> pages() {
         return service.pages();
     }
 
     @GetMapping("/units")
-    public List<com.bidv.coretraining.service.AccessManagementService.UnitDto> units() {
+    public List<AccessManagementDto.UnitDto> units() {
         return service.units();
     }
 }

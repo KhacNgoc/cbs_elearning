@@ -1,6 +1,6 @@
 package com.bidv.coretraining.dto;
 
-import com.bidv.coretraining.entity.VideoSource;
+import com.bidv.coretraining.enums.VideoSource;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

@@ -31,7 +31,7 @@
         class="source-fieldset"
       >
         <div v-if="!documents.length" class="source-empty">
-          <FileText :size="24" /><strong>Khóa học chưa có tài liệu AI</strong>
+          <FileText :size="24" /><strong>Chưa có tài liệu AI có thể sử dụng</strong>
           <p>
             Tải PDF hoặc Word lên, chờ xử lý xong rồi chọn phần dùng cho bài
             học.
@@ -82,13 +82,8 @@
                     >
                   </td>
                 </tr>
-                <tr
-                  v-if="selections[document.id] || document.status === 'FAILED'"
-                >
+                <tr v-if="selections[document.id]">
                   <td colspan="3">
-                    <p v-if="document.status === 'FAILED'" class="source-error">
-                      Không xử lý được tài liệu. Hãy kiểm tra file và tải lại.
-                    </p>
                     <div v-if="selections[document.id]" class="source-options">
                       <p
                         v-if="outlineLoading[document.id]"
@@ -501,7 +496,12 @@ const refreshDocuments = async () => {
       props.permissionPage,
     );
     if (current !== epoch) return;
-    documents.value = fresh;
+    documents.value = fresh.filter((document) => document.status !== 'FAILED');
+    for (const id of Object.keys(selections.value)) {
+      if (!documents.value.some((document) => document.id === id)) {
+        delete selections.value[id];
+      }
+    }
     scheduleRefresh();
   } catch (failure) {
     if (current === epoch) error.value = errorMessage(failure);
@@ -523,8 +523,9 @@ const load = async () => {
       adminApi.getLessonKnowledgeSources(props.lessonId, props.permissionPage),
     ]);
     if (current !== epoch) return;
-    documents.value = docs;
+    documents.value = docs.filter((document) => document.status !== 'FAILED');
     for (const source of sources) {
+      if (!documents.value.some((document) => document.id === source.documentId)) continue;
       const selection = (selections.value[source.documentId] ||= {
         mode: "all",
         ranges: [],

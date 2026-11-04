@@ -86,13 +86,14 @@
             </footer>
           </form>
         </section>
-        <template v-if="learning.workspace">
+        <template>
           <section
             id="profile-stats-panel"
-            v-show="activeTab === 'stats'"
+            v-if="activeTab === 'stats'"
             role="tabpanel"
             aria-labelledby="profile-stats-tab"
           >
+            <p v-if="dataLoading" role="status">Đang tải dữ liệu...</p>
             <div class="summary-grid">
               <article
                 v-for="metric in metrics"
@@ -118,11 +119,11 @@
               </section>
               <section class="card">
                 <h2>Tiến độ theo khóa học</h2>
-                <p v-if="!summary.joined.length" class="subtitle">
+                <p v-if="!stats.joined" class="subtitle">
                   Chưa có khóa học tham gia.
                 </p>
                 <article
-                  v-for="item in summary.joined"
+                  v-for="item in statsCourses"
                   :key="item.course.id"
                   class="course-progress-row"
                 >
@@ -141,6 +142,7 @@
                     <ProgressBar :progress="item.percent" height="6px" />
                   </div>
                 </article>
+                <button class="btn btn-secondary" :disabled="statsCoursePage === 0 || dataLoading" @click="statsCoursePage--">Trước</button> <button class="btn btn-secondary" :disabled="(statsCoursePage + 1) * 10 >= statsCourseTotal || dataLoading" @click="statsCoursePage++">Sau</button>
                 <RouterLink to="/" class="view-link"
                   >Đến khóa học của tôi →</RouterLink
                 >
@@ -149,12 +151,13 @@
           </section>
           <section
             id="profile-results-panel"
-            v-show="activeTab === 'results'"
+            v-if="activeTab === 'results'"
             role="tabpanel"
             aria-labelledby="profile-results-tab"
             class="card"
           >
             <h2>Kết quả kiểm tra</h2>
+            <p v-if="dataLoading" role="status">Đang tải kết quả...</p>
             <p class="subtitle">
               Điểm gần nhất và điểm cao nhất được so sánh trong cùng phiên bản
               đề.
@@ -187,7 +190,7 @@
                     <td>
                       <strong>{{ group.latest.title }}</strong
                       ><small
-                        >{{ courseName(group.latest.courseId) }} · Phiên bản
+                        >{{ group.courseName }} · Phiên bản
                         {{ group.latest.revision }} · Ngưỡng
                         {{ group.latest.passingScore }}%</small
                       >
@@ -216,16 +219,16 @@
                     <td>
                       <button
                         class="view-link"
-                        @click="history = group.attempts"
+                        @click="openHistory(group)"
                       >
-                        {{ group.attempts.length }} lần thi →
+                        {{ group.attemptCount }} lần thi →
                       </button>
                     </td>
                   </tr>
                 </tbody>
               </table>
             </div>
-            <p v-if="!results.length" class="empty">
+            <p v-if="!dataLoading && !results.length" class="empty">
               {{
                 resultSearch
                   ? "Không có kết quả phù hợp."
@@ -235,7 +238,7 @@
             <TablePagination
               v-model:page="resultPage"
               v-model:page-size="resultPageSize"
-              :total="results.length"
+              :total="Math.max(resultData?.total || 0,resultData?.legacyTotal || 0)"
               :page-count="resultPageCount"
               unit="bài kiểm tra"
               unit-label="Bài kiểm tra"
@@ -244,7 +247,7 @@
         </template>
         <section
           v-if="
-            activeTab === 'results' && learning.workspace?.legacyScores?.length
+            activeTab === 'results' && resultData?.legacyScores?.length
           "
           class="card"
           aria-label="Kết quả lưu trước đây"
@@ -265,12 +268,12 @@
               </thead>
               <tbody>
                 <tr
-                  v-for="score in learning.workspace.legacyScores"
+                  v-for="score in resultData?.legacyScores"
                   :key="`${score.courseId}-${score.lessonId}`"
                 >
                   <td>
                     {{ score.title
-                    }}<small>{{ courseName(score.courseId) }}</small>
+                    }}<small>{{ score.courseName }}</small>
                   </td>
                   <td>{{ score.score }}/{{ score.total }}</td>
                   <td>{{ formatLearningDate(score.takenAt) }}</td>
@@ -281,39 +284,39 @@
         </section>
         <div
           v-if="
-            !learning.workspace &&
+            dataError &&
             activeTab !== 'info' &&
             activeTab !== 'awards'
           "
           class="card empty data-reveal"
           role="alert"
         >
-          <p>{{ learning.error }}</p>
-          <button class="btn btn-primary" @click="learning.load">
+          <p>{{ dataError }}</p>
+          <button class="btn btn-primary" @click="loadTab">
             Thử lại
           </button>
         </div>
         <section
           id="profile-awards-panel"
-          v-show="activeTab === 'awards'"
+          v-if="activeTab === 'awards'"
           role="tabpanel"
           aria-labelledby="profile-awards-tab"
           class="card"
         >
-          <div v-if="user.progressError" role="alert">
-            <p>{{ user.progressError }}</p>
-            <button class="btn btn-primary" @click="user.fetchProgress">
+          <div v-if="dataError" role="alert">
+            <p>{{ dataError }}</p>
+            <button class="btn btn-primary" @click="loadTab">
               Thử lại
             </button>
           </div>
           <template v-else
             ><div class="awards-heading">
-              <h2>Huy hiệu & điểm tích lũy</h2>
-              <strong>{{ user.points.toLocaleString("vi-VN") }} PTS</strong>
+              <h2>Huy hiệu & điểm tích lũy</h2><p v-if="dataLoading" role="status">Đang tải huy hiệu...</p>
+              <strong>{{ (awardsData?.points ?? 0).toLocaleString('vi-VN') }} PTS</strong>
             </div>
             <div class="award-grid">
               <article
-                v-for="badge in user.unlockedBadges"
+                v-for="badge in awardsData?.items || []"
                 :key="badge.id"
                 class="award"
               >
@@ -325,11 +328,11 @@
                 >
               </article>
             </div>
-            <p v-if="!user.unlockedBadges.length" class="empty">
+            <p v-if="awardsData && !dataLoading && !awardsData.items.length" class="empty">
               Chưa có huy hiệu. Thành tích xuất hiện khi bạn hoàn thành điều
               kiện đánh giá.
             </p>
-            <RouterLink to="/leaderboard" class="view-link"
+            <TablePagination v-if="awardsData && awardsData.total > 20" v-model:page="awardPage" :page-size="20" :total="awardsData.total" :page-count="Math.max(1,Math.ceil(awardsData.total/20))" :sizes="[20]" unit="huy hiệu"/><RouterLink to="/leaderboard" class="view-link"
               >Bảng vinh danh →</RouterLink
             ></template
           >
@@ -341,7 +344,7 @@
         ><div
           v-if="history"
           class="history-overlay cursor-pointer"
-          @click.self="history = null"
+          @click.self="closeHistory"
         >
           <section
             class="history-dialog card"
@@ -351,12 +354,15 @@
           >
             <header>
               <h2 id="attempt-history-title">
-                Lịch sử · {{ history[0]?.title }}
+                Lịch sử · {{ historyTitle }}
               </h2>
-              <button class="btn btn-secondary" @click="history = null">
+              <button class="btn btn-secondary" @click="closeHistory">
                 Đóng
               </button>
             </header>
+            <p v-if="historyLoading" role="status">Đang tải lịch sử...</p>
+            <p v-if="historyError" role="alert">{{ historyError }} <button @click="loadMoreHistory">Thử lại</button></p>
+            <button v-if="historyCursor" class="btn btn-secondary" :disabled="historyLoading" @click="loadMoreHistory">Tải thêm lịch sử</button>
             <div class="table-scroll">
               <table class="results-table">
                 <thead>
@@ -388,17 +394,13 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { Award } from "lucide-vue-next";
 import { useUserStore } from "../stores/userStore";
-import { useLearningStore } from "../stores/learningStore";
+import { profileReadApi, type AssessmentGroup, type ResultPage, type ProfileStats } from "../api/profileReadApi";
 import { userApi } from "../api/userApi";
-import type { UserProfile, LearnerAttempt } from "../types";
+import type { UserProfile, LearnerAttempt, LearnerCourse } from "../types";
 import { roleLabel } from "../utils/permissions";
 import {
-  competencyScores,
   formatLearningDate,
-  groupAttempts,
   learningStatusLabel,
-  learningSummary,
-  normalizeSearch,
 } from "../utils/learning";
 import CourseThumbnail from "../components/CourseThumbnail.vue";
 import RadarChart from "../components/RadarChart.vue";
@@ -406,7 +408,6 @@ import ProgressBar from "../components/ProgressBar.vue";
 import TablePagination from "../components/TablePagination.vue";
 import PageLoading from "../components/PageLoading.vue";
 const user = useUserStore(),
-  learning = useLearningStore(),
   route = useRoute(),
   router = useRouter();
 const profile = ref<UserProfile | null>(null),
@@ -455,12 +456,8 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const [data] = await Promise.all([
-      userApi.getMyProfile(),
-      user.fetchProgress(),
-      learning.load(),
-    ]);
-    profile.value = data;
+    profile.value = await userApi.getMyProfile();
+    await loadTab();
   } catch {
     error.value = "Không thể tải hồ sơ. Vui lòng thử lại.";
   } finally {
@@ -476,7 +473,8 @@ async function saveProfile() {
       fullName: profile.value.fullName,
       email: profile.value.email || "",
     });
-    await user.fetchProgress();
+    user.fullName = profile.value.fullName;
+    localStorage.setItem("fullName", user.fullName);
     profileMessage.value = "Đã lưu hồ sơ.";
   } catch (e) {
     profileMessage.value =
@@ -486,27 +484,41 @@ async function saveProfile() {
     saving.value = false;
   }
 }
-const summary = computed(() =>
-  learningSummary(learning.workspace?.courses || []),
-);
-const competencies = computed(() =>
-  competencyScores(
-    learning.workspace?.courses || [],
-    learning.workspace?.attempts || [],
-  ),
-);
+const emptyStats: ProfileStats = {joined:0,completed:0,total:0,percent:null,notStarted:0,inProgress:0,complete:0,mandatory:0,mandatoryComplete:0,competencies:[]};
+const stats = ref<ProfileStats>(emptyStats), statsCourses = ref<LearnerCourse[]>([]), statsCoursePage=ref(0), statsCourseTotal=ref(0);
+const summary = stats;
+const competencies = computed(() => stats.value.competencies);
+const awardPage=ref(1),awardsData=ref<import('../api/profileReadApi').AwardsPage|null>(null);
+watch(awardPage,()=>{if(activeTab.value==='awards')void loadTab()});
+const resultData = ref<ResultPage|null>(null), dataError=ref(""), dataLoading=ref(false);
+let requestVersion=0;
+async function loadTab() {
+ const version=++requestVersion; dataError.value=""; dataLoading.value=true;
+ try {
+  if(activeTab.value==='stats') {
+   const [data,courses]=await Promise.all([profileReadApi.stats(),profileReadApi.courses(statsCoursePage.value)]);
+   if(version!==requestVersion)return;stats.value=data;statsCourses.value=courses.items;statsCourseTotal.value=courses.total;
+  } else if(activeTab.value==='results') {
+   const data=await profileReadApi.results(resultPage.value-1,resultPageSize.value,resultSearch.value);
+   if(version===requestVersion)resultData.value=data;
+  } else if(activeTab.value==='awards') {const data=await profileReadApi.awards(awardPage.value-1);if(version===requestVersion)awardsData.value=data;}
+ } catch { if(version===requestVersion)dataError.value="Không thể tải dữ liệu. Vui lòng thử lại."; }
+ finally {if(version===requestVersion)dataLoading.value=false;}
+}
+watch(activeTab,loadTab);
+watch(statsCoursePage,()=>{if(activeTab.value==='stats')void loadTab()});
 const metrics = computed(() => [
   {
     label: "Khóa tham gia",
-    value: summary.value.joined.length,
+    value: summary.value.joined,
     detail: `${summary.value.inProgress} đang học · ${summary.value.notStarted} chưa bắt đầu`,
   },
   {
     label: "Hoàn thành khóa",
-    value: summary.value.joined.length
-      ? `${Math.round((summary.value.complete / summary.value.joined.length) * 100)}%`
+    value: summary.value.joined
+      ? `${Math.round((summary.value.complete / summary.value.joined) * 100)}%`
       : "—",
-    detail: `${summary.value.complete}/${summary.value.joined.length} khóa`,
+    detail: `${summary.value.complete}/${summary.value.joined} khóa`,
   },
   {
     label: "Hoàn thành bài",
@@ -523,44 +535,23 @@ const resultSearch = ref(""),
   resultPage = ref(1),
   resultPageSize = ref(10),
   history = ref<LearnerAttempt[] | null>(null);
-const courseName = (id: string) =>
-  learning.workspace?.courses.find((c) => c.course.id === id)?.course.name ||
-  id;
-const allResults = computed(() =>
-  groupAttempts(learning.workspace?.attempts || []),
-);
-const results = computed(() =>
-  allResults.value.filter((g) =>
-    normalizeSearch(
-      `${g.latest.title} ${courseName(g.latest.courseId)}`,
-    ).includes(normalizeSearch(resultSearch.value)),
-  ),
-);
-const bestScore = computed(() => {
-  const values = [
-    ...allResults.value.map((g) =>
-      Math.round((g.best.score / g.best.total) * 100),
-    ),
-    ...(learning.workspace?.legacyScores || [])
-      .filter((s) => s.total > 0)
-      .map((s) => Math.round((s.score / s.total) * 100)),
-  ];
-  return values.length ? Math.max(...values) : null;
-});
-const resultPageCount = computed(() =>
-  Math.max(1, Math.ceil(results.value.length / resultPageSize.value)),
-);
-const paginatedResults = computed(() =>
-  results.value.slice(
-    (resultPage.value - 1) * resultPageSize.value,
-    resultPage.value * resultPageSize.value,
-  ),
-);
-watch([resultSearch, resultPageSize], () => (resultPage.value = 1));
-watch(
-  resultPageCount,
-  (n) => (resultPage.value = Math.min(resultPage.value, n)),
-);
+const paginatedResults=computed(()=>resultData.value?.items || []);
+const results=paginatedResults;
+const bestScore=computed(()=>resultData.value?.bestScore??null);
+const resultPageCount=computed(()=>Math.max(1,Math.ceil(Math.max(resultData.value?.total||0,resultData.value?.legacyTotal||0)/resultPageSize.value)));
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+watch(resultSearch,()=>{ clearTimeout(searchTimer);++requestVersion;searchTimer=setTimeout(()=>{if(resultPage.value!==1)resultPage.value=1;else void loadTab()},250); });
+watch(resultPageSize,()=>{if(resultPage.value!==1)resultPage.value=1;else void loadTab()});
+watch(resultPage,()=>{if(activeTab.value==='results')void loadTab()});
+const historyTitle=ref(""),historyCursor=ref<string|null>(null),historyLoading=ref(false),historyError=ref("");
+let historyGroup:AssessmentGroup|null=null,historyVersion=0;
+async function openHistory(group:AssessmentGroup){historyLoading.value=false;historyTitle.value=group.latest.title;historyGroup=group;history.value=[];historyCursor.value=null;++historyVersion;await loadMoreHistory()}
+function closeHistory(){++historyVersion;history.value=null;historyCursor.value=null;}
+async function loadMoreHistory(){
+ if(!historyGroup || historyLoading.value)return;const version=historyVersion;historyLoading.value=true;historyError.value="";
+ try{const data=await profileReadApi.history(historyGroup.latest.quizId,historyGroup.latest.revision,historyCursor.value||undefined);if(version!==historyVersion)return;history.value=[...(history.value||[]),...data.items];historyCursor.value=data.nextCursor;}
+ catch{if(version===historyVersion)historyError.value="Không tải được lịch sử. Vui lòng thử lại.";}finally{if(version===historyVersion)historyLoading.value=false;}
+}
 onMounted(load);
 </script>
 <style scoped>

@@ -21,7 +21,7 @@
           {{ label }}
         </option></select
       ><span
-        >{{ items.filter((r) => r.status === "NEW").length }} báo cáo mới</span
+        >{{ newCount }} báo cáo mới</span
       >
     </div>
     <p v-if="error" class="report-error" role="alert">{{ error }}</p>
@@ -56,20 +56,18 @@
               </button>
             </td>
           </tr>
-          <tr v-if="!filtered.length">
+          <tr v-if="!items.length">
             <td colspan="5" class="empty">Không có báo cáo phù hợp.</td>
           </tr>
         </tbody>
       </table>
     </div>
-    <TablePagination
-      v-model:page="page"
-      v-model:page-size="pageSize"
-      :total="filtered.length"
-      :page-count="pageCount"
-      unit="báo cáo"
-      unit-label="Báo cáo"
-    />
+    <nav class="reports-filters" aria-label="Phân trang báo cáo">
+      <button :disabled="loading || page <= 1" @click="page--">Trang trước</button>
+      <span>Trang {{ page }}</span>
+      <button :disabled="loading || !hasMore" @click="page++">Trang sau</button>
+      <select v-model.number="pageSize" aria-label="Số báo cáo mỗi trang"><option v-for="size in [10,20,50,100]" :key="size" :value="size">{{ size }}</option></select>
+    </nav>
     <AdminModal
       :open="!!detail"
       title="Chi tiết báo cáo nội dung"
@@ -143,7 +141,8 @@
   </main>
 </template>
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, onBeforeUnmount, onMounted, watch } from "vue";
+import { adminListApi } from "../api/adminListApi";
 import { useRoute } from "vue-router";
 import {
   contentToolsApi,
@@ -153,8 +152,7 @@ import {
 } from "../api/contentToolsApi";
 import AdminModal from "../components/AdminModal.vue";
 import ProtectedImage from "../components/ProtectedImage.vue";
-import TablePagination from "../components/TablePagination.vue";
-import { useTablePagination } from "../composables/useTablePagination";
+
 import { showToast } from "../utils/toast";
 const route = useRoute();
 const items = ref<LessonReport[]>([]),
@@ -165,22 +163,11 @@ const items = ref<LessonReport[]>([]),
   search = ref(""),
   status = ref(""),
   detail = ref<LessonReport | null>(null);
-const filtered = computed(() =>
-  items.value.filter(
-    (r) =>
-      (!status.value || r.status === status.value) &&
-      [r.lessonTitle, r.courseName, r.reporterName]
-        .join(" ")
-        .toLocaleLowerCase("vi")
-        .includes(search.value.toLocaleLowerCase("vi")),
-  ),
-);
-const {
-  page,
-  pageSize,
-  pageCount,
-  paginated: pageItems,
-} = useTablePagination(filtered);
+const page = ref(1), pageSize = ref(10), hasMore = ref(false), newCount = ref(0);
+const pageItems = items;
+const cursors = ref<(string | undefined)[]>([undefined]);
+let requestId = 0, detailRequest = 0;
+let filterTimer: ReturnType<typeof setTimeout> | undefined;
 const formatDate = (value: string) => new Date(value).toLocaleString("vi-VN");
 function select(r: LessonReport) {
   detail.value = {
@@ -190,23 +177,34 @@ function select(r: LessonReport) {
   };
   detailError.value = "";
 }
-function selectQuery() {
-  const r = items.value.find((r) => String(r.id) === route.query.report);
-  if (r) select(r);
+async function selectQuery() {
+  const request = ++detailRequest;
+  detail.value = null;
+  const id = Number(route.query.report);
+  if (!Number.isSafeInteger(id) || id < 1) return;
+  try {
+    const result = await adminListApi.report(id);
+    if (request === detailRequest) select(result);
+  } catch (e) { if (request === detailRequest) error.value = contentToolsError(e); }
 }
 async function load() {
-  if (loading.value) return;
+  const request = ++requestId;
   loading.value = true;
   error.value = "";
   try {
-    items.value = await contentToolsApi.reports();
-    selectQuery();
-  } catch (e) {
-    error.value = contentToolsError(e);
-  } finally {
-    loading.value = false;
-  }
+    const result = await adminListApi.reports({ query: search.value, status: status.value, size: pageSize.value, cursor: cursors.value[page.value - 1] });
+    if (request !== requestId) return;
+    items.value = result.items; newCount.value = result.newCount; hasMore.value = result.hasMore;
+    cursors.value[page.value] = result.nextCursor || undefined;
+  } catch (e) { if (request === requestId) error.value = contentToolsError(e); }
+  finally { if (request === requestId) loading.value = false; }
 }
+watch([search, status, pageSize], () => {
+  ++requestId; clearTimeout(filterTimer); cursors.value = [undefined]; page.value = 1;
+  filterTimer = setTimeout(() => { filterTimer = undefined; void load(); }, 250);
+});
+watch(page, () => { if (!filterTimer) void load(); });
+onBeforeUnmount(() => { ++requestId; ++detailRequest; clearTimeout(filterTimer); });
 async function save() {
   if (!detail.value || saving.value) return;
   saving.value = true;
@@ -215,6 +213,7 @@ async function save() {
     const saved = await contentToolsApi.review(detail.value);
     items.value = items.value.map((r) => (r.id === saved.id ? saved : r));
     detail.value = null;
+    await load();
     showToast("Đã lưu kết quả xử lý báo cáo.");
   } catch (e) {
     detailError.value = contentToolsError(e);
@@ -223,7 +222,7 @@ async function save() {
   }
 }
 watch(() => route.query.report, selectQuery);
-onMounted(load);
+onMounted(() => { void load(); void selectQuery(); });
 </script>
 <style scoped>
 .reports-page {

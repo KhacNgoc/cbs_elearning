@@ -1,4 +1,5 @@
 package com.bidv.coretraining.dto;
+import com.bidv.coretraining.mapper.CourseMapper;
 
 import com.bidv.coretraining.entity.Course;
 import org.junit.jupiter.api.Test;

@@ -1,5 +1,7 @@
 package com.bidv.coretraining.service;
-import com.bidv.coretraining.dto.CourseMapper;
+import com.bidv.coretraining.enums.EnrollmentStatus;
+import com.bidv.coretraining.service.impl.*;
+import com.bidv.coretraining.mapper.CourseMapper;
 import com.bidv.coretraining.entity.*;
 import com.bidv.coretraining.repository.*;
 import org.junit.jupiter.api.*;
@@ -16,7 +18,7 @@ class LearnerWorkspaceServiceTest {
     LessonProgressRepository progress=mock(LessonProgressRepository.class);
     QuizAttemptRepository attempts=mock(QuizAttemptRepository.class);
     CourseEnrollmentRequestRepository enrollments=mock(CourseEnrollmentRequestRepository.class);
-    LearnerWorkspaceService service=new LearnerWorkspaceService(auth,users,courses,Mappers.getMapper(CourseMapper.class),progress,attempts,enrollments);
+    LearnerWorkspaceService service=new LearnerWorkspaceServiceImpl(auth,users,courses,Mappers.getMapper(CourseMapper.class),progress,attempts,enrollments);
     User user;Course course;Chapter chapter;Lesson first,second;
     @BeforeEach void setup(){
         var unit=OrganizationUnit.builder().id("U").name("Unit").build();

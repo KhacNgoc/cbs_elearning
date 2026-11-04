@@ -1,4 +1,5 @@
 package com.bidv.coretraining.config;
+import com.bidv.coretraining.enums.QuestionType;
 
 import com.bidv.coretraining.entity.*;
 import com.bidv.coretraining.repository.*;

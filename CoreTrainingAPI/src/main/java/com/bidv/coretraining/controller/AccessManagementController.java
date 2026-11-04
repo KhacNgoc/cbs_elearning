@@ -1,7 +1,7 @@
 package com.bidv.coretraining.controller;
 
 import com.bidv.coretraining.service.AccessManagementService;
-import com.bidv.coretraining.service.AccessManagementService.*;
+import com.bidv.coretraining.dto.AccessManagementDto.*;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 

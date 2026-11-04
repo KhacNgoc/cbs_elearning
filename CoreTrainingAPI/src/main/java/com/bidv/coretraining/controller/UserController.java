@@ -4,7 +4,11 @@ import com.bidv.coretraining.dto.UserProgressDto;
 import com.bidv.coretraining.dto.UserProfileDto;
 import com.bidv.coretraining.dto.LessonProgressDto;
 import com.bidv.coretraining.dto.LessonProgressRequest;
+import com.bidv.coretraining.dto.ChangePasswordRequest;
+import com.bidv.coretraining.dto.UpdateProfileRequest;
 import com.bidv.coretraining.security.CustomUserDetails;
+import com.bidv.coretraining.security.JwtCookieService;
+import com.bidv.coretraining.service.AuthService;
 import com.bidv.coretraining.service.LessonProgressService;
 import com.bidv.coretraining.service.UserService;
 import org.springframework.http.ResponseEntity;
@@ -15,24 +19,23 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/users")
 public class UserController {
 
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.bidv.coretraining.security.JwtTokenProvider tokens;
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.bidv.coretraining.security.JwtCookieService cookies;
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.bidv.coretraining.security.UserDetailsServiceImpl detailsService;
     private final UserService userService;
     private final LessonProgressService lessonProgressService;
+    private final AuthService authService;
+    private final JwtCookieService cookies;
 
-    public UserController(UserService userService, LessonProgressService lessonProgressService) {
+    public UserController(UserService userService, LessonProgressService lessonProgressService,
+            AuthService authService, JwtCookieService cookies) {
         this.userService = userService;
         this.lessonProgressService = lessonProgressService;
+        this.authService = authService;
+        this.cookies = cookies;
     }
 
     @PatchMapping("/me/profile")
     public ResponseEntity<UserProfileDto> updateProfile(@AuthenticationPrincipal CustomUserDetails user,
-            @RequestBody java.util.Map<String, String> fields) {
-        return ResponseEntity.ok(userService.updateProfile(user.getUsername(), fields));
+            @RequestBody UpdateProfileRequest request) {
+        return ResponseEntity.ok(userService.updateProfile(user.getUsername(), request));
     }
 
     @GetMapping("/me/profile")
@@ -94,20 +97,12 @@ public class UserController {
 
     @PostMapping("/me/change-password")
     public ResponseEntity<String> changePassword(
-            @RequestBody java.util.Map<String, String> request,
+            @RequestBody ChangePasswordRequest request,
             @AuthenticationPrincipal CustomUserDetails userDetails) {
-        String newPassword = request.get("newPassword");
-        if (newPassword == null || newPassword.trim().isEmpty()) {
-            throw new com.bidv.coretraining.exception.BadRequestException("Mật khẩu mới không được để trống!");
-        }
-        if (newPassword.length() < 8)
-            throw new com.bidv.coretraining.exception.BadRequestException("Mật khẩu phải có tối thiểu 8 ký tự");
-        userService.changePassword(userDetails.getUsername(), newPassword);
-        var fresh = detailsService.loadUserByUsername(userDetails.getUsername());
-        var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(fresh, null,
-                fresh.getAuthorities());
+        userService.changePassword(userDetails.getUsername(), request.newPassword());
         return ResponseEntity.ok()
-                .header(org.springframework.http.HttpHeaders.SET_COOKIE, cookies.create(tokens.generateToken(auth)))
+                .header(org.springframework.http.HttpHeaders.SET_COOKIE,
+                        cookies.create(authService.reissueToken(userDetails.getUsername())))
                 .body("Đổi mật khẩu thành công!");
     }
 }

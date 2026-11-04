@@ -1,6 +1,10 @@
 package com.bidv.coretraining.service;
+import com.bidv.coretraining.enums.DocumentStatus;
 
 import com.bidv.coretraining.dto.LessonKnowledgeSourceDto;
+import com.bidv.coretraining.service.impl.LessonKnowledgeSourceServiceImpl;
+import org.springframework.context.annotation.Bean;
+import static org.mockito.Mockito.*;
 import com.bidv.coretraining.entity.*;
 import com.bidv.coretraining.exception.BadRequestException;
 import com.bidv.coretraining.repository.*;
@@ -29,8 +33,10 @@ class LessonKnowledgeSourceServiceTest {
     @SpringBootConfiguration @EnableAutoConfiguration
     @EntityScan("com.bidv.coretraining.entity")
     @EnableJpaRepositories("com.bidv.coretraining.repository")
-    @Import(LessonKnowledgeSourceService.class)
-    static class Config {}
+    @Import(LessonKnowledgeSourceServiceImpl.class)
+    static class Config {
+        @Bean AuthorizationService authorizationService() { return mock(AuthorizationService.class); }
+    }
 
     static final HttpServer stub = startStub();
     static HttpServer startStub() {
@@ -56,6 +62,7 @@ class LessonKnowledgeSourceServiceTest {
     @AfterAll static void stop() { stub.stop(0); }
 
     @Autowired LessonKnowledgeSourceService service;
+    @Autowired AuthorizationService authorization;
     @Autowired LessonKnowledgeSourceRepository sources;
     @Autowired LessonRepository lessons;
     @Autowired CourseRepository courses;
@@ -68,6 +75,7 @@ class LessonKnowledgeSourceServiceTest {
     Course course;
 
     @BeforeEach void fixture() {
+        reset(authorization);
         TrainingDomain domain = domains.save(TrainingDomain.builder().code("TD").name("Tín dụng").build());
         TrainingProgram program = programs.save(TrainingProgram.builder().domain(domain).code("P").name("Cho vay").build());
         course = courses.save(Course.builder().id("C1").code("C1").name("Cho vay").program(program).build());
@@ -77,6 +85,32 @@ class LessonKnowledgeSourceServiceTest {
                 .storagePath("/tmp/guide.pdf").contentType("application/pdf").sizeBytes(100)
                 .status(DocumentStatus.INDEXED).createdAt(LocalDateTime.now()).build());
         em.flush();
+    }
+
+    @Test void authorizedEntriesUseTheSamePersistenceOperations() {
+        var selection = new LessonKnowledgeSourceDto("doc", 2, 3, null);
+        assertThat(service.saveAuthorized("L1", List.of(selection))).containsExactly(selection);
+        em.clear();
+        assertThat(service.listAuthorized("L1")).containsExactly(selection);
+        assertThat(service.outlineAuthorized("C1", "doc").pages()).contains(2, 3);
+        verify(authorization, times(2)).edit(any(Course.class));
+        verify(authorization).edit("C1");
+    }
+
+    @Test void unauthorizedSaveCannotReplaceExistingSources() {
+        var selection = new LessonKnowledgeSourceDto("doc", 2, 3, null);
+        service.save("L1", List.of(selection));
+        doThrow(new org.springframework.security.access.AccessDeniedException("denied"))
+                .when(authorization).edit(any(Course.class));
+        assertThatThrownBy(() -> service.saveAuthorized("L1", List.of()))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        assertThat(service.list("L1")).containsExactly(selection);
+    }
+
+    @Test void missingLessonRetainsControllerLookupErrorBeforeAuthorization() {
+        assertThatThrownBy(() -> service.listAuthorized("missing"))
+                .isInstanceOf(java.util.NoSuchElementException.class);
+        verifyNoInteractions(authorization);
     }
 
     @Test void savesReplacesAndReloadsRangesWithoutReembedding() {

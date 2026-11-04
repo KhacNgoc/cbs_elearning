@@ -9,47 +9,47 @@
     </header>
     <Transition name="content" mode="out-in">
       <PageLoading
-        v-if="learning.loading"
+        v-if="learning.dashboardLoading && !learning.dashboard"
         key="loading"
         label="Đang tải thông tin học tập..."
       />
-      <div v-else-if="learning.error" class="card empty" role="alert">
-        <p>{{ learning.error }}</p>
+      <div v-else-if="learning.dashboardError" class="card empty" role="alert">
+        <p>{{ learning.dashboardError }}</p>
         <button class="btn btn-primary" @click="refresh">Thử lại</button>
       </div>
       <div
-        v-else-if="learning.workspace"
+        v-else-if="learning.dashboard"
         key="loaded"
         class="learning-home-content"
       >
-        <section v-if="learning.workspace.resume" class="resume-banner">
+        <section v-if="learning.dashboard.resume" class="resume-banner">
           <BookOpen :size="28" />
           <div>
             <span class="eyebrow">{{
-              learning.workspace.resume.lastAccessedAt
+              learning.dashboard.resume.lastAccessedAt
                 ? "ĐANG HỌC GẦN NHẤT"
                 : "SẴN SÀNG BẮT ĐẦU"
             }}</span>
-            <h2>{{ learning.workspace.resume.lessonTitle }}</h2>
+            <h2>{{ learning.dashboard.resume.lessonTitle }}</h2>
             <p>
-              {{ learning.workspace.resume.courseName }} ·
+              {{ learning.dashboard.resume.courseName }} ·
               {{ resumeDescription }}
             </p>
           </div>
           <button
             class="btn btn-primary"
             :disabled="!!opening"
-            @click="openLearning(learning.workspace.resume, !!learning.workspace.resume.lastAccessedAt)"
+            @click="openLearning(learning.dashboard.resume, !!learning.dashboard.resume.lastAccessedAt)"
           >
             {{
-              learning.workspace.resume.lastAccessedAt
+              learning.dashboard.resume.lastAccessedAt
                 ? "Tiếp tục học"
                 : "Bắt đầu học"
             }}
             <ArrowRight :size="18" />
           </button>
         </section>
-        <section v-else-if="!summary.joined.length" class="resume-banner">
+        <section v-else-if="!summary.joined" class="resume-banner">
           <BookOpen :size="28" />
           <div>
             <h2>Bắt đầu hành trình học tập</h2>
@@ -71,7 +71,7 @@
             </div>
             <ProgressBar :progress="summary.percent || 0" height="6px" /><small
               >{{ summary.completed }}/{{ summary.total }} bài hoàn thành ·
-              {{ summary.joined.length }} khóa tham gia</small
+              {{ summary.joined }} khóa tham gia</small
             >
           </div>
           <div class="status-counts" role="group" aria-label="Số khóa học theo trạng thái">
@@ -171,7 +171,7 @@
           >
           <div class="list-meta">
             <span aria-live="polite"
-              >{{ filtered.length }} khóa học
+              >{{ resultTotal }} khóa học
               {{ tab === "mine" ? "của tôi" : "trong danh mục" }}</span
             ><label
               >Sắp xếp
@@ -182,7 +182,9 @@
               </select></label
             >
           </div>
+          <p v-if="learning.dashboardLoading" role="status">Đang tải khóa học...</p>
           <TransitionGroup
+            v-show="!learning.dashboardLoading"
             :key="`${tab}-${page}`"
             name="data-list"
             tag="div"
@@ -267,11 +269,11 @@
               </div>
             </article>
           </TransitionGroup>
-          <div v-if="!filtered.length" class="card empty data-reveal">
+          <div v-if="!learning.dashboardLoading && !resultTotal" class="card empty data-reveal">
             <BookOpen :size="32" />
             <h3>
               {{
-                tab === "mine" && !summary.joined.length
+                tab === "mine" && !summary.joined
                   ? "Chưa có khóa học tham gia"
                   : "Không có khóa học phù hợp"
               }}
@@ -285,7 +287,7 @@
             v-model:page="page"
             v-model:page-size="pageSize"
             :page-count="pageCount"
-            :total="filtered.length"
+            :total="resultTotal"
             :sizes="[6, 9, 12]"
             unit="khóa học"
             unit-label="Khóa học"
@@ -309,7 +311,7 @@
   </main>
 </template>
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import {
   BookOpen,
@@ -325,10 +327,9 @@ import {
   formatLearningDate,
   isEnrolled,
   learningStatusLabel,
-  learningSummary,
-  normalizeSearch,
   resumeRoute,
 } from "../utils/learning";
+import { getDashboardResume } from "../api/learnerDashboardApi";
 import CourseThumbnail from "../components/CourseThumbnail.vue";
 import ProgressBar from "../components/ProgressBar.vue";
 import TablePagination from "../components/TablePagination.vue";
@@ -363,113 +364,54 @@ const filterFields = [
   { key: "level", label: "Mức độ" },
   { key: "source", label: "Nguồn tham gia" },
 ] as const;
-const summary = computed(() =>
-  learningSummary(learning.workspace?.courses || []),
-);
+const summary = computed(() => learning.dashboard?.summary || {
+  joined: 0, discover: 0, completed: 0, total: 0, percent: null,
+  notStarted: 0, inProgress: 0, complete: 0, mandatory: 0, mandatoryComplete: 0,
+});
 const statusCounts = computed(() => [
   { status: "NOT_STARTED", count: summary.value.notStarted },
   { status: "IN_PROGRESS", count: summary.value.inProgress },
   { status: "COMPLETED", count: summary.value.complete },
 ]);
 const catalogTabs = computed(() => [
-  {
-    id: "mine" as const,
-    label: "Khóa học của tôi",
-    count: summary.value.joined.length,
-  },
-  {
-    id: "discover" as const,
-    label: "Khám phá & đăng ký",
-    count: (learning.workspace?.courses || []).filter((c) => !isEnrolled(c))
-      .length,
-  },
+  { id: "mine" as const, label: "Khóa học của tôi", count: summary.value.joined },
+  { id: "discover" as const, label: "Khám phá & đăng ký", count: summary.value.discover },
 ]);
-const baseCourses = computed(() =>
-  (learning.workspace?.courses || []).filter((c) =>
-    tab.value === "mine" ? isEnrolled(c) : !isEnrolled(c),
-  ),
-);
-const availableStatuses = computed(() => [
-  ...new Set(baseCourses.value.map((c) => c.learningStatus)),
-]);
+const availableStatuses = computed(() => (learning.dashboard?.choices.status || []).map(o => o.value));
 const options = (key: (typeof filterFields)[number]["key"]) =>
-  [
-    ...new Set(
-      baseCourses.value
-        .map((c) => (key === "source" ? c.source : c.course[key]))
-        .filter((v): v is string => !!v),
-    ),
-  ].sort((a, b) => a.localeCompare(b, "vi"));
+  (learning.dashboard?.choices[key] || []).map(o => o.value).sort((a,b) => a.localeCompare(b,"vi"));
 function optionLabel(key: (typeof filterFields)[number]["key"], value: string) {
   if (key === "source") return sourceLabel(value);
-  if (key === "domainId" || key === "programId") {
-    const field = key === "domainId" ? "domainName" : "programName";
-    const course = baseCourses.value.find(
-      (c) => c.course[key] === value,
-    )?.course;
-    const label = course?.[field] || value;
-    const duplicates = baseCourses.value.some(
-      (c) => c.course[field] === label && c.course[key] !== value,
-    );
-    return duplicates ? `${label} (${value})` : label;
-  }
-  return value;
+  const choices = learning.dashboard?.choices[key] || [];
+  const label = choices.find(o => o.value === value)?.label || value;
+  return choices.some(o => o.label === label && o.value !== value) ? `${label} (${value})` : label;
 }
 const activeFilters = computed(
   () =>
     filterFields.filter((f) => filters[f.key]).length +
     Number(filters.mandatory),
 );
-const filtered = computed(() => {
-  const term = normalizeSearch(filters.search.trim());
-  return baseCourses.value
-    .filter(
-      (c) =>
-        (!filters.status || c.learningStatus === filters.status) &&
-        (!filters.mandatory || c.mandatory) &&
-        filterFields.every(
-          (f) =>
-            !filters[f.key] ||
-            (f.key === "source" ? c.source : c.course[f.key]) ===
-              filters[f.key],
-        ) &&
-        (!term ||
-          normalizeSearch(
-            [
-              c.course.name,
-              c.course.code,
-              c.course.description,
-              c.course.keywords,
-            ]
-              .filter(Boolean)
-              .join(" "),
-          ).includes(term)),
-    )
-    .sort((a, b) =>
-      sort.value === "name"
-        ? a.course.name.localeCompare(b.course.name, "vi")
-        : sort.value === "recent"
-          ? (b.lastAccessedAt || "").localeCompare(a.lastAccessedAt || "")
-          : dueRank(a) - dueRank(b) ||
-            (b.lastAccessedAt || "").localeCompare(a.lastAccessedAt || ""),
-    );
+const resultTotal = computed(() => learning.dashboardPage?.total || 0);
+const pageCount = computed(() => Math.max(1, Math.ceil(resultTotal.value / pageSize.value)));
+const paginated = computed(() => learning.dashboardPage?.items || []);
+let filterTimer: ReturnType<typeof setTimeout> | undefined;
+let lastTab = tab.value;
+watch([filters, sort, tab, pageSize], () => {
+  learning.invalidateDashboard();
+  page.value = 1;
+  clearTimeout(filterTimer);
+  const refreshSummary = lastTab !== tab.value;
+  lastTab = tab.value;
+  filterTimer = setTimeout(() => loadDashboard(refreshSummary), 250);
+}, { deep: true });
+watch(page, () => {
+  clearTimeout(filterTimer);
+  filterTimer = setTimeout(() => loadDashboard(false), 0);
 });
-function dueRank(c: LearnerCourse) {
-  return c.dueDate && c.learningStatus !== "COMPLETED" && isEnrolled(c)
-    ? Date.parse(c.dueDate)
-    : Infinity;
+watch(pageCount, (n) => { if (page.value > n) page.value = n; });
+function loadDashboard(refreshSummary = true) {
+  return learning.loadDashboard({ ...filters, tab: tab.value, sort: sort.value, page: page.value, size: pageSize.value }, refreshSummary);
 }
-const pageCount = computed(() =>
-  Math.max(1, Math.ceil(filtered.value.length / pageSize.value)),
-);
-const paginated = computed(() =>
-  filtered.value.slice(
-    (page.value - 1) * pageSize.value,
-    page.value * pageSize.value,
-  ),
-);
-watch([filters, sort, tab, pageSize], () => (page.value = 1), { deep: true });
-watch(pageCount, (n) => (page.value = Math.min(page.value, n)));
 function clearFilters() {
   Object.assign(filters, {
     search: "",
@@ -519,7 +461,7 @@ const actionLabel = (item: LearnerCourse) =>
           ? "Bắt đầu học"
           : "Tiếp tục học";
 const resumeDescription = computed(() => {
-  const t = learning.workspace?.resume;
+  const t = learning.dashboard?.resume;
   if (!t) return "";
   return t.contentType === "DOCUMENT"
     ? `Tài liệu · Trang ${t.documentPage || 1}`
@@ -546,8 +488,8 @@ async function openCourse(item: LearnerCourse) {
   if (item.source === "PENDING") return;
   opening.value = item.course.id;
   try {
-    if (item.learningStatus === "IN_PROGRESS" && item.resume)
-      await openLearning(item.resume);
+    const target = item.learningStatus === "IN_PROGRESS" ? await getDashboardResume(item.course.id) : null;
+    if (target) await openLearning(target);
     else {
       await router.push(`/courses/${encodeURIComponent(item.course.id)}`);
     }
@@ -563,7 +505,7 @@ async function register() {
   try {
     await user.registerCourse(registerTarget.value.course.id);
     registerTarget.value = null;
-    await learning.load();
+    await loadDashboard();
     showToast("Đã gửi yêu cầu đăng ký.");
   } catch (error) {
     showToast(courseRegistrationError(error), "error");
@@ -572,9 +514,10 @@ async function register() {
   }
 }
 async function refresh() {
-  await Promise.all([user.fetchProgress(), learning.load()]);
+  await loadDashboard();
 }
 onMounted(refresh);
+onUnmounted(() => clearTimeout(filterTimer));
 </script>
 <style scoped>
 .learning-home-content {

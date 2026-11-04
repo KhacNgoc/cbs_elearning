@@ -25,8 +25,7 @@ import java.util.Arrays;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    @org.springframework.beans.factory.annotation.Autowired
-    private AdminRequestAuthorization adminAuthorization;
+    private final AdminRequestAuthorization adminAuthorization;
     @org.springframework.beans.factory.annotation.Value("${app.jwt.cookie-secure:false}")
     private boolean csrfCookieSecure;
     @org.springframework.beans.factory.annotation.Value("${app.jwt.cookie-same-site:Lax}")
@@ -39,10 +38,12 @@ public class SecurityConfig {
     private java.util.List<String> allowedOrigins;
 
     public SecurityConfig(JwtTokenProvider tokenProvider, UserDetailsServiceImpl userDetailsService,
-            JwtCookieService jwtCookieService) {
+            JwtCookieService jwtCookieService,
+            AdminRequestAuthorization adminAuthorization) {
         this.tokenProvider = tokenProvider;
         this.userDetailsService = userDetailsService;
         this.jwtCookieService = jwtCookieService;
+        this.adminAuthorization = adminAuthorization;
     }
 
     @Bean

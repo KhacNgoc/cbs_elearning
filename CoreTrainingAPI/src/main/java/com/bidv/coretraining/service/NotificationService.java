@@ -1,7 +1,7 @@
 package com.bidv.coretraining.service;
 
 import com.bidv.coretraining.dto.NotificationDto;
-import com.bidv.coretraining.entity.NotificationType;
+import com.bidv.coretraining.enums.NotificationType;
 
 import java.util.List;
 

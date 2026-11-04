@@ -1,5 +1,15 @@
 package com.bidv.coretraining.service.impl;
 
+import com.bidv.coretraining.exception.BadRequestException;
+import com.bidv.coretraining.service.LearningAccessService;
+import com.bidv.coretraining.service.AuthorizationService;
+import com.bidv.coretraining.service.LearningOutlineService;
+import com.bidv.coretraining.security.AccessPolicy;
+import com.bidv.coretraining.repository.projection.LessonOutlineView;
+import com.bidv.coretraining.repository.QuestionRepository;
+import com.bidv.coretraining.mapper.LessonOutlineMapper;
+import com.bidv.coretraining.mapper.CourseMapper;
+
 import com.bidv.coretraining.dto.*;
 import com.bidv.coretraining.entity.Comment;
 import com.bidv.coretraining.entity.Lesson;
@@ -13,9 +23,9 @@ import com.bidv.coretraining.repository.CourseRepository;
 import com.bidv.coretraining.repository.UserRepository;
 import com.bidv.coretraining.repository.VideoNoteRepository;
 import com.bidv.coretraining.service.CourseService;
-import com.bidv.coretraining.service.LearningPolicy;
+import com.bidv.coretraining.policy.LearningPolicy;
 import com.bidv.coretraining.service.NotificationService;
-import com.bidv.coretraining.entity.NotificationType;
+import com.bidv.coretraining.enums.NotificationType;
 import org.springframework.stereotype.Service;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,14 +36,10 @@ import java.util.List;
 @Service
 public class CourseServiceImpl implements CourseService {
     private static final int REPLY_PAGE_SIZE = 5;
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.bidv.coretraining.service.AuthorizationService authorization;
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.bidv.coretraining.service.LearningAccessService learningAccess;
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.bidv.coretraining.repository.QuestionRepository questions;
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.bidv.coretraining.service.LearningOutlineService learningOutline;
+    private final AuthorizationService authorization;
+    private final LearningAccessService learningAccess;
+    private final QuestionRepository questions;
+    private final LearningOutlineService learningOutline;
 
     private final CourseRepository courseRepository;
     private final LessonRepository lessonRepository;
@@ -46,7 +52,8 @@ public class CourseServiceImpl implements CourseService {
     public CourseServiceImpl(CourseRepository courseRepository, LessonRepository lessonRepository,
             CommentRepository commentRepository, UserRepository userRepository,
             VideoNoteRepository videoNoteRepository, CourseMapper courseMapper,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            AuthorizationService authorization, LearningAccessService learningAccess, QuestionRepository questions, LearningOutlineService learningOutline) {
         this.courseRepository = courseRepository;
         this.lessonRepository = lessonRepository;
         this.commentRepository = commentRepository;
@@ -54,6 +61,10 @@ public class CourseServiceImpl implements CourseService {
         this.videoNoteRepository = videoNoteRepository;
         this.courseMapper = courseMapper;
         this.notificationService = notificationService;
+        this.authorization = authorization;
+        this.learningAccess = learningAccess;
+        this.questions = questions;
+        this.learningOutline = learningOutline;
     }
 
     @Override
@@ -61,21 +72,21 @@ public class CourseServiceImpl implements CourseService {
     public List<CourseDto> getAllCourses() {
         User user = authorization.current();
         List<Course> courses = courseRepository.findAll().stream()
-                .filter(c -> com.bidv.coretraining.security.AccessPolicy.canReadCourse(user, c)
+                .filter(c -> AccessPolicy.canReadCourse(user, c)
                         || LearningPolicy.isLearnableStatus(c.getStatus())
-                                && com.bidv.coretraining.security.AccessPolicy.visible(user, c))
+                                && AccessPolicy.visible(user, c))
                 .toList();
         // Keep the full editing DTO for editors; learners only need published metadata.
         var learnerCourseIds = courses.stream()
-            .filter(c -> !com.bidv.coretraining.security.AccessPolicy.canReadCourse(user, c))
+            .filter(c -> !AccessPolicy.canReadCourse(user, c))
             .map(Course::getId).toList();
-        var summaries = learnerCourseIds.isEmpty() ? java.util.Map.<String, List<com.bidv.coretraining.repository.LessonOutlineView>>of()
+        var summaries = learnerCourseIds.isEmpty() ? java.util.Map.<String, List<LessonOutlineView>>of()
             : lessonRepository.findOutlines(learnerCourseIds, false).stream()
-                .collect(java.util.stream.Collectors.groupingBy(com.bidv.coretraining.repository.LessonOutlineView::getCourseId));
+                .collect(java.util.stream.Collectors.groupingBy(LessonOutlineView::getCourseId));
         var quizCourses = learnerCourseIds.isEmpty() ? java.util.Set.<String>of() : questions.findCourseIdsWithQuiz(learnerCourseIds);
         List<CourseDto> result = new java.util.ArrayList<>();
         for (Course course : courses) {
-            boolean editor = com.bidv.coretraining.security.AccessPolicy.canReadCourse(user, course);
+            boolean editor = AccessPolicy.canReadCourse(user, course);
             CourseDto dto = editor ? courseMapper.toCourseDto(course)
                 : learningOutline.courseMetadata(course, false, quizCourses.contains(course.getId()));
             if (!editor) dto.setLessons(summaries.getOrDefault(course.getId(), List.of()).stream()
@@ -83,20 +94,20 @@ public class CourseServiceImpl implements CourseService {
             result.add(dto);
         }
         for (int i = 0; i < courses.size(); i++) {
-            boolean editor = com.bidv.coretraining.security.AccessPolicy.canReadCourse(user, courses.get(i));
+            boolean editor = AccessPolicy.canReadCourse(user, courses.get(i));
             result.get(i).setCanEdit(editor);
             result.get(i)
-                    .setAllowedActions(com.bidv.coretraining.security.AccessPolicy.courseActions(user, courses.get(i)));
+                    .setAllowedActions(AccessPolicy.courseActions(user, courses.get(i)));
             final Course item = courses.get(i);
             result.get(i)
                     .setAdminActions(java.util.stream.Stream.of("courses", "exams", "documents")
                             .collect(java.util.stream.Collectors.toMap(page -> page,
                                     page -> java.util.stream.Stream.of("read", "create", "update", "delete")
-                                            .filter(a -> com.bidv.coretraining.security.AccessPolicy.allowsCourse(user,
+                                            .filter(a -> AccessPolicy.allowsCourse(user,
                                                     page + ":" + a, item))
                                             .collect(java.util.stream.Collectors.toSet()))));
             if (!editor)
-                result.get(i).getLessons().forEach(com.bidv.coretraining.service.TrainingStructureService::outlineOnly);
+                result.get(i).getLessons().forEach(LessonOutlineMapper::outlineOnly);
         }
         return result;
     }
@@ -107,15 +118,15 @@ public class CourseServiceImpl implements CourseService {
         Course course = courseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Course", "id", id));
         User user = authorization.current();
-        boolean editor = com.bidv.coretraining.security.AccessPolicy.canReadCourse(user, course);
-        com.bidv.coretraining.security.AccessPolicy.require(editor || LearningPolicy.isLearnableStatus(course.getStatus())
-                && com.bidv.coretraining.security.AccessPolicy.visible(user, course));
+        boolean editor = AccessPolicy.canReadCourse(user, course);
+        AccessPolicy.require(editor || LearningPolicy.isLearnableStatus(course.getStatus())
+                && AccessPolicy.visible(user, course));
         CourseDto result = editor ? courseMapper.toCourseDto(course)
             : learningOutline.courseMetadata(course, false, questions.existsByCourseIdAndLessonIsNull(id));
         if (!editor) result.setLessons(lessonRepository.findOutline(id, false).stream().map(learningOutline::lessonDto).toList());
         result.setCanEdit(editor);
         if (!editor)
-            result.getLessons().forEach(com.bidv.coretraining.service.TrainingStructureService::outlineOnly);
+            result.getLessons().forEach(LessonOutlineMapper::outlineOnly);
         return result;
     }
 
@@ -217,7 +228,7 @@ public class CourseServiceImpl implements CourseService {
             if (id <= 0) throw new IllegalArgumentException();
             return new ReplyCursor(time, id);
         } catch (RuntimeException invalid) {
-            throw new com.bidv.coretraining.exception.BadRequestException("Mốc tải phản hồi không hợp lệ");
+            throw new BadRequestException("Mốc tải phản hồi không hợp lệ");
         }
     }
 
@@ -294,14 +305,14 @@ public class CourseServiceImpl implements CourseService {
     @Override
     @Transactional
     public void deleteComment(
-            String lessonId, Long commentId, String username, boolean isAdmin) {
+            String lessonId, Long commentId, String username) {
         requireInteraction(lessonId, username);
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Comment", "id", commentId));
         if (!comment.getLesson().getId().equals(lessonId)) {
             throw new ResourceNotFoundException("Comment", "id", commentId);
         }
-        if (!com.bidv.coretraining.security.AccessPolicy.canEdit(authorization.current(),
+        if (!AccessPolicy.canEdit(authorization.current(),
                 comment.getLesson().getCourse()) && !comment.getUsername().equals(username)) {
             throw new AccessDeniedException("Bạn chỉ có thể gỡ bình luận của chính mình");
         }

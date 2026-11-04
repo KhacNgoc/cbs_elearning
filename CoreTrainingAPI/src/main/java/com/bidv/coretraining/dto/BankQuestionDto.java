@@ -1,6 +1,7 @@
 package com.bidv.coretraining.dto;
-
+import com.bidv.coretraining.enums.QuestionType;
 import com.bidv.coretraining.entity.*;
+
 import java.time.LocalDateTime;
 import java.util.List;
 

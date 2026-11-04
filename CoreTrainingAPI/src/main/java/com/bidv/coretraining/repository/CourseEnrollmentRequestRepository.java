@@ -1,6 +1,6 @@
 package com.bidv.coretraining.repository;
 
-import com.bidv.coretraining.entity.EnrollmentStatus;
+import com.bidv.coretraining.enums.EnrollmentStatus;
 import com.bidv.coretraining.entity.CourseEnrollmentRequest;
 import org.springframework.data.jpa.repository.JpaRepository;
 

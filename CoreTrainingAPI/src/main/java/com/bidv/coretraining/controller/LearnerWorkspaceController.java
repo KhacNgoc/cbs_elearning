@@ -1,4 +1,5 @@
 package com.bidv.coretraining.controller;
+import com.bidv.coretraining.dto.LearnerWorkspaceDto;
 
 import com.bidv.coretraining.service.LearnerWorkspaceService;
 import org.springframework.web.bind.annotation.*;
@@ -13,7 +14,7 @@ public class LearnerWorkspaceController {
     }
 
     @GetMapping("/learning")
-    public LearnerWorkspaceService.Workspace workspace() {
+    public LearnerWorkspaceDto.Workspace workspace() {
         return service.workspace();
     }
 }

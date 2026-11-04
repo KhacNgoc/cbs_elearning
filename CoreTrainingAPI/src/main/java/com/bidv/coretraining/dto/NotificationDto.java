@@ -1,6 +1,6 @@
 package com.bidv.coretraining.dto;
 
-import com.bidv.coretraining.entity.NotificationType;
+import com.bidv.coretraining.enums.NotificationType;
 import lombok.*;
 
 import java.time.LocalDateTime;

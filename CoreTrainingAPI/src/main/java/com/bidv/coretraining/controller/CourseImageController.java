@@ -5,7 +5,7 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import java.util.Map;
+import com.bidv.coretraining.dto.UploadResultDto;
 
 @RestController
 public class CourseImageController {
@@ -16,9 +16,9 @@ public class CourseImageController {
     }
 
     @PostMapping(value = "/api/admin/courses/images", consumes = "multipart/form-data")
-    public Map<String, String> upload(@RequestPart("file") MultipartFile file,
+    public UploadResultDto.Image upload(@RequestPart("file") MultipartFile file,
             @RequestParam(required = false) String courseId, @RequestParam(required = false) String programId) {
-        return Map.of("thumbnail", images.upload(file, courseId, programId));
+        return new UploadResultDto.Image(images.upload(file, courseId, programId));
     }
 
     @GetMapping("/api/course-images/{name}")

@@ -90,37 +90,14 @@ test('ignores an in-flight page after switching lesson instances, including retu
   assert.equal(store.currentLessonData.comments[0].replyCursor, 'fresh');
 });
 
-test('mock initial pages clone bounded replies and cursor pages survive deletion without truncating the database', async () => {
-  const { courseApi, setMockDbCourses, mockDbCourses } = await load('../src/api/courseApi.ts', {
-    './axiosClient': { isMockApi: () => true, mockDelay: async () => {}, axiosClient: {} },
-    '../data/mockData': { mockCourses: [] },
-    '../utils/commentReplies': await load('../src/utils/commentReplies.ts', {}).catch(() => ({})),
+test('comment API forwards bounded page and reply cursor to the database endpoints', async () => {
+  const calls = [];
+  const response = { content: [reply(6)], nextCursor: 'next', hasMore: true };
+  const { courseApi } = await load('../src/api/courseApi.ts', {
+    './axiosClient': { axiosClient: { get: async (...args) => { calls.push(args); return { data: response }; } } },
   });
-  const root = { ...reply(100), replies: Array.from({ length: 12 }, (_, i) => reply(i + 1)) };
-  const lesson = { id: 'lesson', comments: [root, ...Array.from({ length: 20 }, (_, i) => ({ ...reply(101 + i), replies: [] }))] };
-  setMockDbCourses([{ id: 'course', lessons: [lesson] }]);
-  const course = await courseApi.getCourseById('course');
-  course.lessons[0].comments = [];
-  assert.equal(lesson.comments.length, 21);
-  const courses = await courseApi.getAllCourses();
-  courses[0].lessons[0].comments = [];
-  assert.equal(lesson.comments.length, 21);
-  const detail = await courseApi.getLessonById('lesson');
-  assert.equal(detail.comments.length, 20);
-  assert.equal(detail.comments[0].replies.length, 5);
-  assert.equal(detail.commentCount, 21);
-  assert.equal(root.replies.length, 12);
-  detail.comments[0].replies[0].content = 'local change';
-  assert.equal(root.replies[0].content, '1');
-  const initial = await courseApi.getComments('lesson');
-  const cursor = initial.content[0].replyCursor;
-  assert.equal(initial.content[0].repliesHasMore, true);
-  root.replies = root.replies.filter(r => r.id !== 5);
-  const second = await courseApi.getReplies('lesson', 100, cursor);
-  assert.deepEqual(second.content.map(r => r.id), [6, 7, 8, 9, 10]);
-  const final = await courseApi.getReplies('lesson', 100, second.nextCursor);
-  assert.deepEqual(final.content.map(r => r.id), [11, 12]);
-  assert.equal(final.hasMore, false);
-  assert.equal(final.nextCursor, null);
-  assert.deepEqual((await courseApi.getReplies('lesson', 100)).content.map(r => r.id), [1, 2, 3, 4, 6]);
+  assert.equal(await courseApi.getComments('lesson', 3, 10), response);
+  assert.deepEqual(calls[0], ['/api/lessons/lesson/comments', { params: { page: 3, size: 10 } }]);
+  assert.equal(await courseApi.getReplies('lesson', 100, 'cursor-5'), response);
+  assert.deepEqual(calls[1], ['/api/lessons/lesson/comments/100/replies', { params: { after: 'cursor-5' } }]);
 });

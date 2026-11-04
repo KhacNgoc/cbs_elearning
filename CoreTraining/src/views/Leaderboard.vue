@@ -2,26 +2,26 @@
   <div class="leaderboard-view animate-fade-in">
     <!-- User Profile Hero Summary -->
     <div class="profile-hero card">
-      <div class="user-big-avatar">Q</div>
+      <div class="user-big-avatar">{{ userStore.username.charAt(0).toUpperCase() }}</div>
       <div class="profile-info">
         <span class="user-status-tag">HỌC VIÊN CHÍNH THỨC</span>
-        <h1>Quản Trị Hệ Thống</h1>
+        <h1>{{ userStore.fullName || userStore.username }}</h1>
         <p class="profile-stats-row">
           <span
-            >Điểm tích lũy: <strong>{{ userStore.points }} PTS</strong></span
+            >Điểm tích lũy: <strong>{{ awardsData?.points ?? '—' }} PTS</strong></span
           >
           <span class="dot-separator">•</span>
           <span
             >Bài học hoàn thành:
             <strong
-              >{{ userStore.completedLessonsCount }} /
-              {{ userStore.totalLessonsCount }}</strong
+              >{{ awardsData?.completedLessons ?? '—' }} /
+              {{ awardsData?.totalLessons ?? '—' }}</strong
             ></span
           >
           <span class="dot-separator">•</span>
           <span
             >Huy hiệu đạt được:
-            <strong>{{ userStore.unlockedBadges.length }}</strong></span
+            <strong>{{ awardsData?.total }}</strong></span
           >
         </p>
       </div>
@@ -35,12 +35,15 @@
           Bảng xếp hạng năng lực học tập dựa trên điểm tích lũy (PTS)
         </p>
 
+        <p v-if="loading" role="status">Đang tải bảng vinh danh...</p>
+        <p v-if="error" role="alert">{{ error }} <button @click="load">Thử lại</button></p>
+        <p v-if="currentRank">Thứ hạng của bạn: {{ currentRank.rank }} / {{ total }}</p>
         <div class="ranks-list">
           <div
             v-for="user in sortedLeaderboard"
             :key="user.username"
             class="rank-row"
-            :class="{ 'is-current-user': user.username === 'quantrh' }"
+            :class="{ 'is-current-user': user.username === userStore.username }"
           >
             <div class="rank-num" :class="getRankClass(user.rank)">
               {{ user.rank }}
@@ -66,6 +69,7 @@
             </div>
           </div>
         </div>
+        <TablePagination v-model:page="page" v-model:page-size="pageSize" :total="total" :page-count="Math.max(1, Math.ceil(total / pageSize))" unit="học viên" unit-label="Học viên" />
       </div>
 
       <!-- Right Column: Badges Collection Cabinet -->
@@ -76,11 +80,11 @@
         </p>
 
         <div class="cabinet-group">
-          <h3>Huy hiệu nghiệp vụ đã nhận</h3>
+          <h3>Huy hiệu nghiệp vụ đã nhận</h3><p v-if="awardsLoading" role="status">Đang tải huy hiệu...</p><p v-if="awardsError" role="alert">{{ awardsError }} <button @click="loadAwards">Thử lại</button></p>
 
-          <div class="badge-cabinet" v-if="userStore.unlockedBadges.length > 0">
+          <div class="badge-cabinet" v-if="awardsData?.items.length">
             <div
-              v-for="badge in userStore.unlockedBadges"
+              v-for="badge in awardsData?.items || []"
               :key="badge.id"
               class="cabinet-badge-card"
               :class="badge.type"
@@ -100,7 +104,7 @@
               </div>
             </div>
           </div>
-          <div class="empty-cabinet" v-else>
+          <div class="empty-cabinet" v-else-if="!awardsLoading && !awardsError && awardsData">
             <p>
               Bạn chưa đạt được huy hiệu nào. Hãy tham gia thi thử trắc nghiệm
               đạt 80% trở lên!
@@ -108,6 +112,7 @@
           </div>
         </div>
 
+        <TablePagination v-if="awardsData && awardsData.total > 20" v-model:page="awardPage" :page-size="20" :total="awardsData.total" :page-count="Math.max(1,Math.ceil(awardsData.total/20))" :sizes="[20]" unit="huy hiệu"/>
         <div class="cabinet-group system-rules">
           <h3>Quy tắc mở khóa huy hiệu</h3>
           <div class="rules-list">
@@ -153,24 +158,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
-import { showToast } from "../utils/toast";
+import { ref, computed, onMounted, watch } from "vue";
+import TablePagination from "../components/TablePagination.vue";
 import { useUserStore } from "../stores/userStore";
-import { leaderboardApi } from "../api/leaderboardApi";
+import type { AwardsPage } from '../api/profileReadApi';
+import { profileReadApi } from "../api/profileReadApi";
 import type { LeaderboardUser } from "../types";
 import { Award, Shield, Medal } from "lucide-vue-next";
 
 const userStore = useUserStore();
 const leaderboardUsers = ref<LeaderboardUser[]>([]);
+const awardsData=ref<AwardsPage|null>(null),awardPage=ref(1),awardsLoading=ref(false),awardsError=ref('');let awardVersion=0;
+async function loadAwards(){const request=++awardVersion;awardsLoading.value=true;awardsError.value='';try{const data=await profileReadApi.awards(awardPage.value-1);if(request===awardVersion)awardsData.value=data;}catch{if(request===awardVersion)awardsError.value='Không thể tải huy hiệu. Vui lòng thử lại.';}finally{if(request===awardVersion)awardsLoading.value=false;}}
+watch(awardPage,loadAwards);
 
-onMounted(async () => {
-  await userStore.fetchProgress();
-  try {
-    leaderboardUsers.value = await leaderboardApi.getLeaderboard();
-  } catch {
-    showToast("Không thể tải bảng vinh danh. Vui lòng thử lại.", "error");
-  }
-});
+const page=ref(1), pageSize=ref(25), total=ref(0), currentRank=ref<LeaderboardUser|null>(null),loading=ref(false),error=ref("");
+let version=0;
+async function load(){const request=++version;loading.value=true;error.value="";try{const data=await profileReadApi.leaderboard(page.value-1,pageSize.value);if(request!==version)return;leaderboardUsers.value=data.items;total.value=data.total;currentRank.value=data.currentUser;}catch{if(request===version)error.value="Không thể tải bảng vinh danh. Vui lòng thử lại.";}finally{if(request===version)loading.value=false;}}
+watch(page,load);watch(pageSize,()=>{if(page.value!==1)page.value=1;else void load()});
+onMounted(()=>{void loadAwards();void load()});
 
 // Dynamically construct and sort leaderboard based on user points from API
 const sortedLeaderboard = computed(() => {
