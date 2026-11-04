@@ -145,8 +145,6 @@ public final class TrainingStructureDto {
         }
     }
 
-    }
-
     public record UnitBatchAllocationRequest(String unitId, List<BatchAllocationItem> items) {
     }
 
