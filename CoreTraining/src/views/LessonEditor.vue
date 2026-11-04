@@ -9,7 +9,7 @@
           />
           <div class="heading-copy">
             <nav class="breadcrumb">
-              <RouterLink :to="`/admin/courses/${chapter.courseId}`">{{
+              <RouterLink to="/admin/courses">{{
                 course?.name
               }}</RouterLink>
               / <RouterLink :to="chapterUrl">{{ chapter.title }}</RouterLink> /
@@ -255,6 +255,14 @@ async function load() {
     chapter.value = await trainingApi.chapter(lesson.value!.chapterId!);
     course.value =
       courseStore.courses.find((c) => c.id === chapter.value?.courseId) || null;
+    if (!course.value && chapter.value?.courseId) {
+      try {
+        const outlineData = await trainingApi.outline(chapter.value.courseId);
+        course.value = outlineData.course;
+      } catch {
+        // ignore
+      }
+    }
     ensureTreeBranchSavedInSession();
   } catch (e) {
     showToast(
@@ -280,7 +288,11 @@ async function savedContent() {
   showToast("Đã lưu nội dung bài học. Đang chuyển tới màn hình xem trước...", "success");
   const courseId = chapter.value?.courseId;
   if (courseId) {
-    await router.push(`/courses/${encodeURIComponent(courseId)}`);
+    ensureTreeBranchSavedInSession();
+    await router.push({
+      path: `/courses/${encodeURIComponent(courseId)}`,
+      query: { from: "admin" },
+    });
   } else if (chapterUrl.value) {
     await router.push(chapterUrl.value);
   }

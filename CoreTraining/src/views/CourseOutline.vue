@@ -54,7 +54,10 @@
       </div>
     </div>
 
-    <RouterLink to="/" class="back-link"
+    <RouterLink
+      :to="shouldBackToTree ? '/admin/courses' : '/'"
+      class="back-link"
+      @click="shouldBackToTree && syncAdminTreeState()"
       ><ArrowLeft :size="18" /> Khóa học</RouterLink
     >
     <p v-if="error" class="error" role="alert">{{ error }}</p>
@@ -237,6 +240,20 @@ const route = useRoute(),
 const isAdminView = computed(
   () => user.systemAdmin || user.can("courses") || !!outline.value?.course.canEdit,
 );
+const shouldBackToTree = computed(() => {
+  if (!isAdminView.value) return false;
+  if (route.query.from === "learner") return false;
+  if (
+    route.query.from === "admin" ||
+    !user.canLearn ||
+    outline.value?.course.status !== "PUBLISHED"
+  ) {
+    return true;
+  }
+  const backUrl = String(router.options.history.state?.back || "");
+  if (backUrl === "/" || backUrl.startsWith("/?")) return false;
+  return true;
+});
 const totalLessons = computed(
   () => outline.value?.chapters.reduce((n, c) => n + c.lessons.length, 0) || 0,
 );
@@ -263,7 +280,11 @@ function toggle(id: string) {
   expanded.value = set;
 }
 function learn(id: string) {
-  router.push(`/lesson/${id}`);
+  router.push(
+    shouldBackToTree.value
+      ? { path: `/lesson/${id}`, query: { from: "admin" } }
+      : `/lesson/${id}`,
+  );
 }
 function continueCourse() {
   if (outline.value?.resume) router.push(resumeRoute(outline.value.resume));
@@ -273,16 +294,24 @@ function start(c: Chapter) {
   const l = c.lessons.find((l) => !completed(l.id)) || c.lessons[0];
   if (l) learn(l.id);
 }
-function backToCurriculumTree() {
+function syncAdminTreeState(targetOutline?: CourseOutline | null) {
+  const data = targetOutline || outline.value;
+  if (!data) return;
   try {
     const key = "cbs_curriculum_tree_state_v1";
     const raw = sessionStorage.getItem(key);
     const parsed = raw ? JSON.parse(raw) : {};
     const ids = new Set<string>(Array.isArray(parsed.expandedIds) ? parsed.expandedIds : []);
-    const crs = outline.value?.course as any;
+    const crs = data.course as any;
     if (crs?.id) ids.add(crs.id);
     if (crs?.programId) ids.add(crs.programId);
     if (crs?.domainId) ids.add(crs.domainId);
+    if (Array.isArray(data.chapters) && data.chapters.length > 0) {
+      const hasExpandedChapter = data.chapters.some((ch) => ids.has(ch.id));
+      if (!hasExpandedChapter) {
+        ids.add(data.chapters[0].id);
+      }
+    }
     sessionStorage.setItem(
       key,
       JSON.stringify({
@@ -294,6 +323,9 @@ function backToCurriculumTree() {
   } catch {
     // ignore storage errors
   }
+}
+function backToCurriculumTree() {
+  syncAdminTreeState();
   router.push("/admin/courses");
 }
 async function changeCourseStatus(status: "PUBLISHED" | "DRAFT") {
@@ -344,6 +376,9 @@ watch(
       ]);
       if (current !== loadId) return;
       outline.value = loaded;
+      if (user.systemAdmin || user.can("courses") || !!loaded.course.canEdit) {
+        syncAdminTreeState(loaded);
+      }
       const first = loaded.chapters.find(c => !c.locked && !c.completed) || loaded.chapters[0];
       if (first) expanded.value = new Set([first.id]);
     } catch (e) {

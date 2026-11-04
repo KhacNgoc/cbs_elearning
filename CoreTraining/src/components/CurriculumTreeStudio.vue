@@ -1714,38 +1714,38 @@ function getProgramTotalCoursesCount(programId: string): number {
   return getCoursesForProgram(programId).length;
 }
 
-// Expand only operating branch
-function expandOperatingBranch(type: string, id?: string, parentId?: string) {
+// Expand operating branch while preserving existing open branches
+async function expandOperatingBranch(type: string, id?: string, parentId?: string) {
   if (type === "domain") {
     if (id) expandedIds.value.add(id);
   } else if (type === "program") {
     if (parentId) expandedIds.value.add(parentId);
     if (id) {
       expandedIds.value.add(id);
-      ensureProgramCoursesLoaded(id, true);
+      await ensureProgramCoursesLoaded(id, true);
     }
   } else if (type === "course") {
     const crs = courses.value.find((c) => c.id === id);
     const effectiveParentId = parentId || crs?.programId;
     if (effectiveParentId) {
       expandedIds.value.add(effectiveParentId);
-      ensureProgramCoursesLoaded(effectiveParentId, true);
+      await ensureProgramCoursesLoaded(effectiveParentId, true);
       const prog = programs.value.find((p) => p.id === effectiveParentId);
       if (prog?.domainId) expandedIds.value.add(prog.domainId);
     }
     if (id) {
       expandedIds.value.add(id);
-      loadChaptersForCourse(id, true);
+      await loadChaptersForCourse(id, true);
     }
   } else if (type === "chapter") {
     if (parentId) {
       expandedIds.value.add(parentId);
-      loadChaptersForCourse(parentId, true);
+      await loadChaptersForCourse(parentId, true);
       const crs = courses.value.find((c) => c.id === parentId);
       if (crs) {
         if (crs.programId) {
           expandedIds.value.add(crs.programId);
-          ensureProgramCoursesLoaded(crs.programId);
+          await ensureProgramCoursesLoaded(crs.programId);
           const prog = programs.value.find((p) => p.id === crs.programId);
           if (prog?.domainId) expandedIds.value.add(prog.domainId);
         }
@@ -1764,11 +1764,11 @@ function expandOperatingBranch(type: string, id?: string, parentId?: string) {
       }
       if (courseId) {
         expandedIds.value.add(courseId);
-        loadChaptersForCourse(courseId, true);
+        await loadChaptersForCourse(courseId, true);
         const crs = courses.value.find((c) => c.id === courseId);
         if (crs?.programId) {
           expandedIds.value.add(crs.programId);
-          ensureProgramCoursesLoaded(crs.programId);
+          await ensureProgramCoursesLoaded(crs.programId);
           const prog = programs.value.find((p) => p.id === crs.programId);
           if (prog?.domainId) expandedIds.value.add(prog.domainId);
         }
@@ -1838,7 +1838,7 @@ async function loadTreeData(expandTarget?: { type: string; id?: string; parentId
         } catch (e) {}
       }
       expandedIds.value.clear();
-      expandOperatingBranch("course", props.initialCourseId);
+      await expandOperatingBranch("course", props.initialCourseId);
       selectedId.value = props.initialCourseId;
       await loadChaptersForCourse(props.initialCourseId, true);
       const courseChaps = chaptersMap.value[props.initialCourseId] || [];
@@ -1847,8 +1847,7 @@ async function loadTreeData(expandTarget?: { type: string; id?: string; parentId
       }
       saveTreeStateToStorage();
     } else if (expandTarget) {
-      expandedIds.value.clear();
-      expandOperatingBranch(expandTarget.type, expandTarget.id, expandTarget.parentId);
+      await expandOperatingBranch(expandTarget.type, expandTarget.id, expandTarget.parentId);
       saveTreeStateToStorage();
     } else if (expandedIds.value.size > 0) {
       // Khôi phục dữ liệu khóa học & chương cho các nhánh đang mở sẵn trước đó
@@ -1876,6 +1875,7 @@ async function loadTreeData(expandTarget?: { type: string; id?: string; parentId
       if (expandedCourseIds.length > 0) {
         await Promise.all(expandedCourseIds.map((cId) => loadChaptersForCourse(cId, true)));
       }
+      saveTreeStateToStorage();
     }
   } catch (error) {
     console.error("Lỗi khi tải cấu trúc đào tạo:", error);
@@ -2598,8 +2598,21 @@ async function executeDeleteNode() {
 
 // Actions
 function previewCourse(courseId: string) {
+  expandedIds.value.add(courseId);
+  const crs = courses.value.find((c) => c.id === courseId);
+  if (crs?.programId) {
+    expandedIds.value.add(crs.programId);
+    const prog = programs.value.find((p) => p.id === crs.programId);
+    if (prog?.domainId) {
+      expandedIds.value.add(prog.domainId);
+    }
+  }
+  selectedId.value = courseId;
   saveTreeStateToStorage();
-  router.push(`/courses/${encodeURIComponent(courseId)}`);
+  router.push({
+    path: `/courses/${encodeURIComponent(courseId)}`,
+    query: { from: "admin" },
+  });
 }
 
 function openLessonEditor(lessonId: string) {
@@ -2858,13 +2871,14 @@ watch(
   async (newCourseId) => {
     if (newCourseId && courses.value.length > 0) {
       expandedIds.value.clear();
-      expandOperatingBranch("course", newCourseId);
+      await expandOperatingBranch("course", newCourseId);
       selectedId.value = newCourseId;
       await loadChaptersForCourse(newCourseId);
       const courseChaps = chaptersMap.value[newCourseId] || [];
       for (const ch of courseChaps) {
         expandedIds.value.add(ch.id);
       }
+      saveTreeStateToStorage();
     }
   }
 );
