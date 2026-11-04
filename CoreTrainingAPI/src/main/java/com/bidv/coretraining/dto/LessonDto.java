@@ -26,6 +26,8 @@ public class LessonDto {
     private String videoUrl;
     private VideoSource videoSource;
     private Boolean hasQuiz;
+    private Boolean hasVideo;
+    private Boolean hasText;
     private Integer quizPassingScore;
     private List<LessonDocumentDto> documents;
     private List<ProcedureSectionDto> procedureSteps;

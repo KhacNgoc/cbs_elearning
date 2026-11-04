@@ -21,6 +21,15 @@
         </button>
         <button
           type="button"
+          class="btn-studio btn-quick-wizard"
+          @click="showQuickWizard = true"
+          title="Khởi tạo nhanh khóa học hoặc import bằng file CSV"
+        >
+          <Zap :size="15" />
+          <span>Tạo nhanh / Import</span>
+        </button>
+        <button
+          type="button"
           class="btn-studio btn-ghost"
           @click="expandAll = !expandAll; toggleAllNodes(expandAll)"
           :title="expandAll ? 'Thu gọn tất cả' : 'Mở rộng tất cả'"
@@ -903,6 +912,15 @@
       </div>
     </div>
 
+    <!-- QUICK CURRICULUM WIZARD & CSV IMPORT MODAL -->
+    <QuickCurriculumImportModal
+      v-if="showQuickWizard"
+      :domains="domains"
+      :programs="programs"
+      @close="showQuickWizard = false"
+      @completed="handleQuickWizardCompleted"
+    />
+
     <!-- FLOATING RICH HOVER DESCRIPTION TOOLTIP (Synchronized with UnitAllocationAdmin) -->
     <Teleport to="body">
       <Transition name="tooltip-fade">
@@ -984,7 +1002,9 @@ import {
   Edit3,
   Trash2,
   Eye,
+  Zap,
 } from "lucide-vue-next";
+import QuickCurriculumImportModal from "./QuickCurriculumImportModal.vue";
 import { courseApi } from "../api/courseApi";
 import { lessonMetadataUpdate } from "../utils/lessonContent";
 import { trainingApi } from "../api/trainingApi";
@@ -1026,6 +1046,26 @@ const searchQuery = ref("");
 const expandAll = ref(false);
 const selectedId = ref<string>("");
 const expandedIds = ref<Set<string>>(new Set());
+const showQuickWizard = ref(false);
+
+async function handleQuickWizardCompleted(result: {
+  expandedIds: string[];
+  firstLessonId?: string;
+  openLessonEditor?: boolean;
+}) {
+  showQuickWizard.value = false;
+  // Chỉ mở duy nhất nhánh cấu trúc vừa được tạo / import xong
+  expandedIds.value = new Set(result.expandedIds);
+  if (result.firstLessonId) {
+    selectedId.value = result.firstLessonId;
+  }
+  saveTreeStateToStorage();
+  await loadTreeData();
+  emit("refresh");
+  if (result.openLessonEditor && result.firstLessonId) {
+    await router.push(`/admin/lessons/${encodeURIComponent(result.firstLessonId)}/edit`);
+  }
+}
 
 // Data storage
 const domains = ref<TrainingDomain[]>([]);
@@ -2971,6 +3011,18 @@ watch(
 .btn-studio.btn-primary:hover {
   background: var(--primary-hover);
   border-color: var(--primary-hover);
+}
+
+.btn-studio.btn-quick-wizard {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--primary-color, #10b981);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.btn-studio.btn-quick-wizard:hover {
+  background: rgba(16, 185, 129, 0.22);
+  border-color: var(--primary-color, #10b981);
+  transform: translateY(-1px);
 }
 
 /* Node action button styled like header add button */

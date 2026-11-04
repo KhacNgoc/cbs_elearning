@@ -88,6 +88,12 @@ public interface CourseMapper {
                                         ? VideoSource.UPLOAD
                                         : VideoSource.URL);
                 }
+                if (dto.getHasText() == null) {
+                        dto.setHasText(lesson.getTextBody() != null && !lesson.getTextBody().trim().isEmpty());
+                }
+                if (dto.getHasVideo() == null) {
+                        dto.setHasVideo(lesson.getVideoUrl() != null && !lesson.getVideoUrl().trim().isEmpty());
+                }
         }
 
         List<LessonDto> toLessonDtoList(List<Lesson> lessons);

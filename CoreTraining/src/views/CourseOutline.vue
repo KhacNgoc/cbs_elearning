@@ -168,12 +168,22 @@
             /><PlayCircle v-else :size="18" /><span
               >{{ lessonIndex + 1 }}. {{ lesson.title }}</span
             >
-            <small
-              v-if="isAdminView && lesson.status === 'DRAFT'"
-              class="draft-lesson-tag"
-            >
-              Bản nháp
-            </small>
+            <template v-if="isAdminView">
+              <small
+                v-if="!isLessonComposed(lesson)"
+                class="uncomposed-lesson-tag"
+                title="Bài học mới được tạo khung đề cương, chưa có nội dung"
+              >
+                Chưa soạn
+              </small>
+              <small
+                v-else-if="lesson.status === 'DRAFT'"
+                class="draft-lesson-tag"
+                title="Bài học đã có nội dung, đang lưu bản nháp"
+              >
+                Bản nháp
+              </small>
+            </template>
             <small
               v-if="lesson.hasQuiz"
               :class="{ required: lesson.quizRequired }"
@@ -187,12 +197,13 @@
               role="button"
               tabindex="0"
               class="btn-quick-edit-lesson"
-              title="Chỉnh sửa bài học này"
+              :class="{ 'btn-compose': !isLessonComposed(lesson) }"
+              :title="!isLessonComposed(lesson) ? 'Bắt đầu soạn nội dung bài học này' : 'Chỉnh sửa nội dung bài học này'"
               @click.stop="router.push(`/admin/lessons/${encodeURIComponent(lesson.id)}/edit`)"
               @keydown.enter.stop="router.push(`/admin/lessons/${encodeURIComponent(lesson.id)}/edit`)"
             >
-              <Edit3 :size="14" />
-              Sửa bài
+              <component :is="!isLessonComposed(lesson) ? FileEdit : Edit3" :size="14" />
+              {{ !isLessonComposed(lesson) ? "Soạn bài" : "Sửa bài" }}
             </span>
           </button>
           <p v-if="!chapter.lessons.length" class="empty">
@@ -214,6 +225,7 @@ import {
   ChevronDown,
   ChevronRight,
   Edit3,
+  FileEdit,
   FolderTree,
   Loader2,
   Lock,
@@ -294,6 +306,17 @@ function start(c: Chapter) {
   const l = c.lessons.find((l) => !completed(l.id)) || c.lessons[0];
   if (l) learn(l.id);
 }
+
+function isLessonComposed(l: Lesson): boolean {
+  if (l.status === 'PUBLISHED') return true;
+  if (l.hasText || (l.textBody && l.textBody.trim().length > 0)) return true;
+  if (l.hasVideo || (l.videoUrl && l.videoUrl.trim().length > 0)) return true;
+  if (Array.isArray(l.documents) && l.documents.length > 0) return true;
+  if (Array.isArray((l as any).procedureSteps) && (l as any).procedureSteps.length > 0) return true;
+  if (l.hasQuiz) return true;
+  return false;
+}
+
 function syncAdminTreeState(targetOutline?: CourseOutline | null) {
   const data = targetOutline || outline.value;
   if (!data) return;
@@ -377,10 +400,41 @@ watch(
       if (current !== loadId) return;
       outline.value = loaded;
       if (user.systemAdmin || user.can("courses") || !!loaded.course.canEdit) {
-        syncAdminTreeState(loaded);
+        if (shouldBackToTree.value) {
+          syncAdminTreeState(loaded);
+        }
+        try {
+          const adminChaps = await trainingApi.chapters(String(courseId));
+          if (Array.isArray(adminChaps)) {
+            const map = new Map<string, any>();
+            for (const ac of adminChaps) {
+              for (const al of ac.lessons || []) {
+                map.set(al.id, al);
+              }
+            }
+            for (const ch of loaded.chapters) {
+              for (let i = 0; i < ch.lessons.length; i++) {
+                const detailed = map.get(ch.lessons[i].id);
+                if (detailed) {
+                  ch.lessons[i] = {
+                    ...ch.lessons[i],
+                    textBody: detailed.textBody,
+                    videoUrl: detailed.videoUrl,
+                    documents: detailed.documents || ch.lessons[i].documents,
+                    procedureSteps: detailed.procedureSteps,
+                    hasQuiz: detailed.hasQuiz ?? ch.lessons[i].hasQuiz,
+                  };
+                }
+              }
+            }
+          }
+        } catch {
+          // ignore
+        }
       }
-      const first = loaded.chapters.find(c => !c.locked && !c.completed) || loaded.chapters[0];
-      if (first) expanded.value = new Set([first.id]);
+      if (Array.isArray(loaded.chapters) && loaded.chapters.length > 0) {
+        expanded.value = new Set(loaded.chapters.map((c) => c.id));
+      }
     } catch (e) {
       if (current !== loadId) return;
       error.value =
@@ -635,6 +689,24 @@ h1 {
   color: var(--primary-ink);
   background: var(--primary-light);
 }
+
+.outline-lesson small.uncomposed-lesson-tag {
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--text-muted, #64748b);
+  border: 1px dashed rgba(148, 163, 184, 0.45);
+  font-weight: 600;
+}
+.btn-quick-edit-lesson.btn-compose {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: var(--primary-color, #10b981);
+}
+.btn-quick-edit-lesson.btn-compose:hover {
+  background: var(--primary-color, #10b981);
+  color: #ffffff;
+  border-color: var(--primary-color, #10b981);
+}
+
 .outline-lesson:disabled {
   opacity: 0.55;
   cursor: not-allowed;
