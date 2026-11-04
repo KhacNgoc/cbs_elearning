@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -6,7 +7,7 @@ from app.schemas import QuizGenerationRequest
 from app.quiz_utils import generated_question_validation_error, same_question_objective
 from app.services.quiz import generate_quiz
 from app import config
-from tests.quiz_fakes import FakeQuizModel
+from tests.quiz_fakes import FakeQuizModel, REVIEW_SYSTEM_PREFIX
 
 
 class QuizQualityTests(unittest.TestCase):
@@ -136,6 +137,55 @@ class QuizQualityFlowTests(unittest.IsolatedAsyncioTestCase):
         result = await self.run_quiz(model)
         self.assertEqual([], result.questions)
         self.assertIn("0/1", result.warnings[0])
+
+    async def test_reviews_do_not_wait_behind_every_generation(self):
+        second = '{"q":"Mã hồ sơ dùng để nhận diện đối tượng nào?","o":["Hồ sơ khoản vay","Khách hàng","Lãi suất","Tài sản"],"a":0}'
+        third = '{"q":"Hồ sơ khoản vay cụ thể được nhận diện bằng mã nào?","o":["Mã hồ sơ","Mã chi nhánh","Mã sản phẩm","Mã giao dịch viên"],"a":0}'
+        fake = FakeQuizModel([GOOD, second, third], [ACCEPT] * 3)
+        order = []
+
+        async def model(name, messages, *args, **kwargs):
+            order.append("review" if messages[0]["content"].startswith(REVIEW_SYSTEM_PREFIX) else "generate")
+            return await fake(name, messages, *args, **kwargs)
+
+        with patch("app.config.QUIZ_GENERATION_CONCURRENCY", 2):
+            await self.run_quiz(model, single=3)
+        self.assertEqual("review", order[2])
+
+    async def test_generation_window_is_shared_between_question_types(self):
+        model = FakeQuizModel([LEAK] * 12)
+        with patch("app.config.QUIZ_GENERATION_CONCURRENCY", 2), \
+             patch("app.infrastructure.ensure_collection", AsyncMock()), \
+             patch("app.infrastructure.embeddings", AsyncMock(return_value=[[1., 0.]] * 4)), \
+             patch("app.infrastructure.qdrant.query_points", AsyncMock(return_value=SimpleNamespace(points=[POINT]))), \
+             patch("app.infrastructure.ollama_chat", new=model):
+            await generate_quiz(QuizGenerationRequest(course_id="C1", course_name="Cho vay",
+                single_choice_count=2, multiple_choice_count=2))
+        first_two = " ".join(call["prompt"] for call in model.generation_calls[:2])
+        self.assertIn("Tạo SINGLE_CHOICE", first_two)
+        self.assertIn("Tạo MULTIPLE_CHOICE", first_two)
+
+    async def test_concurrent_jobs_take_turns_on_the_model_queue(self):
+        order = []
+
+        async def model(name, messages, *args, **kwargs):
+            order.append("B" if "Khóa học: Khóa B" in messages[1]["content"] else "A")
+            await asyncio.sleep(0)
+            return LEAK
+
+        def job(name):
+            return generate_quiz(QuizGenerationRequest(course_id="C1", course_name=name,
+                single_choice_count=10, multiple_choice_count=0))
+
+        with patch("app.config.QUIZ_GENERATION_CONCURRENCY", 2), \
+             patch("app.infrastructure.quiz_generation_semaphore", asyncio.Semaphore(1)), \
+             patch("app.infrastructure.ensure_collection", AsyncMock()), \
+             patch("app.infrastructure.embeddings", AsyncMock(return_value=[[1., 0.]] * 4)), \
+             patch("app.infrastructure.qdrant.query_points", AsyncMock(return_value=SimpleNamespace(points=[POINT]))), \
+             patch("app.infrastructure.ollama_chat", new=model):
+            await asyncio.gather(job("Khóa A"), job("Khóa B"))
+        self.assertIn("A", order[:4])
+        self.assertIn("B", order[:4])
 
     async def test_candidate_budget_bounds_model_calls(self):
         model = FakeQuizModel([LEAK] * 20)

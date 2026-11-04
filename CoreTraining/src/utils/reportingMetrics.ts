@@ -5,7 +5,7 @@ export interface ReportingRecord {
   passingScore: number;
   mandatory: boolean;
   dueDate: string | null;
-  attempts: {score:number;takenAt:string;passingScore?:number;assessment?:string}[];
+  attempts: {id?:number;score:number;takenAt:string;passingScore?:number;assessment?:string}[];
   completed?:boolean;
   started?:boolean;
   assessmentAverage?:number|null;

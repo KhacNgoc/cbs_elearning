@@ -1,7 +1,13 @@
 package com.bidv.coretraining.service.impl;
 import com.bidv.coretraining.service.*;
 import com.bidv.coretraining.dto.TrainingReportQueryDto.Filter;
+import com.bidv.coretraining.dto.TrainingReportDto.AttemptAnalysis;
+import com.bidv.coretraining.entity.UserQuizScore;
+import com.bidv.coretraining.exception.ResourceNotFoundException;
+import com.bidv.coretraining.repository.QuestionRepository;
+import com.bidv.coretraining.repository.QuizAttemptRepository;
 import com.bidv.coretraining.repository.TrainingReportQueryRepository;
+import com.bidv.coretraining.repository.UserQuizScoreRepository;
 import com.bidv.coretraining.repository.TrainingReportQueryRepository.*;
 import com.bidv.coretraining.entity.User;
 import com.bidv.coretraining.security.AccessPolicy;
@@ -15,7 +21,10 @@ import java.util.*;
 public class TrainingReportReadServiceImpl implements TrainingReportReadService {
     private final AuthorizationService auth;
     private final TrainingReportQueryRepository repository;
-    public TrainingReportReadServiceImpl(AuthorizationService auth, TrainingReportQueryRepository repository) {this.auth=auth;this.repository=repository;}
+    private final UserQuizScoreRepository scores;
+    private final QuizAttemptRepository quizAttempts;
+    private final QuestionRepository questions;
+    public TrainingReportReadServiceImpl(AuthorizationService auth, TrainingReportQueryRepository repository, UserQuizScoreRepository scores, QuizAttemptRepository quizAttempts, QuestionRepository questions) {this.auth=auth;this.repository=repository;this.scores=scores;this.quizAttempts=quizAttempts;this.questions=questions;}
     private Filter filter(Map<String,String> p) {
         try { return new Filter(p.get("from"),p.get("to"),p.get("unit"),p.get("group"),p.get("program"),p.get("course"),p.get("status"),p.getOrDefault("view","completion"),p.get("action"),p.get("search"),Integer.parseInt(p.getOrDefault("page","0")),Integer.parseInt(p.getOrDefault("size","20")),p.get("dimension"),p.get("key")); }
         catch(NumberFormatException e) { throw new BadRequestException("Tham số phân trang không hợp lệ"); }
@@ -169,5 +178,21 @@ public class TrainingReportReadServiceImpl implements TrainingReportReadService 
                             .getBytes(java.nio.charset.StandardCharsets.UTF_8));
         }
         return Map.of("items", items, "hasMore", more, "nextCursor", cursor);
+    }
+
+    @Override
+    public AttemptAnalysis attemptAnalysis(long attemptId) {
+        if(!repository.attemptVisible(scope(actor()),attemptId))
+            throw new ResourceNotFoundException("Quiz attempt","id",attemptId);
+        UserQuizScore score=scores.findById(attemptId)
+                .orElseThrow(()->new ResourceNotFoundException("Quiz attempt","id",attemptId));
+        if(score.getLesson()==null)
+            return AttemptAnalysisAssembler.fromCurrentQuestions(score,questions.findByCourseIdAndLessonIsNull(score.getCourse().getId()));
+        String lessonId=score.getLesson().getId();
+        // Submission writes the score first and its snapshot moments later in the same transaction.
+        return quizAttempts.findRecordedSnapshots(score.getUser().getId(),lessonId,score.getScore(),score.getTotal(),score.getTakenAt(),score.getTakenAt().plusMinutes(1)).stream()
+                .flatMap(a->AttemptAnalysisAssembler.fromSnapshot(attemptId,score.getScore(),score.getTotal(),a.getQuestionsJson(),a.getAnswersJson()).stream())
+                .findFirst()
+                .orElseGet(()->AttemptAnalysisAssembler.fromCurrentQuestions(score,questions.findByLessonId(lessonId)));
     }
 }

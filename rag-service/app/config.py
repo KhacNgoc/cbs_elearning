@@ -37,18 +37,19 @@ COURSE_SUMMARY_RETRIEVAL_LIMIT = int(os.getenv("RAG_COURSE_SUMMARY_TOP_K", "5"))
 COURSE_SUMMARY_CONTEXT_MAX_CHARS = int(
     os.getenv("RAG_COURSE_SUMMARY_CONTEXT_MAX_CHARS", "6500")
 )
+# Upper bound of questions in one generation request, across all question types.
+QUIZ_MAX_QUESTIONS = max(1, int(os.getenv("QUIZ_MAX_QUESTIONS", "10")))
 QUIZ_RETRIEVAL_LIMIT = int(os.getenv("QUIZ_RETRIEVAL_LIMIT", "5"))
-# Retrieval grows with the requested count (about 1.5 chunks per question) up to this cap.
-QUIZ_RETRIEVAL_MAX_LIMIT = int(os.getenv("QUIZ_RETRIEVAL_MAX_LIMIT", "24"))
 QUIZ_RETRIEVAL_CANDIDATE_LIMIT = int(os.getenv("QUIZ_RETRIEVAL_CANDIDATE_LIMIT", "12"))
 QUIZ_SOURCE_MAX_CHARS = int(os.getenv("QUIZ_SOURCE_MAX_CHARS", "650"))
 QUIZ_GENERATION_CONCURRENCY = max(1, int(os.getenv("QUIZ_GENERATION_CONCURRENCY", "2")))
 QUIZ_GENERATION_MAX_ATTEMPTS = max(1, int(os.getenv("QUIZ_GENERATION_MAX_ATTEMPTS", "2")))
-# Candidates in flight per missing question, and the total candidate budget per question.
+# Candidates wanted per missing question (each job queues at most
+# QUIZ_GENERATION_CONCURRENCY at a time), and the total candidate budget per question.
 QUIZ_OVERGENERATION_FACTOR = max(1.0, float(os.getenv("QUIZ_OVERGENERATION_FACTOR", "1.5")))
 QUIZ_CANDIDATE_BUDGET_FACTOR = max(1.0, float(os.getenv("QUIZ_CANDIDATE_BUDGET_FACTOR", "3")))
 # No new candidates start after this; the draft returns what passed so far.
-QUIZ_GENERATION_TIME_BUDGET_SECONDS = float(os.getenv("QUIZ_GENERATION_TIME_BUDGET_SECONDS", "200"))
+QUIZ_GENERATION_TIME_BUDGET_SECONDS = float(os.getenv("QUIZ_GENERATION_TIME_BUDGET_SECONDS", "300"))
 QUIZ_TEMPERATURE = float(os.getenv("QUIZ_TEMPERATURE", "0.6"))
 OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "8192"))
 # Ollama reloads a model whose num_ctx changes, so quiz calls share the chat context size.

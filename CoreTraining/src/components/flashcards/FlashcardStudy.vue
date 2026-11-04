@@ -4,10 +4,25 @@
       <div class="study-toolbar">
         <span class="study-count">Thẻ {{ position + 1 }}/{{ queue.length }}</span>
         <span v-if="showLesson" class="study-lesson" :title="current.lessonTitle">{{ current.lessonTitle }}</span>
-        <span v-if="current.mine" class="study-mine">Thẻ của tôi</span>
-        <button type="button" class="study-exit" @click="$emit('exit')">
-          <X :size="15" /> Kết thúc
-        </button>
+        <div class="study-actions">
+          <button
+            v-if="queue.length > 1"
+            type="button"
+            class="study-shuffle"
+            :class="{ active: shuffled }"
+            :aria-pressed="shuffled"
+            :disabled="saving || position >= queue.length - 1"
+            title="Trộn ngẫu nhiên các thẻ chưa học trong phiên này"
+            @keydown.enter.stop
+            @keydown.space.stop
+            @click="toggleShuffle"
+          >
+            <Shuffle :size="15" /> {{ shuffled ? "Đang trộn thẻ" : "Trộn thẻ" }}
+          </button>
+          <button type="button" class="study-exit" @click="$emit('exit')">
+            <X :size="15" /> Kết thúc
+          </button>
+        </div>
       </div>
       <div class="study-progress" role="progressbar" aria-label="Tiến độ phiên ôn"
         aria-valuemin="0" :aria-valuemax="queue.length" :aria-valuenow="position">
@@ -24,6 +39,10 @@
         <span class="flip-inner">
           <span class="flip-face front" :aria-hidden="flipped">
             <span class="card-type">{{ TYPE_LABELS[current.type] }}</span>
+            <span class="card-origin" :class="{ mine: current.mine }">
+              <component :is="current.mine ? PencilLine : BookOpen" :size="13" />
+              {{ current.mine ? "Thẻ của tôi" : "Thẻ bài học" }}
+            </span>
             <span class="card-text">
               <template v-for="(part, index) in frontParts" :key="index">
                 <span v-if="part.blank" class="cloze-blank" aria-label="chỗ trống">&nbsp;</span>
@@ -34,6 +53,10 @@
           </span>
           <span class="flip-face back" :aria-hidden="!flipped">
             <span class="card-type">{{ current.type === 'CLOZE' ? 'Đáp án' : 'Giải thích' }}</span>
+            <span class="card-origin" :class="{ mine: current.mine }">
+              <component :is="current.mine ? PencilLine : BookOpen" :size="13" />
+              {{ current.mine ? "Thẻ của tôi" : "Thẻ bài học" }}
+            </span>
             <span v-if="current.type === 'CLOZE'" class="card-text">
               <template v-for="(part, index) in frontParts" :key="index">
                 <mark v-if="part.blank" class="cloze-answer">{{ current.back }}</mark>
@@ -51,7 +74,7 @@
         </span>
       </button>
 
-      <div v-if="flipped" class="rating-row" role="group" aria-label="Mức độ ghi nhớ">
+      <div v-if="flipped" class="flashcard-review-row" role="group" aria-label="Mức độ ghi nhớ">
         <button
           v-for="(rating, index) in RATINGS"
           :key="rating"
@@ -65,7 +88,7 @@
           <small>{{ RATING_HINTS[rating] }} · phím {{ index + 1 }}</small>
         </button>
       </div>
-      <div v-else class="rating-row single">
+      <div v-else class="flashcard-review-row single">
         <button type="button" class="btn btn-primary reveal-button" @click="flipped = true">
           Xem đáp án
         </button>
@@ -88,7 +111,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
-import { CheckCircle2, FileText, RotateCcw, X } from "lucide-vue-next";
+import { BookOpen, CheckCircle2, FileText, PencilLine, RotateCcw, Shuffle, X } from "lucide-vue-next";
 import {
   flashcardApi,
   apiErrorMessage,
@@ -98,10 +121,12 @@ import {
   type FlashcardRating,
 } from "../../api/flashcardApi";
 import { showToast } from "../../utils/toast";
-import { frontParts as splitFront, sourceLabel } from "../../utils/flashcards";
+import { frontParts as splitFront, shuffleCards, sourceLabel } from "../../utils/flashcards";
 
 const props = defineProps<{ cards: Flashcard[]; showLesson?: boolean }>();
 const emit = defineEmits<{ reviewed: [card: Flashcard]; exit: []; finished: [] }>();
+// A parent may bind this to keep the choice across study sessions.
+const shuffled = defineModel<boolean>("shuffled", { default: false });
 
 const RATINGS: FlashcardRating[] = ["AGAIN", "HARD", "GOOD", "EASY"];
 const RATING_HINTS: Record<FlashcardRating, string> = {
@@ -119,12 +144,15 @@ const saving = ref(false);
 const reviewedCount = ref(0);
 const counts = reactive<Record<FlashcardRating, number>>({ AGAIN: 0, HARD: 0, GOOD: 0, EASY: 0 });
 const forgotten = ref<Flashcard[]>([]);
+// The scheduled order, restored when the learner turns shuffling off.
+let scheduledOrder: Flashcard[] = [];
 
 const current = computed(() => queue.value[position.value] ?? null);
 const frontParts = computed(() => splitFront(current.value));
 
 function restart(cards: Flashcard[]) {
-  queue.value = [...cards];
+  scheduledOrder = [...cards];
+  queue.value = shuffled.value ? shuffleCards(cards) : [...cards];
   position.value = 0;
   flipped.value = false;
   reviewedCount.value = 0;
@@ -135,6 +163,23 @@ function restart(cards: Flashcard[]) {
 
 watch(() => props.cards, (cards) => restart(cards), { immediate: true });
 onMounted(() => root.value?.focus());
+
+/** Reorders only the cards still ahead, so reviewed cards are never asked again. */
+function toggleShuffle() {
+  // A bound model only reads back its new value after the parent re-renders.
+  const shuffle = !shuffled.value;
+  shuffled.value = shuffle;
+  const done = queue.value.slice(0, position.value);
+  const ahead = queue.value.slice(position.value);
+  const aheadIds = new Set(ahead.map((card) => card.id));
+  queue.value = [
+    ...done,
+    ...(shuffle ? shuffleCards(ahead) : scheduledOrder.filter((card) => aheadIds.has(card.id))),
+  ];
+  flipped.value = false;
+  // Hands keyboard focus back so Space flips the new card instead of pressing this button again.
+  root.value?.focus();
+}
 
 async function rate(rating: FlashcardRating) {
   const card = current.value;
@@ -200,21 +245,17 @@ function onKey(event: KeyboardEvent) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.study-mine {
+.study-actions {
+  display: flex;
   flex-shrink: 0;
-  padding: 0.2rem 0.55rem;
-  border-radius: 9999px;
-  background: var(--surface-ede9fe);
-  color: var(--ink-6d28d9);
-  font-size: 0.74rem;
-  font-weight: 700;
-  white-space: nowrap;
+  gap: 0.4rem;
+  margin-left: auto;
 }
+.study-shuffle,
 .study-exit {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  margin-left: auto;
   padding: 0.35rem 0.6rem;
   border: 1px solid var(--border-color);
   border-radius: 8px;
@@ -224,9 +265,19 @@ function onKey(event: KeyboardEvent) {
   font-weight: 600;
   cursor: pointer;
 }
+.study-shuffle:not(:disabled):hover,
 .study-exit:hover {
   color: var(--primary-ink);
   border-color: var(--primary-color);
+}
+.study-shuffle.active {
+  border-color: var(--primary-color);
+  background: var(--primary-light);
+  color: var(--primary-ink);
+}
+.study-shuffle:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 .study-progress {
   height: 6px;
@@ -299,6 +350,24 @@ function onKey(event: KeyboardEvent) {
   font-size: 0.72rem;
   font-weight: 700;
 }
+.card-origin {
+  position: absolute;
+  top: 0.9rem;
+  right: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.18rem 0.55rem;
+  border-radius: 9999px;
+  background: var(--surface-f1f5f9);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.card-origin.mine {
+  background: var(--surface-ede9fe);
+  color: var(--ink-6d28d9);
+}
 .card-text {
   max-width: 640px;
   font-size: 1.15rem;
@@ -336,12 +405,12 @@ function onKey(event: KeyboardEvent) {
   color: var(--text-muted);
   font-size: 0.76rem;
 }
-.rating-row {
+.flashcard-review-row {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.55rem;
 }
-.rating-row.single {
+.flashcard-review-row.single {
   display: flex;
   justify-content: center;
 }
@@ -430,7 +499,7 @@ function onKey(event: KeyboardEvent) {
   .card-text {
     font-size: 1.02rem;
   }
-  .rating-row {
+  .flashcard-review-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .rating-button small {

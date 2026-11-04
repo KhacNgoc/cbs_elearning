@@ -18,6 +18,19 @@ test('due sessions review the most overdue cards first, then new cards in deck o
   assert.deepEqual(flashcards.studyQueue(deck, 'all', NOW).map((card) => card.id), [1, 2, 3, 4, 5, 6]);
 });
 
+test('shuffling keeps every card, moves the first card away and leaves the input alone', () => {
+  const ids = deck.map((card) => card.id);
+  // random() = 0.999 leaves Fisher-Yates a no-op, the case that would otherwise keep the first card.
+  for (const random of [Math.random, () => 0, () => 0.999]) {
+    const shuffled = flashcards.shuffleCards(deck, random);
+    assert.deepEqual(shuffled.map((card) => card.id).sort((a, b) => a - b), ids);
+    assert.notEqual(shuffled[0].id, ids[0]);
+  }
+  assert.deepEqual(deck.map((card) => card.id), ids);
+  assert.deepEqual(flashcards.shuffleCards([deck[0]]), [deck[0]]);
+  assert.deepEqual(flashcards.shuffleCards([]), []);
+});
+
 test('deck stats separate new, due, learning and mastered cards', () => {
   assert.deepEqual(flashcards.deckStats(deck, NOW),
     { total: 6, newCount: 2, dueCount: 2, learningCount: 1, masteredCount: 1 });

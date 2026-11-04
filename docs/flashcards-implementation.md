@@ -33,7 +33,8 @@ Thẻ AI không tự đến tay học viên: chỉ thẻ `PUBLISHED` thuộc bà
 - RAG: `POST /flashcards/jobs`, `GET /flashcards/jobs/{id}`. Dùng chung truy xuất (`retrieve_grounded_sources`), semaphore Ollama
   và trần `QUIZ_JOB_MAX_ACTIVE` với sinh đề, nên tổng tải AI không tăng thêm. Vượt trần trả 429, backend báo "Hệ thống AI đang bận".
 - Kiểm tra rẻ trước khi gọi LLM kiểm định: đáp án điền khuyết phải có nguyên văn trong nguồn, thuật ngữ phải xuất hiện trong nguồn.
-- Lần sinh lại ưu tiên loại thẻ còn thiếu để giữ tỉ lệ Thuật ngữ/Điền khuyết.
+- Sinh và kiểm định theo pipeline như sinh đề: mỗi job chỉ xếp tối đa `QUIZ_GENERATION_CONCURRENCY` lượt sinh vào hàng đợi chung, nên các job chia đều lượt gọi model. Thẻ bị loại, kể cả ở bước kiểm định, được thay thế và ưu tiên loại thẻ còn thiếu để giữ tỉ lệ Thuật ngữ/Điền khuyết.
+- Dùng chung `QUIZ_CANDIDATE_BUDGET_FACTOR` và `QUIZ_GENERATION_TIME_BUDGET_SECONDS`: hết giờ thì trả về các thẻ đã đạt kèm cảnh báo thiếu thẻ, thay vì lỗi 504.
 - Đo trên máy dev (qwen3:8b): job 4 thẻ mất 40–85 giây.
 
 ## API
@@ -62,8 +63,13 @@ Hibernate `ddl-auto=update` tự tạo bảng `flashcards` và `flashcard_review
 
 ## Thẻ cá nhân của học viên (04/11/2026)
 
-Học viên tự viết thẻ cho từng bài: nút **Flashcard** trên thanh tiêu đề luôn hiện (kể cả bài chưa có thẻ), modal có chế độ
-**Thẻ của tôi** để thêm/sửa/xóa thẻ thuật ngữ hoặc điền khuyết. Bài chưa có thẻ nào thì modal mở thẳng vào chế độ này.
+Học viên tự viết thẻ cho từng bài: nút **Flashcard** trên thanh tiêu đề luôn hiện (kể cả bài chưa có thẻ), modal có màn
+**Thêm / sửa thẻ của tôi** để thêm/sửa/xóa thẻ thuật ngữ hoặc điền khuyết. Bài chưa có thẻ nào thì modal mở thẳng vào màn này.
+
+- Modal không chia tab: thẻ bài học và thẻ của học viên học chung một phiên, mỗi thẻ có nhãn **Thẻ bài học** hoặc
+  **Thẻ của tôi** trên cả hai mặt.
+- Nút **Trộn thẻ** chỉ đảo các thẻ chưa học của phiên, tắt thì trở lại thứ tự lịch ôn. Thứ tự chỉ nằm ở frontend, không
+  ảnh hưởng lịch SM-2. Lựa chọn được giữ trong modal đến khi rời trang bài học; trang ôn theo khóa cũng có nút này.
 
 - Dữ liệu: dùng chung bảng `flashcards`, thêm cột `owner_user_id` (NULL = thẻ của bài) và origin `PERSONAL`. Thẻ cá nhân
   luôn `PUBLISHED`, không cần duyệt, nên dùng luôn lịch ôn SM-2, hàng đợi theo khóa và banner Dashboard.

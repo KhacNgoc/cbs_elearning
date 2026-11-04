@@ -29,7 +29,7 @@ class QuizGenerationSourceTest {
     QuestionRepository questions = mock(QuestionRepository.class);
     BankQuestionRepository bank = mock(BankQuestionRepository.class);
     QuizGenerationService service = new QuizGenerationServiceImpl(courses, lessons, sources, questions, bank,
-            "http://rag", 5000, 30000);
+            "http://rag", 5000, 30000, 10);
     Course course = Course.builder().id("C1").name("Cho vay").build();
     Lesson lesson = Lesson.builder().id("L1").course(course).title("Giải ngân").build();
     QuizGenerationRequestDto request() {

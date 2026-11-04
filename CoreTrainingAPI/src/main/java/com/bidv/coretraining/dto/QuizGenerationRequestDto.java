@@ -15,10 +15,8 @@ public class QuizGenerationRequestDto {
     private String courseId;
     private String lessonId;
     @Min(0)
-    @Max(10)
     private int singleChoiceCount = 5;
     @Min(0)
-    @Max(10)
     private int multipleChoiceCount = 0;
     @Min(3)
     @Max(6)

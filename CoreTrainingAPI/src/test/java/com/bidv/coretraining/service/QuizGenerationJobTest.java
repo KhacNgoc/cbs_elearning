@@ -4,6 +4,7 @@ import com.bidv.coretraining.service.impl.*;
 import com.bidv.coretraining.dto.QuizGenerationJobDto;
 import com.bidv.coretraining.dto.QuizGenerationRequestDto;
 import com.bidv.coretraining.entity.Course;
+import com.bidv.coretraining.exception.BadRequestException;
 import com.bidv.coretraining.exception.RagServiceUnavailableException;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
 import com.bidv.coretraining.mapper.QuizMapper;
@@ -30,7 +31,7 @@ class QuizGenerationJobTest {
     CourseRepository courses = mock(CourseRepository.class);
     LessonKnowledgeSourceService sources = mock(LessonKnowledgeSourceService.class);
     QuizGenerationService service = new QuizGenerationServiceImpl(courses, mock(LessonRepository.class), sources,
-            mock(QuestionRepository.class), mock(BankQuestionRepository.class), "http://rag", 5000, 30000);
+            mock(QuestionRepository.class), mock(BankQuestionRepository.class), "http://rag", 5000, 30000, 10);
     MockRestServiceServer server = MockRestServiceServer.bindTo(
             (RestTemplate) ReflectionTestUtils.getField(service, "restTemplate")).build();
 
@@ -94,6 +95,22 @@ class QuizGenerationJobTest {
         server.expect(requestTo("http://rag/quiz/jobs/abc123")).andRespond(withStatus(HttpStatus.NOT_FOUND));
         assertThatThrownBy(() -> service.jobStatus("abc123")).isInstanceOf(ResourceNotFoundException.class);
         assertThatThrownBy(() -> service.jobCourseId("abc123")).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test void questionCapAppliesToTheTotalAcrossTypes() {
+        var request = request();
+        request.setSingleChoiceCount(6);
+        request.setMultipleChoiceCount(5);
+        assertThatThrownBy(() -> service.startJob(request)).isInstanceOf(BadRequestException.class);
+        server.verify();
+
+        request.setSingleChoiceCount(10);
+        request.setMultipleChoiceCount(0);
+        server.expect(requestTo("http://rag/quiz/jobs"))
+                .andExpect(jsonPath("$.single_choice_count").value(10))
+                .andRespond(withStatus(HttpStatus.ACCEPTED).contentType(MediaType.APPLICATION_JSON).body(QUEUED));
+        service.startJob(request);
+        server.verify();
     }
 
     @Test void unknownJobNeverCallsRag() {

@@ -19,7 +19,7 @@ export const RAG_CHAT_TIMEOUT_MS = positiveTimeout(
 
 export const QUIZ_GENERATION_TIMEOUT_MS = positiveTimeout(
   import.meta.env.VITE_QUIZ_GENERATION_TIMEOUT_MS,
-  300_000,
+  420_000,
 );
 
 export const isTimeoutError = (error: unknown): boolean => {

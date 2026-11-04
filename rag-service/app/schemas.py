@@ -4,6 +4,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr, model_validator
 
+from app import config
+
 
 class ConversationMessage(BaseModel):
     role: Literal["user", "assistant", "system"]
@@ -96,8 +98,8 @@ class QuizGenerationRequest(BaseModel):
     lesson_name: str | None = Field(default=None, max_length=500)
     lesson_id: str | None = Field(default=None, min_length=1, max_length=200)
     sources: list[QuizKnowledgeSource] = Field(default_factory=list, max_length=50)
-    single_choice_count: int = Field(default=5, ge=0, le=10)
-    multiple_choice_count: int = Field(default=0, ge=0, le=10)
+    single_choice_count: int = Field(default=5, ge=0, le=config.QUIZ_MAX_QUESTIONS)
+    multiple_choice_count: int = Field(default=0, ge=0, le=config.QUIZ_MAX_QUESTIONS)
     option_count: int = Field(default=4, ge=3, le=6)
     # Saved questions and earlier drafts; new candidates repeating them are rejected.
     existing_questions: list[Annotated[str, Field(max_length=2000)]] = Field(

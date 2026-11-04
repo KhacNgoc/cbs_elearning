@@ -32,3 +32,13 @@ export const readReportAttempts = async(learnerId:string,courseId:string,before?
   (await axiosClient.get<{items:ReportingRecord['attempts'];nextCursor:string;hasMore:boolean}>('/api/admin/reports/training/attempts',{params:{learnerId,courseId,before,size:20}})).data;
 export const exportTrainingReport = async(params:ReportParams) =>
   (await axiosClient.get<Blob>('/api/admin/reports/training/export',{params,responseType:'blob'})).data;
+export interface ReportAttemptQuestion {
+  id:number; text:string; options:string[]; selectedAnswers:number[]; correctAnswers:number[];
+  answered:boolean; correct:boolean;
+}
+export interface ReportAttemptAnalysis {
+  attemptId:number; available:boolean; source:'SNAPSHOT'|'CURRENT'|null; unavailableReason:'NO_ANSWERS'|'QUIZ_CHANGED'|null;
+  correct:number; incorrect:number; unanswered:number; questions:ReportAttemptQuestion[];
+}
+export const readReportAttemptAnalysis = async(attemptId:number) =>
+  (await axiosClient.get<ReportAttemptAnalysis>(`/api/admin/reports/training/attempts/${attemptId}/analysis`)).data;

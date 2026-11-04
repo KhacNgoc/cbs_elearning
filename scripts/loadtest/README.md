@@ -54,7 +54,7 @@ Mỗi lần chỉ nên đo một bậc tải để dễ đọc kết quả, ví 
 | `quiz_job_duration` | Thời gian từ lúc tạo job đến khi job xong |
 | `quiz_job_success` | Tỷ lệ job sinh đề hoàn thành |
 | `quiz_accepted_ratio` | Số câu đạt chia cho số câu yêu cầu. Tỷ lệ này giảm khi quá tải vì các lượt sinh bị timeout |
-| `quiz_errors{status:...}` | `429` là vượt `QUIZ_JOB_MAX_ACTIVE`, `504` là job vượt 300s |
+| `quiz_errors{status:...}` | `429` là vượt `QUIZ_JOB_MAX_ACTIVE`, `504` là job vượt 420s |
 
 **Năng lực chịu tải** là bậc cao nhất mà `chat_success` vẫn > 95% và p95 của `chat_duration` < 50s. Với sinh đề, là bậc cao nhất mà `quiz_job_success` > 90%.
 

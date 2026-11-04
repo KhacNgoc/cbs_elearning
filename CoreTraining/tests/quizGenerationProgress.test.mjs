@@ -82,7 +82,7 @@ async function fixture(generateQuizWithProgress) {
     'vue-router': { useRoute: () => ({ name: 'AdminQuizDetail', params: { scopeType: 'course', scopeId: 'c1' }, query: {} }), useRouter: () => ({ push() {}, replace() {} }) },
     '../stores/courseStore': { useCourseStore: () => vue.reactive({ courses: [] }) },
     '../api/quizContextApi': { getQuizContext: async () => course, getQuizCourses: async () => [course] },
-    '../api/adminApi': { adminApi: { getQuizQuestions: async () => [], generateQuizWithProgress } },
+    '../api/adminApi': { adminApi: { getQuizQuestions: async () => [], generateQuizWithProgress }, QUIZ_MAX_QUESTIONS: 10 },
     '../utils/quizGenerationJob': jobModule,
     '../composables/useTablePagination': { useTablePagination },
     '../utils/toast': { showToast: (message, type) => toasts.push({ message, type }) },

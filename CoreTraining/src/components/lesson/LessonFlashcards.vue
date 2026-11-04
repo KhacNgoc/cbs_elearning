@@ -1,75 +1,45 @@
 <template>
   <!-- The page has no inline deck: learners open it from the lesson header or the completion reminder. -->
-  <AdminModal :open="!!tab" :title="studyTitle" :width="680" @close="tab = null">
-    <div class="deck-tabs" role="tablist" aria-label="Bộ thẻ">
-      <button
-        v-for="option in TABS"
-        :key="option.key"
-        type="button"
-        role="tab"
-        :aria-selected="tab === option.key"
-        @click="selectTab(option.key)"
-      >
-        <component :is="option.icon" :size="16" />
-        {{ option.label }}
-        <span class="tab-count" :class="{ pending: pendingCount(option.key) }">
-          {{ pendingCount(option.key) || cardsFor(option.key).length }}
-        </span>
-      </button>
-    </div>
-
-    <template v-if="tab === 'lesson'">
-      <FlashcardStudy
-        v-if="lessonCards.length"
-        :key="sessionKey"
-        :cards="session"
-        @reviewed="applyReview"
-        @exit="tab = null"
-      />
-      <p v-else class="tab-empty">
-        Bài này chưa có thẻ do giảng viên soạn. Bạn có thể tự tạo thẻ ở tab <strong>Thẻ của tôi</strong>.
-      </p>
-    </template>
-    <template v-else-if="tab === 'mine'">
-      <FlashcardStudy
-        v-if="studyingMine"
-        :key="sessionKey"
-        :cards="session"
-        @reviewed="applyReview"
-        @exit="studyingMine = false"
-      />
-      <PersonalFlashcards
-        v-else
-        :lesson-id="lessonId"
-        :cards="myCards"
-        @saved="applySaved"
-        @removed="applyRemoved"
-      />
-    </template>
+  <AdminModal :open="!!view" :title="studyTitle" :width="680" @close="view = null">
+    <FlashcardStudy
+      v-if="view === 'study'"
+      :key="sessionKey"
+      v-model:shuffled="shuffled"
+      :cards="session"
+      @reviewed="applyReview"
+      @exit="view = null"
+    />
+    <PersonalFlashcards
+      v-else-if="view === 'manage'"
+      :lesson-id="lessonId"
+      :cards="myCards"
+      @saved="applySaved"
+      @removed="applyRemoved"
+    />
 
     <template #footer>
-      <span v-if="studying" class="study-shortcuts">
+      <span v-if="view === 'study'" class="study-shortcuts">
         <kbd>Space</kbd> lật thẻ · <kbd>1</kbd>–<kbd>4</kbd> đánh giá · <kbd>Esc</kbd> đóng
       </span>
-      <button v-if="tab === 'mine' && studyingMine" type="button" class="btn btn-secondary footer-action" @click="studyingMine = false">
-        <PencilLine :size="16" /> Quản lý thẻ của tôi
+      <button v-if="view === 'study'" type="button" class="btn btn-secondary footer-action" @click="view = 'manage'">
+        <PencilLine :size="16" /> Thêm / sửa thẻ của tôi
       </button>
       <button
-        v-else-if="tab === 'mine' && myCards.length"
+        v-else-if="deck?.cards.length"
         type="button"
         class="btn btn-primary footer-action"
-        @click="startMineStudy"
+        @click="startStudy"
       >
-        <Layers3 :size="16" /> Ôn thẻ của tôi
+        <Layers3 :size="16" /> Học thẻ ({{ deck.cards.length }})
       </button>
-      <button type="button" class="btn btn-secondary" @click="tab = null">Đóng</button>
+      <button type="button" class="btn btn-secondary" @click="view = null">Đóng</button>
     </template>
   </AdminModal>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { BookOpen, Layers3, PencilLine } from "lucide-vue-next";
+import { Layers3, PencilLine } from "lucide-vue-next";
 import AdminModal from "../AdminModal.vue";
 import FlashcardStudy from "../flashcards/FlashcardStudy.vue";
 import PersonalFlashcards from "../flashcards/PersonalFlashcards.vue";
@@ -81,41 +51,25 @@ import {
 } from "../../api/flashcardApi";
 import { deckStats, studyQueue, upsertCard } from "../../utils/flashcards";
 
-type DeckTab = "lesson" | "mine";
-
 const props = defineProps<{ lessonId: string; lessonTitle?: string }>();
 // The lesson page shows its own shortcuts to this deck, so it needs the counts.
 const emit = defineEmits<{ stats: [stats: FlashcardStats | null] }>();
 
-const TABS = [
-  { key: "lesson", label: "Thẻ bài học", icon: BookOpen },
-  { key: "mine", label: "Thẻ của tôi", icon: PencilLine },
-] as const;
-
 const deck = ref<FlashcardDeck | null>(null);
-// Lesson cards are studied straight away; the learner's own tab lists and edits cards until they start a session.
-const tab = ref<DeckTab | null>(null);
-const studyingMine = ref(false);
+// One deck mixes lesson cards and the learner's own; writing their own cards is a secondary view.
+const view = ref<"study" | "manage" | null>(null);
 const session = ref<Flashcard[]>([]);
 // Remounts the study view so each new session starts from its first card.
 const sessionKey = ref(0);
+// Lives here so the choice survives leaving to edit cards and starting a new session.
+const shuffled = ref(false);
 let requestId = 0;
 
-const lessonCards = computed(() => deck.value?.cards.filter((card) => !card.mine) ?? []);
 const myCards = computed(() => deck.value?.cards.filter((card) => card.mine) ?? []);
-const studying = computed(() =>
-  (tab.value === "lesson" && lessonCards.value.length > 0) || (tab.value === "mine" && studyingMine.value),
-);
-
-const cardsFor = (key: DeckTab) => (key === "lesson" ? lessonCards.value : myCards.value);
-const pendingCount = (key: DeckTab) => {
-  const stats = deckStats(cardsFor(key));
-  return stats.dueCount + stats.newCount;
-};
 
 async function load() {
   const current = ++requestId;
-  tab.value = null;
+  view.value = null;
   try {
     const result = await flashcardApi.lessonDeck(props.lessonId);
     if (current === requestId) deck.value = result;
@@ -151,29 +105,19 @@ function applyRemoved(id: number) {
 }
 
 /** Starts with cards that are due or new; once caught up, lets the learner run through the whole set. */
-function startSession(cards: Flashcard[]) {
+function startStudy() {
+  const cards = deck.value?.cards ?? [];
   const stats = deckStats(cards);
   session.value = studyQueue(cards, stats.dueCount + stats.newCount > 0 ? "due" : "all");
   sessionKey.value++;
+  view.value = "study";
 }
 
-function selectTab(key: DeckTab) {
-  if (tab.value === key) return;
-  tab.value = key;
-  studyingMine.value = false;
-  if (key === "lesson") startSession(lessonCards.value);
-}
-
-function startMineStudy() {
-  startSession(myCards.value);
-  studyingMine.value = true;
-}
-
-/** Opens on the lesson cards when there are any, otherwise where the learner writes their own. */
+/** Opens on the cards when there are any, otherwise where the learner writes their own. */
 function open() {
   if (!deck.value) return;
-  tab.value = null;
-  selectTab(lessonCards.value.length ? "lesson" : "mine");
+  if (deck.value.cards.length) startStudy();
+  else view.value = "manage";
 }
 
 defineExpose({ open });
@@ -187,50 +131,6 @@ const studyTitle = computed(() =>
 /* The dialog already has its own close controls. */
 :global(.admin-modal-body .flashcard-study .study-exit) {
   display: none;
-}
-.deck-tabs {
-  display: flex;
-  gap: 0.25rem;
-  margin-bottom: 1rem;
-  border-bottom: 1px solid var(--border-color);
-}
-.deck-tabs button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-bottom: -1px;
-  padding: 0.55rem 0.85rem;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--text-muted);
-  font-weight: 700;
-  cursor: pointer;
-}
-.deck-tabs button[aria-selected="true"] {
-  border-bottom-color: var(--primary-color);
-  color: var(--primary-ink);
-}
-.tab-count {
-  min-width: 1.4rem;
-  padding: 0.05rem 0.4rem;
-  border-radius: 9999px;
-  background: var(--surface-f1f5f9);
-  color: var(--text-muted);
-  font-size: 0.72rem;
-  text-align: center;
-}
-.tab-count.pending {
-  background: var(--primary-light);
-  color: var(--primary-ink);
-}
-.tab-empty {
-  margin: 0;
-  padding: 1.5rem 1rem;
-  border: 1px dashed var(--border-color);
-  border-radius: var(--radius-md);
-  color: var(--text-muted);
-  text-align: center;
 }
 .footer-action {
   display: inline-flex;

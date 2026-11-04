@@ -54,6 +54,7 @@ public class QuizGenerationServiceImpl implements QuizGenerationService {
     private final BankQuestionRepository bankQuestionRepository;
     private final RestTemplate restTemplate;
     private final String ragUrl;
+    private final int maxQuestions;
     private final Map<String, JobOwner> jobOwners = new ConcurrentHashMap<>();
 
     private record JobOwner(String courseId, Instant startedAt) {
@@ -70,13 +71,15 @@ public class QuizGenerationServiceImpl implements QuizGenerationService {
             BankQuestionRepository bankQuestionRepository,
             @Value("${app.rag-url}") String ragUrl,
             @Value("${app.rag.connect-timeout-ms:5000}") int connectTimeoutMs,
-            @Value("${app.rag.quiz-read-timeout-ms:300000}") int readTimeoutMs) {
+            @Value("${app.rag.quiz-read-timeout-ms:300000}") int readTimeoutMs,
+            @Value("${app.rag.quiz-max-questions:10}") int maxQuestions) {
         this.courseRepository = courseRepository;
         this.lessonRepository = lessonRepository;
         this.knowledgeSources = knowledgeSources;
         this.questionRepository = questionRepository;
         this.bankQuestionRepository = bankQuestionRepository;
         this.ragUrl = ragUrl;
+        this.maxQuestions = maxQuestions;
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(connectTimeoutMs);
         requestFactory.setReadTimeout(readTimeoutMs);
@@ -183,8 +186,8 @@ public class QuizGenerationServiceImpl implements QuizGenerationService {
 
     private RagQuizRequest ragRequest(QuizGenerationRequestDto request) {
         int total = request.getSingleChoiceCount() + request.getMultipleChoiceCount();
-        if (total < 1 || total > 20) {
-            throw new BadRequestException("Tổng số câu hỏi phải nằm trong khoảng từ 1 đến 20");
+        if (total < 1 || total > maxQuestions) {
+            throw new BadRequestException("Tổng số câu hỏi phải nằm trong khoảng từ 1 đến " + maxQuestions);
         }
         Course course = courseRepository.findById(request.getCourseId())
                 .orElseThrow(() -> new ResourceNotFoundException("Course", "id", request.getCourseId()));

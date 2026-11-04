@@ -2737,13 +2737,41 @@ const deleteComment = async (commentId: number) => {
   outline: 2px solid #8ae2c2;
   outline-offset: 2px;
 }
-.lesson-content-switch .switch-divider {
-  width: 1px;
-  height: 20px;
-  margin: 0 2px;
-  background: rgba(138, 226, 194, 0.28);
+.lesson-tools {
+  display: flex;
+  /* Stretch keeps the flashcard button as tall as the content switch at every breakpoint. */
+  align-items: stretch;
+  gap: 0.5rem;
+  min-width: 0;
 }
-.lesson-content-switch .flashcard-shortcut strong {
+/* An action that opens a dialog, so it sits apart from the content switch. */
+.flashcard-shortcut {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 38px;
+  padding: 0 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 7px;
+  background: transparent;
+  color: white;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.flashcard-shortcut:hover {
+  background: #294c40;
+  border-color: var(--line-8ae2c2);
+}
+.flashcard-shortcut:focus-visible {
+  outline: 2px solid #8ae2c2;
+  outline-offset: 2px;
+}
+.flashcard-shortcut strong {
   min-width: 1.35rem;
   padding: 0.2rem 0.4rem;
   border-radius: 9999px;
@@ -2755,7 +2783,7 @@ const deleteComment = async (commentId: number) => {
   font-variant-numeric: tabular-nums;
 }
 /* Cards waiting for review get the same amber as the dashboard reminder. */
-.lesson-content-switch .flashcard-shortcut strong.pending {
+.flashcard-shortcut strong.pending {
   background: var(--warning-ink);
   color: var(--surface-ffffff);
 }
@@ -2831,7 +2859,7 @@ const deleteComment = async (commentId: number) => {
     justify-content: flex-end;
   }
   /* Keep the header row short: icon and count are enough on phones. */
-  .lesson-content-switch .flashcard-shortcut > span {
+  .flashcard-shortcut > span {
     display: none;
   }
 }
@@ -2916,7 +2944,7 @@ const deleteComment = async (commentId: number) => {
     padding: 0;
     margin: 0;
   }
-  .learning-header .lesson-content-switch {
+  .learning-header .lesson-tools {
     grid-column: 1 / 3;
     grid-row: 2;
     justify-self: start;
@@ -2941,7 +2969,8 @@ const deleteComment = async (commentId: number) => {
   .header-completion-content {
     padding-left: 0;
   }
-  .lesson-content-switch button {
+  .lesson-content-switch button,
+  .flashcard-shortcut {
     min-height: 34px;
     padding: 0 0.5rem;
     gap: 0.35rem;
@@ -2952,12 +2981,58 @@ const deleteComment = async (commentId: number) => {
     gap: 0.3rem;
   }
 }
+/* Phones: progress becomes the title's subtitle, so the header stays at two visual rows. */
+@media (max-width: 600px) {
+  .learning-header {
+    row-gap: 0;
+  }
+  .learning-header .back-button,
+  .learning-header .mobile-content-button {
+    grid-row: 1 / 3;
+  }
+  .learning-header .header-copy {
+    align-self: end;
+  }
+  .learning-header .header-completion {
+    grid-column: 2 / 4;
+    grid-row: 2;
+    align-self: start;
+    justify-self: start;
+    margin-top: 2px;
+  }
+  .learning-header .progress-summary {
+    gap: 0.25rem;
+    font-size: 0.7rem;
+    font-weight: 500;
+  }
+  .learning-header .progress-summary svg {
+    width: 13px;
+    height: 13px;
+  }
+  .learning-header .lesson-tools {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    width: 100%;
+    margin-top: 0.6rem;
+  }
+  .learning-header .lesson-content-switch {
+    flex: 1;
+    min-width: 0;
+  }
+  .learning-header .lesson-content-switch button {
+    flex: 1;
+  }
+}
 @media (max-width: 360px) {
   .lesson-content-switch {
     gap: 2px;
     padding: 3px;
   }
-  .lesson-content-switch button {
+  .lesson-tools {
+    gap: 0.25rem;
+  }
+  .lesson-content-switch button,
+  .flashcard-shortcut {
     padding: 0 0.35rem;
     font-size: 0.75rem;
   }

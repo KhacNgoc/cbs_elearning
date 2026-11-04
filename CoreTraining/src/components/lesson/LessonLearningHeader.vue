@@ -12,41 +12,41 @@
       <h1>{{ lessonTitle }}</h1>
     </div>
     <div class="header-actions">
-      <div
-        v-if="hasText || hasVideo || hasSlides || flashcardsEnabled"
-        class="lesson-content-switch"
-        role="group"
-        aria-label="Chọn nội dung bài học"
-      >
-        <button
-          v-if="hasText"
-          type="button"
-          :aria-pressed="activeContent === 'TEXT'"
-          @click="$emit('select-content', 'TEXT')"
+      <div class="lesson-tools">
+        <div
+          v-if="hasText || hasVideo || hasSlides"
+          class="lesson-content-switch"
+          role="group"
+          aria-label="Chọn nội dung bài học"
         >
-          <FileText :size="17" /><span>Văn bản</span>
-        </button>
-        <button
-          v-if="hasVideo"
-          type="button"
-          :aria-pressed="activeContent === 'VIDEO'"
-          @click="$emit('select-content', 'VIDEO')"
-        >
-          <PlayCircle :size="17" /><span>Video</span>
-        </button>
-        <button v-if="hasSlides" type="button" :aria-pressed="activeContent === 'SLIDE'" @click="$emit('select-content', 'SLIDE')"><FileText :size="17" /><span>Slide</span></button>
-        <template v-if="flashcardsEnabled">
-          <span class="switch-divider" aria-hidden="true"></span>
           <button
+            v-if="hasText"
             type="button"
-            class="flashcard-shortcut"
-            :title="flashcardPending ? `${flashcardPending} thẻ cần ôn` : flashcardTotal ? `${flashcardTotal} flashcard` : 'Tạo flashcard của bạn'"
-            @click="$emit('open-flashcards')"
+            :aria-pressed="activeContent === 'TEXT'"
+            @click="$emit('select-content', 'TEXT')"
           >
-            <Layers3 :size="17" /><span>Flashcard</span>
-            <strong v-if="flashcardTotal" :class="{ pending: flashcardPending }">{{ flashcardPending || flashcardTotal }}</strong>
+            <FileText :size="17" /><span>Văn bản</span>
           </button>
-        </template>
+          <button
+            v-if="hasVideo"
+            type="button"
+            :aria-pressed="activeContent === 'VIDEO'"
+            @click="$emit('select-content', 'VIDEO')"
+          >
+            <PlayCircle :size="17" /><span>Video</span>
+          </button>
+          <button v-if="hasSlides" type="button" :aria-pressed="activeContent === 'SLIDE'" @click="$emit('select-content', 'SLIDE')"><FileText :size="17" /><span>Slide</span></button>
+        </div>
+        <button
+          v-if="flashcardsEnabled"
+          type="button"
+          class="flashcard-shortcut"
+          :title="flashcardPending ? `${flashcardPending} thẻ cần ôn` : flashcardTotal ? `${flashcardTotal} flashcard` : 'Tạo flashcard của bạn'"
+          @click="$emit('open-flashcards')"
+        >
+          <Layers3 :size="17" /><span>Flashcard</span>
+          <strong v-if="flashcardTotal" :class="{ pending: flashcardPending }">{{ flashcardPending || flashcardTotal }}</strong>
+        </button>
       </div>
       <div
         class="header-completion"

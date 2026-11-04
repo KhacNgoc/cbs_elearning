@@ -126,14 +126,17 @@ configured independently through `OLLAMA_CHAT_TIMEOUT_SECONDS`,
 `OLLAMA_REWRITE_TIMEOUT_SECONDS`, and `OLLAMA_SUMMARY_TIMEOUT_SECONDS`.
 Quiz generation defaults to `OLLAMA_QUIZ_MODEL=qwen3:4b`. Each candidate is a compact,
 single-source generation. Retrieval scales with the request: about 1.5 chunks per
-question, between `QUIZ_RETRIEVAL_LIMIT` (5) and `QUIZ_RETRIEVAL_MAX_LIMIT` (24),
+question and at least `QUIZ_RETRIEVAL_LIMIT` (5), so `QUIZ_MAX_QUESTIONS` (10, shared
+with the backend and the frontend build) also bounds retrieval. Chunks are
 spread across the selected documents and sampled among the most relevant chunks,
 so repeated drafts use different passages. Candidates run as a pipeline:
 generate, structural and duplicate checks, then review; every rejection is
 replaced until each type is filled. `QUIZ_OVERGENERATION_FACTOR` (1.5) sets the
-candidates in flight per missing question, `QUIZ_CANDIDATE_BUDGET_FACTOR` (3) caps
+candidates wanted per missing question; each job queues at most
+`QUIZ_GENERATION_CONCURRENCY` of them at a time, so reviews and other jobs do not
+wait behind a whole batch. `QUIZ_CANDIDATE_BUDGET_FACTOR` (3) caps
 total candidates per requested question, and `QUIZ_GENERATION_TIME_BUDGET_SECONDS`
-(200) stops starting new candidates so a slow model still returns a partial draft.
+(300) stops starting new candidates so a slow model still returns a partial draft.
 Requests may carry `existing_questions` (saved quiz, question bank and unsaved
 drafts); candidates repeating them are rejected and the closest ones are listed
 in the prompt. `QUIZ_TEMPERATURE` (0.6) controls wording variety.
@@ -143,8 +146,8 @@ parallel slots on GPU servers. `QUIZ_NUM_CTX` defaults to `OLLAMA_NUM_CTX`: Olla
 reloads a model whose context size changes, so a different value makes chat,
 quiz generation and review evict each other when they share a model.
 `QUIZ_SOURCE_MAX_CHARS`, `QUIZ_SINGLE_NUM_PREDICT`, and `QUIZ_MULTIPLE_NUM_PREDICT`
-bound token costs without changing code. `QUIZ_GENERATION_MAX_ATTEMPTS` now only
-applies to flashcards.
+bound token costs without changing code. Flashcards use the same pipeline, candidate
+and time budgets; `QUIZ_GENERATION_MAX_ATTEMPTS` is only reported in job status.
 The per-question timeout is controlled by
 `OLLAMA_QUIZ_GENERATION_TIMEOUT_SECONDS` (120s). A second LLM verification pass
 is always enabled for lesson quizzes and enabled by default for course-wide

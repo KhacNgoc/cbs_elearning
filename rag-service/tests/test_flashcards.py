@@ -7,8 +7,9 @@ from unittest.mock import AsyncMock, patch
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from app.schemas import FlashcardGenerationRequest, GeneratedFlashcard
+from app.schemas import FlashcardGenerationRequest, GeneratedFlashcard, QuizGenerationRequest
 from app.services import quiz_jobs
+from app.services.quiz import generate_quiz
 from app.services.flashcards import (
     flashcard_validation_error,
     generate_flashcards,
@@ -28,6 +29,10 @@ LEAKED = json.dumps({"f": "Hồ sơ được duyệt trong 2 ngày làm việc, 
                     ensure_ascii=False)
 ACCEPT = '{"reason":"Đúng theo nguồn.","grounded":true,"well_formed":true}'
 REJECT = '{"reason":"Không có trong nguồn.","grounded":false,"well_formed":true}'
+
+
+def is_review(messages):
+    return messages[0]["content"].startswith("Bạn kiểm định")
 
 
 def request(count=2, types=None):
@@ -86,37 +91,114 @@ class FlashcardValidationTests(unittest.TestCase):
 
 
 class FlashcardGenerationTests(unittest.IsolatedAsyncioTestCase):
-    async def test_generates_alternating_types_retries_rejects_and_verifies(self):
-        outputs = iter([TERM, LEAKED, CLOZE, ACCEPT, ACCEPT])
-        prompts = []
+    def fake_model(self, generations, reviews, log=None):
+        """Answers generation and review calls from separate queues, since they interleave."""
+        generations, reviews = list(generations), list(reviews)
 
         async def model(_model, messages, *args, **kwargs):
-            prompts.append(messages[-1]["content"])
-            return next(outputs)
+            review = is_review(messages)
+            if log is not None:
+                log.append(("review" if review else "generate", messages[-1]["content"]))
+            return (reviews if review else generations).pop(0)
 
+        return model
+
+    async def run_job(self, model, **kwargs):
         patches = retrieval_patches(model)
         with patches[0], patches[1], patches[2], patches[3], patches[4]:
-            result = await generate_flashcards(request(count=2))
+            return await generate_flashcards(request(**kwargs))
+
+    async def test_generates_both_types_replaces_rejects_and_verifies(self):
+        calls = []
+        model = self.fake_model([TERM, LEAKED, CLOZE], [ACCEPT, ACCEPT], calls)
+        result = await self.run_job(model, count=2)
 
         self.assertEqual(["TERM", "CLOZE"], [item.type for item in result.cards])
         self.assertEqual("2 ngày làm việc", result.cards[1].back)
         self.assertEqual([], result.warnings)
         self.assertEqual("CIF.pdf", result.sources[0].documentName)
-        # The retry prompt names the rejection reason; verification checks each kept card.
-        self.assertIn("cloze_answer_revealed", prompts[2])
-        self.assertEqual(5, len(prompts))
+        # The replacement names the rejection reason; verification checks each kept card.
+        generations = [prompt for role, prompt in calls if role == "generate"]
+        self.assertIn("cloze_answer_revealed", generations[2])
+        self.assertEqual(5, len(calls))
 
-    async def test_verification_rejection_is_reported_as_shortfall(self):
-        outputs = iter([TERM, REJECT])
+    async def test_card_rejected_in_review_is_replaced(self):
+        other = json.dumps({"f": "Kiểm soát viên", "b": "Người phê duyệt hồ sơ mở CIF trong vòng 2 ngày."}, ensure_ascii=False)
+        calls = []
+        model = self.fake_model([TERM, other], [REJECT, ACCEPT], calls)
+        result = await self.run_job(model, count=1, types=["TERM"])
+        self.assertEqual(["Kiểm soát viên"], [item.front for item in result.cards])
+        self.assertEqual([], result.warnings)
+        # The replacement is told not to draft the rejected card again.
+        self.assertIn("CIF", [prompt for role, prompt in calls if role == "generate"][1].split("đã có:")[1])
 
-        async def model(*args, **kwargs):
-            return next(outputs)
-
-        patches = retrieval_patches(model)
-        with patches[0], patches[1], patches[2], patches[3], patches[4]:
-            result = await generate_flashcards(request(count=1, types=["TERM"]))
+    async def test_candidate_budget_reports_the_shortfall(self):
+        model = self.fake_model([TERM] * 3, [REJECT])
+        with patch("app.config.QUIZ_CANDIDATE_BUDGET_FACTOR", 3):
+            result = await self.run_job(model, count=1, types=["TERM"])
         self.assertEqual([], result.cards)
         self.assertIn("0/1", result.warnings[0])
+
+    async def test_reviews_do_not_wait_behind_every_generation(self):
+        calls = []
+        fronts = ["Hồ sơ", "Khách hàng", "Kiểm soát viên", "Ngày làm việc"]
+        cards = [json.dumps({"f": front, "b": f"Nội dung giải thích đủ dài về {front}."}, ensure_ascii=False)
+                 for front in fronts]
+        with patch("app.config.QUIZ_GENERATION_CONCURRENCY", 2):
+            await self.run_job(self.fake_model(cards, [ACCEPT] * 4, calls), count=4, types=["TERM"])
+        self.assertEqual("review", calls[2][0])
+
+    async def test_time_budget_returns_the_cards_already_reviewed(self):
+        reviewed = asyncio.Event()
+
+        async def model(_model, messages, *args, **kwargs):
+            if is_review(messages):
+                reviewed.set()
+                return ACCEPT
+            if not model.first_done:
+                model.first_done = True
+                return TERM
+            await asyncio.sleep(30)
+
+        model.first_done = False
+        with patch("app.config.QUIZ_GENERATION_TIME_BUDGET_SECONDS", 0.05), \
+             patch("app.config.OLLAMA_QUIZ_VERIFICATION_TIMEOUT_SECONDS", 0.05):
+            result = await self.run_job(model, count=2, types=["TERM"])
+        self.assertTrue(reviewed.is_set())
+        self.assertEqual(1, len(result.cards))
+        self.assertIn("1/2", result.warnings[0])
+
+    async def test_unverifiable_cards_fail_the_job_only_when_all_fail(self):
+        async def model(_model, messages, *args, **kwargs):
+            if is_review(messages):
+                raise RuntimeError("model down")
+            return TERM
+
+        with self.assertRaises(HTTPException) as failed:
+            await self.run_job(model, count=1, types=["TERM"])
+        self.assertEqual(503, failed.exception.status_code)
+
+    async def test_flashcard_and_quiz_jobs_take_turns_on_the_model_queue(self):
+        order = []
+        quiz_output = '{"q":"Câu hỏi?","o":["A","B","C","D"],"a":0}'
+
+        async def model(_model, messages, *args, **kwargs):
+            flashcard = "flashcard" in messages[0]["content"]
+            order.append("F" if flashcard else "Q")
+            await asyncio.sleep(0)
+            if is_review(messages):
+                return REJECT if flashcard else '{"reason":"Sai đáp án.","correct_answers":[1],"well_formed":true}'
+            return TERM if flashcard else quiz_output
+
+        patches = retrieval_patches(model)
+        quiz_request = QuizGenerationRequest(course_id="C1", course_name="Khách hàng",
+            single_choice_count=10, multiple_choice_count=0)
+        with patches[0], patches[1], patches[2], patches[3], patches[4], \
+             patch("app.config.QUIZ_GENERATION_CONCURRENCY", 2), \
+             patch("app.infrastructure.quiz_generation_semaphore", asyncio.Semaphore(1)):
+            await asyncio.gather(generate_flashcards(request(count=10)), generate_quiz(quiz_request))
+        self.assertIn("F", order[:4])
+        self.assertIn("Q", order[:4])
 
     async def test_no_sources_never_calls_the_model(self):
         generate = AsyncMock()

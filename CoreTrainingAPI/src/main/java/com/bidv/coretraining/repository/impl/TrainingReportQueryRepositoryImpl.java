@@ -257,4 +257,10 @@ public class TrainingReportQueryRepositoryImpl implements TrainingReportQueryRep
         }
         return maps(c.sql()+" select id,score,taken_at,passing_score,assessment from scored where user_id=:learner and course_id=:course"+boundary+" order by taken_at desc,id desc limit "+(limit+1),p);
     }
+
+    public boolean attemptVisible(Scope scope, long attemptId) {
+        var c=facts(scope); var p=new HashMap<>(c.params());
+        p.put("attempt",attemptId);
+        return !maps(c.sql()+" select id from scored where id=:attempt limit 1",p).isEmpty();
+    }
 }

@@ -195,12 +195,12 @@ class BalancedRetrievalTests(unittest.IsolatedAsyncioTestCase):
         # Four shared searches plus one per document.
         self.assertEqual(6, query.await_count)
 
-    async def test_retrieval_grows_with_requested_count_up_to_the_cap(self):
+    async def test_retrieval_grows_with_requested_count(self):
         points = {"D1": [chunk("D1", page, 0.9) for page in range(1, 41)]}
         few, _ = await self.retrieve(points, 2, [{"document_id": "D1"}])
         many, _ = await self.retrieve(points, 20, [{"document_id": "D1"}])
         self.assertEqual(5, len(few))
-        self.assertEqual(24, len(many))
+        self.assertEqual(30, len(many))
 
     async def test_repeated_drafts_sample_different_chunks(self):
         points = {"D1": [chunk("D1", page, 0.9) for page in range(1, 21)]}

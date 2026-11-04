@@ -20,7 +20,7 @@ const THINK_TIME_SECONDS = Number(__ENV.THINK_TIME || 0);
 const QUIZ_SINGLE = Number(__ENV.QUIZ_SINGLE || 5);
 const QUIZ_MULTIPLE = Number(__ENV.QUIZ_MULTIPLE || 5);
 const QUIZ_POLL_INTERVAL_SECONDS = Number(__ENV.QUIZ_POLL_INTERVAL || 1.5);
-const QUIZ_MAX_WAIT_SECONDS = Number(__ENV.QUIZ_MAX_WAIT || 330);
+const QUIZ_MAX_WAIT_SECONDS = Number(__ENV.QUIZ_MAX_WAIT || 450);
 
 const DEFAULT_QUESTIONS = [
   "Tóm tắt các nội dung chính của khóa học này",
@@ -72,8 +72,8 @@ if (SCENARIO === "quiz" || SCENARIO === "mixed") {
     exec: "quiz",
     startVUs: 0,
     stages: parseSteps(QUIZ_STEPS),
-    gracefulRampDown: "6m",
-    gracefulStop: "6m",
+    gracefulRampDown: "8m",
+    gracefulStop: "8m",
   };
 }
 

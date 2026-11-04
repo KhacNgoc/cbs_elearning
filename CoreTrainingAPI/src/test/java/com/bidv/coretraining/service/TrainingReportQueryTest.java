@@ -13,6 +13,27 @@ import static org.assertj.core.api.Assertions.assertThat;
 class TrainingReportQueryTest extends TrainingReportServiceTest {
     @Autowired TrainingReportReadService query;
     @Autowired EntityManager em;
+    @Test void attemptAnalysisReadsTheExamSnapshotEvenAfterTheQuizWasEdited() {
+        var taken=java.time.LocalDateTime.of(2026,10,5,10,0);
+        var quiz=com.bidv.coretraining.entity.Quiz.builder().lesson(first).title("Quiz").build();em.persist(quiz);
+        em.persist(com.bidv.coretraining.entity.Question.builder().course(course).lesson(first).quiz(quiz).text("Edited later").options(new java.util.ArrayList<>(java.util.List.of("X","Y"))).correctAnswer(0).build());
+        var recorded=scores.save(com.bidv.coretraining.entity.UserQuizScore.builder().user(learner).course(course).lesson(first).score(1).total(2).takenAt(taken).selectedAnswerSets(new java.util.HashMap<>(java.util.Map.of(1L,"1"))).build());
+        em.persist(com.bidv.coretraining.entity.QuizAttempt.builder().user(learner).quiz(quiz).score(1).total(2).takenAt(taken.plusNanos(50_000_000))
+            .answersJson("{\"1\":[1]}").questionsJson("[{\"id\":1,\"text\":\"Original\",\"options\":[\"A\",\"B\"],\"correctAnswers\":[1]},{\"id\":2,\"text\":\"Skipped\",\"options\":[\"A\",\"B\"],\"correctAnswers\":[0]}]").build());
+        em.flush();
+        var analysis=query.attemptAnalysis(recorded.getId());
+        assertThat(analysis.source()).isEqualTo("SNAPSHOT");
+        assertThat(analysis.questions()).extracting(q->q.text()).containsExactly("Original","Skipped");
+        assertThat(analysis.correct()).isEqualTo(1);assertThat(analysis.unanswered()).isEqualTo(1);
+    }
+    @Test void attemptAnalysisFallsBackWhenNoSnapshotAndHidesAttemptsOutsideScope() {
+        var recorded=scores.save(com.bidv.coretraining.entity.UserQuizScore.builder().user(learner).course(course).score(0).total(1).takenAt(java.time.LocalDateTime.of(2026,10,5,10,0)).build());
+        em.flush();
+        assertThat(query.attemptAnalysis(recorded.getId()).unavailableReason()).isEqualTo("NO_ANSWERS");
+        org.assertj.core.api.Assertions.assertThatThrownBy(()->query.attemptAnalysis(Long.MAX_VALUE)).isInstanceOf(com.bidv.coretraining.exception.ResourceNotFoundException.class);
+        org.mockito.Mockito.when(auth.current()).thenReturn(com.bidv.coretraining.entity.User.builder().role("ROLE_USER").build());
+        org.assertj.core.api.Assertions.assertThatThrownBy(()->query.attemptAnalysis(recorded.getId())).isInstanceOf(com.bidv.coretraining.exception.ResourceNotFoundException.class);
+    }
     @Autowired org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate jdbc;
     @Test void nullablePersonalDeadlineDoesNotFallBackToCourseDefault() {
         course.setCompletionDeadline(java.time.LocalDate.of(2026,11,1));em.flush();

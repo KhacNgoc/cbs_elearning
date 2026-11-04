@@ -38,10 +38,7 @@ MAX_PER_DOCUMENT_SEARCHES = 10
 
 def quiz_source_target(requested: int) -> int:
     """About 1.5 chunks per requested item, so candidates rarely share a passage."""
-    return min(
-        config.QUIZ_RETRIEVAL_MAX_LIMIT,
-        max(config.QUIZ_RETRIEVAL_LIMIT, math.ceil(requested * 1.5)),
-    )
+    return max(config.QUIZ_RETRIEVAL_LIMIT, math.ceil(requested * 1.5))
 
 
 async def retrieve_grounded_sources(
@@ -168,8 +165,8 @@ async def generate_quiz(request: QuizGenerationRequest, progress: QuizProgress |
     loop = asyncio.get_running_loop()
     started_at = loop.time()
     requested_total = request.single_choice_count + request.multiple_choice_count
-    if requested_total < 1 or requested_total > 20:
-        raise HTTPException(400, "The total number of questions must be between 1 and 20")
+    if requested_total < 1 or requested_total > config.QUIZ_MAX_QUESTIONS:
+        raise HTTPException(400, f"The total number of questions must be between 1 and {config.QUIZ_MAX_QUESTIONS}")
 
     rng = random.Random()
     progress.retrieving()
@@ -427,18 +424,27 @@ well_formed=false nếu câu hỏi/lựa chọn vô nghĩa, lộ đáp án hoặ
         # The model is down, not just picky: stop before the budget is burnt on errors.
         if not total_generated and generation_error_count >= max(3, 2 * config.QUIZ_GENERATION_CONCURRENCY):
             return
-        for question_type in question_types:
+
+        def unmet(question_type: str) -> int:
             open_slots = remaining[question_type] - reviewing[question_type] - len(spares[question_type])
             wanted = math.ceil(max(0, open_slots) * config.QUIZ_OVERGENERATION_FACTOR)
-            while generating[question_type] < wanted and next_candidate < budget:
-                source, start = slots[next_slot % len(slots)]
-                next_slot += 1
-                generating[question_type] += 1
-                task = asyncio.create_task(
-                    generate_candidate(question_type, next_candidate, source, start)
-                )
-                next_candidate += 1
-                tasks[task] = ("generate", question_type)
+            return wanted - generating[question_type]
+
+        # The model queue is first-come, first-served and shared by every job. Queueing
+        # only a small window keeps reviews from waiting behind this job's generations,
+        # and other jobs from waiting behind all of them.
+        while sum(generating.values()) < config.QUIZ_GENERATION_CONCURRENCY and next_candidate < budget:
+            question_type = max(question_types, key=unmet)
+            if unmet(question_type) <= 0:
+                break
+            source, start = slots[next_slot % len(slots)]
+            next_slot += 1
+            generating[question_type] += 1
+            task = asyncio.create_task(
+                generate_candidate(question_type, next_candidate, source, start)
+            )
+            next_candidate += 1
+            tasks[task] = ("generate", question_type)
 
     def accept(question: GeneratedQuizQuestion) -> None:
         remaining[question.type] -= 1

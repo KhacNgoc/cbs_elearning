@@ -6,6 +6,7 @@ the model semaphore and the job cap are shared with quiz generation.
 
 import asyncio
 import json
+import math
 import re
 
 import httpx
@@ -25,6 +26,8 @@ from app.services.quiz_jobs import NULL_PROGRESS, QuizProgress
 from app.utils import ollama_compatible_schema, strip_model_thinking
 
 
+# Keeps the avoid-list in each prompt short; every extra token is slow on CPU.
+MAX_FRONTS_IN_PROMPT = 8
 CLOZE_BLANK = "____"
 _BLANK_RUN = re.compile(r"_{3,}")
 _SOURCE_REFERENCES = ("theo tài liệu", "đoạn trên", "nguồn trên", "reference_document", "source_")
@@ -98,7 +101,8 @@ async def generate_flashcards(
     request: FlashcardGenerationRequest, progress: QuizProgress | None = None
 ) -> FlashcardGenerationResponse:
     progress = progress or NULL_PROGRESS
-    started_at = asyncio.get_running_loop().time()
+    loop = asyncio.get_running_loop()
+    started_at = loop.time()
 
     progress.retrieving()
     sources, source_text_by_id = await retrieve_grounded_sources(request, request.count)
@@ -109,45 +113,40 @@ async def generate_flashcards(
                       "Hãy kiểm tra nguồn hoặc bổ sung tài liệu."],
         )
 
-    # Lesson drafts always get the independent grounding check.
-    progress.plan(request.count, True)
+    # Every card gets the independent grounding check, so the bar counts cards that passed it.
+    progress.plan(request.count, False)
     lesson_scope = f"Bài học được chọn: {request.lesson_name}."
     types = list(dict.fromkeys(request.types))
-    # Split the requested count evenly so retries refill the type that fell short.
+    # Split the requested count evenly so replacements refill the type that fell short.
     targets = {
         card_type: request.count // len(types) + (1 if position < request.count % len(types) else 0)
         for position, card_type in enumerate(types)
     }
     accepted: list[GeneratedFlashcard] = []
-    seen_fronts: set[str] = set()
+    generating = dict.fromkeys(types, 0)
+    reviewing = dict.fromkeys(types, 0)
+    # Fronts already drafted, rejected ones included, so a rejected card is not drafted again.
+    seen_fronts: dict[str, str] = {}
     rejection_counts: dict[str, int] = {}
 
     def reject(reason: str) -> None:
         rejection_counts[reason] = rejection_counts.get(reason, 0) + 1
 
-    def missing(card_type: str) -> int:
-        return targets[card_type] - sum(card.type == card_type for card in accepted)
+    def open_slots(card_type: str) -> int:
+        filled = sum(card.type == card_type for card in accepted)
+        return targets[card_type] - filled - reviewing[card_type] - generating[card_type]
 
-    def accept(card: GeneratedFlashcard) -> None:
-        if missing(card.type) <= 0:
-            reject("type_overflow")
-            return
-        key = _fold(card.front)
-        if key in seen_fronts:
-            reject("duplicate_front")
-            return
-        error = flashcard_validation_error(card, source_text_by_id[card.source_ids[0]])
-        if error:
-            reject(error)
-            return
-        seen_fronts.add(key)
-        accepted.append(card)
-
-    async def generate_candidate(card_type: str, index: int, feedback: str) -> GeneratedFlashcard:
+    async def generate_candidate(card_type: str, index: int) -> GeneratedFlashcard:
         source = sources[index % len(sources)]
         source_text = quiz_focus_snippet(
             source_text_by_id[source.id], index, config.FLASHCARD_SOURCE_MAX_CHARS
         )
+        feedback = []
+        if rejection_counts:
+            feedback.append("Các lỗi cần tránh: " + ", ".join(rejection_counts) + ".")
+        if seen_fronts:
+            recent = list(seen_fronts.values())[-MAX_FRONTS_IN_PROMPT:]
+            feedback.append("Không lặp lại mặt trước của các thẻ đã có: " + json.dumps(recent, ensure_ascii=False))
         schema = ollama_compatible_schema(CompactFlashcard.model_json_schema())
         schema["properties"]["f"]["maxLength"] = 220 if card_type == "CLOZE" else 80
         schema["properties"]["b"]["maxLength"] = 60 if card_type == "CLOZE" else 300
@@ -160,7 +159,7 @@ Khóa học: {request.course_name}. {lesson_scope}
 
 {TYPE_INSTRUCTIONS[card_type]}
 Tạo thẻ ứng viên số {index + 1}.
-{feedback}
+{chr(10).join(feedback)}
 Schema: f là mặt trước, b là mặt sau. Không trả source id."""
         async with infrastructure.quiz_generation_semaphore:
             raw = await infrastructure.ollama_chat(
@@ -179,58 +178,12 @@ Schema: f là mặt trước, b là mặt sau. Không trả source id."""
             type=card_type, front=compact.f, back=compact.b, source_ids=[source.id]
         ))
 
-    async def generate_one(card_type: str, index: int, feedback: str) -> GeneratedFlashcard:
-        card = await generate_candidate(card_type, index, feedback)
-        accept(card)
-        progress.accepted(len(accepted))
-        return card
-
-    generated_total = 0
-    generation_errors = 0
-    feedback = ""
-    next_index = 0
-    for attempt in range(1, config.QUIZ_GENERATION_MAX_ATTEMPTS + 1):
-        specs = []
-        for card_type in types:
-            for _ in range(missing(card_type)):
-                specs.append((card_type, next_index))
-                next_index += 1
-        if not specs:
-            break
-        if attempt > 1:
-            feedback = (
-                "Các lỗi cần tránh từ lần trước: " + ", ".join(rejection_counts) +
-                ". Không lặp lại mặt trước của các thẻ đã đạt: " +
-                json.dumps([card.front for card in accepted], ensure_ascii=False)
-            )
-        progress.generation_started(attempt, len(specs))
-        results = await asyncio.gather(
-            *(generate_one(card_type, index, feedback) for card_type, index in specs),
-            return_exceptions=True,
+    async def verify_one(card: GeneratedFlashcard) -> bool:
+        reference = "\n".join(
+            f'<source id="{source_id}">{source_text_by_id[source_id]}</source>'
+            for source_id in card.source_ids
         )
-        generated_total += sum(isinstance(result, GeneratedFlashcard) for result in results)
-        errors = [type(result).__name__ for result in results if isinstance(result, BaseException)]
-        generation_errors += len(errors)
-        if errors:
-            infrastructure.logger.warning(
-                "Flashcard generation had failures lesson_id=%s attempt=%d errors=%s",
-                request.lesson_id, attempt, errors,
-            )
-    if not generated_total:
-        raise HTTPException(503, "Flashcard generation model is unavailable")
-    if rejection_counts:
-        infrastructure.logger.warning(
-            "Flashcard candidates rejected lesson_id=%s generated=%d accepted=%d reasons=%s",
-            request.lesson_id, generated_total, len(accepted), rejection_counts,
-        )
-
-    if accepted:
-        async def verify_one(card: GeneratedFlashcard) -> bool:
-            reference = "\n".join(
-                f'<source id="{source_id}">{source_text_by_id[source_id]}</source>'
-                for source_id in card.source_ids
-            )
-            prompt = f"""<reference_documents>
+        prompt = f"""<reference_documents>
 {reference}
 </reference_documents>
 
@@ -245,43 +198,141 @@ Kiểm tra độc lập flashcard:
 - well_formed=false nếu thẻ vô nghĩa, lộ đáp án, mơ hồ, sai chính tả nghiêm trọng hoặc cần nhìn tài liệu mới hiểu.
 - Thẻ phải phù hợp với bài học {request.lesson_name!r}; nếu thuộc chủ đề khác thì grounded=false.
 Trả JSON với reason giải thích trong tối đa hai câu ngắn. Không sửa thẻ."""
-            async with infrastructure.quiz_generation_semaphore:
-                raw = await infrastructure.ollama_chat(
-                    config.CHAT_MODEL,
-                    [{"role": "system", "content": "Bạn kiểm định một flashcard ôn tập. Đánh giá độc lập theo bằng chứng trong nguồn."},
-                     {"role": "user", "content": prompt}],
-                    config.OLLAMA_QUIZ_VERIFICATION_TIMEOUT_SECONDS,
-                    json_schema=ollama_compatible_schema(FlashcardReview.model_json_schema()),
-                    options={"temperature": 0, "num_predict": config.QUIZ_VERIFICATION_NUM_PREDICT},
-                )
-            progress.step_done()
-            review = FlashcardReview.model_validate(json.loads(strip_model_thinking(raw)))
-            return review.grounded and review.well_formed
-
-        progress.verification_started(len(accepted))
-        decisions = await asyncio.gather(*(verify_one(card) for card in accepted), return_exceptions=True)
-        failures = [decision for decision in decisions if isinstance(decision, BaseException)]
-        for error in failures:
-            if not isinstance(error, (httpx.HTTPError, KeyError, TypeError, ValueError, RuntimeError)):
-                raise error
-        if failures:
-            infrastructure.logger.warning(
-                "Flashcard verification failed lesson_id=%s candidates=%d failures=%d errors=%s",
-                request.lesson_id, len(accepted), len(failures),
-                sorted({type(error).__name__ for error in failures}),
+        async with infrastructure.quiz_generation_semaphore:
+            raw = await infrastructure.ollama_chat(
+                config.CHAT_MODEL,
+                [{"role": "system", "content": "Bạn kiểm định một flashcard ôn tập. Đánh giá độc lập theo bằng chứng trong nguồn."},
+                 {"role": "user", "content": prompt}],
+                config.OLLAMA_QUIZ_VERIFICATION_TIMEOUT_SECONDS,
+                json_schema=ollama_compatible_schema(FlashcardReview.model_json_schema()),
+                options={"temperature": 0, "num_predict": config.QUIZ_VERIFICATION_NUM_PREDICT},
             )
-        # One unverifiable card is dropped; failing for every card means the model is unavailable.
-        if len(failures) == len(accepted):
-            raise HTTPException(503, "Flashcard verification model is unavailable") from failures[0]
-        accepted = [card for card, decision in zip(accepted, decisions) if decision is True]
+        review = FlashcardReview.model_validate(json.loads(strip_model_thinking(raw)))
+        return review.grounded and review.well_formed
+
+    # Same pipeline as quiz generation: each candidate is generated, checked locally and
+    # reviewed on its own, and every rejection opens room for a replacement until the type
+    # is filled, the candidate budget is spent or the time budget runs out.
+    budget = math.ceil(request.count * config.QUIZ_CANDIDATE_BUDGET_FACTOR)
+    launch_deadline = started_at + config.QUIZ_GENERATION_TIME_BUDGET_SECONDS
+    # In-flight work past this is abandoned so the job still returns its draft.
+    hard_deadline = launch_deadline + config.OLLAMA_QUIZ_VERIFICATION_TIMEOUT_SECONDS
+    tasks: dict[asyncio.Task, tuple[str, object]] = {}
+    next_index = 0
+    generated_total = 0
+    generation_errors: dict[str, int] = {}
+    verification_calls = 0
+    verification_errors: list[BaseException] = []
+
+    def schedule() -> None:
+        nonlocal next_index
+        if loop.time() >= launch_deadline:
+            return
+        # The model is down, not just picky: stop before the budget is burnt on errors.
+        failures = sum(generation_errors.values())
+        if not generated_total and failures >= max(3, 2 * config.QUIZ_GENERATION_CONCURRENCY):
+            return
+        # The model queue is shared with every other job, so only a small window is queued.
+        while sum(generating.values()) < config.QUIZ_GENERATION_CONCURRENCY and next_index < budget:
+            card_type = max(types, key=open_slots)
+            if open_slots(card_type) <= 0:
+                break
+            generating[card_type] += 1
+            tasks[asyncio.create_task(generate_candidate(card_type, next_index))] = ("generate", card_type)
+            next_index += 1
+
+    def rejection_reason(card: GeneratedFlashcard) -> str | None:
+        if _fold(card.front) in seen_fronts:
+            return "duplicate_front"
+        return flashcard_validation_error(card, source_text_by_id[card.source_ids[0]])
+
+    progress.generation_started(1, request.count)
+    try:
+        while True:
+            schedule()
+            if not tasks:
+                break
+            done, _ = await asyncio.wait(
+                tasks, timeout=max(0.0, hard_deadline - loop.time()),
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if not done:
+                infrastructure.logger.warning(
+                    "Flashcard generation time budget exhausted lesson_id=%s pending=%d",
+                    request.lesson_id, len(tasks),
+                )
+                break
+            for task in done:
+                kind, subject = tasks.pop(task)
+                error = task.exception()
+                if kind == "generate":
+                    generating[subject] -= 1
+                    if error:
+                        name = type(error).__name__
+                        generation_errors[name] = generation_errors.get(name, 0) + 1
+                        continue
+                    generated_total += 1
+                    card = task.result()
+                    reason = rejection_reason(card)
+                    if reason:
+                        reject(reason)
+                        continue
+                    seen_fronts[_fold(card.front)] = card.front
+                    reviewing[card.type] += 1
+                    verification_calls += 1
+                    tasks[asyncio.create_task(verify_one(card))] = ("verify", card)
+                    continue
+
+                card = subject
+                reviewing[card.type] -= 1
+                if error:
+                    if not isinstance(error, (httpx.HTTPError, KeyError, TypeError, ValueError, RuntimeError)):
+                        raise error
+                    verification_errors.append(error)
+                elif task.result():
+                    accepted.append(card)
+                    progress.accepted(len(accepted))
+                else:
+                    reject("verification_rejected")
+    finally:
+        # Queued candidates never reach the model; running ones are aborted by Ollama
+        # when their connection closes.
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+    if generation_errors:
+        infrastructure.logger.warning(
+            "Flashcard generation had failures lesson_id=%s errors=%s",
+            request.lesson_id, generation_errors,
+        )
+    if not generated_total:
+        raise HTTPException(503, "Flashcard generation model is unavailable")
+    if verification_errors:
+        infrastructure.logger.warning(
+            "Flashcard verification failed lesson_id=%s reviewed=%d failures=%d errors=%s",
+            request.lesson_id, verification_calls, len(verification_errors),
+            sorted({type(error).__name__ for error in verification_errors}),
+        )
+    # One unverifiable card is dropped; failing for every card means the model is unavailable.
+    if verification_calls and len(verification_errors) == verification_calls:
+        raise HTTPException(503, "Flashcard verification model is unavailable") from verification_errors[0]
+    if rejection_counts:
+        infrastructure.logger.warning(
+            "Flashcard candidates rejected lesson_id=%s generated=%d accepted=%d reasons=%s",
+            request.lesson_id, generated_total, len(accepted), rejection_counts,
+        )
 
     progress.finalizing()
+    # Keep each type together, in the requested type order.
+    accepted.sort(key=lambda card: types.index(card.type))
     progress.accepted(len(accepted))
     infrastructure.logger.info(
-        "RAG flashcards completed lesson_id=%s requested=%d generated=%d accepted=%d "
-        "generation_failures=%d elapsed_ms=%d model=%s",
-        request.lesson_id, request.count, generated_total, len(accepted), generation_errors,
-        int((asyncio.get_running_loop().time() - started_at) * 1000), config.QUIZ_MODEL,
+        "RAG flashcards completed lesson_id=%s requested=%d candidates=%d generated=%d reviewed=%d "
+        "accepted=%d generation_failures=%d elapsed_ms=%d model=%s",
+        request.lesson_id, request.count, next_index, generated_total, verification_calls,
+        len(accepted), sum(generation_errors.values()),
+        int((loop.time() - started_at) * 1000), config.QUIZ_MODEL,
     )
     warnings = []
     if len(accepted) < request.count:

@@ -12,6 +12,10 @@ import {
   type QuizGenerationJob,
 } from "../utils/quizGenerationJob";
 
+// Set from QUIZ_MAX_QUESTIONS at build time; the backend enforces the same value.
+export const QUIZ_MAX_QUESTIONS =
+  Number(import.meta.env.VITE_QUIZ_MAX_QUESTIONS) || 10;
+
 const configuredVideoMaxBytes = Number(
   import.meta.env.VITE_VIDEO_MAX_UPLOAD_BYTES,
 );

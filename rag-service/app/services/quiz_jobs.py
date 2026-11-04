@@ -24,7 +24,8 @@ from app.schemas import (
 
 QUIZ_JOB_RETENTION_SECONDS = float(os.getenv("QUIZ_JOB_RETENTION_SECONDS", "900"))
 QUIZ_JOB_MAX_ACTIVE = max(1, int(os.getenv("QUIZ_JOB_MAX_ACTIVE", "20")))
-QUIZ_JOB_TIMEOUT_SECONDS = float(os.getenv("QUIZ_JOB_TIMEOUT_SECONDS", "300"))
+# Must exceed QUIZ_GENERATION_TIME_BUDGET_SECONDS plus the verification timeout.
+QUIZ_JOB_TIMEOUT_SECONDS = float(os.getenv("QUIZ_JOB_TIMEOUT_SECONDS", "420"))
 
 QuizJobKind = Literal["quiz", "flashcard"]
 QuizJobStatus = Literal["queued", "running", "completed", "failed"]
@@ -203,8 +204,8 @@ async def _run_job(job: QuizGenerationJob, request) -> None:
 
 def start_quiz_job(request: QuizGenerationRequest) -> QuizGenerationJob:
     requested_total = request.single_choice_count + request.multiple_choice_count
-    if requested_total < 1 or requested_total > 20:
-        raise HTTPException(400, "The total number of questions must be between 1 and 20")
+    if requested_total < 1 or requested_total > config.QUIZ_MAX_QUESTIONS:
+        raise HTTPException(400, f"The total number of questions must be between 1 and {config.QUIZ_MAX_QUESTIONS}")
     return _start_job("quiz", request, requested_total)
 
 

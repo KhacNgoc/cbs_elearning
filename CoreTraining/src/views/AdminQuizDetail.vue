@@ -113,8 +113,8 @@
           </div>
           <LessonKnowledgeSources permission-page="exams" v-if="lessonId" :key="`${courseId}:${lessonId}`" :course-id="courseId" :lesson-id="lessonId" :disabled="generating || savingDrafts" @ready="handleSourceReady" />
           <div class="ai-settings">
-            <label><span>Single choice</span><input v-model.number="aiConfig.singleChoiceCount" type="number" min="0" max="10" /></label>
-            <label><span>Multiple choice</span><input v-model.number="aiConfig.multipleChoiceCount" type="number" min="0" max="10" /></label>
+            <label><span>Single choice</span><input v-model.number="aiConfig.singleChoiceCount" type="number" min="0" :max="QUIZ_MAX_QUESTIONS" /></label>
+            <label><span>Multiple choice</span><input v-model.number="aiConfig.multipleChoiceCount" type="number" min="0" :max="QUIZ_MAX_QUESTIONS" /></label>
             <label><span>Số lựa chọn</span><input v-model.number="aiConfig.optionCount" type="number" min="3" max="6" /></label>
             <button class="primary-button" :disabled="generating || (Boolean(lessonId) && !sourceReady)" @click="generateQuestions">
               <LoaderCircle v-if="generating" class="spin" :size="17" />
@@ -277,7 +277,7 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ArrowLeft, ArrowRight, CheckCircle2, Download, Edit, FileUp, LoaderCircle, Plus, Search, Sparkles, Trash2, X } from "lucide-vue-next";
 
-import { adminApi } from "../api/adminApi";
+import { adminApi, QUIZ_MAX_QUESTIONS } from "../api/adminApi";
 import type { GeneratedQuizQuestion, QuizGenerationJobSnapshot, QuizGenerationSource } from "../api/adminApi";
 import { describeQuizJob, describeQuizJobDetail, QuizGenerationJobError } from "../utils/quizGenerationJob";
 import type { Question, Lesson } from "../types";
@@ -699,8 +699,8 @@ const generateQuestions = async () => {
     return;
   }
   const total = aiConfig.singleChoiceCount + aiConfig.multipleChoiceCount;
-  if (!Number.isInteger(total) || total < 1 || total > 20) {
-    showToast("Tổng số câu hỏi phải từ 1 đến 20.", "warning");
+  if (!Number.isInteger(total) || total < 1 || total > QUIZ_MAX_QUESTIONS) {
+    showToast(`Tổng số câu hỏi phải từ 1 đến ${QUIZ_MAX_QUESTIONS}.`, "warning");
     return;
   }
   if (!Number.isInteger(aiConfig.optionCount) || aiConfig.optionCount < 3 || aiConfig.optionCount > 6) {

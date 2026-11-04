@@ -11,4 +11,5 @@ public interface TrainingReportQueryRepository {
     Map<String,Object> read(Scope scope, Filter filter, boolean metadata);
     void export(Scope scope, Filter filter, Consumer<Map<String,Object>> row);
     List<Map<String,Object>> attempts(Scope scope, long learner, String course, AttemptBoundary boundary, int limit);
+    boolean attemptVisible(Scope scope, long attemptId);
 }

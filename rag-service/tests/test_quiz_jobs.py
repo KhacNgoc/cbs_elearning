@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from app.api.routes import router
 from app.schemas import QuizGenerationRequest, QuizGenerationResponse
@@ -155,6 +156,18 @@ class QuizJobTests(unittest.IsolatedAsyncioTestCase):
         progress.accepted(4)
         progress.finalizing()
         self.assertEqual(99, job.percent)
+
+    def test_question_cap_applies_to_the_total_across_types(self):
+        balanced = QuizGenerationRequest(course_id="C1", course_name="Cho vay",
+            single_choice_count=5, multiple_choice_count=5)
+        self.assertEqual(10, balanced.single_choice_count + balanced.multiple_choice_count)
+        with self.assertRaises(ValidationError):
+            request(single=11)
+        over_total = QuizGenerationRequest(course_id="C1", course_name="Cho vay",
+            single_choice_count=6, multiple_choice_count=5)
+        with self.assertRaises(HTTPException) as raised:
+            start_quiz_job(over_total)
+        self.assertEqual(400, raised.exception.status_code)
 
     def test_job_routes_are_registered_next_to_legacy_endpoint(self):
         paths = {(route.path, tuple(sorted(route.methods))) for route in router.routes}

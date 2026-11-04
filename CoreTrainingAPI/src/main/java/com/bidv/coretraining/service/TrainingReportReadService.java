@@ -7,6 +7,7 @@ public interface TrainingReportReadService {
     Map<String,Object> read(Filter filter);
     Map<String,Object> read(Filter filter, boolean metadata);
     Map<String,Object> attempts(String learner, String course, String before, int size);
+    com.bidv.coretraining.dto.TrainingReportDto.AttemptAnalysis attemptAnalysis(long attemptId);
     void export(Map<String,String> params, java.io.Writer writer) throws java.io.IOException;
     void export(Filter filter, java.io.Writer writer) throws java.io.IOException;
 }

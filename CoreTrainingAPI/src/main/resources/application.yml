@@ -56,5 +56,6 @@ app:
     connect-timeout-ms: ${RAG_CONNECT_TIMEOUT_MS}
     read-timeout-ms: ${RAG_READ_TIMEOUT_MS}
     quiz-read-timeout-ms: ${RAG_QUIZ_READ_TIMEOUT_MS:300000}
+    quiz-max-questions: ${QUIZ_MAX_QUESTIONS:10}
     summary-timeout-ms: ${RAG_SUMMARY_TIMEOUT_MS:10000}
   upload-directory: ${APP_UPLOAD_DIRECTORY}

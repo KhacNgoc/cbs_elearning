@@ -80,7 +80,7 @@
 
       </template>
     </dialog>
-    <dialog ref="detailDialog" class="learner-dialog" @close="inspectRow=null" @click="closeOnBackdrop"><template v-if="inspectRow"><div class="dialog-heading"><div><span class="eyebrow">CHI TIẾT LƯỢT HỌC</span><h2>{{ inspectRow.name }}</h2><p>{{ inspectRow.learnerId }} · {{ inspectRow.unit }}</p></div><button class="r-button" aria-label="Đóng chi tiết" @click="detailDialog?.close()"><X :size="18"/></button></div><h3>{{ inspectRow.courseName }}</h3><dl><div><dt>Trạng thái</dt><dd>{{ inspectRow.status }} · {{ inspectRow.progress }}% tiến độ bài học</dd></div><div><dt>Hạn hoàn thành</dt><dd>{{ inspectRow.dueDate?displayDate(inspectRow.dueDate):'Chưa quy định' }}</dd></div><div><dt>Tình huống</dt><dd>{{ reason(inspectRow) }}</dd></div></dl><h3>Lịch sử kiểm tra</h3><p v-if="historyLoading" role="status">Đang tải lịch sử...</p><p v-if="historyError" role="alert">{{ historyError }} <button class="r-button" @click="loadAttempts()">Thử lại</button></p><ol v-if="inspectRow.attempts.length" class="attempt-list"><li v-for="(attempt,index) in inspectRow.attempts" :key="index"><span>{{ attempt.assessment }} · {{ displayDate(attempt.takenAt) }}</span><strong>{{ attempt.score }}/100 · {{ Math.round(attempt.score)>=(attempt.passingScore??inspectRow.passingScore)?'Đạt':'Chưa đạt' }}</strong></li></ol><p v-else-if="!historyLoading&&!historyError">Chưa có lần kiểm tra nào.</p><button v-if="historyHasMore" class="r-button" :disabled="historyLoading" @click="loadAttempts(true)">Tải thêm lịch sử</button><details class="question-analysis"><summary>Phân tích câu hỏi</summary><p>Chưa hỗ trợ phân tích câu trả lời tại báo cáo này.</p></details><div class="dialog-note">Gợi ý: {{ isOverdue(inspectRow)?'Phối hợp đơn vị để xác nhận kế hoạch hoàn thành.':isFailed(inspectRow)?'Hướng dẫn ôn tập và kiểm tra lại.':'Theo dõi và hỗ trợ hoàn thành nội dung còn lại.' }}</div></template></dialog>
+    <dialog ref="detailDialog" class="learner-dialog" @close="inspectRow=null" @click="closeOnBackdrop"><template v-if="inspectRow"><div class="dialog-heading"><div><span class="eyebrow">CHI TIẾT LƯỢT HỌC</span><h2>{{ inspectRow.name }}</h2><p>{{ inspectRow.learnerId }} · {{ inspectRow.unit }}</p></div><button class="r-button" aria-label="Đóng chi tiết" @click="detailDialog?.close()"><X :size="18"/></button></div><h3>{{ inspectRow.courseName }}</h3><dl><div><dt>Trạng thái</dt><dd>{{ inspectRow.status }} · {{ inspectRow.progress }}% tiến độ bài học</dd></div><div><dt>Hạn hoàn thành</dt><dd>{{ inspectRow.dueDate?displayDate(inspectRow.dueDate):'Chưa quy định' }}</dd></div><div><dt>Tình huống</dt><dd>{{ reason(inspectRow) }}</dd></div></dl><h3>Lịch sử kiểm tra</h3><p v-if="historyLoading" role="status">Đang tải lịch sử...</p><p v-if="historyError" role="alert">{{ historyError }} <button class="r-button" @click="loadAttempts()">Thử lại</button></p><ol v-if="inspectRow.attempts.length" class="attempt-list"><li v-for="(attempt,index) in inspectRow.attempts" :key="attempt.id??index"><span>{{ attempt.assessment }} · {{ displayDate(attempt.takenAt) }}</span><strong>{{ attempt.score }}/100 · {{ Math.round(attempt.score)>=(attempt.passingScore??inspectRow.passingScore)?'Đạt':'Chưa đạt' }}</strong><ReportAttemptAnalysis v-if="attempt.id!=null" :attempt-id="attempt.id"/></li></ol><p v-else-if="!historyLoading&&!historyError">Chưa có lần kiểm tra nào.</p><button v-if="historyHasMore" class="r-button" :disabled="historyLoading" @click="loadAttempts(true)">Tải thêm lịch sử</button><div class="dialog-note">Gợi ý: {{ isOverdue(inspectRow)?'Phối hợp đơn vị để xác nhận kế hoạch hoàn thành.':isFailed(inspectRow)?'Hướng dẫn ôn tập và kiểm tra lại.':'Theo dõi và hỗ trợ hoàn thành nội dung còn lại.' }}</div></template></dialog>
     </template>
     </template>
   </div>
@@ -93,6 +93,7 @@ import { Users, CircleCheck, Target, Download, Printer, Info, SlidersHorizontal,
 import ReportMockChart from '../components/ReportMockChart.vue';
 import LiveCourseRatings from '../components/LiveCourseRatings.vue';
 import TablePagination from '../components/TablePagination.vue';
+import ReportAttemptAnalysis from '../components/ReportAttemptAnalysis.vue';
 import { scrollWithin } from '../utils/scrollWithin';
 import { reportViews } from '../utils/reportingViews';
 import type { ReportView } from '../utils/reportingViews';
@@ -219,6 +220,7 @@ onBeforeUnmount(()=>{sequence++;historySequence++;dimensionSequence++;clearTimeo
 <style scoped src="../assets/styles/reporting-mockup.css"></style>
 <style scoped>
 .report-pagination{margin-top:0;padding:16px 20px}
+.attempt-list li{flex-wrap:wrap}
 @media(max-width:600px){
   .report-pagination{padding:12px}
   .heading-actions,.drill-actions{flex-wrap:wrap;min-width:0}

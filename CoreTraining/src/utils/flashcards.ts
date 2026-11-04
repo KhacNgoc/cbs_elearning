@@ -30,6 +30,20 @@ export function studyQueue<T extends StudyCard>(cards: readonly T[], mode: "due"
   return [...due, ...cards.filter((card) => !card.progress)];
 }
 
+/** Random order that never keeps the first card, so asking for a shuffle always shows a different card. */
+export function shuffleCards<T>(cards: readonly T[], random: () => number = Math.random): T[] {
+  const shuffled = [...cards];
+  for (let index = shuffled.length - 1; index > 0; index--) {
+    const other = Math.floor(random() * (index + 1));
+    [shuffled[index], shuffled[other]] = [shuffled[other], shuffled[index]];
+  }
+  if (shuffled.length > 1 && shuffled[0] === cards[0]) {
+    const other = 1 + Math.floor(random() * (shuffled.length - 1));
+    [shuffled[0], shuffled[other]] = [shuffled[other], shuffled[0]];
+  }
+  return shuffled;
+}
+
 export function deckStats(cards: readonly StudyCard[], now = Date.now()): DeckStats {
   const stats: DeckStats = { total: cards.length, newCount: 0, dueCount: 0, learningCount: 0, masteredCount: 0 };
   for (const card of cards) {
