@@ -1,8 +1,13 @@
 package com.bidv.coretraining.repository;
 
+import com.bidv.coretraining.dto.CourseDto;
+import com.bidv.coretraining.dto.PagedResult;
+import com.bidv.coretraining.dto.TrainingStructureDto.DomainListItem;
+import com.bidv.coretraining.dto.TrainingStructureDto.ProgramListItem;
 import com.bidv.coretraining.dto.TrainingStructureDto.UnitAllocationDirectoryDto;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /** Native queries behind unit allocation and catalog soft deletes. */
 public interface UnitAllocationNativeRepository {
@@ -28,4 +33,12 @@ public interface UnitAllocationNativeRepository {
     void softDeleteCourseTree(String courseId, String suffix, int negBase);
 
     UnitAllocationDirectoryDto unitAllocationDirectory(String search, String type, String status, int page, int size);
+
+    List<Map<String, Object>> getUnitAllocatedItems(String unitId);
+
+    PagedResult<DomainListItem> adminDomainsPagedUnallocated(String search, int page, int size, String unitId);
+
+    PagedResult<ProgramListItem> adminProgramsPagedUnallocated(String domainId, String search, int page, int size, String unitId);
+
+    PagedResult<CourseDto> adminCoursesByProgramPagedUnallocated(String programId, String search, int page, int size, String unitId);
 }

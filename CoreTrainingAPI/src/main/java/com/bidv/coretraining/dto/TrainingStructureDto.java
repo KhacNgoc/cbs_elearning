@@ -134,7 +134,15 @@ public final class TrainingStructureDto {
     public record StaffCountDto(long count) {
     }
 
-    public record BatchAllocationItem(String categoryType, String targetId, String grantType) {
+    public record BatchAllocationItem(
+            String categoryType,
+            String targetId,
+            String grantType,
+            Boolean onlyUnallocated,
+            List<String> excludeIds) {
+        public BatchAllocationItem(String categoryType, String targetId, String grantType) {
+            this(categoryType, targetId, grantType, Boolean.TRUE, java.util.Collections.emptyList());
+        }
     }
 
     public record UnitBatchAllocationRequest(String unitId, List<BatchAllocationItem> items) {

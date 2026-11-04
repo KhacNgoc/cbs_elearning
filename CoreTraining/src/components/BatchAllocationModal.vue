@@ -80,7 +80,6 @@
                 >
                   <div class="check-box" :class="checkClass(domainState(d.id))">
                     <Check v-if="domainState(d.id) === 'full'" :size="12" />
-                    <Minus v-else-if="domainState(d.id) === 'partial'" :size="12" />
                   </div>
                 </button>
 
@@ -93,15 +92,15 @@
                 <Globe :size="16" class="node-icon domain-icon" />
                 <span class="node-name">{{ d.name }}</span>
                 <span class="node-count">
-                  <template v-if="domainState(d.id) === 'partial'">
-                    ({{ domainSelectedCourseCount(d.id) }}/{{ domainCourseTotal(d.id) }} khóa học)
+                  <template v-if="domainSelectedCourseCount(d.id) > 0">
+                    ({{ domainSelectedCourseCount(d.id) }} khóa học đã chọn)
                   </template>
                   <template v-else>({{ d.programsCount ?? programsOf(d.id).length }} chương trình)</template>
                 </span>
               </div>
 
               <div class="node-right" @click.stop>
-                <div v-if="domainState(d.id) === 'full'" class="grant-toggle-wrapper">
+                <div v-if="domainState(d.id) !== 'none'" class="grant-toggle-wrapper">
                   <button
                     type="button"
                     class="btn-grant-toggle"
@@ -109,7 +108,6 @@
                     @click="cycleDomainGrant(d.id)"
                     title="Bấm để đổi hình thức cho toàn bộ Lĩnh vực"
                   >
-                    <span class="dot"></span>
                     <span>{{ grantLabel(domainGrant(d.id)) }}</span>
                   </button>
                 </div>
@@ -139,7 +137,6 @@
                       >
                         <div class="check-box" :class="checkClass(programState(p.id, d.id))">
                           <Check v-if="programState(p.id, d.id) === 'full'" :size="12" />
-                          <Minus v-else-if="programState(p.id, d.id) === 'partial'" :size="12" />
                         </div>
                       </button>
 
@@ -152,15 +149,15 @@
                       <Folder :size="15" class="node-icon program-icon" />
                       <span class="node-name">{{ p.name }}</span>
                       <span class="node-count">
-                        <template v-if="programState(p.id, d.id) === 'partial'">
-                          ({{ programSelectedCount(p.id, d.id) }}/{{ coursesOf(p.id).length }} khóa học)
+                        <template v-if="programSelectedCount(p.id, d.id) > 0">
+                          ({{ programSelectedCount(p.id, d.id) }} khóa học đã chọn)
                         </template>
                         <template v-else>({{ p.coursesCount ?? coursesOf(p.id).length }} khóa học)</template>
                       </span>
                     </div>
 
                     <div class="node-right" @click.stop>
-                      <div v-if="programState(p.id, d.id) === 'full'" class="grant-toggle-wrapper">
+                      <div v-if="programState(p.id, d.id) !== 'none'" class="grant-toggle-wrapper">
                         <button
                           type="button"
                           class="btn-grant-toggle"
@@ -168,7 +165,6 @@
                           @click="cycleProgramGrant(p.id, d.id)"
                           title="Bấm để đổi hình thức cho toàn bộ Chương trình"
                         >
-                          <span class="dot"></span>
                           <span>{{ grantLabel(programGrant(p.id, d.id)) }}</span>
                         </button>
                       </div>
@@ -214,7 +210,6 @@
                                 @click="toggleCourseGrant(c.id, p.id, d.id)"
                                 title="Bấm để chuyển giữa Bắt buộc và Tự chọn"
                               >
-                                <span class="dot"></span>
                                 <span>{{ grantLabel(courseGrant(c.id, p.id, d.id)) }}</span>
                               </button>
                             </div>
@@ -329,7 +324,6 @@ import {
   ChevronDown,
   ChevronUp,
   Check,
-  Minus,
   Loader2,
   Building2,
   AlertCircle,
@@ -417,6 +411,7 @@ async function loadDomains() {
       search: debouncedSearch.value || undefined,
       page: page.value - 1,
       size: DOMAIN_PAGE_SIZE,
+      unallocatedForUnitId: props.unit?.id || undefined,
     });
     pagedDomains.value = res.items || [];
     totalPages.value = Math.max(1, res.totalPages || 1);
@@ -445,6 +440,7 @@ async function fetchPrograms(domainId: string, autoExpandChild = false) {
       search: debouncedSearch.value || undefined,
       page: 0,
       size: 100,
+      unallocatedForUnitId: props.unit?.id || undefined,
     });
     programsByDomain.value.set(domainId, res.items || []);
 
@@ -469,6 +465,7 @@ async function fetchCourses(programId: string, pageNum = 0) {
       search: debouncedSearch.value || undefined,
       page: pageNum,
       size: COURSE_PAGE_SIZE,
+      unallocatedForUnitId: props.unit?.id || undefined,
     });
     const current = pageNum === 0 ? [] : coursesByProgram.value.get(programId) ?? [];
     coursesByProgram.value.set(programId, [...current, ...(res.items || [])]);
@@ -554,7 +551,7 @@ function isCourseSelected(courseId: string, programId: string, domainId: string)
   if (unselectedCourseIds.value.has(courseId)) return false;
   if (courseSel.value.has(courseId)) return true;
   if (programSel.value.has(programId) && !unselectedProgramIds.value.has(programId)) return true;
-  if (domainSel.value.has(domainId)) return true;
+  if (domainSel.value.has(domainId) && !unselectedProgramIds.value.has(programId)) return true;
   return false;
 }
 
@@ -568,19 +565,14 @@ function courseGrant(courseId: string, programId: string, domainId: string): Gra
 }
 
 function programState(programId: string, domainId: string): NodeState {
-  if (unselectedProgramIds.value.has(programId)) return "none";
   const courses = coursesOf(programId);
-  if (courses.length === 0) {
-    if (programSel.value.has(programId) || domainSel.value.has(domainId)) return "full";
-    return "none";
+  if (courses.length > 0) {
+    const allSelected = courses.every((c) => isCourseSelected(c.id, programId, domainId));
+    return allSelected ? "full" : "none";
   }
-  let selected = 0;
-  for (const c of courses) {
-    if (isCourseSelected(c.id, programId, domainId)) selected++;
-  }
-  if (selected === 0) return "none";
-  if (selected === courses.length) return "full";
-  return "partial";
+  return programSel.value.has(programId) || (domainSel.value.has(domainId) && !unselectedProgramIds.value.has(programId))
+    ? "full"
+    : "none";
 }
 
 function programGrant(programId: string, domainId: string): GrantState {
@@ -596,18 +588,11 @@ function programGrant(programId: string, domainId: string): GrantState {
 
 function domainState(domainId: string): NodeState {
   const programs = programsOf(domainId);
-  if (programs.length === 0) {
-    return domainSel.value.has(domainId) ? "full" : "none";
+  const courses = programs.flatMap((p) => coursesOf(p.id));
+  if (courses.length > 0) {
+    const allSelected = courses.every((c) => isCourseSelected(c.id, c.programId || "", domainId));
+    return allSelected ? "full" : "none";
   }
-  let fullCount = 0;
-  let partialCount = 0;
-  for (const p of programs) {
-    const s = programState(p.id, domainId);
-    if (s === "full") fullCount++;
-    else if (s === "partial") partialCount++;
-  }
-  if (fullCount === programs.length) return "full";
-  if (fullCount > 0 || partialCount > 0) return "partial";
   return domainSel.value.has(domainId) ? "full" : "none";
 }
 
@@ -639,14 +624,10 @@ function domainSelectedCourseCount(domainId: string): number {
   return count;
 }
 
-function domainCourseTotal(domainId: string): number {
-  return programsOf(domainId).reduce((sum, p) => sum + coursesOf(p.id).length, 0);
-}
-
 // ---------------- Toggle Actions ----------------
 function toggleDomain(domainId: string) {
   const currentState = domainState(domainId);
-  if (currentState === "full") {
+  if (currentState === "full" || currentState === "partial") {
     domainSel.value.delete(domainId);
     for (const p of programsOf(domainId)) {
       programSel.value.delete(p.id);
@@ -659,10 +640,15 @@ function toggleDomain(domainId: string) {
   } else {
     domainSel.value.set(domainId, "MANDATORY");
     for (const p of programsOf(domainId)) {
+      programSel.value.set(p.id, "MANDATORY");
       unselectedProgramIds.value.delete(p.id);
       for (const c of coursesOf(p.id)) {
+        courseSel.value.set(c.id, "MANDATORY");
         unselectedCourseIds.value.delete(c.id);
       }
+    }
+    if (!programsByDomain.value.has(domainId)) {
+      fetchPrograms(domainId);
     }
   }
 }
@@ -671,18 +657,35 @@ function toggleProgram(programId: string, domainId: string) {
   const currentState = programState(programId, domainId);
   if (currentState === "full") {
     programSel.value.delete(programId);
-    if (domainSel.value.has(domainId)) {
-      unselectedProgramIds.value.add(programId);
-    }
+    unselectedProgramIds.value.add(programId);
     for (const c of coursesOf(programId)) {
       courseSel.value.delete(c.id);
-      unselectedCourseIds.value.delete(c.id);
+      unselectedCourseIds.value.add(c.id);
+    }
+    // Bỏ tích ở cha (domain) luôn
+    if (domainSel.value.has(domainId)) {
+      for (const p of programsOf(domainId)) {
+        if (p.id !== programId && programState(p.id, domainId) === "full") {
+          const pg = programGrant(p.id, domainId);
+          programSel.value.set(p.id, pg === "MIXED" ? "MANDATORY" : pg);
+        }
+      }
+      domainSel.value.delete(domainId);
     }
   } else {
     programSel.value.set(programId, "MANDATORY");
     unselectedProgramIds.value.delete(programId);
     for (const c of coursesOf(programId)) {
+      courseSel.value.set(c.id, "MANDATORY");
       unselectedCourseIds.value.delete(c.id);
+    }
+    if (!coursesByProgram.value.has(programId)) {
+      fetchCourses(programId, 0);
+    }
+    // Tích hết con của lĩnh vực thì tự động tích lĩnh vực cha:
+    const allDomCourses = programsOf(domainId).flatMap((p) => coursesOf(p.id));
+    if (allDomCourses.length > 0 && allDomCourses.every((c) => isCourseSelected(c.id, c.programId || "", domainId))) {
+      domainSel.value.set(domainId, "MANDATORY");
     }
   }
 }
@@ -690,13 +693,47 @@ function toggleProgram(programId: string, domainId: string) {
 function toggleCourse(courseId: string, programId: string, domainId: string) {
   const selected = isCourseSelected(courseId, programId, domainId);
   if (selected) {
+    // 1. Bỏ chọn khóa học này
     courseSel.value.delete(courseId);
-    if (programSel.value.has(programId) || domainSel.value.has(domainId)) {
-      unselectedCourseIds.value.add(courseId);
+    unselectedCourseIds.value.add(courseId);
+
+    // 2. Bỏ tích ở cha (program) luôn đi (không để dấu -):
+    // Giữ lại các khóa học khác trong cùng chương trình nếu đang được chọn
+    for (const c of coursesOf(programId)) {
+      if (c.id !== courseId && isCourseSelected(c.id, programId, domainId)) {
+        courseSel.value.set(c.id, courseGrant(c.id, programId, domainId));
+      }
+    }
+    programSel.value.delete(programId);
+    unselectedProgramIds.value.add(programId);
+
+    // 3. Bỏ tích ở ông (domain) luôn đi:
+    if (domainSel.value.has(domainId)) {
+      for (const p of programsOf(domainId)) {
+        if (p.id !== programId && programState(p.id, domainId) === "full") {
+          const pg = programGrant(p.id, domainId);
+          programSel.value.set(p.id, pg === "MIXED" ? "MANDATORY" : pg);
+        }
+      }
+      domainSel.value.delete(domainId);
     }
   } else {
+    // 1. Tích con này
     courseSel.value.set(courseId, "MANDATORY");
     unselectedCourseIds.value.delete(courseId);
+
+    // 2. Tích hết con thì tự động tích cha:
+    const progCourses = coursesOf(programId);
+    if (progCourses.length > 0 && progCourses.every((c) => isCourseSelected(c.id, programId, domainId))) {
+      programSel.value.set(programId, "MANDATORY");
+      unselectedProgramIds.value.delete(programId);
+    }
+
+    // 3. Tích hết tất cả con của lĩnh vực thì tự động tích ông (lĩnh vực):
+    const allDomCourses = programsOf(domainId).flatMap((p) => coursesOf(p.id));
+    if (allDomCourses.length > 0 && allDomCourses.every((c) => isCourseSelected(c.id, c.programId || "", domainId))) {
+      domainSel.value.set(domainId, "MANDATORY");
+    }
   }
 }
 
@@ -776,11 +813,11 @@ const selectedCourseCount = computed(() => {
 
 // ---------------- UI Helpers ----------------
 function stateClass(state: NodeState) {
-  return { "is-selected": state === "full", "is-partial": state === "partial" };
+  return { "is-selected": state === "full" };
 }
 
 function checkClass(state: NodeState) {
-  return { checked: state === "full", partial: state === "partial" };
+  return { checked: state === "full" };
 }
 
 function grantClass(g: GrantState) {
@@ -795,25 +832,54 @@ function grantLabel(g: GrantState) {
 
 // ---------------- Payload Builder ----------------
 function buildPayloadItems() {
-  const items: { categoryType: "domain" | "program" | "course"; targetId: string; grantType: Grant }[] = [];
+  const items: {
+    categoryType: "domain" | "program" | "course";
+    targetId: string;
+    grantType: Grant;
+    onlyUnallocated?: boolean;
+    excludeIds?: string[];
+  }[] = [];
 
   for (const d of pagedDomains.value) {
-    const s = domainState(d.id);
-    if (s === "full") {
+    if (domainSel.value.has(d.id)) {
       const g = domainGrant(d.id);
-      items.push({ categoryType: "domain", targetId: d.id, grantType: g === "MIXED" ? "MANDATORY" : g });
+      const excludedCourses = programsOf(d.id)
+        .flatMap((p) => coursesOf(p.id))
+        .filter((c) => !isCourseSelected(c.id, c.programId || "", d.id))
+        .map((c) => c.id);
+      items.push({
+        categoryType: "domain",
+        targetId: d.id,
+        grantType: g === "MIXED" ? "MANDATORY" : g,
+        onlyUnallocated: true,
+        excludeIds: excludedCourses.length > 0 ? excludedCourses : undefined,
+      });
       continue;
     }
+
     for (const p of programsOf(d.id)) {
-      const ps = programState(p.id, d.id);
-      if (ps === "full") {
+      if (programSel.value.has(p.id)) {
         const pg = programGrant(p.id, d.id);
-        items.push({ categoryType: "program", targetId: p.id, grantType: pg === "MIXED" ? "MANDATORY" : pg });
+        const excludedCourses = coursesOf(p.id)
+          .filter((c) => !isCourseSelected(c.id, p.id, d.id))
+          .map((c) => c.id);
+        items.push({
+          categoryType: "program",
+          targetId: p.id,
+          grantType: pg === "MIXED" ? "MANDATORY" : pg,
+          onlyUnallocated: true,
+          excludeIds: excludedCourses.length > 0 ? excludedCourses : undefined,
+        });
         continue;
       }
+
       for (const c of coursesOf(p.id)) {
         if (isCourseSelected(c.id, p.id, d.id)) {
-          items.push({ categoryType: "course", targetId: c.id, grantType: courseGrant(c.id, p.id, d.id) });
+          items.push({
+            categoryType: "course",
+            targetId: c.id,
+            grantType: courseGrant(c.id, p.id, d.id),
+          });
         }
       }
     }
@@ -821,12 +887,12 @@ function buildPayloadItems() {
 
   for (const [did, g] of domainSel.value) {
     if (!items.some((i) => i.targetId === did)) {
-      items.push({ categoryType: "domain", targetId: did, grantType: g });
+      items.push({ categoryType: "domain", targetId: did, grantType: g, onlyUnallocated: true });
     }
   }
   for (const [pid, g] of programSel.value) {
     if (!items.some((i) => i.targetId === pid)) {
-      items.push({ categoryType: "program", targetId: pid, grantType: g });
+      items.push({ categoryType: "program", targetId: pid, grantType: g, onlyUnallocated: true });
     }
   }
   for (const [cid, g] of courseSel.value) {
@@ -1482,14 +1548,15 @@ function handleClose() {
   margin-left: 0.25rem;
 }
 
+.footer-actions,
 .footer-buttons {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .btn {
-  padding: 0.5rem 1rem;
+  padding: 0.55rem 1.25rem;
   border-radius: 8px;
   font-size: 0.85rem;
   font-weight: 600;

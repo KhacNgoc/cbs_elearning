@@ -38,7 +38,10 @@ public class TrigramIndexInitializer {
                 jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_programs_name_trgm ON training_programs USING gin (name gin_trgm_ops);");
                 jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_programs_code_trgm ON training_programs USING gin (code gin_trgm_ops);");
 
-                log.info("Lean GIN trigram indexes verified successfully (2 per table).");
+                // Composite B-Tree index for Course Documents pagination and sorting
+                jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_course_documents_course_created ON course_documents (course_id, created_at DESC);");
+
+                log.info("Lean GIN trigram & course_documents indexes verified successfully.");
             }
         } catch (Exception e) {
             log.warn("Could not initialize pg_trgm indexes: {}", e.getMessage());

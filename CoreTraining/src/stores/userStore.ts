@@ -7,7 +7,7 @@ import type { LoginRequest } from "../api/authApi";
 import { courseApi } from "../api/courseApi";
 import { userApi } from "../api/userApi";
 import { useNavigationStore } from "./navigationStore";
-import { clearAuthSession, setCachedAuthSession } from "../utils/authSession";
+import { clearAuthSession, setCachedAuthSession, clearUserDraftsAndTemporaryState } from "../utils/authSession";
 import { showToast } from "../utils/toast";
 import { useLearningStore } from "./learningStore";
 
@@ -193,6 +193,7 @@ export const useUserStore = defineStore("user", {
         console.error("Server logout failed:", error);
       }
       clearAuthSession();
+      clearUserDraftsAndTemporaryState();
       localStorage.removeItem("accessToken");
       localStorage.removeItem("userRole");
       localStorage.removeItem("username");
@@ -233,6 +234,10 @@ export const useUserStore = defineStore("user", {
       progressWriters.delete(this);
       this.progressLoaded = false;
       useLearningStore().clear();
+      try {
+        const { useQuizStore } = await import("./quizStore");
+        useQuizStore().$reset();
+      } catch {}
       await navigate("/login");
     },
 

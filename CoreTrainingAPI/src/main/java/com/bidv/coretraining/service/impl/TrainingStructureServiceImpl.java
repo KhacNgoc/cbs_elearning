@@ -247,7 +247,8 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
                 d.setSeqNumber(nextSeq);
             }
         } else {
-            d.setCode(required(request.code(), "Mã lĩnh vực"));
+            String dCode = (request.code() != null && !request.code().isBlank()) ? request.code().trim() : (d.getCode() != null ? d.getCode() : java.util.UUID.randomUUID().toString());
+            d.setCode(dCode);
             if (d.getSeqNumber() == null) {
                 d.setSeqNumber(extractTrailingNumber(d.getCode(), 1));
             }
@@ -348,7 +349,8 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
                 p.setSeqNumber(nextSeq);
             }
         } else {
-            p.setCode(required(request.code(), "Mã chương trình"));
+            String pCode = (request.code() != null && !request.code().isBlank()) ? request.code().trim() : (p.getCode() != null ? p.getCode() : java.util.UUID.randomUUID().toString());
+            p.setCode(pCode);
             if (p.getSeqNumber() == null) {
                 p.setSeqNumber(extractTrailingNumber(p.getCode(), 1));
             }
@@ -453,7 +455,8 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
                 c.setSeqNumber(nextSeq);
             }
         } else {
-            c.setCode(required(r.code(), "Mã khóa"));
+            String cCode = (r.code() != null && !r.code().isBlank()) ? r.code().trim() : (c.getCode() != null ? c.getCode() : java.util.UUID.randomUUID().toString());
+            c.setCode(cCode);
             if (c.getSeqNumber() == null) {
                 c.setSeqNumber(extractTrailingNumber(c.getCode(), 1));
             }
@@ -584,7 +587,11 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
                 .toList();
     }
 
-    public PagedResult<DomainListItem> adminDomainsPaged(String search, int page, int size) {
+    @Override
+    public PagedResult<DomainListItem> adminDomainsPaged(String search, int page, int size, String unallocatedForUnitId) {
+        if (unallocatedForUnitId != null && !unallocatedForUnitId.isBlank()) {
+            return catalogNative.adminDomainsPagedUnallocated(search, page, size, unallocatedForUnitId.trim());
+        }
         String query = (search != null && !search.isBlank()) ? search.trim() : null;
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
         org.springframework.data.domain.Page<TrainingDomain> result = domains.findByFilter(query, pageable);
@@ -592,18 +599,31 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
                 programs.countByDomainIdAndStatusNot(d.getId(), "DELETED")));
     }
 
-    public PagedResult<CourseDto> adminCoursesByProgramPaged(String programId, String search, int page, int size) {
+    @Override
+    public PagedResult<CourseDto> adminCoursesByProgramPaged(String programId, String search, int page, int size, String unallocatedForUnitId) {
+        if (unallocatedForUnitId != null && !unallocatedForUnitId.isBlank()) {
+            return catalogNative.adminCoursesByProgramPagedUnallocated(programId, search, page, size, unallocatedForUnitId.trim());
+        }
         String query = (search != null && !search.isBlank()) ? search.trim() : null;
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
         return PagedResult.of(courses.findByProgramIdWithFilter(programId, query, pageable), this::mapToAdminCourseDto);
     }
 
-    public PagedResult<ProgramListItem> adminProgramsPaged(String domainId, String search, int page, int size) {
+    @Override
+    public PagedResult<ProgramListItem> adminProgramsPaged(String domainId, String search, int page, int size, String unallocatedForUnitId) {
+        if (unallocatedForUnitId != null && !unallocatedForUnitId.isBlank()) {
+            return catalogNative.adminProgramsPagedUnallocated(domainId, search, page, size, unallocatedForUnitId.trim());
+        }
         String query = (search != null && !search.isBlank()) ? search.trim() : null;
         String dId = (domainId != null && !domainId.isBlank()) ? domainId.trim() : null;
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
         return PagedResult.of(programs.findByDomainIdWithFilter(dId, query, pageable),
                 p -> ProgramListItem.of(programDto(p), courses.countByProgramIdAndStatusNot(p.getId(), "DELETED")));
+    }
+
+    @Override
+    public List<Map<String, Object>> getUnitAllocatedItems(String unitId) {
+        return catalogNative.getUnitAllocatedItems(unitId);
     }
 
     public void allocateCoursesToUnit(String unitId, String grantType, String programId, boolean allInProgram, List<String> courseIds) {
@@ -749,6 +769,7 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
             String grant = "MANDATORY".equalsIgnoreCase(item.grantType()) ? "MANDATORY" : "OPTIONAL";
             String targetId = item.targetId();
 
+
             if ("domain".equals(type)) {
                 TrainingDomain d = domainsToSave.computeIfAbsent(targetId, id ->
                         domains.findById(id).orElseThrow(() -> new ResourceNotFoundException("Domain", "id", id)));
@@ -768,6 +789,8 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
 
                     List<Course> pCourses = courses.findByProgramIdAndStatusNot(p.getId(), "DELETED");
                     for (Course c : pCourses) {
+                    if (item.excludeIds() != null && item.excludeIds().contains(c.getId())) continue;
+                        if (item.excludeIds() != null && item.excludeIds().contains(c.getId())) continue;
                         Course cToSave = coursesToSave.computeIfAbsent(c.getId(), cid -> c);
                         if (cToSave.getUnitGrants() == null) cToSave.setUnitGrants(new HashMap<>());
                         cToSave.getUnitGrants().put(unit.getId(), grant);
@@ -794,6 +817,7 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
 
                 List<Course> pCourses = courses.findByProgramIdAndStatusNot(p.getId(), "DELETED");
                 for (Course c : pCourses) {
+                    if (item.excludeIds() != null && item.excludeIds().contains(c.getId())) continue;
                     Course cToSave = coursesToSave.computeIfAbsent(c.getId(), cid -> c);
                     if (cToSave.getUnitGrants() == null) cToSave.setUnitGrants(new HashMap<>());
                     cToSave.getUnitGrants().put(unit.getId(), grant);
@@ -806,6 +830,7 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
                     }
                 }
             } else if ("course".equals(type)) {
+                if (item.excludeIds() != null && item.excludeIds().contains(targetId)) continue;
                 Course c = coursesToSave.computeIfAbsent(targetId, id ->
                         courses.findById(id).orElseThrow(() -> new ResourceNotFoundException("Course", "id", id)));
                 if (!"DELETED".equals(c.getStatus())) {
@@ -876,6 +901,7 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
             String action = item.action() == null ? "UPDATE_GRANT" : item.action().trim().toUpperCase();
             String type = item.categoryType().trim().toLowerCase();
             String targetId = item.targetId();
+
 
             if ("REMOVE".equals(action)) {
                 removeUnitAllocation(unitId, type, targetId);
@@ -1099,7 +1125,8 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
         if (!c.getCourse().getId().equals(courseId))
             throw new BadRequestException("Chương không thuộc khóa");
         version(c.getVersion(), r.version());
-        c.setCode(required(r.code(), "Mã chương"));
+        String chCode = (r.code() != null && !r.code().isBlank()) ? r.code().trim() : (c.getCode() != null ? c.getCode() : java.util.UUID.randomUUID().toString());
+        c.setCode(chCode);
         c.setTitle(required(r.title(), "Tên chương"));
         c.setDescription(r.description());
         return chapterDto(chapters.saveAndFlush(c), null);

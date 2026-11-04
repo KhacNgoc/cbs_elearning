@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "lessons", uniqueConstraints = @UniqueConstraint(columnNames = { "chapter_id", "lesson_order" }))
+@Table(name = "lessons")
 @Getter
 @Setter
 @NoArgsConstructor

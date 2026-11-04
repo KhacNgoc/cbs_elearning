@@ -112,6 +112,7 @@ onBeforeUnmount(release);
         <form
           ref="dialog"
           class="admin-modal-dialog"
+          :class="{ 'is-alert-modal': alert }"
           :style="{ maxWidth: `${width}px` }"
           :role="alert ? 'alertdialog' : 'dialog'"
           aria-modal="true"
@@ -227,6 +228,22 @@ onBeforeUnmount(release);
   border-top: 1px solid var(--border-color);
   background: var(--surface-ffffff);
   box-shadow: 0 -8px 20px #0f231b08;
+}
+.is-alert-modal .admin-modal-header {
+  position: relative;
+  justify-content: center;
+}
+.is-alert-modal .admin-modal-header h2 {
+  text-align: center;
+  width: 100%;
+  padding: 0 1.75rem;
+}
+.is-alert-modal .admin-modal-close {
+  position: absolute;
+  right: 1.25rem;
+}
+.is-alert-modal .admin-modal-footer {
+  justify-content: center;
 }
 .btn-danger {
   background: #dc2626;

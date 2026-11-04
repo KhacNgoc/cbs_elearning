@@ -39,6 +39,13 @@ public interface CourseRepository extends JpaRepository<Course, String> {
             @Param("search") String search,
             Pageable pageable);
 
+    @Query("SELECT c FROM Course c WHERE c.status <> 'DELETED' " +
+           "AND (:search IS NULL OR :search = '' OR c.name ILIKE CONCAT('%', :search, '%') OR c.code ILIKE CONCAT('%', :search, '%')) " +
+           "ORDER BY c.name ASC")
+    Page<Course> searchActiveCourses(
+            @Param("search") String search,
+            Pageable pageable);
+
     @Query("select distinct c from Course c join c.unitGrants ug where key(ug) = :unitId and c.status <> 'DELETED'")
     List<Course> findByUnitGrant(@Param("unitId") String unitId);
 }

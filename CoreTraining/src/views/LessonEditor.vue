@@ -9,13 +9,41 @@
           />
           <div class="heading-copy">
             <nav class="breadcrumb">
-              <RouterLink :to="`/admin/courses/${chapter.courseId}`">{{
+              <RouterLink to="/admin/courses">{{
                 course?.name
               }}</RouterLink>
               / <RouterLink :to="chapterUrl">{{ chapter.title }}</RouterLink> /
-              {{ lesson.id }}
+              <span>{{ lesson.title }}</span>
             </nav>
-            <h1>{{ lesson.title }}</h1>
+            <div class="title-header-container">
+              <input
+                v-if="isEditingTitle"
+                ref="titleInputRef"
+                v-model="quickTitle"
+                type="text"
+                class="header-title-input"
+                placeholder="Nhập tiêu đề bài học..."
+                @blur="saveQuickTitle"
+                @keydown.enter.prevent="saveQuickTitle"
+                @keydown.esc="cancelQuickTitle"
+              />
+              <div
+                v-else
+                class="header-title-interactive"
+                title="Bấm để đổi tên bài học"
+                @click="startEditTitle"
+              >
+                <h1>{{ lesson.title }}</h1>
+                <button
+                  v-if="canEdit"
+                  type="button"
+                  class="btn-edit-title"
+                  aria-label="Sửa tên bài học"
+                >
+                  <Pencil :size="16" />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </header>
@@ -73,6 +101,7 @@
             :read-only="!canEdit"
             @saved="savedContent"
             @dirty="dirty = $event"
+            @title-change="onTitleChange"
             @cancel="router.push(chapterUrl)"
           />
         </section>
@@ -131,10 +160,11 @@
   </main>
 </template>
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
 import { useRoute, useRouter, onBeforeRouteLeave } from "vue-router";
 import { useUserStore } from "../stores/userStore";
 import { trainingApi } from "../api/trainingApi";
+import { adminApi } from "../api/adminApi";
 import { showToast } from "../utils/toast";
 import { useCourseStore } from "../stores/courseStore";
 import type { Lesson, Chapter, Course } from "../types";
@@ -142,6 +172,8 @@ import LessonContentEditor from "./LessonContentEditor.vue";
 import AdminQuizDetail from "./AdminQuizDetail.vue";
 import AdminBackButton from "../components/AdminBackButton.vue";
 import LessonFlashcardManager from "../components/flashcards/LessonFlashcardManager.vue";
+import { Pencil } from "lucide-vue-next";
+
 const route = useRoute(),
   router = useRouter(),
   courseStore = useCourseStore(),
@@ -159,10 +191,81 @@ const lesson = ref<Lesson | null>(null),
   dirty = ref(false),
   preparingQuiz = ref(false),
   tab = ref("content");
-const chapterUrl = computed(
-  () =>
-    `/admin/courses/${encodeURIComponent(chapter.value?.courseId || "")}?chapter=${encodeURIComponent(chapter.value?.id || "")}`,
-);
+
+const isEditingTitle = ref(false);
+const quickTitle = ref("");
+const titleInputRef = ref<HTMLInputElement | null>(null);
+
+function startEditTitle() {
+  if (!canEdit.value) return;
+  quickTitle.value = lesson.value?.title || "";
+  isEditingTitle.value = true;
+  nextTick(() => {
+    titleInputRef.value?.focus();
+    titleInputRef.value?.select();
+  });
+}
+
+function cancelQuickTitle() {
+  isEditingTitle.value = false;
+  quickTitle.value = lesson.value?.title || "";
+}
+
+async function saveQuickTitle() {
+  if (!isEditingTitle.value) return;
+  const newTitle = quickTitle.value.trim();
+  if (!newTitle) {
+    cancelQuickTitle();
+    return;
+  }
+  isEditingTitle.value = false;
+  if (lesson.value && lesson.value.title !== newTitle) {
+    lesson.value.title = newTitle;
+    try {
+      const updated = await adminApi.updateLesson(lesson.value.id, {
+        ...lesson.value,
+        title: newTitle,
+        hint: lesson.value.hint || newTitle,
+        courseId: chapter.value?.courseId || "",
+      });
+      lesson.value = updated;
+      showToast("Cập nhật tên bài học thành công!", "success");
+    } catch (e: any) {
+      showToast(e.response?.data?.message || "Lỗi cập nhật tên bài học", "error");
+    }
+  }
+}
+
+function onTitleChange(newTitle: string) {
+  if (lesson.value) {
+    lesson.value.title = newTitle;
+  }
+}
+const chapterUrl = computed(() => "/admin/courses");
+
+function ensureTreeBranchSavedInSession() {
+  try {
+    const key = "cbs_curriculum_tree_state_v1";
+    const raw = sessionStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : {};
+    const ids = new Set<string>(Array.isArray(parsed.expandedIds) ? parsed.expandedIds : []);
+    if (chapter.value?.id) ids.add(chapter.value.id);
+    if (chapter.value?.courseId) ids.add(chapter.value.courseId);
+    if (course.value?.programId) ids.add(course.value.programId);
+    if ((course.value as any)?.domainId) ids.add((course.value as any).domainId);
+    sessionStorage.setItem(
+      key,
+      JSON.stringify({
+        ...parsed,
+        expandedIds: Array.from(ids),
+        selectedId: chapter.value?.id || parsed.selectedId || null,
+      }),
+    );
+  } catch {
+    // ignore storage errors
+  }
+}
+
 async function refreshLesson() {
   lesson.value = await trainingApi.lesson(String(route.params.lessonId));
 }
@@ -176,6 +279,15 @@ async function load() {
     chapter.value = await trainingApi.chapter(lesson.value!.chapterId!);
     course.value =
       courseStore.courses.find((c) => c.id === chapter.value?.courseId) || null;
+    if (!course.value && chapter.value?.courseId) {
+      try {
+        const outlineData = await trainingApi.outline(chapter.value.courseId);
+        course.value = outlineData.course;
+      } catch {
+        // ignore
+      }
+    }
+    ensureTreeBranchSavedInSession();
   } catch (e) {
     showToast(
       (e as { response?: { data?: { message?: string } } }).response?.data
@@ -197,7 +309,17 @@ watch(
 );
 async function savedContent() {
   dirty.value = false;
-  await refreshLesson();
+  showToast("Đã lưu nội dung bài học. Đang chuyển tới màn hình xem trước...", "success");
+  const courseId = chapter.value?.courseId;
+  if (courseId) {
+    ensureTreeBranchSavedInSession();
+    await router.push({
+      path: `/courses/${encodeURIComponent(courseId)}`,
+      query: { from: "admin" },
+    });
+  } else if (chapterUrl.value) {
+    await router.push(chapterUrl.value);
+  }
 }
 function createQuiz() {
   preparingQuiz.value = true;
@@ -300,6 +422,57 @@ h1 {
     flex-direction: column;
     align-items: flex-start;
   }
+}
+.title-header-container {
+  margin-top: 0.35rem;
+}
+.header-title-interactive {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 0.2rem 0.5rem;
+  margin-left: -0.5rem;
+  transition: background 0.15s ease;
+}
+.header-title-interactive:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.header-title-interactive h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-heading, #fff);
+}
+.btn-edit-title {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #94a3b8);
+  padding: 0.25rem;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+.header-title-interactive:hover .btn-edit-title {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.15);
+}
+.header-title-input {
+  font-size: 1.35rem;
+  font-weight: 700;
+  background: var(--bg-surface, #1e293b);
+  color: #fff;
+  border: 1.5px solid #10b981;
+  border-radius: 8px;
+  padding: 0.35rem 0.75rem;
+  min-width: 340px;
+  max-width: 100%;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
 }
 .heading-with-back {
   display: flex;

@@ -177,6 +177,35 @@ export const adminApi = {
     return response.data;
   },
 
+  async searchCourses(
+    search?: string,
+    limit = 50,
+  ): Promise<{ id: string; code?: string; name: string; status: string }[]> {
+    const response = await axiosClient.get<
+      { id: string; code?: string; name: string; status: string }[]
+    >("/api/admin/courses/search", { params: { search, limit } });
+    return response.data;
+  },
+
+  async getCourseDocumentsPaged(
+    courseId: string,
+    params?: { search?: string; status?: string; page?: number; size?: number },
+  ): Promise<{
+    items: CourseDocument[];
+    page: number;
+    size: number;
+    totalElements: number;
+    totalPages: number;
+    hasNext: boolean;
+    stats: { total: number; indexed: number; indexing: number; failed: number };
+  }> {
+    const response = await axiosClient.get(
+      `/api/admin/courses/${encodeURIComponent(courseId)}/documents/paged`,
+      { params },
+    );
+    return response.data;
+  },
+
   async deleteCourseDocument(
     courseId: string,
     documentId: string,

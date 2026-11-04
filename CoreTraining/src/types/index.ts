@@ -64,6 +64,8 @@ export interface Lesson {
   videoUrl: string;
   videoSource?: "UPLOAD" | "URL";
   hasQuiz?: boolean;
+  hasVideo?: boolean;
+  hasText?: boolean;
   quizPassingScore?: number;
   procedureSteps: ProcedureSection[];
   comments: Comment[];

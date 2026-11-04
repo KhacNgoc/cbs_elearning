@@ -10,8 +10,13 @@
     @close="$emit('cancel')"
     @submit="$emit('confirm')"
   >
-    <div class="confirm-modal-icon"><TriangleAlert :size="25" /></div>
-    <p class="confirm-message">{{ message }}</p>
+    <div v-if="!notes?.length" class="confirm-modal-icon"><TriangleAlert :size="25" /></div>
+    <p class="confirm-message" :class="{ 'confirm-main-question': !!notes?.length }">{{ message }}</p>
+    <div v-if="notes && notes.length" class="confirm-notes-group">
+      <p v-for="(note, idx) in notes" :key="idx" class="confirm-note-item">
+        {{ note }}
+      </p>
+    </div>
     <template #footer
       ><button
         type="button"
@@ -19,7 +24,7 @@
         :disabled="loading"
         @click="$emit('cancel')"
       >
-        Đóng</button
+        Hủy bỏ</button
       ><button type="submit" class="btn btn-danger" :disabled="loading">
         {{ loading ? "Đang xử lý…" : confirmLabel }}
       </button></template
@@ -34,6 +39,7 @@ withDefaults(
     open: boolean;
     title: string;
     message: string;
+    notes?: string[];
     confirmLabel?: string;
     loading?: boolean;
   }>(),
@@ -58,6 +64,26 @@ defineEmits<{ confirm: []; cancel: [] }>();
   line-height: 1.6;
   white-space: pre-line;
   overflow-wrap: anywhere;
+}
+.confirm-main-question {
+  color: var(--text-main);
+  font-size: 0.92rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.confirm-notes-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.55rem;
+}
+.confirm-note-item {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 400;
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--text-muted);
 }
 .btn-danger {
   background: #dc2626;

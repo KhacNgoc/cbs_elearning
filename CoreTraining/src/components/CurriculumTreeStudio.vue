@@ -21,6 +21,15 @@
         </button>
         <button
           type="button"
+          class="btn-studio btn-quick-wizard"
+          @click="showQuickWizard = true"
+          title="Khởi tạo nhanh khóa học hoặc import bằng file CSV"
+        >
+          <Zap :size="15" />
+          <span>Tạo nhanh / Import</span>
+        </button>
+        <button
+          type="button"
           class="btn-studio btn-ghost"
           @click="expandAll = !expandAll; toggleAllNodes(expandAll)"
           :title="expandAll ? 'Thu gọn tất cả' : 'Mở rộng tất cả'"
@@ -57,7 +66,7 @@
         <p>Đang tải cấu trúc chương trình...</p>
       </div>
 
-      <div v-else-if="!filteredDomains.length" class="tree-empty-state">
+      <div v-else-if="!domains.length" class="tree-empty-state">
         <FolderTree :size="36" class="empty-icon" />
         <p v-if="searchQuery">Không tìm thấy mục nào khớp với "{{ searchQuery }}".</p>
         <p v-else>Chưa có cấu trúc đào tạo nào. Hãy bấm "Thêm Lĩnh vực" để bắt đầu.</p>
@@ -66,7 +75,7 @@
       <div v-else class="tree-root">
         <!-- LEVEL 1: DOMAIN (LĨNH VỰC) -->
         <div
-          v-for="domain in pagedDomains"
+          v-for="domain in domains"
           :key="domain.id"
           class="tree-branch domain-branch"
         >
@@ -99,6 +108,14 @@
             </div>
 
             <div class="node-badge-group">
+              <span
+                v-if="domain.mandatoryUnitIds?.length"
+                class="meta-tag mandatory-tag"
+                :title="`Đơn vị bắt buộc: ${domain.mandatoryUnitIds.map(getUnitName).join(', ')}`"
+              >
+                <ShieldCheck :size="11" />
+                {{ domain.mandatoryUnitIds.length }} ĐV Bắt buộc
+              </span>
               <span class="count-tag">{{ getProgramsForDomain(domain.id).length }} CT</span>
             </div>
 
@@ -168,7 +185,11 @@
                 </div>
 
                 <div class="node-badge-group">
-                  <span v-if="program.mandatoryUnitIds?.length" class="meta-tag mandatory-tag" title="Đơn vị bắt buộc hoàn thành">
+                  <span
+                    v-if="program.mandatoryUnitIds?.length"
+                    class="meta-tag mandatory-tag"
+                    :title="`Đơn vị bắt buộc: ${program.mandatoryUnitIds.map(getUnitName).join(', ')}`"
+                  >
                     <ShieldCheck :size="11" />
                     {{ program.mandatoryUnitIds.length }} ĐV Bắt buộc
                   </span>
@@ -261,13 +282,25 @@
                         <ShieldCheck :size="11" />
                         {{ getCourseMandatoryUnits(course).length }} ĐV Bắt buộc
                       </span>
-                      <span v-if="course.status === 'DRAFT'" class="status-pill draft">
+                      <span v-if="course.status === 'PUBLISHED'" class="status-pill published">
+                        Đã xuất bản
+                      </span>
+                      <span v-else class="status-pill draft">
                         Bản nháp
                       </span>
                     </div>
 
                     <!-- Hover Actions -->
                     <div class="node-hover-actions" @click.stop>
+                      <button
+                        type="button"
+                        class="btn-studio-node btn-preview-node"
+                        title="Xem trước & kiểm duyệt nội dung khóa học"
+                        @click.stop="previewCourse(course.id)"
+                      >
+                        <Eye :size="13" />
+                        <span>Xem trước</span>
+                      </button>
                       <button
                         type="button"
                         class="btn-studio-node btn-primary-node"
@@ -349,7 +382,7 @@
                             type="button"
                             class="btn-studio-node btn-primary-node"
                             title="Thêm Bài học vào Chương này"
-                            @click="openAddModal('lesson', chapter, course)"
+                            @click="createLessonDirectly(chapter, course)"
                           >
                             <Plus :size="12" />
                             <span>Thêm Bài</span>
@@ -451,14 +484,6 @@
                               >
                                 <ExternalLink :size="12" />
                                 <span>Soạn bài</span>
-                              </button>
-                              <button
-                                type="button"
-                                class="hover-action-btn edit-btn"
-                                title="Chỉnh sửa thông tin Bài học"
-                                @click.stop="openEditModal('lesson', lesson, chapter, course)"
-                              >
-                                <Edit3 :size="13" />
                               </button>
                               <button
                                 type="button"
@@ -570,11 +595,11 @@
     </div>
 
     <!-- TIER-1 ROOT TREE PAGINATION FOOTER BAR -->
-    <div v-if="!loading && filteredDomains.length > 0" class="tree-pagination-bar">
+    <div v-if="!loading && domains.length > 0" class="tree-pagination-bar">
       <div class="pagination-summary">
         <span>
-          Hiển thị <strong>{{ (treeDomainPage - 1) * treeDomainPageSize + 1 }}–{{ Math.min(treeDomainPage * treeDomainPageSize, filteredDomains.length) }}</strong>
-          trên tổng số <strong>{{ filteredDomains.length }}</strong> lĩnh vực
+          Hiển thị <strong>{{ (treeDomainPage - 1) * treeDomainPageSize + 1 }}–{{ Math.min(treeDomainPage * treeDomainPageSize, treeDomainTotalElements) }}</strong>
+          trên tổng số <strong>{{ treeDomainTotalElements }}</strong> lĩnh vực
           ({{ totalActiveProgramsCount }} chương trình)
         </span>
       </div>
@@ -614,11 +639,10 @@
     </div>
 
     <!-- CONFIRM DELETE MODAL -->
-    <div v-if="deleteConfirm.show" class="tree-modal-backdrop">
+    <div v-if="deleteConfirm.show" class="tree-modal-backdrop" @click.self="closeDeleteModal">
       <div class="tree-quick-modal delete-confirm-modal">
-        <div class="modal-header">
+        <div class="modal-header delete-modal-header">
           <div class="modal-title-box">
-            <span class="modal-level-badge level-danger">Xác nhận xóa</span>
             <h4>{{ deleteConfirm.title }}</h4>
           </div>
           <button type="button" class="close-btn" @click="closeDeleteModal">
@@ -626,11 +650,22 @@
           </button>
         </div>
         <div class="modal-form">
-          <p class="delete-warning-text">{{ deleteConfirm.message }}</p>
-          <div class="modal-actions">
+          <div class="delete-confirm-body">
+            <p class="delete-main-question">{{ deleteConfirm.message }}</p>
+            <div v-if="deleteConfirm.notes.length" class="delete-notes-group">
+              <p
+                v-for="(note, idx) in deleteConfirm.notes"
+                :key="idx"
+                class="delete-note-item"
+              >
+                {{ note }}
+              </p>
+            </div>
+          </div>
+          <div class="modal-actions delete-modal-actions">
             <button
               type="button"
-              class="btn-cancel"
+              class="btn btn-secondary"
               :disabled="deleteConfirm.busy"
               @click="closeDeleteModal"
             >
@@ -638,11 +673,11 @@
             </button>
             <button
               type="button"
-              class="btn-submit btn-delete-submit"
+              class="btn btn-primary btn-delete-submit"
               :disabled="deleteConfirm.busy"
               @click="executeDeleteNode"
             >
-              <Loader2 v-if="deleteConfirm.busy" class="spinner" :size="14" />
+              <Loader2 v-if="deleteConfirm.busy" class="spin-icon" :size="14" />
               <span>{{ deleteConfirm.busy ? 'Đang xóa...' : 'Xóa vĩnh viễn' }}</span>
             </button>
           </div>
@@ -668,81 +703,13 @@
         <form @submit.prevent="submitAddModal" class="modal-form">
           <!-- SECTION 1: BASIC INFO -->
           <div class="form-section">
-            <!-- CẤP CHA TRỰC THUỘC (HIỂN THỊ CỐ ĐỊNH CHO TẤT CẢ CÁC CẤP CON) -->
-            <!-- 1. Khi thêm / sửa chương trình: hiển thị Lĩnh vực đào tạo -->
-            <div class="form-group" v-if="addModal.type === 'program'">
-              <label>Lĩnh vực đào tạo (*):</label>
-              <select
-                v-model="addModal.parentId"
-                class="form-control select-control disabled-select"
-                @change="handleDomainChange"
-                disabled
-                required
-              >
-                <option v-for="d in domains" :key="d.id" :value="d.id">
-                  {{ d.name }} ({{ d.code }})
-                </option>
-              </select>
-            </div>
 
-            <!-- 2. Khi thêm / sửa khóa học: hiển thị Chương trình đào tạo -->
-            <div class="form-group" v-else-if="addModal.type === 'course'">
-              <label>Chương trình đào tạo (*):</label>
-              <div class="inherited-parent-display">
-                <span class="parent-chip-badge">{{ addModal.parentObj?.name || addModal.parentObj?.code || "Chương trình hiện tại" }}</span>
-              </div>
-            </div>
 
-            <!-- 3. Khi thêm / sửa chương học: hiển thị Khóa học nghiệp vụ -->
-            <div class="form-group" v-else-if="addModal.type === 'chapter'">
-              <label>Khóa học nghiệp vụ (*):</label>
-              <div class="inherited-parent-display">
-                <span class="parent-chip-badge">{{ addModal.parentObj?.name || addModal.parentObj?.code || "Khóa học hiện tại" }}</span>
-              </div>
-            </div>
 
-            <!-- 4. Khi thêm / sửa bài học: hiển thị Chương học trực thuộc -->
-            <div class="form-group" v-else-if="addModal.type === 'lesson'">
-              <label>Chương học trực thuộc (*):</label>
-              <div class="inherited-parent-display">
-                <span class="parent-chip-badge">{{ addModal.parentObj?.title || addModal.parentObj?.name || addModal.parentObj?.code || "Chương học hiện tại" }}</span>
-              </div>
-            </div>
-
-            <!-- PHÂN HỆ CHO CẤP 1 (LĨNH VỰC) - CHO PHÉP CHỌN GỐC -->
-            <div class="form-group" v-if="addModal.type === 'domain'">
-              <label>Phân hệ nghiệp vụ (*):</label>
-              <select
-                v-model="addModal.businessModule"
-                class="form-control select-control module-select"
-                @change="handleBusinessModuleChange"
-                required
-              >
-                <option value="">-- Chọn phân hệ nghiệp vụ gốc --</option>
-                <option
-                  v-for="mod in BUSINESS_MODULES"
-                  :key="mod.value"
-                  :value="mod.value"
-                >
-                  {{ mod.label }}
-                </option>
-              </select>
-            </div>
-
-            <!-- PHÂN HỆ CHO CÁC CẤP CON (CHƯƠNG TRÌNH, KHÓA HỌC, CHƯƠNG, BÀI) - TỰ ĐỘNG CỐ ĐỊNH TỪ CHA -->
-            <div
-              class="form-group inherited-module-info"
-              v-else
-            >
-              <label>Phân hệ nghiệp vụ:</label>
-              <div class="inherited-module-display">
-                <span class="module-chip-badge">{{ addModal.businessModule || "N/A" }}</span>
-                <span class="module-title-text">{{ getModuleName(addModal.businessModule) }}</span>
-              </div>
-            </div>
 
             <!-- MÃ ĐỊNH DANH (CODE) VỚI OPTION TỰ ĐỘNG SINH / DISABLE / ẨN -->
-            <div class="form-group code-group">
+            <!-- MÃ ĐỊNH DANH (CODE) - ĐÃ ẨN VÀ TỰ ĐỘNG DÙNG UUID -->
+            <div class="form-group code-group" style="display: none;">
               <div class="code-label-row">
                 <label>Mã định danh (*):</label>
               </div>
@@ -945,6 +912,15 @@
       </div>
     </div>
 
+    <!-- QUICK CURRICULUM WIZARD & CSV IMPORT MODAL -->
+    <QuickCurriculumImportModal
+      v-if="showQuickWizard"
+      :domains="domains"
+      :programs="programs"
+      @close="showQuickWizard = false"
+      @completed="handleQuickWizardCompleted"
+    />
+
     <!-- FLOATING RICH HOVER DESCRIPTION TOOLTIP (Synchronized with UnitAllocationAdmin) -->
     <Teleport to="body">
       <Transition name="tooltip-fade">
@@ -982,6 +958,17 @@
         </div>
       </Transition>
     </Teleport>
+
+    <!-- FULLSCREEN LOADING OVERLAY KHI ĐANG TẠO BÀI HỌC -->
+    <Teleport to="body">
+      <div v-if="isCreatingLessonDirectly" class="fullscreen-loading-overlay">
+        <div class="loading-modal-card">
+          <Loader2 :size="42" class="spin-icon loading-spinner" />
+          <h4>Đang khởi tạo bài học mới...</h4>
+          <p>Hệ thống đang chuẩn bị cấu trúc và chuyển hướng tới trang soạn thảo.</p>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -1014,7 +1001,10 @@ import {
   ShieldCheck,
   Edit3,
   Trash2,
+  Eye,
+  Zap,
 } from "lucide-vue-next";
+import QuickCurriculumImportModal from "./QuickCurriculumImportModal.vue";
 import { courseApi } from "../api/courseApi";
 import { lessonMetadataUpdate } from "../utils/lessonContent";
 import { trainingApi } from "../api/trainingApi";
@@ -1040,18 +1030,7 @@ const emit = defineEmits<{
   (e: "refresh"): void;
 }>();
 
-// Business Modules & Training Levels
-const BUSINESS_MODULES = [
-  { value: "RM", label: "Quản trị rủi ro & Tuân thủ (RM)" },
-  { value: "TD", label: "Tiền gửi & Huy động vốn (TD)" },
-  { value: "LN", label: "Cho vay & Quản trị tín dụng (LN)" },
-  { value: "CIF", label: "Thông tin khách hàng & Tài khoản (CIF)" },
-  { value: "GL", label: "Kế toán tổng hợp & Giao dịch (GL)" },
-  { value: "TF", label: "Thanh toán quốc tế & TT Thương mại (TF)" },
-  { value: "DIGI", label: "Ngân hàng số & E-Banking (DIGI)" },
-  { value: "CARD", label: "Dịch vụ thẻ ngân hàng (CARD)" },
-  { value: "OPS", label: "Vận hành chi nhánh & DVKH (OPS)" },
-];
+// Training Levels
 
 const TRAINING_LEVELS = [
   { value: "BASIC", label: "Cơ bản (Nền tảng nghiệp vụ)" },
@@ -1067,6 +1046,26 @@ const searchQuery = ref("");
 const expandAll = ref(false);
 const selectedId = ref<string>("");
 const expandedIds = ref<Set<string>>(new Set());
+const showQuickWizard = ref(false);
+
+async function handleQuickWizardCompleted(result: {
+  expandedIds: string[];
+  firstLessonId?: string;
+  openLessonEditor?: boolean;
+}) {
+  showQuickWizard.value = false;
+  // Chỉ mở duy nhất nhánh cấu trúc vừa được tạo / import xong
+  expandedIds.value = new Set(result.expandedIds);
+  if (result.firstLessonId) {
+    selectedId.value = result.firstLessonId;
+  }
+  saveTreeStateToStorage();
+  await loadTreeData();
+  emit("refresh");
+  if (result.openLessonEditor && result.firstLessonId) {
+    await router.push(`/admin/lessons/${encodeURIComponent(result.firstLessonId)}/edit`);
+  }
+}
 
 // Data storage
 const domains = ref<TrainingDomain[]>([]);
@@ -1086,6 +1085,7 @@ const deleteConfirm = ref<{
   grandParentId?: string;
   title: string;
   message: string;
+  notes: string[];
   busy: boolean;
 }>({
   show: false,
@@ -1096,6 +1096,7 @@ const deleteConfirm = ref<{
   grandParentId: "",
   title: "",
   message: "",
+  notes: [],
   busy: false,
 });
 
@@ -1408,22 +1409,10 @@ const descriptionPlaceholder = computed(() => {
   }
 });
 
-function getModuleName(code?: string): string {
-  if (!code) return "Chưa xác định";
-  const found = BUSINESS_MODULES.find((m) => m.value === code);
-  return found ? found.label : code;
-}
 
-// Trích xuất mã phân hệ từ cấp cha một cách thông minh (kể cả khi code là RMLV1, RMCT1...)
-function extractModuleFromParent(parent: any): string {
-  if (!parent) return "";
-  if (parent.businessModule) return parent.businessModule;
-  const code = (parent.code || "").toUpperCase();
-  for (const mod of BUSINESS_MODULES) {
-    if (code.startsWith(mod.value)) {
-      return mod.value;
-    }
-  }
+
+// Đã bỏ phân hệ nghiệp vụ hoàn toàn
+function extractModuleFromParent(_parent: any): string {
   return "";
 }
 
@@ -1625,7 +1614,6 @@ const loadingMoreProgramCoursesMap = ref<Record<string, boolean>>({});
 const loadingCourseChaptersMap = ref<Record<string, boolean>>({});
 const courseBranchLimits = ref<Record<string, number>>({});
 const auxiliaryModalLoaded = ref(false);
-const searchCoursesLoaded = ref(false);
 
 function mergeCoursesIntoStore(newCourses: Course[]) {
   if (!newCourses?.length) return;
@@ -1766,38 +1754,38 @@ function getProgramTotalCoursesCount(programId: string): number {
   return getCoursesForProgram(programId).length;
 }
 
-// Expand only operating branch
-function expandOperatingBranch(type: string, id?: string, parentId?: string) {
+// Expand operating branch while preserving existing open branches
+async function expandOperatingBranch(type: string, id?: string, parentId?: string) {
   if (type === "domain") {
     if (id) expandedIds.value.add(id);
   } else if (type === "program") {
     if (parentId) expandedIds.value.add(parentId);
     if (id) {
       expandedIds.value.add(id);
-      ensureProgramCoursesLoaded(id, true);
+      await ensureProgramCoursesLoaded(id, true);
     }
   } else if (type === "course") {
     const crs = courses.value.find((c) => c.id === id);
     const effectiveParentId = parentId || crs?.programId;
     if (effectiveParentId) {
       expandedIds.value.add(effectiveParentId);
-      ensureProgramCoursesLoaded(effectiveParentId, true);
+      await ensureProgramCoursesLoaded(effectiveParentId, true);
       const prog = programs.value.find((p) => p.id === effectiveParentId);
       if (prog?.domainId) expandedIds.value.add(prog.domainId);
     }
     if (id) {
       expandedIds.value.add(id);
-      loadChaptersForCourse(id, true);
+      await loadChaptersForCourse(id, true);
     }
   } else if (type === "chapter") {
     if (parentId) {
       expandedIds.value.add(parentId);
-      loadChaptersForCourse(parentId, true);
+      await loadChaptersForCourse(parentId, true);
       const crs = courses.value.find((c) => c.id === parentId);
       if (crs) {
         if (crs.programId) {
           expandedIds.value.add(crs.programId);
-          ensureProgramCoursesLoaded(crs.programId);
+          await ensureProgramCoursesLoaded(crs.programId);
           const prog = programs.value.find((p) => p.id === crs.programId);
           if (prog?.domainId) expandedIds.value.add(prog.domainId);
         }
@@ -1816,11 +1804,11 @@ function expandOperatingBranch(type: string, id?: string, parentId?: string) {
       }
       if (courseId) {
         expandedIds.value.add(courseId);
-        loadChaptersForCourse(courseId, true);
+        await loadChaptersForCourse(courseId, true);
         const crs = courses.value.find((c) => c.id === courseId);
         if (crs?.programId) {
           expandedIds.value.add(crs.programId);
-          ensureProgramCoursesLoaded(crs.programId);
+          await ensureProgramCoursesLoaded(crs.programId);
           const prog = programs.value.find((p) => p.id === crs.programId);
           if (prog?.domainId) expandedIds.value.add(prog.domainId);
         }
@@ -1830,13 +1818,44 @@ function expandOperatingBranch(type: string, id?: string, parentId?: string) {
   }
 }
 
-// Load lightweight catalog (Domains + Programs only) — True Lazy Fetch for Courses & Chapters
+// DB-Level Paged Tree Catalog (Domains + Programs) — True Lazy Fetch for Courses & Chapters
 async function loadTreeData(expandTarget?: { type: string; id?: string; parentId?: string }) {
   loading.value = true;
   try {
-    const catalog = await trainingApi.catalog();
-    domains.value = catalog.domains || [];
-    programs.value = catalog.programs || [];
+    const res = await trainingApi.domainsPaged({
+      search: searchQuery.value.trim() || undefined,
+      page: treeDomainPage.value - 1,
+      size: treeDomainPageSize.value,
+    });
+    domains.value = (res.items || []).filter((d) => d.status !== "DELETED");
+    treeDomainTotalPages.value = Math.max(1, res.totalPages || 1);
+    treeDomainTotalElements.value = res.totalElements || 0;
+
+    const domainIds = domains.value.map((d) => d.id);
+    if (domainIds.length > 0) {
+      const progResponses = await Promise.all(
+        domainIds.map((dId) =>
+          trainingApi.programsPaged({
+            domainId: dId,
+            search: searchQuery.value.trim() || undefined,
+            size: 100,
+          })
+        )
+      );
+      programs.value = progResponses.flatMap((r) => (r.items || []).filter((p) => p.status !== "DELETED"));
+    } else {
+      programs.value = [];
+    }
+
+    if (searchQuery.value.trim()) {
+      for (const d of domains.value) {
+        expandedIds.value.add(d.id);
+      }
+      for (const p of programs.value) {
+        expandedIds.value.add(p.id);
+        ensureProgramCoursesLoaded(p.id);
+      }
+    }
 
     // Load units lightly so unit badges on courses/programs have names
     if (!unitsList.value.length) {
@@ -1859,16 +1878,44 @@ async function loadTreeData(expandTarget?: { type: string; id?: string; parentId
         } catch (e) {}
       }
       expandedIds.value.clear();
-      expandOperatingBranch("course", props.initialCourseId);
+      await expandOperatingBranch("course", props.initialCourseId);
       selectedId.value = props.initialCourseId;
       await loadChaptersForCourse(props.initialCourseId, true);
       const courseChaps = chaptersMap.value[props.initialCourseId] || [];
       for (const ch of courseChaps) {
         expandedIds.value.add(ch.id);
       }
+      saveTreeStateToStorage();
     } else if (expandTarget) {
-      expandedIds.value.clear();
-      expandOperatingBranch(expandTarget.type, expandTarget.id, expandTarget.parentId);
+      await expandOperatingBranch(expandTarget.type, expandTarget.id, expandTarget.parentId);
+      saveTreeStateToStorage();
+    } else if (expandedIds.value.size > 0) {
+      // Khôi phục dữ liệu khóa học & chương cho các nhánh đang mở sẵn trước đó
+      const expandedProgs = programs.value.filter((p) => expandedIds.value.has(p.id));
+      for (const p of expandedProgs) {
+        if (p.domainId) expandedIds.value.add(p.domainId);
+      }
+      if (expandedProgs.length > 0) {
+        await Promise.all(expandedProgs.map((p) => ensureProgramCoursesLoaded(p.id, true)));
+      }
+      const expandedCourseIds: string[] = [];
+      for (const p of expandedProgs) {
+        const progCourses = getCoursesForProgram(p.id);
+        for (const c of progCourses) {
+          if (expandedIds.value.has(c.id)) {
+            expandedCourseIds.push(c.id);
+          }
+        }
+      }
+      for (const c of courses.value) {
+        if (expandedIds.value.has(c.id) && !expandedCourseIds.includes(c.id)) {
+          expandedCourseIds.push(c.id);
+        }
+      }
+      if (expandedCourseIds.length > 0) {
+        await Promise.all(expandedCourseIds.map((cId) => loadChaptersForCourse(cId, true)));
+      }
+      saveTreeStateToStorage();
     }
   } catch (error) {
     console.error("Lỗi khi tải cấu trúc đào tạo:", error);
@@ -1939,6 +1986,7 @@ function toggleNode(id: string) {
       loadChaptersForCourse(id);
     }
   }
+  saveTreeStateToStorage();
 }
 
 function toggleAllNodes(expand: boolean) {
@@ -1946,7 +1994,7 @@ function toggleAllNodes(expand: boolean) {
     expandedIds.value.clear();
   } else {
     // Chỉ mở rộng các Lĩnh vực & Chương trình thuộc TRANG HIỆN TẠI để tránh query ồ ạt
-    for (const d of pagedDomains.value) {
+    for (const d of domains.value) {
       expandedIds.value.add(d.id);
       const progs = getProgramsForDomain(d.id);
       for (const p of progs) {
@@ -1955,6 +2003,7 @@ function toggleAllNodes(expand: boolean) {
       }
     }
   }
+  saveTreeStateToStorage();
 }
 
 // Select node & toggle tree (expand/collapse)
@@ -1965,26 +2014,97 @@ function selectNode(type: string, data: any, parent?: any, grandparent?: any) {
 }
 
 // Open Inline Add Modal
-function handleDomainChange() {
-  const chosen = domains.value.find((d) => d.id === addModal.value.parentId);
-  if (chosen) {
-    addModal.value.parentObj = chosen;
-    addModal.value.businessModule = extractModuleFromParent(chosen);
-    if (chosen.mandatoryUnitIds && chosen.mandatoryUnitIds.length > 0) {
-      addModal.value.mandatoryUnitIds = [...chosen.mandatoryUnitIds];
-    } else {
-      addModal.value.mandatoryUnitIds = [];
+function extractUnitsFromObject(obj: any): { mandatory: string[]; optional: string[] } {
+  if (!obj) return { mandatory: [], optional: [] };
+  const mandatory: string[] = [];
+  const optional: string[] = [];
+  if (obj.mandatoryUnitIds) {
+    const list = Array.isArray(obj.mandatoryUnitIds) ? obj.mandatoryUnitIds : Array.from(obj.mandatoryUnitIds);
+    for (const u of list) {
+      if (u && !mandatory.includes(String(u))) mandatory.push(String(u));
     }
-    if (chosen.optionalUnitIds && chosen.optionalUnitIds.length > 0) {
-      addModal.value.optionalUnitIds = [...chosen.optionalUnitIds];
-    } else if (chosen.unitIds && chosen.unitIds.length > 0) {
-      addModal.value.optionalUnitIds = [...chosen.unitIds];
-    } else {
-      addModal.value.optionalUnitIds = [];
+  }
+  if (obj.optionalUnitIds) {
+    const list = Array.isArray(obj.optionalUnitIds) ? obj.optionalUnitIds : Array.from(obj.optionalUnitIds);
+    for (const u of list) {
+      if (u && !optional.includes(String(u))) optional.push(String(u));
     }
-    if (addModal.value.autoCode) {
-      handleBusinessModuleChange();
+  }
+  if (obj.unitGrants && typeof obj.unitGrants === "object") {
+    for (const [uId, grant] of Object.entries(obj.unitGrants)) {
+      if (String(grant).toUpperCase() === "MANDATORY") {
+        if (!mandatory.includes(uId)) mandatory.push(uId);
+      } else {
+        if (!optional.includes(uId)) optional.push(uId);
+      }
     }
+  }
+  if (mandatory.length === 0 && optional.length === 0 && obj.unitIds) {
+    const list = Array.isArray(obj.unitIds) ? obj.unitIds : Array.from(obj.unitIds);
+    for (const u of list) {
+      if (u && !optional.includes(String(u))) optional.push(String(u));
+    }
+  }
+  return { mandatory, optional };
+}
+
+
+
+const isCreatingLessonDirectly = ref(false);
+
+async function createLessonDirectly(chapter: any, course?: any) {
+  try {
+    const courseId =
+      course?.id ||
+      chapter?.courseId ||
+      chapter?.course_id ||
+      (courses.value as any[]).find((c: any) => c.chapters?.some((ch: any) => ch.id === chapter?.id))?.id;
+    if (!chapter?.id) {
+      showToast("Không tìm thấy thông tin chương học!", "error");
+      return;
+    }
+    isCreatingLessonDirectly.value = true;
+    const initialTitle = "Bài học mới";
+    const initialId =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : Date.now().toString(36) + Math.random().toString(36).substring(2);
+
+    const saved = await adminApi.createLesson({
+      id: initialId,
+      status: "DRAFT",
+      title: initialTitle,
+      hint: initialTitle,
+      chapterId: chapter.id,
+      courseId: courseId || "",
+      videoUrl: "",
+      videoSource: "URL",
+      documents: [],
+      procedureSteps: [],
+    });
+
+    // Lưu trạng thái mở của chương, khóa học, chương trình, lĩnh vực trước khi sang màn soạn bài
+    expandedIds.value.add(chapter.id);
+    if (courseId) {
+      expandedIds.value.add(courseId);
+      const crs = course || courses.value.find((c) => c.id === courseId);
+      if (crs?.programId) {
+        expandedIds.value.add(crs.programId);
+        const prog = programs.value.find((p) => p.id === crs.programId);
+        if (prog?.domainId) {
+          expandedIds.value.add(prog.domainId);
+        }
+      }
+    }
+    selectedId.value = chapter.id;
+    saveTreeStateToStorage();
+
+    emit("refresh");
+    await router.push(`/admin/lessons/${encodeURIComponent(saved.id)}/edit`);
+  } catch (err: any) {
+    isCreatingLessonDirectly.value = false;
+    const msg = err.response?.data?.message || "Lỗi khi tạo bài học!";
+    showToast(msg, "error");
   }
 }
 
@@ -1993,6 +2113,10 @@ function openAddModal(
   parentObj?: any,
   grandParentObj?: any
 ) {
+  if (type === "lesson") {
+    void createLessonDirectly(parentObj, grandParentObj);
+    return;
+  }
   ensureModalAuxiliaryDataLoaded();
   const parent = parentObj || grandParentObj;
   const resolvedParent =
@@ -2000,7 +2124,6 @@ function openAddModal(
     (parent?.id && programs.value.find((p) => p.id === parent.id)) ||
     (parent?.id && courses.value.find((c) => c.id === parent.id)) ||
     parent;
-  const parentCode = resolvedParent?.code || "";
 
   // Tự động kế thừa phân hệ & phân bổ đơn vị từ cấp cha
   let defaultModule = "";
@@ -2013,32 +2136,20 @@ function openAddModal(
   let inheritedMandatoryUnits: string[] = [];
   let inheritedOptionalUnits: string[] = [];
 
-  // CHỈ cấp Khóa học (course) mới kế thừa đơn vị từ Chương trình đào tạo cha (nếu có)
-  if (type === "course" && resolvedParent) {
-    const sourceUnitsObj = resolvedParent;
-    if (sourceUnitsObj.mandatoryUnitIds && Array.isArray(sourceUnitsObj.mandatoryUnitIds)) {
-      inheritedMandatoryUnits = [...sourceUnitsObj.mandatoryUnitIds];
-    } else if (sourceUnitsObj.mandatoryUnitIds) {
-      inheritedMandatoryUnits = Array.from(sourceUnitsObj.mandatoryUnitIds);
-    }
-    if (sourceUnitsObj.optionalUnitIds && Array.isArray(sourceUnitsObj.optionalUnitIds)) {
-      inheritedOptionalUnits = [...sourceUnitsObj.optionalUnitIds];
-    } else if (sourceUnitsObj.optionalUnitIds) {
-      inheritedOptionalUnits = Array.from(sourceUnitsObj.optionalUnitIds);
-    }
-    if (
-      inheritedMandatoryUnits.length === 0 &&
-      inheritedOptionalUnits.length === 0 &&
-      sourceUnitsObj.unitIds &&
-      sourceUnitsObj.unitIds.length > 0
-    ) {
-      inheritedOptionalUnits = Array.from(sourceUnitsObj.unitIds);
+  // Tự động kế thừa phân bổ đơn vị cho cả Chương trình (từ Lĩnh vực) và Khóa học (từ Chương trình / Lĩnh vực)
+  if ((type === "program" || type === "course") && resolvedParent) {
+    const parentUnits = extractUnitsFromObject(resolvedParent);
+    if (parentUnits.mandatory.length > 0 || parentUnits.optional.length > 0) {
+      inheritedMandatoryUnits = [...parentUnits.mandatory];
+      inheritedOptionalUnits = [...parentUnits.optional];
+    } else if (grandParentObj) {
+      const grandParentUnits = extractUnitsFromObject(grandParentObj);
+      inheritedMandatoryUnits = [...grandParentUnits.mandatory];
+      inheritedOptionalUnits = [...grandParentUnits.optional];
     }
   }
 
-  const initialCode = defaultModule
-    ? computeNextSequenceCode(type, defaultModule)
-    : generateStandardCode(type, "", parentCode);
+  const initialCode = (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).substring(2));
 
   const draftKey = getDraftKey(type, resolvedParent?.id);
   const existingDraft = addModalDrafts.value[draftKey];
@@ -2066,11 +2177,11 @@ function openAddModal(
       description: existingDraft.description || "",
       status: existingDraft.status || "ACTIVE",
       mandatoryUnitIds:
-        type === "chapter" || type === "lesson"
+        type === "chapter"
           ? []
           : existingDraft.mandatoryUnitIds || inheritedMandatoryUnits,
       optionalUnitIds:
-        type === "chapter" || type === "lesson"
+        type === "chapter"
           ? []
           : existingDraft.optionalUnitIds || inheritedOptionalUnits,
       autoEnrollStaff: existingDraft.autoEnrollStaff ?? true,
@@ -2114,6 +2225,10 @@ function openEditModal(
   parentObj?: any,
   grandParentObj?: any
 ) {
+  if (type === "lesson") {
+    openLessonEditor(item.id);
+    return;
+  }
   ensureModalAuxiliaryDataLoaded();
   hasRestoredDraft.value = false;
   selectedId.value = item.id;
@@ -2127,8 +2242,6 @@ function openEditModal(
     pId = item.programId || parent?.id || "";
   } else if (type === "chapter") {
     pId = item.courseId || parent?.id || "";
-  } else if (type === "lesson") {
-    pId = item.chapterId || parent?.id || "";
   }
 
   const resolvedParent =
@@ -2159,7 +2272,7 @@ function openEditModal(
     if (resolvedParent?.mandatoryUnitIds) mandatoryUnits = [...resolvedParent.mandatoryUnitIds];
     if (resolvedParent?.optionalUnitIds) optionalUnits = [...resolvedParent.optionalUnitIds];
     else if (resolvedParent?.unitIds) optionalUnits = [...resolvedParent.unitIds];
-  } else if (type === "chapter" || type === "lesson") {
+  } else if (type === "chapter") {
     mandatoryUnits = [];
     optionalUnits = [];
   }
@@ -2197,8 +2310,10 @@ function openEditModal(
 
 // Submit Create or Edit Node
 async function submitAddModal() {
-  const { type, parentId, code, name, isEdit, editId } = addModal.value;
-  if (!code.trim() || !name.trim()) return;
+  const { type, parentId, isEdit, editId } = addModal.value;
+  const name = addModal.value.name;
+  if (!name || !name.trim()) return;
+  const code = (addModal.value.code && addModal.value.code.trim()) ? addModal.value.code.trim() : (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).substring(2)));
 
   submitting.value = true;
   let savedNodeId = isEdit ? editId : code.trim().toUpperCase();
@@ -2343,7 +2458,7 @@ async function submitAddModal() {
 }
 
 // Delete handling
-function promptDeleteNode(
+async function promptDeleteNode(
   type: "domain" | "program" | "course" | "chapter" | "lesson",
   item: any,
   parentObj?: any,
@@ -2351,32 +2466,49 @@ function promptDeleteNode(
 ) {
   const name = item.title || item.name || item.code || "";
   let typeLabel = "bài học";
-  let warnExtra = "";
+  let notes: string[] = [];
 
   if (type === "domain") {
     typeLabel = "lĩnh vực";
     const progs = getProgramsForDomain(item.id);
-    if (progs.length > 0) {
-      warnExtra = ` Lĩnh vực này hiện có ${progs.length} chương trình đào tạo. Xóa lĩnh vực sẽ đồng thời xóa toàn bộ chương trình và khóa học bên trong.`;
-    }
+    notes = [
+      `Lĩnh vực này hiện có ${progs.length} chương trình đào tạo.`,
+      `Xóa lĩnh vực sẽ đồng thời xóa toàn bộ chương trình và khóa học bên trong.`,
+    ];
   } else if (type === "program") {
     typeLabel = "chương trình đào tạo";
     const totalCrss = getProgramTotalCoursesCount(item.id);
-    if (totalCrss > 0) {
-      warnExtra = ` Chương trình này hiện có ${totalCrss} khóa học. Xóa chương trình sẽ đồng thời xóa toàn bộ khóa học bên trong.`;
-    }
+    notes = [
+      `Chương trình này hiện có ${totalCrss} khóa học.`,
+      `Xóa chương trình sẽ đồng thời xóa toàn bộ khóa học bên trong.`,
+    ];
   } else if (type === "course") {
     typeLabel = "khóa học";
-    const chaps = getChaptersForCourse(item.id);
-    if (chaps.length > 0) {
-      warnExtra = ` Khóa học này hiện có ${chaps.length} chương. Xóa khóa học sẽ đồng thời xóa toàn bộ chương và bài học bên trong.`;
+    if (chaptersMap.value[item.id] === undefined) {
+      await loadChaptersForCourse(item.id);
     }
+    const chaps = getChaptersForCourse(item.id);
+    notes = [
+      `Khóa học này hiện có ${chaps.length} chương.`,
+      `Xóa khóa học sẽ đồng thời xóa toàn bộ chương và bài học bên trong.`,
+    ];
   } else if (type === "chapter") {
     typeLabel = "chương";
     const activeLessons = (item.lessons || []).filter((l: any) => l.status !== "DELETED");
-    if (activeLessons.length > 0) {
-      warnExtra = ` Chương này hiện có ${activeLessons.length} bài học. Xóa chương sẽ đồng thời xóa toàn bộ bài học bên trong.`;
-    }
+    notes = [
+      `Chương này hiện có ${activeLessons.length} bài học.`,
+      `Xóa chương sẽ đồng thời xóa toàn bộ bài học bên trong.`,
+    ];
+  } else if (type === "lesson") {
+    typeLabel = "bài học";
+    const docCount =
+      (item.documents || []).length +
+      (item.procedureSteps || []).length +
+      (item.videoUrl ? 1 : 0);
+    notes = [
+      `Bài học này hiện có ${docCount} nội dung học liệu${item.hasQuiz ? " và 1 bài kiểm tra" : ""}.`,
+      `Xóa bài học sẽ đồng thời xóa toàn bộ học liệu và bài kiểm tra bên trong.`,
+    ];
   }
 
   deleteConfirm.value = {
@@ -2387,7 +2519,8 @@ function promptDeleteNode(
     parentId: parentObj?.id || item.programId || item.courseId || item.chapterId || item.domainId || "",
     grandParentId: grandParentObj?.id || item.courseId || "",
     title: `Xác nhận xóa ${typeLabel}`,
-    message: `Bạn có chắc chắn muốn xóa ${typeLabel} "${name}"?${warnExtra} Trạng thái sẽ được chuyển sang DELETED.`,
+    message: `Bạn có chắc chắn muốn xóa ${typeLabel} "${name}"?`,
+    notes,
     busy: false,
   };
 }
@@ -2504,59 +2637,104 @@ async function executeDeleteNode() {
 }
 
 // Actions
+function previewCourse(courseId: string) {
+  expandedIds.value.add(courseId);
+  const crs = courses.value.find((c) => c.id === courseId);
+  if (crs?.programId) {
+    expandedIds.value.add(crs.programId);
+    const prog = programs.value.find((p) => p.id === crs.programId);
+    if (prog?.domainId) {
+      expandedIds.value.add(prog.domainId);
+    }
+  }
+  selectedId.value = courseId;
+  saveTreeStateToStorage();
+  router.push({
+    path: `/courses/${encodeURIComponent(courseId)}`,
+    query: { from: "admin" },
+  });
+}
+
 function openLessonEditor(lessonId: string) {
+  saveTreeStateToStorage();
   router.push(`/admin/lessons/${encodeURIComponent(lessonId)}/edit`);
 }
 
 function editLessonBlock(lesson: Lesson, blockType: string) {
+  saveTreeStateToStorage();
   router.push({
     path: `/admin/lessons/${encodeURIComponent(lesson.id)}/edit`,
     query: { tab: blockType },
   });
 }
 
-// Search Filter & 2-Tier Tree Pagination
-const filteredDomains = computed(() => {
-  const activeDomains = domains.value.filter((d) => d.status !== "DELETED");
-  if (!searchQuery.value.trim()) return activeDomains;
-  const q = searchQuery.value.toLowerCase().trim();
-  return activeDomains.filter(
-    (d) =>
-      d.name.toLowerCase().includes(q) ||
-      d.code.toLowerCase().includes(q) ||
-      getProgramsForDomain(d.id).some(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.code.toLowerCase().includes(q) ||
-          getCoursesForProgram(p.id).some((c) => c.name.toLowerCase().includes(q))
-      )
-  );
-});
-
+// 2-Tier Tree Pagination with DB-level Domains
 const treeDomainPage = ref(1);
 const treeDomainPageSize = ref(5);
-
-const treeDomainTotalPages = computed(() =>
-  Math.max(1, Math.ceil(filteredDomains.value.length / treeDomainPageSize.value))
-);
-
-const pagedDomains = computed(() => {
-  const start = (treeDomainPage.value - 1) * treeDomainPageSize.value;
-  return filteredDomains.value.slice(start, start + treeDomainPageSize.value);
-});
+const treeDomainTotalPages = ref(1);
+const treeDomainTotalElements = ref(0);
 
 const totalActiveProgramsCount = computed(() =>
-  filteredDomains.value.reduce((acc, d) => acc + getProgramsForDomain(d.id).length, 0)
+  programs.value.filter((p) => p.status !== "DELETED").length
 );
 
-watch([searchQuery, treeDomainPageSize], () => {
+const TREE_STATE_STORAGE_KEY = "cbs_curriculum_tree_state_v1";
+let isRestoringTreeState = false;
+
+function saveTreeStateToStorage() {
+  if (isRestoringTreeState) return;
+  try {
+    sessionStorage.setItem(
+      TREE_STATE_STORAGE_KEY,
+      JSON.stringify({
+        expandedIds: Array.from(expandedIds.value),
+        selectedId: selectedId.value,
+        treeDomainPage: treeDomainPage.value,
+        treeDomainPageSize: treeDomainPageSize.value,
+      })
+    );
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function loadTreeStateFromStorage(): boolean {
+  try {
+    const raw = sessionStorage.getItem(TREE_STATE_STORAGE_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    isRestoringTreeState = true;
+    if (Array.isArray(parsed.expandedIds)) {
+      expandedIds.value = new Set(parsed.expandedIds);
+    }
+    if (parsed.selectedId) {
+      selectedId.value = parsed.selectedId;
+    }
+    if (typeof parsed.treeDomainPageSize === "number" && parsed.treeDomainPageSize > 0) {
+      treeDomainPageSize.value = parsed.treeDomainPageSize;
+    }
+    if (typeof parsed.treeDomainPage === "number" && parsed.treeDomainPage > 0) {
+      treeDomainPage.value = parsed.treeDomainPage;
+    }
+    isRestoringTreeState = false;
+    return true;
+  } catch {
+    isRestoringTreeState = false;
+    return false;
+  }
+}
+
+watch(treeDomainPageSize, () => {
+  if (isRestoringTreeState) return;
   treeDomainPage.value = 1;
+  saveTreeStateToStorage();
+  loadTreeData();
 });
 
-watch(filteredDomains, () => {
-  if (treeDomainPage.value > treeDomainTotalPages.value) {
-    treeDomainPage.value = treeDomainTotalPages.value;
-  }
+watch(treeDomainPage, () => {
+  if (isRestoringTreeState) return;
+  saveTreeStateToStorage();
+  loadTreeData();
 });
 
 // Tier-2 In-Branch Course Pagination inside a Program (Server-Side Lazy Fetch)
@@ -2713,21 +2891,18 @@ function hideNodeTooltip() {
   hoverTooltip.value.visible = false;
 }
 
-// On-Demand Search: chỉ khi người dùng gõ từ khóa tìm kiếm mới tải danh sách khóa học phục vụ lọc toàn cây
+// On-Demand Search: debounced DB query across domains and programs
 let treeSearchDebounceTimer: any = null;
-watch(searchQuery, (q) => {
+watch(searchQuery, () => {
   if (treeSearchDebounceTimer) clearTimeout(treeSearchDebounceTimer);
-  if (!q.trim() || searchCoursesLoaded.value) return;
-  treeSearchDebounceTimer = setTimeout(async () => {
-    try {
-      const allCourses = await trainingApi.courses();
-      mergeCoursesIntoStore(allCourses || []);
-      searchCoursesLoaded.value = true;
-    } catch (e) {}
+  treeSearchDebounceTimer = setTimeout(() => {
+    treeDomainPage.value = 1;
+    loadTreeData();
   }, 300);
 });
 
 onMounted(() => {
+  loadTreeStateFromStorage();
   loadTreeData();
 });
 
@@ -2736,13 +2911,14 @@ watch(
   async (newCourseId) => {
     if (newCourseId && courses.value.length > 0) {
       expandedIds.value.clear();
-      expandOperatingBranch("course", newCourseId);
+      await expandOperatingBranch("course", newCourseId);
       selectedId.value = newCourseId;
       await loadChaptersForCourse(newCourseId);
       const courseChaps = chaptersMap.value[newCourseId] || [];
       for (const ch of courseChaps) {
         expandedIds.value.add(ch.id);
       }
+      saveTreeStateToStorage();
     }
   }
 );
@@ -2837,19 +3013,35 @@ watch(
   border-color: var(--primary-hover);
 }
 
+.btn-studio.btn-quick-wizard {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--primary-color, #10b981);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.btn-studio.btn-quick-wizard:hover {
+  background: rgba(16, 185, 129, 0.22);
+  border-color: var(--primary-color, #10b981);
+  transform: translateY(-1px);
+}
+
 /* Node action button styled like header add button */
 .btn-studio-node {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.3rem 0.7rem;
-  border-radius: 8px;
-  font-size: 0.76rem;
+  justify-content: center;
+  gap: 0.32rem;
+  padding: 0 0.65rem;
+  height: 26px;
+  line-height: 1;
+  border-radius: 6px;
+  font-size: 0.74rem;
   font-weight: 600;
   cursor: pointer;
   border: 1px solid transparent;
   transition: all 0.15s ease;
   white-space: nowrap;
+  box-sizing: border-box;
 }
 
 .btn-studio-node.btn-primary-node {
@@ -2989,14 +3181,15 @@ watch(
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.35rem 0.75rem;
   border-radius: 10px;
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
   transition: background-color 0.14s ease, border-color 0.14s ease;
   user-select: none;
-  min-height: 38px;
+  min-height: 40px;
+  box-sizing: border-box;
 }
 
 .tree-node:hover {
@@ -3068,8 +3261,11 @@ watch(
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 0.15rem;
+  padding: 0;
+  width: 22px;
+  height: 22px;
   border-radius: 4px;
+  flex-shrink: 0;
 }
 
 .toggle-chevron:hover {
@@ -3141,26 +3337,36 @@ watch(
   align-items: center;
   gap: 0.35rem;
   margin-left: auto;
+  flex-shrink: 0;
 }
 
 .count-tag {
   font-size: 0.72rem;
   font-weight: 600;
-  padding: 0.14rem 0.5rem;
+  padding: 0 0.55rem;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: var(--bg-subtle);
   color: var(--text-muted);
   border-radius: 9999px;
   border: 1px solid var(--border-color);
+  box-sizing: border-box;
+  line-height: 1;
 }
 
 .meta-tag {
   font-size: 0.7rem;
-  padding: 0.14rem 0.5rem;
+  padding: 0 0.55rem;
+  height: 24px;
   border-radius: 9999px;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
+  box-sizing: border-box;
+  line-height: 1;
 }
 
 .module-tag {
@@ -3173,16 +3379,27 @@ watch(
   background: var(--success-surface);
   color: var(--success-ink);
   border: 1px solid var(--success-border);
+  display: none;
+}
+
+.tree-node:hover .mandatory-tag {
+  display: inline-flex;
 }
 
 .status-pill {
   font-size: 0.72rem;
   font-weight: 600;
-  padding: 0.14rem 0.5rem;
+  padding: 0 0.55rem;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 9999px;
   background: var(--bg-subtle);
   color: var(--text-muted);
   border: 1px solid var(--border-color);
+  box-sizing: border-box;
+  line-height: 1;
 }
 
 .status-pill.published {
@@ -3267,22 +3484,19 @@ watch(
   font-weight: bold;
 }
 
-/* Hover Action Buttons (Reserve layout space to prevent horizontal jitter on hover) */
+/* Hover Action Buttons */
 .node-hover-actions {
-  display: flex;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
+  display: none;
   align-items: center;
   gap: 0.3rem;
   margin-left: 0.4rem;
-  transition: opacity 0.15s ease, visibility 0.15s ease;
+  flex-shrink: 0;
+  height: 26px;
+  box-sizing: border-box;
 }
 
 .tree-node:hover .node-hover-actions {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
+  display: flex;
 }
 
 .hover-action-btn {
@@ -3298,6 +3512,9 @@ watch(
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.14s ease;
+  box-sizing: border-box;
+  padding: 0;
+  flex-shrink: 0;
 }
 
 .hover-action-btn:hover {
@@ -3335,6 +3552,42 @@ watch(
   color: #ffffff;
 }
 
+.btn-studio-node.btn-preview-node {
+  background: var(--bg-card);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+}
+
+.btn-studio-node.btn-preview-node:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-ink);
+  background: var(--primary-light);
+}
+
+.btn-studio-node.btn-publish-node {
+  background: rgba(16, 185, 129, 0.14);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.btn-studio-node.btn-publish-node:hover:not(:disabled) {
+  background: #10b981;
+  border-color: #10b981;
+  color: #ffffff;
+}
+
+.btn-studio-node.btn-unpublish-node {
+  background: rgba(245, 158, 11, 0.14);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.btn-studio-node.btn-unpublish-node:hover:not(:disabled) {
+  background: #f59e0b;
+  border-color: #f59e0b;
+  color: #ffffff;
+}
+
 .btn-tooltip {
   position: absolute;
   top: -26px;
@@ -3364,23 +3617,72 @@ watch(
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 14px;
-  padding: 1.35rem 1.5rem;
+  padding: 1.25rem 1.5rem;
   box-shadow: var(--shadow-lg);
   overflow: hidden;
   color: var(--text-main);
 }
 
-.level-danger {
-  background: var(--danger-surface);
-  color: var(--danger-ink);
-  border: 1px solid var(--danger-border);
+.delete-modal-header {
+  position: relative;
+  justify-content: center !important;
+  align-items: center !important;
+  margin-bottom: 0.85rem !important;
+  padding-bottom: 0.75rem !important;
 }
 
-.delete-warning-text {
-  font-size: 0.88rem;
-  line-height: 1.55;
+.delete-modal-header .modal-title-box {
+  text-align: center;
+  width: 100%;
+  padding: 0 1.75rem;
+}
+
+.delete-modal-header .modal-title-box h4 {
+  margin: 0 !important;
+  font-size: 1.05rem;
+  font-weight: 700;
   color: var(--text-main);
-  padding: 0.5rem 0 1rem;
+}
+
+.delete-modal-header .close-btn {
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.delete-confirm-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.15rem 0 0.35rem;
+}
+
+.delete-main-question {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--text-main);
+}
+
+.delete-notes-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.delete-note-item {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 400;
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.delete-modal-actions {
+  justify-content: center !important;
+  gap: 0.75rem;
 }
 
 .btn-delete-submit {
@@ -4294,5 +4596,42 @@ watch(
 
 .impeccable-desc-popover .popover-footer-meta strong {
   color: var(--text-main);
+}
+
+.fullscreen-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  background: rgba(10, 16, 26, 0.78);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.loading-modal-card {
+  background: var(--bg-surface, #1e293b);
+  border: 1px solid var(--border-color, #334155);
+  border-radius: 16px;
+  padding: 2.2rem 3rem;
+  text-align: center;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.65);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+}
+.loading-modal-card h4 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #fff;
+}
+.loading-modal-card p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #94a3b8;
+}
+.loading-spinner {
+  color: #10b981;
 }
 </style>

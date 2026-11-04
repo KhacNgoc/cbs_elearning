@@ -111,7 +111,7 @@ export const trainingApi = {
   async lesson(id: string) {
     return (await axiosClient.get<Lesson>(`/api/lessons/${id}`)).data;
   },
-  async domainsPaged(params?: { search?: string; page?: number; size?: number }) {
+  async domainsPaged(params?: { search?: string; page?: number; size?: number; unallocatedForUnitId?: string }) {
     return (
       await axiosClient.get<{
         items: (TrainingDomain & { programsCount?: number })[];
@@ -123,7 +123,7 @@ export const trainingApi = {
       }>("/api/admin/domains/paged", { params })
     ).data;
   },
-  async programsPaged(params?: { domainId?: string; search?: string; page?: number; size?: number }) {
+  async programsPaged(params?: { domainId?: string; search?: string; page?: number; size?: number; unallocatedForUnitId?: string }) {
     return (
       await axiosClient.get<{
         items: (TrainingProgram & { coursesCount?: number })[];
@@ -135,7 +135,7 @@ export const trainingApi = {
       }>("/api/admin/programs/paged", { params })
     ).data;
   },
-  async coursesByProgramPaged(programId: string, params?: { search?: string; page?: number; size?: number }) {
+  async coursesByProgramPaged(programId: string, params?: { search?: string; page?: number; size?: number; unallocatedForUnitId?: string }) {
     return (
       await axiosClient.get<{
         items: Course[];
@@ -145,6 +145,18 @@ export const trainingApi = {
         totalPages: number;
         hasNext: boolean;
       }>(`/api/admin/programs/${encodeURIComponent(programId)}/courses`, { params })
+    ).data;
+  },
+  async unitAllocatedItems(unitId: string) {
+    return (
+      await axiosClient.get<{
+        categoryType: "domain" | "program" | "course";
+        targetId: string;
+        grantType: "MANDATORY" | "OPTIONAL";
+        code?: string;
+        name?: string;
+        parentId?: string;
+      }[]>(`/api/admin/unit-allocations/${encodeURIComponent(unitId)}/allocated-items`)
     ).data;
   },
   async unitDirectoryPaged(params?: { search?: string; type?: string; status?: string; page?: number; size?: number }) {
