@@ -113,6 +113,20 @@ public class AuthorizationServiceImpl implements AuthorizationService {
         return courses.findAll().stream().filter(c -> AccessPolicy.allowsCourse(u, op.permission(), c)).toList();
     }
 
+    @Override
+    public List<Course> searchEditableCourses(String search, int limit) {
+        User u = current();
+        var op = AdminOperation.current("courses", "read");
+        String query = (search != null && !search.isBlank()) ? search.trim() : null;
+        int maxResults = (limit > 0 && limit <= 200) ? limit : 50;
+        return courses.searchActiveCourses(query, org.springframework.data.domain.PageRequest.of(0, maxResults))
+                .getContent()
+                .stream()
+                .filter(c -> (c.getCode() == null || !c.getCode().contains("_DEL_"))
+                        && AccessPolicy.allowsCourse(u, op.permission(), c))
+                .toList();
+    }
+
     public List<User> manageableUsers() {
         User u = current();
         permission("USER_MANAGE");

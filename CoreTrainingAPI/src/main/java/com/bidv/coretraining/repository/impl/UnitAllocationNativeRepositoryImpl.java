@@ -1,5 +1,9 @@
 package com.bidv.coretraining.repository.impl;
 
+import com.bidv.coretraining.dto.CourseDto;
+import com.bidv.coretraining.dto.PagedResult;
+import com.bidv.coretraining.dto.TrainingStructureDto.DomainListItem;
+import com.bidv.coretraining.dto.TrainingStructureDto.ProgramListItem;
 import com.bidv.coretraining.dto.TrainingStructureDto.UnitAllocationDirectoryDto;
 import com.bidv.coretraining.repository.UnitAllocationNativeRepository;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -7,8 +11,10 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** Set-based native SQL for unit allocation, staff enrollment and catalog soft deletes (PostgreSQL). */
 @Repository
@@ -233,7 +239,7 @@ public class UnitAllocationNativeRepositoryImpl implements UnitAllocationNativeR
                 "chapter_order = :negBase - numbered.rn " +
                 "FROM numbered WHERE ch.id = numbered.id", params);
 
-        // 4. Soft delete course
+        // 4. Bulk soft delete course
         jdbc.update(
                 "UPDATE courses SET status = 'DELETED', " +
                 "code = CASE WHEN code NOT LIKE '%_DEL_%' THEN code || :suffix ELSE code END " +
@@ -312,5 +318,214 @@ public class UnitAllocationNativeRepositoryImpl implements UnitAllocationNativeR
         return new UnitAllocationDirectoryDto(items, page, pageSize, totalElements, Math.max(1, totalPages),
                 new UnitAllocationDirectoryDto.Stats(totalUnits, allocatedUnits, Math.max(0, totalUnits - allocatedUnits),
                         branchUnits, departmentUnits));
+    }
+
+    @Override
+    public List<Map<String, Object>> getUnitAllocatedItems(String unitId) {
+        String sql = """
+            SELECT 'domain' AS category_type, dug.domain_id AS target_id, dug.grant_type, d.code, d.name, NULL AS parent_id
+            FROM domain_unit_grants dug
+            JOIN training_domains d ON d.id = dug.domain_id
+            WHERE dug.unit_id = :unitId AND d.status <> 'DELETED'
+            UNION ALL
+            SELECT 'program' AS category_type, pug.program_id AS target_id, pug.grant_type, p.code, p.name, p.domain_id AS parent_id
+            FROM program_unit_grants pug
+            JOIN training_programs p ON p.id = pug.program_id
+            WHERE pug.unit_id = :unitId AND p.status <> 'DELETED'
+            UNION ALL
+            SELECT 'course' AS category_type, cug.course_id AS target_id, cug.grant_type, c.code, c.name, c.program_id AS parent_id
+            FROM course_unit_grants cug
+            JOIN courses c ON c.id = cug.course_id
+            WHERE cug.unit_id = :unitId AND c.status <> 'DELETED'
+        """;
+        return jdbc.query(sql, Map.of("unitId", unitId), (rs, rowNum) -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("categoryType", rs.getString("category_type"));
+            map.put("targetId", rs.getString("target_id"));
+            map.put("grantType", rs.getString("grant_type"));
+            map.put("code", rs.getString("code"));
+            map.put("name", rs.getString("name"));
+            map.put("parentId", rs.getString("parent_id"));
+            return map;
+        });
+    }
+
+    @Override
+    public PagedResult<DomainListItem> adminDomainsPagedUnallocated(String search, int page, int size, String unitId) {
+        String query = (search != null && !search.isBlank()) ? search.trim() : null;
+        int pageSize = size > 0 ? size : 10;
+        int offset = Math.max(0, page) * pageSize;
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("search", query)
+                .addValue("unitId", unitId)
+                .addValue("limit", pageSize)
+                .addValue("offset", offset);
+
+        String whereClause = " WHERE d.status <> 'DELETED' " +
+                (query != null ? " AND (d.name ILIKE CONCAT('%', :search, '%') OR d.code ILIKE CONCAT('%', :search, '%') " +
+                                 "      OR EXISTS (SELECT 1 FROM training_programs p WHERE p.domain_id = d.id AND p.status <> 'DELETED' " +
+                                 "                 AND (p.name ILIKE CONCAT('%', :search, '%') OR p.code ILIKE CONCAT('%', :search, '%') " +
+                                 "                      OR EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED' " +
+                                 "                                 AND (c.name ILIKE CONCAT('%', :search, '%') OR c.code ILIKE CONCAT('%', :search, '%')))))) " : "") +
+                " AND ( " +
+                "   EXISTS ( " +
+                "     SELECT 1 FROM training_programs p WHERE p.domain_id = d.id AND p.status <> 'DELETED' " +
+                "     AND ( " +
+                "       EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED' " +
+                "               AND NOT EXISTS (SELECT 1 FROM course_unit_grants g WHERE g.course_id = c.id AND g.unit_id = :unitId)) " +
+                "       OR (NOT EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED') " +
+                "           AND NOT EXISTS (SELECT 1 FROM program_unit_grants g WHERE g.program_id = p.id AND g.unit_id = :unitId)) " +
+                "     ) " +
+                "   ) " +
+                "   OR ( " +
+                "     NOT EXISTS (SELECT 1 FROM training_programs p WHERE p.domain_id = d.id AND p.status <> 'DELETED') " +
+                "     AND NOT EXISTS (SELECT 1 FROM domain_unit_grants g WHERE g.domain_id = d.id AND g.unit_id = :unitId) " +
+                "   ) " +
+                " ) ";
+
+        String countSql = "SELECT COUNT(*) FROM training_domains d " + whereClause;
+        Integer totalCount = jdbc.queryForObject(countSql, params, Integer.class);
+        int totalElements = totalCount != null ? totalCount : 0;
+        int totalPages = (int) Math.ceil((double) totalElements / pageSize);
+
+        String dataSql = "SELECT d.id, d.code, d.name, d.description, d.status, d.business_module, d.seq_number, " +
+                "  (SELECT COUNT(*) FROM training_programs p WHERE p.domain_id = d.id AND p.status <> 'DELETED' " +
+                "   AND ( " +
+                "     EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED' " +
+                "             AND NOT EXISTS (SELECT 1 FROM course_unit_grants g WHERE g.course_id = c.id AND g.unit_id = :unitId)) " +
+                "     OR (NOT EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED') " +
+                "         AND NOT EXISTS (SELECT 1 FROM program_unit_grants g WHERE g.program_id = p.id AND g.unit_id = :unitId)) " +
+                "   )) AS programs_count " +
+                "FROM training_domains d " + whereClause +
+                "ORDER BY d.code ASC, d.name ASC LIMIT :limit OFFSET :offset";
+
+        List<DomainListItem> items = jdbc.query(dataSql, params, (rs, rowNum) ->
+                new DomainListItem(
+                        rs.getString("id"),
+                        rs.getString("code"),
+                        rs.getString("name"),
+                        rs.getString("description"),
+                        rs.getString("status"),
+                        Set.of("VIEW", "EDIT"),
+                        rs.getString("business_module"),
+                        rs.getObject("seq_number", Integer.class),
+                        Collections.emptySet(),
+                        Collections.emptySet(),
+                        Collections.emptySet(),
+                        rs.getLong("programs_count")
+                ));
+
+        return new PagedResult<>(items, page, pageSize, totalElements, Math.max(1, totalPages), (page + 1) < totalPages);
+    }
+
+    @Override
+    public PagedResult<ProgramListItem> adminProgramsPagedUnallocated(String domainId, String search, int page, int size, String unitId) {
+        String query = (search != null && !search.isBlank()) ? search.trim() : null;
+        String dId = (domainId != null && !domainId.isBlank()) ? domainId.trim() : null;
+        int pageSize = size > 0 ? size : 10;
+        int offset = Math.max(0, page) * pageSize;
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("domainId", dId)
+                .addValue("search", query)
+                .addValue("unitId", unitId)
+                .addValue("limit", pageSize)
+                .addValue("offset", offset);
+
+        String whereClause = " WHERE p.status <> 'DELETED' " +
+                (dId != null ? " AND p.domain_id = :domainId " : "") +
+                (query != null ? " AND (p.name ILIKE CONCAT('%', :search, '%') OR p.code ILIKE CONCAT('%', :search, '%') " +
+                                 "      OR EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED' " +
+                                 "                 AND (c.name ILIKE CONCAT('%', :search, '%') OR c.code ILIKE CONCAT('%', :search, '%')))) " : "") +
+                " AND ( " +
+                "   EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED' " +
+                "           AND NOT EXISTS (SELECT 1 FROM course_unit_grants g WHERE g.course_id = c.id AND g.unit_id = :unitId)) " +
+                "   OR (NOT EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED') " +
+                "       AND NOT EXISTS (SELECT 1 FROM program_unit_grants g WHERE g.program_id = p.id AND g.unit_id = :unitId)) " +
+                " ) ";
+
+        String countSql = "SELECT COUNT(*) FROM training_programs p " + whereClause;
+        Integer totalCount = jdbc.queryForObject(countSql, params, Integer.class);
+        int totalElements = totalCount != null ? totalCount : 0;
+        int totalPages = (int) Math.ceil((double) totalElements / pageSize);
+
+        String dataSql = "SELECT p.id, p.domain_id, p.code, p.name, p.description, p.status, p.business_module, p.level, p.seq_number, " +
+                "  (SELECT COUNT(*) FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED' " +
+                "   AND NOT EXISTS (SELECT 1 FROM course_unit_grants g WHERE g.course_id = c.id AND g.unit_id = :unitId)) AS courses_count " +
+                "FROM training_programs p " + whereClause +
+                "ORDER BY p.code ASC, p.name ASC LIMIT :limit OFFSET :offset";
+
+        List<ProgramListItem> items = jdbc.query(dataSql, params, (rs, rowNum) ->
+                new ProgramListItem(
+                        rs.getString("id"),
+                        rs.getString("domain_id"),
+                        rs.getString("code"),
+                        rs.getString("name"),
+                        rs.getString("description"),
+                        rs.getString("status"),
+                        Collections.emptySet(),
+                        Set.of("VIEW", "EDIT"),
+                        rs.getString("business_module"),
+                        rs.getString("level"),
+                        Collections.emptySet(),
+                        Collections.emptySet(),
+                        false,
+                        rs.getObject("seq_number", Integer.class),
+                        rs.getLong("courses_count")
+                ));
+
+        return new PagedResult<>(items, page, pageSize, totalElements, Math.max(1, totalPages), (page + 1) < totalPages);
+    }
+
+    @Override
+    public PagedResult<CourseDto> adminCoursesByProgramPagedUnallocated(String programId, String search, int page, int size, String unitId) {
+        String query = (search != null && !search.isBlank()) ? search.trim() : null;
+        int pageSize = size > 0 ? size : 10;
+        int offset = Math.max(0, page) * pageSize;
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("programId", programId)
+                .addValue("search", query)
+                .addValue("unitId", unitId)
+                .addValue("limit", pageSize)
+                .addValue("offset", offset);
+
+        String whereClause = " WHERE c.program_id = :programId AND c.status <> 'DELETED' " +
+                (query != null ? " AND (c.name ILIKE CONCAT('%', :search, '%') OR c.code ILIKE CONCAT('%', :search, '%')) " : "") +
+                " AND NOT EXISTS (SELECT 1 FROM course_unit_grants g WHERE g.course_id = c.id AND g.unit_id = :unitId) ";
+
+        String countSql = "SELECT COUNT(*) FROM courses c " + whereClause;
+        Integer totalCount = jdbc.queryForObject(countSql, params, Integer.class);
+        int totalElements = totalCount != null ? totalCount : 0;
+        int totalPages = (int) Math.ceil((double) totalElements / pageSize);
+
+        String dataSql = "SELECT c.id, c.code, c.name, c.description, c.status, c.business_module, c.level, c.seq_number, c.program_id, " +
+                "  p.name AS program_name, p.domain_id, d.name AS domain_name " +
+                "FROM courses c " +
+                "LEFT JOIN training_programs p ON p.id = c.program_id " +
+                "LEFT JOIN training_domains d ON d.id = p.domain_id " +
+                whereClause +
+                "ORDER BY c.code ASC, c.name ASC LIMIT :limit OFFSET :offset";
+
+        List<CourseDto> items = jdbc.query(dataSql, params, (rs, rowNum) -> {
+            CourseDto.CourseDtoBuilder b = CourseDto.builder();
+            b.id(rs.getString("id"));
+            b.code(rs.getString("code"));
+            b.name(rs.getString("name"));
+            b.description(rs.getString("description"));
+            b.status(rs.getString("status"));
+            b.businessModule(rs.getString("business_module"));
+            b.level(rs.getString("level"));
+            b.seqNumber(rs.getObject("seq_number", Integer.class));
+            b.programId(rs.getString("program_id"));
+            b.programName(rs.getString("program_name"));
+            b.domainId(rs.getString("domain_id"));
+            b.domainName(rs.getString("domain_name"));
+            b.unitIds(Collections.emptySet());
+            b.mandatoryUnitIds(Collections.emptySet());
+            b.optionalUnitIds(Collections.emptySet());
+            b.allowedActions(Set.of("VIEW", "EDIT"));
+            return b.build();
+        });
+
+        return new PagedResult<>(items, page, pageSize, totalElements, Math.max(1, totalPages), (page + 1) < totalPages);
     }
 }

@@ -2,10 +2,8 @@ package com.bidv.coretraining.service;
 
 import com.bidv.coretraining.repository.projection.LessonOutlineView;
 import com.bidv.coretraining.dto.TrainingStructureDto;
-
 import com.bidv.coretraining.dto.*;
-import com.bidv.coretraining.entity.*;
-import java.util.*;
+import com.bidv.coretraining.entity.Course;
 
 /** Business operations for LearningOutlineService. */
 public interface LearningOutlineService {

@@ -31,5 +31,7 @@ public interface AuthorizationService {
 
     public List<Course> editableCourses();
 
+    public List<Course> searchEditableCourses(String search, int limit);
+
     public List<User> manageableUsers();
 }

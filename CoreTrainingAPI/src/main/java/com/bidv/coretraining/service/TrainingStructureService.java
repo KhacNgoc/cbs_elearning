@@ -31,9 +31,15 @@ public interface TrainingStructureService {
 
     public List<CourseDto> adminCoursesByProgram(String programId);
 
-    public PagedResult<CourseDto> adminCoursesByProgramPaged(String programId, String search, int page, int size);
+    public PagedResult<CourseDto> adminCoursesByProgramPaged(String programId, String search, int page, int size, String unallocatedForUnitId);
+    default PagedResult<CourseDto> adminCoursesByProgramPaged(String programId, String search, int page, int size) {
+        return adminCoursesByProgramPaged(programId, search, page, size, null);
+    }
 
-    public PagedResult<ProgramListItem> adminProgramsPaged(String domainId, String search, int page, int size);
+    public PagedResult<ProgramListItem> adminProgramsPaged(String domainId, String search, int page, int size, String unallocatedForUnitId);
+    default PagedResult<ProgramListItem> adminProgramsPaged(String domainId, String search, int page, int size) {
+        return adminProgramsPaged(domainId, search, page, size, null);
+    }
 
     public void allocateCoursesToUnit(String unitId, String grantType, String programId, boolean allInProgram, List<String> courseIds);
 
@@ -89,7 +95,10 @@ public interface TrainingStructureService {
 
     public int countActiveStaffInUnitsNative(java.util.Collection<String> unitIds);
 
-    public PagedResult<DomainListItem> adminDomainsPaged(String search, int page, int size);
+    public PagedResult<DomainListItem> adminDomainsPaged(String search, int page, int size, String unallocatedForUnitId);
+    default PagedResult<DomainListItem> adminDomainsPaged(String search, int page, int size) {
+        return adminDomainsPaged(search, page, size, null);
+    }
 
     public BatchAllocationResultDto batchAssignUnitAllocation(String unitId, List<BatchAllocationItem> items);
 
@@ -97,4 +106,6 @@ public interface TrainingStructureService {
 
     public UnitAllocationDirectoryDto getUnitAllocationDirectoryPaged(String search, String type, String status,
             int page, int size);
+
+    public List<Map<String, Object>> getUnitAllocatedItems(String unitId);
 }

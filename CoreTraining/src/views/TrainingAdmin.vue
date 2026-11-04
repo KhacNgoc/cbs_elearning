@@ -601,10 +601,11 @@
     </AdminModal>
     <ConfirmModal
       :open="!!deleteTarget"
-      title="Xóa nội dung?"
+      :title="deleteTitle"
       :message="deleteMessage"
+      :notes="deleteNotes"
       :loading="busy"
-      confirm-label="Xóa"
+      confirm-label="Xóa vĩnh viễn"
       @cancel="deleteTarget = null"
       @confirm="remove"
     />
@@ -1065,13 +1066,41 @@ async function save() {
   }
 }
 const deleteTarget = ref<Row | null>(null);
+const deleteKind = ref<"course" | "chapter" | "lesson">("course");
+const deleteTypeLabel = computed(() =>
+  deleteKind.value === "lesson"
+    ? "bài học"
+    : deleteKind.value === "chapter"
+      ? "chương"
+      : "khóa học",
+);
+const deleteTitle = computed(() => `Xác nhận xóa ${deleteTypeLabel.value}`);
 const deleteMessage = computed(() => {
   const r = deleteTarget.value;
   if (!r) return "";
-  const count = "lessons" in r ? r.lessons.length : 0;
-  return `Xóa “${rowName(r)}”? ${count ? `${count} bài học và nội dung trực thuộc cũng sẽ bị xóa. ` : ""}Thao tác không thể hoàn tác.`;
+  return `Bạn có chắc chắn muốn xóa ${deleteTypeLabel.value} "${rowName(r)}"?`;
 });
-const deleteKind = ref<"course" | "chapter" | "lesson">("course");
+const deleteNotes = computed(() => {
+  const r = deleteTarget.value;
+  if (!r) return [];
+  if (deleteKind.value === "chapter") {
+    const count = "lessons" in r ? r.lessons.length : 0;
+    return [
+      `Chương này hiện có ${count} bài học.`,
+      `Xóa chương sẽ đồng thời xóa toàn bộ bài học bên trong.`,
+    ];
+  }
+  if (deleteKind.value === "course") {
+    return [
+      `Khóa học này sẽ bị xóa khỏi danh mục đào tạo.`,
+      `Xóa khóa học sẽ đồng thời xóa toàn bộ chương và bài học bên trong.`,
+    ];
+  }
+  return [
+    `Bài học này thuộc khóa học "${course.value?.name || "hiện tại"}".`,
+    `Xóa bài học sẽ đồng thời xóa toàn bộ học liệu và bài kiểm tra bên trong.`,
+  ];
+});
 function askDelete(r: Row, kind?: "course" | "chapter" | "lesson") {
   deleteKind.value =
     kind || (chapter.value ? "lesson" : course.value ? "chapter" : "course");

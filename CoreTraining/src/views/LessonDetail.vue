@@ -8,7 +8,7 @@
     <LessonLearningHeader
       v-if="lesson && chapter && !lessonLoading"
       :course-name="`${fullCourse?.name} / ${chapter?.title}`"
-      :back-to="`/courses/${fullCourse?.id}`"
+      :back-to="route.query.from === 'admin' ? `/courses/${fullCourse?.id}?from=admin` : `/courses/${fullCourse?.id}`"
       :lesson-title="lesson.title"
       :sidebar-open="sidebarOpen"
       :active-content="selectedDocument?.purpose === 'SLIDE' ? 'SLIDE' : activeContentType"

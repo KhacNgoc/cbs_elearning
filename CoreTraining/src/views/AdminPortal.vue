@@ -2,7 +2,7 @@
   <div class="admin-portal-layout">
     <!-- Right Main Content Area -->
     <div class="admin-main-content">
-      <header v-if="activeTab !== 'overview'" class="admin-page-heading">
+      <header v-if="activeTab !== 'overview' && activeTab !== 'documents'" class="admin-page-heading">
         <div>
           <h1>{{ sectionHeading.title }}</h1>
           <p>{{ sectionHeading.description }}</p>
@@ -762,72 +762,87 @@
           </div>
         </div>
 
-        <div v-if="activeTab === 'documents'" class="tab-pane animate-fade-in">
-          <div class="courses-summary card rag-documents-manager">
+        <div v-if="activeTab === 'documents'" class="tab-pane rag-tab-layout animate-fade-in">
+          <!-- KHỐI 1: TẢI LÊN TÀI LIỆU (UPLOAD CARD) -->
+          <div class="card rag-upload-card">
             <div class="card-header-row">
               <div class="header-left">
-                <h3 class="card-title">TÀI LIỆU TRI THỨC AI</h3>
-                <p class="card-subtitle">
-                  Tải PDF hoặc DOCX theo từng khóa học. Tài liệu sẽ được gửi tới
-                  dịch vụ embedding và lưu vector trong Qdrant.
-                </p>
+                <h3 class="card-title">TẢI LÊN TÀI LIỆU AI</h3>
               </div>
-              <button
-                class="btn btn-secondary"
-                :disabled="documentListLoading"
-                @click="loadDocuments()"
-              >
-                <RefreshCw
-                  :size="16"
-                  :class="{ 'spin-icon': documentListLoading }"
-                />
-                LÀM MỚI
-              </button>
             </div>
 
-            <div class="rag-document-controls">
-              <div class="form-group">
-                <label class="form-label">Khóa học nhận tài liệu</label>
-                <select
-                  v-model="selectedCourseId"
-                  class="form-input"
-                  @change="loadDocuments()"
-                >
-                  <option
-                    v-for="course in courseStore.courses"
-                    :key="course.id"
-                    :value="course.id"
+            <div class="upload-controls-flow">
+              <!-- Course Select Row -->
+              <div class="course-picker-row">
+                <label class="form-label">
+                  Khóa học tiếp nhận tài liệu <span class="required-mark">*</span>:
+                </label>
+                <div ref="coursePickerRef" class="searchable-course-picker">
+                  <button
+                    type="button"
+                    class="form-control course-select-trigger"
+                    :class="{ 'is-open': courseDropdownOpen }"
+                    @click="toggleCourseDropdown"
                   >
-                    {{ course.id }} — {{ course.name }}
-                  </option>
-                </select>
-              </div>
-              <div class="rag-upload-box">
-                <Database :size="28" />
-                <div>
-                  <strong>Upload và embedding tài liệu</strong>
-                  <small
-                    >Định dạng PDF/DOCX, tối đa theo cấu hình máy chủ.</small
-                  >
+                    <span class="selected-course-label">
+                      {{ selectedCourseName || "Chọn khóa học..." }}
+                    </span>
+                    <ChevronDown :size="16" class="dropdown-chevron" :class="{ rotated: courseDropdownOpen }" />
+                  </button>
+                  <div v-if="courseDropdownOpen" class="course-dropdown-popover" @click.stop>
+                    <div class="course-dropdown-search">
+                      <Search :size="15" />
+                      <input
+                        ref="courseSearchInputRef"
+                        v-model="courseSearchQuery"
+                        type="text"
+                        placeholder="Gõ tên khóa học để tìm nhanh..."
+                        @input="onCourseSearchInput"
+                      />
+                      <LoaderCircle v-if="courseSearchLoading" :size="14" class="spin-icon" />
+                      <button
+                        v-else-if="courseSearchQuery"
+                        type="button"
+                        class="btn-clear-search"
+                        title="Xóa từ khóa"
+                        @click="clearCourseSearch"
+                      >
+                        <X :size="13" />
+                      </button>
+                    </div>
+                    <div class="course-dropdown-list">
+                      <button
+                        v-for="course in displayedCourseOptions"
+                        :key="course.id"
+                        type="button"
+                        class="course-dropdown-option"
+                        :class="{ 'is-selected': course.id === selectedCourseId }"
+                        @click="selectCourseOption(course)"
+                      >
+                        <span class="course-option-name">{{ course.name }}</span>
+                      </button>
+                      <div v-if="displayedCourseOptions.length === 0 && !courseSearchLoading" class="course-dropdown-empty">
+                        Không tìm thấy khóa học phù hợp.
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <button
-                  v-if="allowedCourseAction('documents', 'create')"
-                  class="btn btn-primary"
-                  :disabled="
-                    documentUploading ||
-                    !selectedCourseId ||
-                    selectedCourseId === ALL_COURSES
-                  "
-                  @click="ragFileInput?.click()"
-                >
-                  <LoaderCircle
-                    v-if="documentUploading"
-                    :size="16"
-                    class="spin-icon"
-                  />
-                  <Upload v-else :size="16" />
-                  {{ documentUploading ? "ĐANG TẢI LÊN" : "CHỌN TỆP" }}
-                </button>
+              </div>
+
+              <!-- Dropzone Upload Area -->
+              <div
+                v-if="allowedCourseAction('documents', 'create')"
+                class="rag-dropzone-box"
+                :class="{
+                  'is-dragover': isDraggingOver,
+                  'is-uploading': documentUploading,
+                  'is-disabled': !selectedCourseId || selectedCourseId === ALL_COURSES
+                }"
+                @dragover.prevent="onDragOver"
+                @dragleave.prevent="onDragLeave"
+                @drop.prevent="onFileDrop"
+                @click="triggerFileInput"
+              >
                 <input
                   ref="ragFileInput"
                   type="file"
@@ -835,52 +850,140 @@
                   accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                   @change="uploadDocument"
                 />
+                <div class="dropzone-icon-circle">
+                  <LoaderCircle v-if="documentUploading" :size="24" class="spin-icon" />
+                  <Upload v-else :size="24" />
+                </div>
+                <div class="dropzone-text-group">
+                  <p class="dropzone-main-text">
+                    <span v-if="documentUploading">Đang tải lên và xử lý embedding tài liệu...</span>
+                    <span v-else>
+                      <strong>Kéo thả tệp PDF, DOCX vào đây</strong> hoặc <span class="upload-link-highlight">nhấn để chọn tệp</span>
+                    </span>
+                  </p>
+                  <span class="dropzone-hint-text">
+                    Hỗ trợ PDF, DOCX (tối đa theo cấu hình máy chủ).
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-primary btn-sm dropzone-btn"
+                  :disabled="documentUploading || !selectedCourseId || selectedCourseId === ALL_COURSES"
+                  @click.stop="triggerFileInput"
+                >
+                  <LoaderCircle v-if="documentUploading" :size="15" class="spin-icon" />
+                  <Upload v-else :size="15" />
+                  {{ documentUploading ? "ĐANG TẢI LÊN..." : "CHỌN TỆP" }}
+                </button>
+              </div>
+            </div>
+          </div><!-- KHỐI 2: DANH SÁCH & TÌM KIẾM TÀI LIỆU (DIRECTORY/SEARCH CARD) -->
+          <div class="card rag-directory-card">
+            <div class="card-header-row">
+              <div class="header-left">
+                <div class="title-with-badge">
+                  <h3 class="card-title">DANH SÁCH TÀI LIỆU THEO KHÓA HỌC</h3>
+                  <span class="rag-count-pill">{{ documentStats.total }} tài liệu</span>
+                </div>
+              </div>
+              <div class="header-actions">
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm"
+                  :disabled="documentListLoading"
+                  title="Làm mới danh sách"
+                  @click="loadDocuments()"
+                >
+                  <RefreshCw
+                    :size="15"
+                    :class="{ 'spin-icon': documentListLoading }"
+                  />
+                  <span>LÀM MỚI</span>
+                </button>
               </div>
             </div>
 
-            <div class="admin-table-toolbar">
-              <div class="admin-search-box">
-                <Search :size="18" /><input
+            <!-- Toolbar: Search & Status Filter -->
+            <div class="admin-table-toolbar rag-toolbar">
+              <div class="admin-search-box rag-search">
+                <Search :size="16" />
+                <input
                   v-model="documentQuery"
                   type="search"
-                  placeholder="Tìm tên tài liệu…"
+                  placeholder="Tìm kiếm tài liệu theo tên tệp..."
                   aria-label="Tìm tài liệu AI"
                 />
+                <button
+                  v-if="documentQuery"
+                  type="button"
+                  class="btn-clear-search"
+                  title="Xóa tìm kiếm"
+                  @click="documentQuery = ''"
+                >
+                  <X :size="14" />
+                </button>
+              </div>
+
+              <div class="filter-controls">
+                <select
+                  v-model="documentStatusFilter"
+                  class="form-control select-control status-select"
+                  aria-label="Lọc trạng thái"
+                >
+                  <option value="ALL">Tất cả trạng thái ({{ documentStats.total }})</option>
+                  <option value="INDEXED">Đã index ({{ documentStats.indexed }})</option>
+                  <option value="INDEXING">Đang embedding ({{ documentStats.indexing }})</option>
+                  <option value="FAILED">Thất bại ({{ documentStats.failed }})</option>
+                </select>
               </div>
             </div>
-            <div class="rag-document-table-scroll">
-              <table class="admin-table rag-document-table">
+
+            <!-- Data Table -->
+            <div class="admin-table-scroll">
+              <table class="admin-table rag-table">
                 <colgroup>
-                  <col style="width: 24%" />
-                  <col style="width: 10%" />
+                  <col style="width: 36%" />
                   <col style="width: 12%" />
-                  <col style="width: 7%" />
-                  <col style="width: 16%" />
-                  <col style="width: 21%" />
+                  <col style="width: 15%" />
                   <col style="width: 10%" />
+                  <col style="width: 15%" />
+                  <col style="width: 12%" />
                 </colgroup>
                 <thead>
                   <tr>
-                    <th>Tệp</th>
+                    <th>Tên tệp tài liệu</th>
                     <th>Dung lượng</th>
                     <th>Trạng thái</th>
                     <th>Chunks</th>
-                    <th>Thời gian</th>
-                    <th>Lỗi</th>
-                    <th class="rag-document-actions">Thao tác</th>
+                    <th>Thời gian cập nhật</th>
+                    <th class="actions-col text-center">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr
-                    v-if="documentListLoading && courseDocuments.length === 0"
-                  >
-                    <td colspan="7" class="rag-empty-cell">
-                      Đang tải danh sách tài liệu...
+                  <!-- Loading State -->
+                  <tr v-if="documentListLoading && courseDocuments.length === 0">
+                    <td colspan="6" class="admin-empty">
+                      <LoaderCircle :size="24" class="spin-icon" style="margin-bottom: 0.5rem;" />
+                      <p>Đang tải danh sách tài liệu...</p>
                     </td>
                   </tr>
-                  <tr v-for="document in paginatedDocuments" :key="document.id">
+
+                  <!-- Data Rows -->
+                  <tr v-for="document in courseDocuments" :key="document.id">
                     <td>
-                      <strong>{{ document.fileName }}</strong>
+                      <div class="doc-file-item">
+                        <FileText :size="17" class="doc-file-icon" />
+                        <div class="doc-file-details">
+                          <strong>{{ document.fileName }}</strong>
+                          <span
+                            v-if="document.status === 'FAILED' && document.errorMessage"
+                            class="doc-error-text"
+                            :title="document.errorMessage"
+                          >
+                            {{ document.errorMessage }}
+                          </span>
+                        </div>
+                      </div>
                     </td>
                     <td>{{ formatFileSize(document.sizeBytes) }}</td>
                     <td>
@@ -893,22 +996,13 @@
                     </td>
                     <td>{{ document.indexedChunks ?? "-" }}</td>
                     <td>
-                      {{
-                        formatDocumentDate(
-                          document.indexedAt || document.createdAt,
-                        )
-                      }}
+                      {{ formatDocumentDate(document.indexedAt || document.createdAt) }}
                     </td>
-                    <td class="rag-error-cell">
-                      <span :title="document.errorMessage || ''">{{
-                        document.errorMessage || "-"
-                      }}</span>
-                    </td>
-                    <td class="rag-document-actions">
+                    <td class="actions-col text-center">
                       <button
                         v-if="allowedCourseAction('documents', 'delete')"
                         type="button"
-                        class="btn btn-secondary btn-sm"
+                        class="action-btn delete"
                         :disabled="
                           document.status === 'PENDING' ||
                           document.status === 'INDEXING' ||
@@ -922,33 +1016,41 @@
                         "
                         @click="deleteCourseDocument(document)"
                       >
-                        <Trash2 :size="16" /> Xóa
+                        <Trash2 />
                       </button>
                     </td>
                   </tr>
-                  <tr
-                    v-if="
-                      !documentListLoading && filteredDocuments.length === 0
-                    "
-                  >
-                    <td colspan="7" class="rag-empty-cell">
-                      Khóa học này chưa có tài liệu được embedding.
+
+                  <!-- Empty State -->
+                  <tr v-if="!documentListLoading && documentStats.total === 0 && courseDocuments.length === 0">
+                    <td colspan="6" class="admin-empty">
+                      <FileText :size="32" class="empty-icon" style="opacity: 0.5; margin-bottom: 0.5rem;" />
+                      <p>Khóa học này chưa có tài liệu tri thức nào.</p>
+                      <small>Sử dụng khung bên trên để tải lên tệp PDF hoặc Word.</small>
+                    </td>
+                  </tr>
+
+                  <tr v-if="!documentListLoading && documentStats.total > 0 && courseDocuments.length === 0">
+                    <td colspan="6" class="admin-empty">
+                      Không tìm thấy tài liệu phù hợp với bộ lọc tìm kiếm.
                     </td>
                   </tr>
                 </tbody>
               </table>
-              <TablePagination
-                v-model:page="documentPage"
-                v-model:page-size="documentPageSize"
-                :total="filteredDocuments.length"
-                :page-count="documentPageCount"
-                unit="tài liệu"
-                unit-label="Tài liệu"
-              />
             </div>
+
+            <TablePagination
+              :page="documentPage"
+              :page-size="documentPageSize"
+              :total="documentTotalElements"
+              :page-count="documentPageCount"
+              unit="tài liệu"
+              unit-label="Tài liệu"
+              @update:page="onDocumentPageChange"
+              @update:page-size="onDocumentPageSizeChange"
+            />
           </div>
-        </div>
-      </div>
+        </div></div>
     </div>
 
     <AdminModal
@@ -1501,9 +1603,9 @@ import {
   GripVertical,
   CheckCircle2,
   XCircle,
-  Database,
   LoaderCircle,
   RefreshCw,
+  ChevronDown,
 } from "lucide-vue-next";
 
 // Chart.js imports & registrations
@@ -1829,7 +1931,100 @@ async function runModalSave(action: () => Promise<void>) {
 }
 const enrollmentQuery = ref(""),
   enrollmentStatus = ref(""),
-  documentQuery = ref("");
+  documentQuery = ref(""),
+  documentStatusFilter = ref<"ALL" | "INDEXED" | "INDEXING" | "FAILED">("ALL"),
+  isDraggingOver = ref(false);
+
+const undeletedCourses = computed(() =>
+  [...courseStore.courses]
+    .filter((c) => c.status !== "DELETED" && !c.code?.includes("_DEL_"))
+    .sort((a, b) => a.name.localeCompare(b.name, "vi")),
+);
+
+const coursePickerRef = ref<HTMLElement | null>(null);
+const courseSearchInputRef = ref<HTMLInputElement | null>(null);
+const courseDropdownOpen = ref(false);
+const courseSearchQuery = ref("");
+const courseSearchLoading = ref(false);
+const searchedCourseOptions = ref<{ id: string; code?: string; name: string; status: string }[] | null>(null);
+let courseSearchTimer: ReturnType<typeof setTimeout> | null = null;
+
+const selectedCourseName = computed(() => {
+  const found =
+    undeletedCourses.value.find((c) => c.id === selectedCourseId.value) ||
+    searchedCourseOptions.value?.find((c) => c.id === selectedCourseId.value);
+  return found ? found.name : "";
+});
+
+const displayedCourseOptions = computed(() => {
+  if (searchedCourseOptions.value !== null) {
+    return searchedCourseOptions.value;
+  }
+  return undeletedCourses.value;
+});
+
+const toggleCourseDropdown = () => {
+  courseDropdownOpen.value = !courseDropdownOpen.value;
+  if (courseDropdownOpen.value) {
+    void nextTick(() => {
+      courseSearchInputRef.value?.focus();
+    });
+  }
+};
+
+const onCourseSearchInput = () => {
+  if (courseSearchTimer) clearTimeout(courseSearchTimer);
+  const q = courseSearchQuery.value.trim();
+  if (!q) {
+    searchedCourseOptions.value = null;
+    courseSearchLoading.value = false;
+    return;
+  }
+  courseSearchLoading.value = true;
+  courseSearchTimer = setTimeout(async () => {
+    try {
+      searchedCourseOptions.value = await adminApi.searchCourses(q, 50);
+    } catch (err) {
+      console.error("Failed to search courses:", err);
+    } finally {
+      courseSearchLoading.value = false;
+    }
+  }, 250);
+};
+
+const clearCourseSearch = () => {
+  courseSearchQuery.value = "";
+  searchedCourseOptions.value = null;
+  courseSearchLoading.value = false;
+  void nextTick(() => {
+    courseSearchInputRef.value?.focus();
+  });
+};
+
+const selectCourseOption = (course: { id: string; name: string }) => {
+  courseDropdownOpen.value = false;
+  if (selectedCourseId.value !== course.id) {
+    selectedCourseId.value = course.id;
+  }
+};
+
+const handleOutsideCourseDropdownClick = (event: MouseEvent) => {
+  if (
+    courseDropdownOpen.value &&
+    coursePickerRef.value &&
+    !coursePickerRef.value.contains(event.target as Node)
+  ) {
+    courseDropdownOpen.value = false;
+  }
+};
+
+const documentStats = ref({
+  total: 0,
+  indexed: 0,
+  indexing: 0,
+  failed: 0,
+});
+
 const filteredEnrollments = computed(() =>
   enrollmentRequests.value.filter(
     (r) =>
@@ -1839,13 +2034,13 @@ const filteredEnrollments = computed(() =>
       (!enrollmentStatus.value || r.status === enrollmentStatus.value),
   ),
 );
-const filteredDocuments = computed(() =>
-  courseDocuments.value.filter((d) =>
-    d.fileName
-      .toLocaleLowerCase("vi")
-      .includes(documentQuery.value.trim().toLocaleLowerCase("vi")),
-  ),
-);
+const documentPage = ref(1);
+const documentPageSize = ref(10);
+const documentTotalElements = ref(0);
+const documentPageCount = ref(1);
+const resetDocuments = () => {
+  documentPage.value = 1;
+};
 const {
   page: summaryPage,
   pageSize: summaryPageSize,
@@ -1873,13 +2068,7 @@ const {
   paginated: paginatedLegacyLessons,
   reset: resetLegacyLessons,
 } = useTablePagination(currentCourseLessons);
-const {
-  page: documentPage,
-  pageSize: documentPageSize,
-  pageCount: documentPageCount,
-  paginated: paginatedDocuments,
-  reset: resetDocuments,
-} = useTablePagination(filteredDocuments);
+// Server-side pagination handlers for AI documents
 const {
   page: quizPage,
   pageSize: quizPageSize,
@@ -1889,11 +2078,44 @@ const {
 } = useTablePagination(filteredQuizDefinitions);
 watch(userSearchQuery, resetLegacyUsers);
 watch([enrollmentQuery, enrollmentStatus], resetEnrollments);
-watch(documentQuery, resetDocuments);
+let documentFetchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+const scheduleLoadDocuments = (delayMs = 0) => {
+  if (documentFetchDebounceTimer) clearTimeout(documentFetchDebounceTimer);
+  documentFetchDebounceTimer = setTimeout(() => {
+    documentFetchDebounceTimer = null;
+    if (activeTab.value === "documents") {
+      void loadDocuments();
+    }
+  }, delayMs);
+};
+
+const onDocumentPageChange = (newPage: number) => {
+  if (documentPage.value === newPage) return;
+  documentPage.value = newPage;
+  scheduleLoadDocuments(0);
+};
+
+const onDocumentPageSizeChange = (newSize: number) => {
+  documentPageSize.value = newSize;
+  documentPage.value = 1;
+  scheduleLoadDocuments(0);
+};
+
+watch(documentQuery, () => {
+  resetDocuments();
+  scheduleLoadDocuments(300);
+});
+
+watch(documentStatusFilter, () => {
+  resetDocuments();
+  scheduleLoadDocuments(0);
+});
+
 watch([quizSearchQuery, selectedCourseId], resetQuizzes);
 watch(selectedCourseId, () => {
   resetLegacyLessons();
   resetDocuments();
+  scheduleLoadDocuments(0);
 });
 
 const navigationRoute = (id: string, params: Record<string, string> = {}) => {
@@ -2019,20 +2241,37 @@ const clearDocumentPolling = () => {
 
 const loadDocuments = async (silent = false) => {
   clearDocumentPolling();
-  if (!selectedCourseId.value || selectedCourseId.value === ALL_COURSES) {
-    courseDocuments.value = [];
-    return;
+  if (!selectedCourseId.value || selectedCourseId.value === ALL_COURSES || !undeletedCourses.value.some((c) => c.id === selectedCourseId.value)) {
+    if (undeletedCourses.value.length > 0) {
+      selectedCourseId.value = undeletedCourses.value[0].id;
+    } else {
+      courseDocuments.value = [];
+      documentTotalElements.value = 0;
+      documentPageCount.value = 1;
+      documentStats.value = { total: 0, indexed: 0, indexing: 0, failed: 0 };
+      return;
+    }
   }
   if (!silent) documentListLoading.value = true;
   try {
-    courseDocuments.value = await adminApi.getCourseDocuments(
-      selectedCourseId.value,
-    );
-    if (
-      courseDocuments.value.some((document) =>
-        ["PENDING", "INDEXING"].includes(document.status),
-      )
-    ) {
+    const res = await adminApi.getCourseDocumentsPaged(selectedCourseId.value, {
+      search: documentQuery.value.trim() || undefined,
+      status: documentStatusFilter.value,
+      page: Math.max(0, documentPage.value - 1),
+      size: documentPageSize.value,
+    });
+    courseDocuments.value = res.items || [];
+    documentTotalElements.value = res.totalElements ?? 0;
+    documentPageCount.value = Math.max(1, res.totalPages ?? 1);
+    if (res.stats) {
+      documentStats.value = {
+        total: res.stats.total ?? 0,
+        indexed: res.stats.indexed ?? 0,
+        indexing: res.stats.indexing ?? 0,
+        failed: res.stats.failed ?? 0,
+      };
+    }
+    if ((res.stats && res.stats.indexing > 0) || courseDocuments.value.some((d) => ["PENDING", "INDEXING"].includes(d.status))) {
       documentPollingTimer = setTimeout(() => {
         if (activeTab.value === "documents") void loadDocuments(true);
       }, 2500);
@@ -2045,19 +2284,29 @@ const loadDocuments = async (silent = false) => {
   }
 };
 
-const uploadDocument = async (event: Event) => {
-  const input = event.target as HTMLInputElement;
-  const file = input.files?.[0];
+const triggerFileInput = () => {
+  if (
+    ragFileInput.value &&
+    !documentUploading.value &&
+    selectedCourseId.value &&
+    selectedCourseId.value !== ALL_COURSES
+  ) {
+    ragFileInput.value.click();
+  }
+};
+
+const processUploadFile = async (file: File) => {
   if (
     !file ||
     !selectedCourseId.value ||
     selectedCourseId.value === ALL_COURSES
-  )
+  ) {
+    showToast("Vui lòng chọn một khóa học cụ thể để tải tài liệu.", "warning");
     return;
+  }
   const extension = file.name.split(".").pop()?.toLowerCase();
   if (!extension || !["pdf", "docx"].includes(extension)) {
     showToast("Chỉ hỗ trợ tệp PDF hoặc DOCX.", "warning");
-    input.value = "";
     return;
   }
   documentUploading.value = true;
@@ -2070,9 +2319,44 @@ const uploadDocument = async (event: Event) => {
     console.error("Failed to upload course document:", error);
   } finally {
     documentUploading.value = false;
-    input.value = "";
+    if (ragFileInput.value) {
+      ragFileInput.value.value = "";
+    }
   }
 };
+
+const uploadDocument = async (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (file) {
+    await processUploadFile(file);
+  }
+};
+
+const onDragOver = (e: DragEvent) => {
+  e.preventDefault();
+  if (!selectedCourseId.value || selectedCourseId.value === ALL_COURSES) return;
+  isDraggingOver.value = true;
+};
+
+const onDragLeave = (e: DragEvent) => {
+  e.preventDefault();
+  isDraggingOver.value = false;
+};
+
+const onFileDrop = async (e: DragEvent) => {
+  e.preventDefault();
+  isDraggingOver.value = false;
+  if (!selectedCourseId.value || selectedCourseId.value === ALL_COURSES) {
+    showToast("Vui lòng chọn khóa học trước khi kéo thả tệp.", "warning");
+    return;
+  }
+  const file = e.dataTransfer?.files?.[0];
+  if (file) {
+    await processUploadFile(file);
+  }
+};
+
 
 const documentStatusLabel = (status: CourseDocument["status"]) =>
   ({
@@ -2118,10 +2402,11 @@ watch(
     }
     if (activeTab.value === "documents") {
       if (
-        selectedCourseId.value === ALL_COURSES &&
-        courseStore.courses.length > 0
+        (selectedCourseId.value === ALL_COURSES ||
+          !undeletedCourses.value.some((c) => c.id === selectedCourseId.value)) &&
+        undeletedCourses.value.length > 0
       ) {
-        selectedCourseId.value = courseStore.courses[0].id;
+        selectedCourseId.value = undeletedCourses.value[0].id;
       }
       void loadDocuments();
     } else {
@@ -2425,9 +2710,10 @@ const deleteCourseDocument = (document: CourseDocument) => {
       try {
         await adminApi.deleteCourseDocument(courseId, document.id);
         if (selectedCourseId.value === courseId) {
-          courseDocuments.value = courseDocuments.value.filter(
-            (item) => item.id !== document.id,
-          );
+          if (courseDocuments.value.length <= 1 && documentPage.value > 1) {
+            documentPage.value -= 1;
+          }
+          await loadDocuments();
         }
         showToast("Đã xóa tài liệu và dữ liệu embedding.");
       } catch (error: any) {
@@ -2534,9 +2820,13 @@ const loadAllData = async () => {
 
 onMounted(() => {
   loadAllData();
+  window.addEventListener("click", handleOutsideCourseDropdownClick);
 });
 
-onBeforeUnmount(clearDocumentPolling);
+onBeforeUnmount(() => {
+  clearDocumentPolling();
+  window.removeEventListener("click", handleOutsideCourseDropdownClick);
+});
 
 // ==========================================
 // COURSE ACTIONS
@@ -4569,46 +4859,348 @@ select:disabled {
   opacity: 1;
 }
 
-.rag-documents-manager {
+/* RAG 2-Block Layout */
+.rag-tab-layout {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.5rem;
 }
 
-.rag-document-controls {
-  display: grid;
-  grid-template-columns: minmax(240px, 0.8fr) minmax(420px, 2fr);
-  gap: 1rem;
-  align-items: end;
+/* KHỐI 1: Upload Card */
+.rag-upload-card {
+  padding: 1.5rem 1.8rem;
+  background: var(--surface-ffffff);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
 }
 
-.rag-upload-box {
-  min-height: 82px;
+.rag-upload-card .card-header-row {
+  margin-bottom: 1.25rem;
+}
+
+.upload-controls-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+}
+
+.course-picker-row {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
-  padding: 1rem;
-  border: 1px dashed var(--line-9db9ae);
-  border-radius: var(--radius-md);
-  background: var(--surface-f4f8f6);
-  color: var(--primary-ink);
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
-.rag-upload-box > div {
-  min-width: 0;
+.course-picker-row .form-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+.upload-course-select {
   flex: 1;
+  max-width: 580px;
+  min-width: 280px;
+  height: 40px;
+}
+
+.searchable-course-picker {
+  position: relative;
+  flex: 1;
+  min-width: 280px;
+}
+
+.course-select-trigger {
+  width: 100%;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0 0.85rem;
+  text-align: left;
+  cursor: pointer;
+  background: var(--bg-input, var(--bg-surface));
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm, 8px);
+  color: var(--text-main);
+  font-size: 0.875rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.course-select-trigger:hover,
+.course-select-trigger.is-open {
+  border-color: var(--primary-color);
+}
+
+.selected-course-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.dropdown-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+
+.dropdown-chevron.rotated {
+  transform: rotate(180deg);
+}
+
+.course-dropdown-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  background: var(--bg-surface, #1e293b);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
-.rag-upload-box small {
+.course-dropdown-search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-subtle, rgba(15, 23, 42, 0.4));
   color: var(--text-muted);
 }
 
-.rag-upload-message {
-  margin: -0.45rem 0 0;
-  color: var(--primary-ink);
+.course-dropdown-search input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  font-size: 0.84rem;
+  outline: none;
+}
+
+.course-dropdown-list {
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 0.3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.course-dropdown-option {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-main);
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.course-dropdown-option:hover {
+  background: var(--primary-light, rgba(16, 185, 129, 0.12));
+  color: var(--primary-ink, #10b981);
+}
+
+.course-dropdown-option.is-selected {
+  background: var(--primary-light, rgba(16, 185, 129, 0.18));
+  color: var(--primary-ink, #10b981);
   font-weight: 600;
+}
+
+.course-option-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.course-dropdown-empty {
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.rag-dropzone-box {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1.15rem 1.6rem;
+  border: 1.5px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle, #f8fafc);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.rag-dropzone-box:hover,
+.rag-dropzone-box.is-dragover {
+  border-color: var(--primary);
+  background: rgba(0, 91, 65, 0.04);
+}
+
+.rag-dropzone-box.is-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  border-color: var(--border-color);
+  background: var(--bg-subtle, #f8fafc);
+}
+
+.dropzone-icon-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(0, 91, 65, 0.08);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dropzone-text-group {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.dropzone-main-text {
+  font-size: 0.875rem;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.upload-link-highlight {
+  color: var(--primary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dropzone-hint-text {
+  font-size: 0.775rem;
+  color: var(--text-muted);
+}
+
+.dropzone-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding: 0.55rem 1.15rem;
+  font-weight: 600;
+}
+
+/* KHỐI 2: Directory / Search & Table Card */
+.rag-directory-card {
+  padding: 1.5rem 1.8rem;
+  background: var(--surface-ffffff);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.rag-directory-card .card-header-row {
+  margin-bottom: 1.25rem;
+}
+
+.title-with-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.rag-count-pill {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(0, 91, 65, 0.1);
+  color: var(--primary);
+}
+
+.rag-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.rag-toolbar .rag-search {
+  flex: 1;
+  min-width: 240px;
+  position: relative;
+}
+
+.btn-clear-search {
+  background: none;
+  border: none;
+  padding: 0.2rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-clear-search:hover {
+  color: var(--text-main);
+}
+
+.rag-toolbar .filter-controls .status-select {
+  min-width: 200px;
+  height: 42px;
+}
+
+.doc-file-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.doc-file-icon {
+  flex-shrink: 0;
+  color: var(--primary);
+}
+
+.doc-file-details {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.doc-file-details strong {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.doc-error-text {
+  color: var(--ink-b91c1c, #dc2626);
+  font-size: 0.75rem;
+  margin-top: 0.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .rag-status {
@@ -4639,31 +5231,25 @@ select:disabled {
   color: var(--ink-b91c1c);
 }
 
-.rag-error-cell {
-  min-width: 0;
-  color: var(--ink-b91c1c);
-  white-space: normal;
-  word-break: break-word;
-  overflow-wrap: anywhere;
+:root[data-theme="dark"] .rag-upload-card,
+:root[data-theme="dark"] .rag-directory-card {
+  background: var(--bg-card);
+  border-color: var(--border-color);
 }
 
-.rag-error-cell span {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
+:root[data-theme="dark"] .rag-dropzone-box {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: var(--border-color);
 }
 
-.rag-document-table-scroll {
-  min-width: 0;
-  max-width: 100%;
-  overflow-x: auto;
+:root[data-theme="dark"] .rag-dropzone-box:hover,
+:root[data-theme="dark"] .rag-dropzone-box.is-dragover {
+  border-color: var(--primary);
+  background: rgba(0, 91, 65, 0.15);
 }
 
-.rag-document-table {
-  table-layout: fixed;
-  min-width: 760px;
+:root[data-theme="dark"] .dropzone-icon-circle {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .rag-document-table th,

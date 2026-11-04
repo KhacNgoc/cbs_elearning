@@ -12,6 +12,8 @@ import com.bidv.coretraining.repository.CourseDocumentRepository;
 import com.bidv.coretraining.repository.CourseRepository;
 import com.bidv.coretraining.repository.LessonKnowledgeSourceRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -20,7 +22,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -74,6 +78,74 @@ public class DocumentServiceImpl implements DocumentService {
         }
         return documentRepository.findByCourseIdOrderByCreatedAtDesc(courseId).stream().map(CourseDocumentDto::from)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, Object> listPaged(String courseId, String search, String statusFilter, int page, int size) {
+        if (!courseRepository.existsById(courseId)) {
+            throw new ResourceNotFoundException("Không tìm thấy khóa học: " + courseId);
+        }
+        String query = (search != null && !search.isBlank()) ? search.trim() : null;
+        int pageSize = (size > 0 && size <= 100) ? size : 10;
+        int pageIdx = Math.max(0, page);
+
+        boolean filterByStatus = false;
+        List<DocumentStatus> statuses = List.of(DocumentStatus.values());
+        if (statusFilter != null && !statusFilter.isBlank() && !"ALL".equalsIgnoreCase(statusFilter.trim())) {
+            String sf = statusFilter.trim().toUpperCase();
+            if ("INDEXING".equals(sf) || "PENDING".equals(sf)) {
+                filterByStatus = true;
+                statuses = List.of(DocumentStatus.PENDING, DocumentStatus.INDEXING);
+            } else if ("INDEXED".equals(sf)) {
+                filterByStatus = true;
+                statuses = List.of(DocumentStatus.INDEXED);
+            } else if ("FAILED".equals(sf)) {
+                filterByStatus = true;
+                statuses = List.of(DocumentStatus.FAILED);
+            }
+        }
+
+        Page<CourseDocument> resultPage = documentRepository.findByCourseIdWithFilter(
+                courseId,
+                query,
+                filterByStatus,
+                statuses,
+                PageRequest.of(pageIdx, pageSize)
+        );
+
+        long totalAll = 0;
+        long indexedCount = 0;
+        long indexingCount = 0;
+        long failedCount = 0;
+        for (Object[] row : documentRepository.countStatusByCourseId(courseId)) {
+            DocumentStatus st = (DocumentStatus) row[0];
+            long cnt = ((Number) row[1]).longValue();
+            totalAll += cnt;
+            if (st == DocumentStatus.INDEXED) {
+                indexedCount += cnt;
+            } else if (st == DocumentStatus.PENDING || st == DocumentStatus.INDEXING) {
+                indexingCount += cnt;
+            } else if (st == DocumentStatus.FAILED) {
+                failedCount += cnt;
+            }
+        }
+
+        Map<String, Long> stats = new HashMap<>();
+        stats.put("total", totalAll);
+        stats.put("indexed", indexedCount);
+        stats.put("indexing", indexingCount);
+        stats.put("failed", failedCount);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("items", resultPage.getContent().stream().map(CourseDocumentDto::from).toList());
+        response.put("page", resultPage.getNumber());
+        response.put("size", resultPage.getSize());
+        response.put("totalElements", resultPage.getTotalElements());
+        response.put("totalPages", Math.max(1, resultPage.getTotalPages()));
+        response.put("hasNext", resultPage.hasNext());
+        response.put("stats", stats);
+        return response;
     }
 
     @Transactional

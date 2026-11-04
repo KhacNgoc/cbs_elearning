@@ -2,34 +2,22 @@
   <section class="card embedded-content">
     <form class="lesson-modal-form" @submit.prevent="saveLesson">
       <div ref="lessonModalBodyRef" class="lesson-modal-body lesson-authoring-fields">
-        <div class="form-row">
-          <div class="form-group col">
-            <label>Khóa học trực thuộc <span class="required-mark" aria-hidden="true">*</span></label>
-            <select
-              v-model="lessonForm.courseId"
-              class="form-control"
-              disabled
-              required
+                <div class="form-group">
+          <label>Khóa học trực thuộc <span class="required-mark" aria-hidden="true">*</span></label>
+          <select
+            v-model="lessonForm.courseId"
+            class="form-control"
+            disabled
+            required
+          >
+            <option
+              v-for="t in courseStore.courses"
+              :key="t.id"
+              :value="t.id"
             >
-              <option
-                v-for="t in courseStore.courses"
-                :key="t.id"
-                :value="t.id"
-              >
-                {{ t.name }}
-              </option>
-            </select>
-          </div>
-          <div class="form-group col">
-            <label>Mã bài học (Ví dụ: 'LN03', 'CIF05') <span class="required-mark" aria-hidden="true">*</span></label>
-            <input
-              v-model="lessonForm.id"
-              type="text"
-              class="form-control"
-              required
-              :disabled="lessonModal.isEdit"
-            />
-          </div>
+              {{ t.name }}
+            </option>
+          </select>
         </div>
 
         <div class="form-group">
@@ -306,11 +294,26 @@
           </div>
         </div>
       </div>
-              <!-- KHỐI THÔNG BÁO CẬP NHẬT KIẾN THỨC CHO HỌC VIÊN ĐÃ HOÀN THÀNH -->
-        <div v-if="lessonModal.isEdit && !readOnly" class="change-notify-card">
-          <div class="change-notify-header">
+              <!-- KHỐI GHI NHẬN NỘI DUNG THAY ĐỔI & THÔNG BÁO HỌC VIÊN -->
+        <div v-if="!readOnly && isPreviouslyComposed" class="change-notify-card">
+          <div class="summary-label-row">
+            <label>Tóm tắt nội dung thay đổi:</label>
+            <span class="auto-diff-badge" title="Tự động ghi nhận các mục đã chỉnh sửa vào đây">
+              <CheckCheck :size="12" />
+              <span>Tự động ghi nhận thay đổi</span>
+            </span>
+          </div>
+          <textarea
+            v-model="changeSummary"
+            @input="onUserManualEditSummary"
+            rows="3"
+            class="form-control notify-summary-input"
+            placeholder="Mô tả nội dung cập nhật cho bài học..."
+          ></textarea>
+
+          <div class="change-notify-header" style="margin-top: 0.75rem;">
             <label class="notify-checkbox-label">
-              <input type="checkbox" v-model="notifyLearners" />
+              <input type="checkbox" v-model="notifyLearners" :disabled="completedLearnersCount === 0" />
               <span class="notify-checkbox-title">Bắn thông báo cập nhật cho cán bộ đã học xong bài này</span>
             </label>
             <span v-if="completedLearnersCount > 0" class="badge-learners-warning">
@@ -321,31 +324,9 @@
               (Chưa có cán bộ nào hoàn thành bài này)
             </span>
           </div>
-
-          <div v-if="notifyLearners" class="change-notify-body">
-            <div class="summary-label-row">
-              <label>Tóm tắt nội dung thay đổi (*):</label>
-              <button
-                type="button"
-                class="btn-ai-diff"
-                :disabled="generatingAiSummary"
-                @click="generateAiChangeSummary"
-                title="Sử dụng Trợ lý AI để tự động phát hiện thay đổi và tóm tắt ngắn gọn"
-              >
-                <Sparkles :size="13" />
-                <span>{{ generatingAiSummary ? "AI đang phân tích..." : "AI Tóm tắt thay đổi" }}</span>
-              </button>
-            </div>
-            <textarea
-              v-model="changeSummary"
-              rows="2"
-              class="form-control notify-summary-input"
-              placeholder="Nhập ghi chú tóm tắt hoặc bấm 'AI Tóm tắt thay đổi' để hệ thống tự động sinh..."
-            ></textarea>
-            <small class="summary-hint">
-              Thông báo sẽ gửi đến quả chuông và popup của các cán bộ đã hoàn thành bài học này.
-            </small>
-          </div>
+          <small v-if="completedLearnersCount > 0 && notifyLearners" class="summary-hint">
+            Thông báo sẽ gửi đến quả chuông và popup của các cán bộ đã hoàn thành bài học này.
+          </small>
         </div>
         <footer v-if="!readOnly" class="modal-buttons lesson-modal-footer">
         <button type="button" class="btn btn-secondary" @click="emit('cancel')">
@@ -356,6 +337,35 @@
         </button>
       </footer>
     </form>
+
+    <!-- FULLSCREEN LOADING OVERLAY KHI ĐANG LƯU BÀI HỌC HOẶC TẢI LÊN TÁC VỤ LÂU -->
+    <Teleport to="body">
+      <div v-if="loading" class="fullscreen-loading-overlay">
+        <div class="loading-modal-card">
+          <Loader2 :size="42" class="spin-icon text-primary loading-spinner" />
+          <h4 v-if="videoUploadProgress !== null">
+            Đang tải lên video ({{ videoUploadProgress }}%)...
+          </h4>
+          <h4 v-else-if="uploadingDocs">
+            Đang tải lên và xử lý tài liệu đính kèm...
+          </h4>
+          <h4 v-else>
+            Đang lưu trữ nội dung bài học...
+          </h4>
+
+          <div v-if="videoUploadProgress !== null" class="upload-progress-track">
+            <div
+              class="upload-progress-bar"
+              :style="{ width: videoUploadProgress + '%' }"
+            ></div>
+          </div>
+
+          <p>
+            Vui lòng chờ trong giây lát, hệ thống đang xử lý và chuyển thẳng sang màn hình xem trước.
+          </p>
+        </div>
+      </div>
+    </Teleport>
   </section>
 </template>
 <script setup lang="ts">
@@ -364,11 +374,12 @@ import LessonContentSelection from '../components/lesson/LessonContentSelection.
 import { lessonContentTypes, selectedLessonContent, validateSelectedLessonContent, type LessonContentType } from '../utils/lessonContent';
 import { scrollWithin } from "../utils/scrollWithin";
 import { ref, computed, nextTick, watch, defineAsyncComponent } from "vue";
-import { Upload, Link2, Plus, FileText, X, Trash2, Sparkles, ShieldAlert } from "lucide-vue-next";
+import { Upload, Link2, Plus, FileText, X, Trash2, CheckCheck, ShieldAlert, Loader2 } from "lucide-vue-next";
 import { axiosClient } from "../api/axiosClient";
 import { onMounted } from "vue";
 import { useCourseStore } from "../stores/courseStore";
 import { adminApi, VIDEO_UPLOAD_MAX_BYTES } from "../api/adminApi";
+import { trainingApi } from "../api/trainingApi";
 import { validateVideoUpload } from "../utils/videoAccess";
 import { showToast } from "../utils/toast";
 import type { Lesson, LessonDocument } from "../types";
@@ -376,10 +387,27 @@ const LessonTextEditor = defineAsyncComponent(
   () => import("../components/lesson/LessonTextEditor.vue"),
 );
 const props = defineProps<{ lesson: Lesson; readOnly?: boolean }>();
-const emit = defineEmits<{ saved: []; cancel: []; dirty: [value: boolean] }>();
+const emit = defineEmits<{
+  saved: [];
+  cancel: [];
+  dirty: [value: boolean];
+  'title-change': [title: string];
+}>();
 const courseStore = useCourseStore();
 const loading = ref(false),
-  videoUploadProgress = ref<number | null>(null);
+  videoUploadProgress = ref<number | null>(null),
+  uploadingDocs = ref(false);
+const isPreviouslyComposed = computed(() => {
+  const l = props.lesson;
+  if (!l) return false;
+  if (l.status === 'PUBLISHED') return true;
+  if (l.hasText || (l.textBody && l.textBody.trim().length > 0)) return true;
+  if (l.hasVideo || (l.videoUrl && l.videoUrl.trim().length > 0)) return true;
+  if (Array.isArray(l.documents) && l.documents.length > 0) return true;
+  if (Array.isArray((l as any).procedureSteps) && (l as any).procedureSteps.length > 0) return true;
+  if (l.hasQuiz) return true;
+  return false;
+});
 const lessonModal = ref({ show: true, isEdit: true });
 type LessonDocumentForm = LessonDocument & { file?: File };
 const lessonForm = ref({
@@ -397,8 +425,20 @@ const lessonForm = ref({
   })),
 });
 const selectedContentTypes = ref<LessonContentType[]>(lessonContentTypes(props.lesson));
-watch(selectedContentTypes, () => emit("dirty", true), { deep: true });
-watch(lessonForm, () => emit("dirty", true), { deep: true });
+watch(selectedContentTypes, () => { emit("dirty", true); autoUpdateChangeSummary(); }, { deep: true });
+watch(lessonForm, () => { emit("dirty", true); autoUpdateChangeSummary(); }, { deep: true });
+watch(() => lessonForm.value.title, (t) => emit("title-change", t));
+watch(
+  () => props.lesson,
+  (newLesson) => {
+    if (newLesson) {
+      lessonForm.value.title = newLesson.title;
+      lessonForm.value.hint = newLesson.hint;
+      lessonForm.value.version = newLesson.version;
+    }
+  },
+  { deep: true }
+);
 const lessonModalBodyRef = ref<HTMLElement | null>(null);
 
 const selectedVideoFileName = computed(() => {
@@ -508,10 +548,142 @@ const removeLessonDocument = (index: number) => {
   lessonForm.value.documents.splice(index, 1);
 };
 
-const generatingAiSummary = ref(false);
 const notifyLearners = ref(false);
 const changeSummary = ref("");
 const completedLearnersCount = ref(0);
+const isSummaryManuallyEdited = ref(false);
+
+function computeDetectedChanges(): string {
+  const diffs: string[] = [];
+  const original = props.lesson;
+  if (!original) return "- Cập nhật nội dung bài học.";
+
+  // 1. Tiêu đề bài học
+  const origTitle = (original.title || "").trim();
+  const currentTitle = (lessonForm.value.title || "").trim();
+  if (currentTitle && origTitle && currentTitle !== origTitle) {
+    diffs.push(`- Đổi tiêu đề: "${currentTitle}"`);
+  }
+
+  // 2. Gợi ý / Mô tả tóm tắt (Hint)
+  const origHint = (original.hint || "").trim();
+  const currentHint = (lessonForm.value.hint || "").trim();
+  if (currentHint !== origHint) {
+    diffs.push("- Cập nhật gợi ý nghiệp vụ bài học");
+  }
+
+  // 3. Định dạng nội dung bài học (Video, Soạn thảo văn bản, Slide)
+  const origTypes = lessonContentTypes(original).sort();
+  const currentTypes = [...selectedContentTypes.value].sort();
+  if (JSON.stringify(origTypes) !== JSON.stringify(currentTypes)) {
+    const typeLabels: Record<string, string> = {
+      VIDEO: "Video",
+      TEXT: "Bài viết soạn thảo",
+      SLIDE: "Slide bài giảng",
+    };
+    const activeNames = currentTypes.map((t) => typeLabels[t] || t).join(", ");
+    diffs.push(`- Điều chỉnh định dạng bài học (${activeNames || "Chưa chọn"})`);
+  }
+
+  // 4. Video bài giảng
+  if (selectedContentTypes.value.includes("VIDEO")) {
+    if (lessonForm.value.videoFile) {
+      diffs.push(`- Tải lên video bài giảng mới: ${lessonForm.value.videoFile.name}`);
+    } else {
+      const origVid = (original.videoUrl || "").trim();
+      const currentVid = (lessonForm.value.videoUrl || "").trim();
+      if (origVid !== currentVid) {
+        if (!currentVid && origVid) {
+          diffs.push("- Xóa video bài giảng");
+        } else if (currentVid && !origVid) {
+          diffs.push("- Bổ sung video bài giảng mới");
+        } else if (currentVid) {
+          diffs.push("- Cập nhật liên kết video bài giảng");
+        }
+      }
+    }
+  }
+
+  // 5. Tài liệu đính kèm
+  const origDocs = original.documents || [];
+  const currentDocs = lessonForm.value.documents || [];
+  const newUploaded = currentDocs.filter((d) => !d.id || !!d.file);
+
+  if (newUploaded.length > 0) {
+    const names = newUploaded.map((d) => d.file?.name || d.name).filter(Boolean);
+    diffs.push(`- Tải lên ${newUploaded.length} tài liệu đính kèm mới (${names.slice(0, 2).join(", ")}${names.length > 2 ? "..." : ""})`);
+  } else if (currentDocs.length !== origDocs.length) {
+    if (currentDocs.length > origDocs.length) {
+      diffs.push(`- Bổ sung tài liệu đính kèm (tổng ${currentDocs.length} tài liệu)`);
+    } else {
+      diffs.push(`- Giảm bớt tài liệu đính kèm (còn ${currentDocs.length} tài liệu)`);
+    }
+  } else {
+    const nameChanged = currentDocs.some((d, idx) => (d.name || "").trim() !== (origDocs[idx]?.name || "").trim());
+    if (nameChanged) {
+      diffs.push("- Cập nhật thông tin tài liệu đính kèm");
+    }
+  }
+
+  // 6. Soạn thảo văn bản (TextBody / Rich Text)
+  if (selectedContentTypes.value.includes("TEXT")) {
+    const origText = (original.textBody || "").trim();
+    const currentText = (lessonForm.value.textBody || "").trim();
+    if (origText !== currentText) {
+      diffs.push("- Chỉnh sửa nội dung bài viết / bài giảng");
+    }
+  }
+
+  // 7. Quy trình nghiệp vụ
+  const origProc = JSON.stringify(original.procedureSteps || []);
+  const currentProc = JSON.stringify(lessonForm.value.procedureSteps || []);
+  if (origProc !== currentProc) {
+    const stepCount = lessonForm.value.procedureSteps.reduce((acc, p) => acc + (p.steps?.length || 0), 0);
+    diffs.push(`- Cập nhật các bước quy trình tác nghiệp (${stepCount} bước)`);
+  }
+
+  if (diffs.length === 0) {
+    return "- Cập nhật nội dung bài học.";
+  }
+
+  return diffs.join("\n");
+}
+
+function hasAnyRealChanges(): boolean {
+  const original = props.lesson;
+  if (!original) return false;
+  if ((lessonForm.value.title || "").trim() !== (original.title || "").trim()) return true;
+  if ((lessonForm.value.hint || "").trim() !== (original.hint || "").trim()) return true;
+  const origTypes = lessonContentTypes(original).sort();
+  const currentTypes = [...selectedContentTypes.value].sort();
+  if (JSON.stringify(origTypes) !== JSON.stringify(currentTypes)) return true;
+  if (lessonForm.value.videoFile) return true;
+  if ((lessonForm.value.videoUrl || "").trim() !== (original.videoUrl || "").trim()) return true;
+  const origDocs = original.documents || [];
+  const currentDocs = lessonForm.value.documents || [];
+  if (currentDocs.some((d) => !d.id || !!d.file)) return true;
+  if (currentDocs.length !== origDocs.length) return true;
+  if (currentDocs.some((d, idx) => (d.name || "").trim() !== (origDocs[idx]?.name || "").trim())) return true;
+  if ((lessonForm.value.textBody || "").trim() !== (original.textBody || "").trim()) return true;
+  if (JSON.stringify(original.procedureSteps || []) !== JSON.stringify(lessonForm.value.procedureSteps || [])) return true;
+  return false;
+}
+
+function autoUpdateChangeSummary() {
+  if (isSummaryManuallyEdited.value) return;
+  if (hasAnyRealChanges()) {
+    changeSummary.value = computeDetectedChanges();
+  }
+}
+
+function onUserManualEditSummary() {
+  if (!changeSummary.value.trim()) {
+    isSummaryManuallyEdited.value = false;
+    autoUpdateChangeSummary();
+  } else {
+    isSummaryManuallyEdited.value = true;
+  }
+}
 
 async function loadCompletedLearnersCount() {
   if (!props.lesson?.id) return;
@@ -520,31 +692,10 @@ async function loadCompletedLearnersCount() {
     completedLearnersCount.value = res.data?.count || 0;
     if (completedLearnersCount.value > 0) {
       notifyLearners.value = true;
+      autoUpdateChangeSummary();
     }
   } catch (e) {
     console.warn("Could not load completed learners count:", e);
-  }
-}
-
-async function generateAiChangeSummary() {
-  if (generatingAiSummary.value) return;
-  generatingAiSummary.value = true;
-  try {
-    const oldContent = (props.lesson as any).textBody || "";
-    const newContent = lessonForm.value.textBody || "";
-    const res = await axiosClient.post(`/api/admin/lessons/${props.lesson.id}/ai-summarize-changes`, {
-      oldContent,
-      newContent,
-    });
-    if (res.data?.summary) {
-      changeSummary.value = res.data.summary;
-      showToast("AI đã tạo tóm tắt thay đổi thành công!", "success");
-    }
-  } catch (err) {
-    console.warn("AI diff error:", err);
-    changeSummary.value = `Cập nhật nội dung bài học và tài liệu mới cho bài "${lessonForm.value.title}".`;
-  } finally {
-    generatingAiSummary.value = false;
   }
 }
 
@@ -566,6 +717,7 @@ const saveLesson = async () => {
           })
         : lessonForm.value.videoUrl.trim();
     videoUploadProgress.value = null;
+    uploadingDocs.value = activeContent.documents.some((d) => !!d.file);
     const documents = await Promise.all(
       activeContent.documents.map(async (document, index) => {
         const uploaded = document.file
@@ -592,9 +744,21 @@ const saveLesson = async () => {
     };
     delete (payload as Partial<typeof lessonForm.value>).videoFile;
 
-    const saved = lessonModal.value.isEdit
-      ? await adminApi.updateLesson(lessonForm.value.id, payload)
-      : await adminApi.createLesson(payload);
+    let saved: Lesson;
+    try {
+      saved = lessonModal.value.isEdit
+        ? await adminApi.updateLesson(lessonForm.value.id, payload)
+        : await adminApi.createLesson(payload);
+    } catch (saveErr: any) {
+      if (saveErr.response?.status === 409) {
+        // Tự động đồng bộ version mới nhất và lưu lại để không gián đoạn người dùng
+        const fresh = await trainingApi.lesson(lessonForm.value.id);
+        payload.version = fresh.version;
+        saved = await adminApi.updateLesson(lessonForm.value.id, payload);
+      } else {
+        throw saveErr;
+      }
+    }
     lessonForm.value = {
       ...lessonForm.value,
       ...saved,
@@ -609,10 +773,10 @@ const saveLesson = async () => {
       })),
     };
     await nextTick();
-        if (lessonModal.value.isEdit && (notifyLearners.value || changeSummary.value)) {
+        if (lessonModal.value.isEdit && isPreviouslyComposed.value && (notifyLearners.value || changeSummary.value.trim() || hasAnyRealChanges())) {
       try {
         const notifyRes = await axiosClient.post(`/api/admin/lessons/${lessonForm.value.id}/changelog-notify`, {
-          changeSummary: changeSummary.value,
+          changeSummary: changeSummary.value.trim() || computeDetectedChanges(),
           notifyLearners: notifyLearners.value,
         });
         if (notifyLearners.value && (notifyRes.data?.notifiedCount || 0) > 0) {
@@ -2261,23 +2425,17 @@ textarea {
   font-size: 0.82rem;
   color: var(--text-main);
 }
-.btn-ai-diff {
+.auto-diff-badge {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.25rem 0.65rem;
+  padding: 0.2rem 0.55rem;
   border-radius: 6px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: #ffffff;
-  border: none;
-  font-size: 0.76rem;
+  background: var(--bg-subtle, rgba(16, 185, 129, 0.1));
+  color: var(--primary-color, #10b981);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  font-size: 0.72rem;
   font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-.btn-ai-diff:hover:not(:disabled) {
-  opacity: 0.9;
-  transform: translateY(-1px);
 }
 .notify-summary-input {
   font-size: 0.85rem;
@@ -2290,4 +2448,45 @@ textarea {
   color: var(--text-muted);
 }
 
+
+.fullscreen-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  background: rgba(10, 16, 26, 0.78);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.loading-modal-card {
+  background: var(--bg-surface, #1e293b);
+  border: 1px solid var(--border-color, #334155);
+  border-radius: 16px;
+  padding: 2.2rem 3rem;
+  text-align: center;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.65);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+}
+.loading-modal-card h4 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #fff;
+}
+.loading-modal-card p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #94a3b8;
+}
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 </style>
