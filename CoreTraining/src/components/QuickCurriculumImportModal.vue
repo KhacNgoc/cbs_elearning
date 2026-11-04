@@ -409,54 +409,38 @@
 
       <!-- Modal Footer -->
       <div class="modal-footer">
-        <div class="footer-left">
-          <button
-            v-if="hasAnyDraftContent"
-            type="button"
-            class="btn btn-outline-danger btn-reset-draft"
-            :disabled="processing"
-            @click="resetAllDrafts(true)"
-            title="Xóa toàn bộ nội dung đang nhập để làm lại từ đầu"
-          >
-            <RotateCcw :size="13" />
-            <span>Làm mới</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          class="btn btn-secondary"
+          :disabled="processing"
+          @click="handleCancel"
+        >
+          Hủy bỏ
+        </button>
 
-        <div class="footer-right">
-          <button
-            type="button"
-            class="btn btn-secondary"
-            :disabled="processing"
-            @click="handleCancel"
-          >
-            Hủy bỏ
-          </button>
+        <button
+          v-if="activeTab === 'outline'"
+          type="button"
+          class="btn btn-primary btn-submit-wizard"
+          :disabled="processing || !canSubmitOutline"
+          @click="executeOutlineCreation"
+        >
+          <Loader2 v-if="processing" :size="15" class="spin-icon" />
+          <Zap v-else :size="15" />
+          <span>{{ processing ? "Đang khởi tạo cấu trúc..." : "Khởi tạo cấu trúc ngay" }}</span>
+        </button>
 
-          <button
-            v-if="activeTab === 'outline'"
-            type="button"
-            class="btn btn-primary btn-submit-wizard"
-            :disabled="processing || !canSubmitOutline"
-            @click="executeOutlineCreation"
-          >
-            <Loader2 v-if="processing" :size="15" class="spin-icon" />
-            <Zap v-else :size="15" />
-            <span>{{ processing ? "Đang khởi tạo cấu trúc..." : "Khởi tạo cấu trúc ngay" }}</span>
-          </button>
-
-          <button
-            v-else
-            type="button"
-            class="btn btn-primary btn-submit-wizard"
-            :disabled="processing || !csvParsedRows.length"
-            @click="executeCsvImport"
-          >
-            <Loader2 v-if="processing" :size="15" class="spin-icon" />
-            <UploadCloud v-else :size="15" />
-            <span>{{ processing ? "Đang import..." : `Xác nhận Import (${csvParsedRows.length} bài học)` }}</span>
-          </button>
-        </div>
+        <button
+          v-else
+          type="button"
+          class="btn btn-primary btn-submit-wizard"
+          :disabled="processing || !csvParsedRows.length"
+          @click="executeCsvImport"
+        >
+          <Loader2 v-if="processing" :size="15" class="spin-icon" />
+          <UploadCloud v-else :size="15" />
+          <span>{{ processing ? "Đang import..." : `Xác nhận Import (${csvParsedRows.length} bài học)` }}</span>
+        </button>
       </div>
     </div>
   </div>
@@ -667,19 +651,6 @@ function clearDraft() {
     // ignore
   }
 }
-
-const hasAnyDraftContent = computed(() => {
-  return (
-    !!courseName.value.trim() ||
-    !!newDomainName.value.trim() ||
-    !!newProgramName.value.trim() ||
-    !!outlineRawText.value.trim() ||
-    !!courseDeadline.value ||
-    csvParsedRows.value.length > 0 ||
-    !!csvFile.value ||
-    !!csvFileInfo.value
-  );
-});
 
 function resetAllDrafts(notify = true) {
   clearDraft();
