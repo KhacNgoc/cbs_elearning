@@ -86,6 +86,7 @@ public class LearningOutlineServiceImpl implements LearningOutlineService {
                 resume == null ? null : resume.lessonId(), resume);
     }
 
+    @Override
     public CourseDto courseMetadata(Course course, boolean editor, boolean hasCourseQuiz) {
         var program = course.getProgram();
         return CourseDto.builder().id(course.getId()).code(course.getCode()).name(course.getName())
