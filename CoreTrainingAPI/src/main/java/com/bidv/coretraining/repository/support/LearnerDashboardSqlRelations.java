@@ -5,9 +5,9 @@ import java.util.*;
 import java.text.Normalizer;
 @org.springframework.stereotype.Component
 public class LearnerDashboardSqlRelations {
- private final NamedParameterJdbcTemplate jdbc;
- public LearnerDashboardSqlRelations(NamedParameterJdbcTemplate jdbc){this.jdbc=jdbc;}
- public record Context(String sql,Map<String,Object> params) {}
+    private final NamedParameterJdbcTemplate jdbc;
+    public LearnerDashboardSqlRelations(NamedParameterJdbcTemplate jdbc){this.jdbc=jdbc;}
+    public record Context(String sql,Map<String,Object> params) {}
     private static String published(String alias) {
         return "(" + alias + ".status is null or upper(" + alias + ".status) in ('ACTIVE','PUBLISHED'))";
     }

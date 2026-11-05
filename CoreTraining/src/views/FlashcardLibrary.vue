@@ -109,7 +109,7 @@
       </button>
     </template>
 
-    <AdminModal :open="!!studyCards.length" :title="studyTitle" :width="680" fixed-height @close="studyCards = []">
+    <AdminModal :open="!!studyCards.length" :title="studyTitle" :width="680" @close="studyCards = []">
       <FlashcardStudy
         v-if="studyCards.length"
         v-model:shuffled="shuffled"
@@ -643,6 +643,17 @@ input[type="checkbox"]:disabled {
   font-size: 0.75rem;
 }
 @media (max-width: 600px) {
+  /* Fixed slots: wrapping by content width moved the buttons whenever the count or a label changed. */
+  .selection-bar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .selection-count {
+    margin-right: 0;
+  }
+  .selection-bar .btn {
+    padding-inline: 0.5rem;
+  }
   .lesson-row {
     flex-wrap: wrap;
     padding-left: 1rem;

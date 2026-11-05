@@ -1,6 +1,6 @@
 <template>
   <!-- The page has no inline deck: learners open it from the lesson header or the completion reminder. -->
-  <AdminModal :open="!!view" :title="studyTitle" :width="680" fixed-height @close="view = null">
+  <AdminModal :open="!!view" :title="studyTitle" :width="680" :fixed-height="view === 'manage'" @close="view = null">
     <FlashcardStudy
       v-if="view === 'study'"
       :key="sessionKey"
