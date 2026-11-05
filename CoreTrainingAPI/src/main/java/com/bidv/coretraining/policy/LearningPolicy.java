@@ -1,8 +1,11 @@
 package com.bidv.coretraining.policy;
 
-import com.bidv.coretraining.entity.*;
+import com.bidv.coretraining.course.entity.Chapter;
+import com.bidv.coretraining.course.entity.Course;
 import com.bidv.coretraining.exception.BadRequestException;
+import com.bidv.coretraining.lesson.entity.Lesson;
 import com.bidv.coretraining.security.AccessPolicy;
+import com.bidv.coretraining.user.entity.User;
 import org.springframework.security.access.AccessDeniedException;
 import java.util.List;
 
@@ -51,6 +54,27 @@ public final class LearningPolicy {
                 .takeWhile(l -> !l.getId().equals(lesson.getId())).allMatch(l -> completed(user, l));
     }
 
+    /**
+     * Every lesson open to a learner in one course, computed at once from ids in published order. Must agree with
+     * {@code LessonRepository.hasIncompletePredecessors}: a chapter with no published lesson blocks those after it.
+     */
+    public static java.util.Set<String> unlockedLessonIds(List<String> chapterIds,
+            java.util.Map<String, List<String>> lessonIdsByChapter, java.util.Set<String> completed) {
+        java.util.Set<String> unlocked = new java.util.HashSet<>();
+        for (String chapterId : chapterIds) {
+            List<String> lessonIds = lessonIdsByChapter.getOrDefault(chapterId, List.of());
+            boolean predecessorsDone = !lessonIds.isEmpty();
+            for (String lessonId : lessonIds) {
+                if (predecessorsDone)
+                    unlocked.add(lessonId);
+                predecessorsDone &= completed.contains(lessonId);
+            }
+            if (!predecessorsDone)
+                break;
+        }
+        return unlocked;
+    }
+
     public static void assertCourseAccess(User user, Course course) {
         com.bidv.coretraining.security.AccessPolicy.require(user.activeAccount());
         if (com.bidv.coretraining.security.AccessPolicy.canReadCourse(user, course))
@@ -59,8 +83,7 @@ public final class LearningPolicy {
                 .require(com.bidv.coretraining.security.AccessPolicy.permissions(user).contains("LEARN")
                         && com.bidv.coretraining.security.AccessPolicy.visible(user, course));
         boolean enrolled = com.bidv.coretraining.security.AccessPolicy.mandatory(user, course)
-                || user.getRegisteredCourses().stream().anyMatch(c -> c.getId().equals(course.getId()))
-                || user.hasGroupMandatoryCourse(course.getId());
+                || user.getRegisteredCourses().stream().anyMatch(c -> c.getId().equals(course.getId()));
         if (!isLearnableStatus(course.getStatus()) || !enrolled)
             throw new AccessDeniedException("Bạn chưa được cấp quyền học khóa này");
     }
@@ -95,7 +118,7 @@ public final class LearningPolicy {
     }
     public static boolean ratingEligible(User user,Course course) {
         boolean enrolled=user.getRegisteredCourses().stream().anyMatch(c->c.getId().equals(course.getId()))
-                || AccessPolicy.mandatory(user,course) || user.hasGroupMandatoryCourse(course.getId());
+                || AccessPolicy.mandatory(user,course);
         return AccessPolicy.has(user,"LEARN") && "PUBLISHED".equals(course.getStatus()) && enrolled
                 && LearningPolicy.courseCompleted(user,course);
     }

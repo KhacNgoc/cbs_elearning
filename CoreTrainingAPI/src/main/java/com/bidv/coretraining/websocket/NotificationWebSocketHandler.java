@@ -1,6 +1,6 @@
 package com.bidv.coretraining.websocket;
 
-import com.bidv.coretraining.dto.NotificationDto;
+import com.bidv.coretraining.notification.dto.NotificationDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.*;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Map;
@@ -146,7 +147,12 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void handleTransportError(WebSocketSession session, Throwable exception) {
-        log.warn("WebSocket transport error sessionId={}", session.getId(), exception);
+        if (exception instanceof EOFException) {
+            // Routine when a client or proxy drops the TCP connection without a close frame.
+            log.info("WebSocket connection dropped without close frame sessionId={}", session.getId());
+        } else {
+            log.warn("WebSocket transport error sessionId={}", session.getId(), exception);
+        }
         closeQuietly(session, CloseStatus.SERVER_ERROR);
     }
 

@@ -42,8 +42,6 @@ export const useUserStore = defineStore("user", {
     lessonProgress: {},
     points: 0,
     unlockedBadges: [],
-    groupIds: [] as string[],
-    groupName: "",
     mandatoryCourses: [],
     registeredCourses: [],
     pendingCourses: [],
@@ -199,6 +197,11 @@ export const useUserStore = defineStore("user", {
       localStorage.removeItem("username");
       localStorage.removeItem("fullName");
       localStorage.removeItem("mustChangePassword");
+      // Unsubmitted quiz answers must not outlive the session on a shared machine.
+      // Literal mirrors QUIZ_DRAFT_PREFIX in quizStore (importing it would create a cycle).
+      Object.keys(localStorage)
+        .filter((key) => key.startsWith("quiz-draft:"))
+        .forEach((key) => localStorage.removeItem(key));
 
       this.isAuthenticated = false;
       this.role = "";
@@ -213,8 +216,6 @@ export const useUserStore = defineStore("user", {
       this.lessonProgress = {};
       this.points = 0;
       this.unlockedBadges = [];
-      this.groupIds = [];
-      this.groupName = "";
       this.mandatoryCourses = [];
       this.registeredCourses = [];
       this.pendingCourses = [];
@@ -256,8 +257,6 @@ export const useUserStore = defineStore("user", {
           this.lessonProgress = progress.lessonProgress || {};
           this.points = progress.points || 0;
           this.unlockedBadges = progress.unlockedBadges || [];
-          this.groupIds = progress.groupIds || [];
-          this.groupName = progress.groupName || "";
           this.mandatoryCourses = progress.mandatoryCourses || [];
           this.registeredCourses = progress.registeredCourses || [];
           this.pendingCourses = progress.pendingCourses || [];
@@ -370,8 +369,6 @@ export const useUserStore = defineStore("user", {
         this.registeredCourses = updatedProgress.registeredCourses || [];
         this.pendingCourses = updatedProgress.pendingCourses || [];
         this.mandatoryCourses = updatedProgress.mandatoryCourses || [];
-        this.groupIds = updatedProgress.groupIds || [];
-        this.groupName = updatedProgress.groupName || "";
       } catch (error) {
         console.error("Failed to register course:", error);
         throw error;

@@ -21,7 +21,7 @@ test('report displays full-scope totals while requesting one database page',asyn
  const stub={render:()=>vue.h('div')};
  const modules={vue,'lucide-vue-next':icons,'vue-router':{useRoute:()=>({query:{},path:'/admin'}),useRouter:()=>({replace:async()=>{}})},'../utils/reportingMetrics':metrics,'../utils/reportingViews':views,'../composables/useTablePagination':{useTablePagination},'../utils/scrollWithin':{scrollWithin(){}},'../api/trainingReportApi':{
   getTrainingReport:async()=>{legacy.push(1);return{asOf:'2026-10-28',rows:[]};},
-  readTrainingReport:async params=>{calls.push(params);return{asOf:'2026-10-28',summary,choices:{units:[],groups:[],courses:[],programs:[]},items:[],total:51,page:params.page,size:20,charts:{},actions:[],months:[],bins:[]};},
+  readTrainingReport:async params=>{calls.push(params);return{asOf:'2026-10-28',summary,choices:{units:[],courses:[],programs:[]},items:[],total:51,page:params.page,size:20,charts:{},actions:[],months:[],bins:[]};},
  }};
  modules['../components/TablePagination.vue']={default:{props:['total','page'],emits:['update:page'],template:'<button class="next" @click="$emit(\'update:page\',page+1)">{{total}}</button>'}};
  const component=new Function('modules',code)(new Proxy(modules,{get:(t,k)=>t[k]||{default:stub}}));

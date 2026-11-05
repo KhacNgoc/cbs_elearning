@@ -15,6 +15,7 @@
       :has-text="Boolean(lesson.textBody?.trim())"
       :has-video="Boolean(lesson.videoUrl?.trim())"
       :has-slides="lesson.documents.some(document => document.purpose === 'SLIDE')"
+      :optional-content="optionalLessonContent(lesson)"
       @select-content="showPrimaryContent"
       :completed-count="completedCount"
       :total-lessons="course?.lessons.length || 0"
@@ -22,6 +23,9 @@
       :can-complete="userStore.canLearn"
       @complete="markAsCompleted"
       @open-content="sidebarOpen = true"
+      :flashcard-total="flashcardTotal || 0"
+      :flashcards-enabled="flashcardTotal !== null"
+      @open-flashcards="openFlashcards"
     />
         <!-- BANNER NỘI DUNG CẬP NHẬT MỚI -->
     <div
@@ -121,6 +125,7 @@
         :lesson="lesson"
         :course-name="fullCourse?.name"
         :completed="isCompleted"
+        :completion-rule="completionRule"
       >
         <template #actions>
           <LessonReportForm
@@ -130,6 +135,12 @@
             :lesson-title="lesson.title"
           />
         </template>
+        <LessonFlashcards
+          ref="flashcardsPanel"
+          :lesson-id="lesson.id"
+          :lesson-title="lesson.title"
+          @total="flashcardTotal = $event"
+        />
         <LessonVideoNotes
           ref="videoNotesPanel"
           :notes="videoNotes"
@@ -175,6 +186,27 @@
         <ChevronRight :size="17" />
       </button>
     </footer>
+    <Transition name="flashcard-nudge">
+      <aside
+        v-if="flashcardNudgeOpen && flashcardTotal && !quizGateOpen"
+        class="flashcard-nudge"
+        role="status"
+      >
+        <span class="flashcard-nudge-icon"><Layers3 :size="20" /></span>
+        <div class="flashcard-nudge-copy">
+          <strong>Củng cố bài vừa học</strong>
+          <span>Bài này có {{ flashcardTotal }} flashcard để bạn ghi nhớ nhanh.</span>
+        </div>
+        <div class="flashcard-nudge-actions">
+          <button type="button" class="btn btn-secondary" @click="flashcardNudgeOpen = false">
+            Để sau
+          </button>
+          <button type="button" class="btn btn-primary" @click="openFlashcards">
+            Xem thẻ
+          </button>
+        </div>
+      </aside>
+    </Transition>
     <Transition name="quiz-gate">
       <div
         v-if="quizGateOpen"
@@ -257,7 +289,7 @@ import {
   watch,
 } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { AlertTriangle, ChevronLeft, ChevronRight, X, Sparkles } from "lucide-vue-next";
+import { AlertTriangle, ChevronLeft, ChevronRight, Layers3, X, Sparkles } from "lucide-vue-next";
 import { useCourseStore } from "../stores/courseStore";
 import { useUserStore } from "../stores/userStore";
 import { axiosClient } from "../api/axiosClient";
@@ -274,11 +306,12 @@ import LessonCourseSidebar from "../components/lesson/LessonCourseSidebar.vue";
 import LessonMediaStage from "../components/lesson/LessonMediaStage.vue";
 import LessonOverview from "../components/lesson/LessonOverview.vue";
 import LessonReportForm from "../components/lesson/LessonReportForm.vue";
-import { initialLessonContent } from "../utils/lessonContent";
+import { initialLessonContent, lessonCompletionRule, optionalLessonContent } from "../utils/lessonContent";
 import { createDocumentProgressJournal } from "../utils/documentProgressJournal";
 import { createVideoProgressJournal } from "../utils/videoProgressJournal";
 import LessonDiscussion from "../components/lesson/LessonDiscussion.vue";
 import LessonVideoNotes from "../components/lesson/LessonVideoNotes.vue";
+import LessonFlashcards from "../components/lesson/LessonFlashcards.vue";
 
 const props = defineProps<{ id: string }>();
 const latestChangelog = ref<{ changeSummary: string; createdAt: string } | null>(null);
@@ -364,6 +397,13 @@ const restoreDocumentPosition = (
 const mediaStage = ref<InstanceType<typeof LessonMediaStage> | null>(null);
 const learningPage = ref<HTMLElement | null>(null);
 const videoNotesPanel = ref<InstanceType<typeof LessonVideoNotes> | null>(null);
+const flashcardsPanel = ref<InstanceType<typeof LessonFlashcards> | null>(null);
+const flashcardTotal = ref<number | null>(null);
+const flashcardNudgeOpen = ref(false);
+const openFlashcards = () => {
+  flashcardNudgeOpen.value = false;
+  flashcardsPanel.value?.open();
+};
 const selectedDocument = ref<LessonDocument | null>(null);
 const primaryContent = ref<"VIDEO" | "TEXT">("TEXT");
 const activeContentType = computed(() =>
@@ -435,6 +475,20 @@ const quizPromptLesson = computed(
 );
 const isCompleted = computed(() =>
   lesson.value ? userStore.completedLessons.includes(lesson.value.id) : false,
+);
+const completionRule = computed(() => {
+  if (!lesson.value) return "";
+  const outlineLesson = course.value?.lessons.find((item) => item.id === lesson.value?.id);
+  return lessonCompletionRule(lesson.value, Boolean(outlineLesson?.hasQuiz && outlineLesson.quizRequired));
+});
+// Learners rarely scroll past the player after finishing, so point them at the deck.
+watch(
+  () => [lesson.value?.id, isCompleted.value, userStore.progressLoaded] as const,
+  ([id, done], [previousId, wasDone, wasLoaded]) => {
+    if (id !== previousId) flashcardNudgeOpen.value = false;
+    // Progress arriving after the lesson opens is not the learner finishing it just now.
+    else if (done && !wasDone && wasLoaded) flashcardNudgeOpen.value = true;
+  },
 );
 const completedCount = computed(
   () =>
@@ -616,10 +670,51 @@ onMounted(() => {
   document.addEventListener("visibilitychange", handleVisibilityChange);
   window.addEventListener("pagehide", flushProgress);
   window.addEventListener("online", handleOnline);
+  window.addEventListener("resize", fitLearningStage);
   void loadLessonData(props.id);
 });
 
+// Fill the visible area below the headers on any screen height instead of guessing their size.
+let stageObserver: ResizeObserver | undefined;
+const scrollParent = (element: HTMLElement) => {
+  for (let node = element.parentElement; node; node = node.parentElement) {
+    if (/auto|scroll/.test(getComputedStyle(node).overflowY)) return node;
+  }
+  return null;
+};
+const fitLearningStage = () => {
+  const page = learningPage.value;
+  const stage = page?.querySelector<HTMLElement>(".learning-stage");
+  // Test DOMs have no layout engine.
+  if (!page || !stage || typeof getComputedStyle !== "function") return;
+  const scroller = scrollParent(page);
+  const pageRect = page.getBoundingClientRect();
+  // Admin pages scroll inside a shell section; learner pages scroll the window.
+  const origin = scroller
+    ? scroller.getBoundingClientRect().top + scroller.clientTop - scroller.scrollTop
+    : -window.scrollY;
+  // Ignore the route enter transition, which briefly shifts the page with a transform.
+  const shift = new DOMMatrix(getComputedStyle(page).transform).m42;
+  const top = stage.getBoundingClientRect().top - pageRect.top + (pageRect.top - shift - origin);
+  const visible = scroller ? scroller.clientHeight : window.innerHeight;
+  page.style.setProperty("--learning-stage-fill", `${Math.max(0, Math.floor(visible - top))}px`);
+};
+watch(learningPage, (page) => {
+  stageObserver?.disconnect();
+  stageObserver = undefined;
+  if (!page || typeof ResizeObserver === "undefined") return;
+  stageObserver = new ResizeObserver(fitLearningStage);
+  // The page grows when the header or update banner appears; the scroller follows the window.
+  stageObserver.observe(page);
+  const scroller = scrollParent(page);
+  if (scroller) stageObserver.observe(scroller);
+  fitLearningStage();
+});
+// The header and update banner render after the lesson loads, which moves the stage down.
+watch([lessonLoading, showChangelogBanner, latestChangelog], () => nextTick(fitLearningStage));
+
 onBeforeUnmount(() => {
+  stageObserver?.disconnect();
   void persistCurrentProgress();
   disposed = true;
   if (retryTimer) clearTimeout(retryTimer);
@@ -627,6 +722,7 @@ onBeforeUnmount(() => {
   document.removeEventListener("visibilitychange", handleVisibilityChange);
   window.removeEventListener("pagehide", flushProgress);
   window.removeEventListener("online", handleOnline);
+  window.removeEventListener("resize", fitLearningStage);
 });
 
 watch(
@@ -1297,7 +1393,7 @@ const deleteComment = async (commentId: number) => {
 .learning-stage {
   display: block;
   background: #17201e;
-  height: clamp(480px, calc(100vh - 193px), 720px);
+  height: max(480px, var(--learning-stage-fill, calc(100vh - 193px)));
   position: relative;
   overflow: hidden;
 }
@@ -2117,7 +2213,7 @@ const deleteComment = async (commentId: number) => {
   .learning-stage,
   .learning-stage.sidebar-hidden {
     display: block;
-    height: clamp(420px, calc(100vh - 185px), 620px);
+    height: max(420px, var(--learning-stage-fill, calc(100vh - 185px)));
   }
   .viewer-area {
     padding: 10px 10px 0;
@@ -2273,7 +2369,7 @@ const deleteComment = async (commentId: number) => {
 
 /* Sidebar resources layout */
 .learning-stage {
-  height: clamp(540px, calc(100vh - 141px), 780px);
+  height: max(540px, var(--learning-stage-fill, calc(100vh - 151px)));
 }
 .lesson-entry {
   position: relative;
@@ -2454,7 +2550,7 @@ const deleteComment = async (commentId: number) => {
 @media (max-width: 900px) {
   .learning-stage,
   .learning-stage.sidebar-hidden {
-    height: clamp(480px, calc(100vh - 133px), 680px);
+    height: max(480px, var(--learning-stage-fill, calc(100vh - 133px)));
   }
 }
 @media (max-width: 600px) {
@@ -2516,7 +2612,7 @@ const deleteComment = async (commentId: number) => {
 }
 @media (max-width: 900px) {
   .learning-stage {
-    height: clamp(420px, calc(100dvh - 185px), 620px);
+    height: max(420px, var(--learning-stage-fill, calc(100dvh - 185px)));
   }
 }
 @media (max-width: 600px) {
@@ -2631,6 +2727,12 @@ const deleteComment = async (commentId: number) => {
   display: block;
   line-height: 1;
 }
+.content-optional-tag {
+  font-size: 0.68rem;
+  font-weight: 500;
+  line-height: 1;
+  opacity: 0.8;
+}
 .lesson-content-switch button:hover {
   background: rgba(255, 255, 255, 0.09);
   color: #fff;
@@ -2643,6 +2745,127 @@ const deleteComment = async (commentId: number) => {
 .lesson-content-switch button:focus-visible {
   outline: 2px solid #8ae2c2;
   outline-offset: 2px;
+}
+.lesson-tools {
+  display: flex;
+  /* Stretch keeps the flashcard button as tall as the content switch at every breakpoint. */
+  align-items: stretch;
+  gap: 0.5rem;
+  min-width: 0;
+}
+/* An action that opens a dialog, so it sits apart from the content switch. */
+.flashcard-shortcut {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 38px;
+  padding: 0 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 7px;
+  background: transparent;
+  color: white;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.flashcard-shortcut:hover {
+  background: #294c40;
+  border-color: var(--line-8ae2c2);
+}
+.flashcard-shortcut:focus-visible {
+  outline: 2px solid #8ae2c2;
+  outline-offset: 2px;
+}
+.flashcard-shortcut strong {
+  min-width: 1.35rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 0.72rem;
+  line-height: 1;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Reminder shown once a lesson is marked complete. */
+.flashcard-nudge {
+  position: fixed;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: min(440px, calc(100vw - 2rem));
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-lg);
+  background: var(--warning-surface);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
+}
+.flashcard-nudge-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--surface-ffffff);
+  color: var(--warning-ink);
+}
+.flashcard-nudge-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.flashcard-nudge-copy strong {
+  color: var(--text-color);
+  font-size: 0.92rem;
+}
+.flashcard-nudge-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+.flashcard-nudge-actions .btn {
+  padding: 0.45rem 0.8rem;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+.flashcard-nudge-enter-active,
+.flashcard-nudge-leave-active {
+  transition:
+    opacity 200ms ease,
+    transform 200ms ease;
+}
+.flashcard-nudge-enter-from,
+.flashcard-nudge-leave-to {
+  opacity: 0;
+  transform: translateY(12px);
+}
+@media (max-width: 600px) {
+  .flashcard-nudge {
+    right: 1rem;
+    bottom: 1rem;
+    flex-wrap: wrap;
+  }
+  .flashcard-nudge-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  /* Keep the header row short: icon and count are enough on phones. */
+  .flashcard-shortcut > span {
+    display: none;
+  }
 }
 .learning-header .header-actions {
   gap: 0;
@@ -2725,7 +2948,7 @@ const deleteComment = async (commentId: number) => {
     padding: 0;
     margin: 0;
   }
-  .learning-header .lesson-content-switch {
+  .learning-header .lesson-tools {
     grid-column: 1 / 3;
     grid-row: 2;
     justify-self: start;
@@ -2750,7 +2973,8 @@ const deleteComment = async (commentId: number) => {
   .header-completion-content {
     padding-left: 0;
   }
-  .lesson-content-switch button {
+  .lesson-content-switch button,
+  .flashcard-shortcut {
     min-height: 34px;
     padding: 0 0.5rem;
     gap: 0.35rem;
@@ -2761,12 +2985,58 @@ const deleteComment = async (commentId: number) => {
     gap: 0.3rem;
   }
 }
+/* Phones: progress becomes the title's subtitle, so the header stays at two visual rows. */
+@media (max-width: 600px) {
+  .learning-header {
+    row-gap: 0;
+  }
+  .learning-header .back-button,
+  .learning-header .mobile-content-button {
+    grid-row: 1 / 3;
+  }
+  .learning-header .header-copy {
+    align-self: end;
+  }
+  .learning-header .header-completion {
+    grid-column: 2 / 4;
+    grid-row: 2;
+    align-self: start;
+    justify-self: start;
+    margin-top: 2px;
+  }
+  .learning-header .progress-summary {
+    gap: 0.25rem;
+    font-size: 0.7rem;
+    font-weight: 500;
+  }
+  .learning-header .progress-summary svg {
+    width: 13px;
+    height: 13px;
+  }
+  .learning-header .lesson-tools {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    width: 100%;
+    margin-top: 0.6rem;
+  }
+  .learning-header .lesson-content-switch {
+    flex: 1;
+    min-width: 0;
+  }
+  .learning-header .lesson-content-switch button {
+    flex: 1;
+  }
+}
 @media (max-width: 360px) {
   .lesson-content-switch {
     gap: 2px;
     padding: 3px;
   }
-  .lesson-content-switch button {
+  .lesson-tools {
+    gap: 0.25rem;
+  }
+  .lesson-content-switch button,
+  .flashcard-shortcut {
     padding: 0 0.35rem;
     font-size: 0.75rem;
   }
@@ -2782,6 +3052,8 @@ const deleteComment = async (commentId: number) => {
   .learning-page,
   .course-sidebar,
   .lesson-content-switch button,
+  .flashcard-nudge-enter-active,
+  .flashcard-nudge-leave-active,
   .header-completion,
   .header-completion.visible {
     transition: none;

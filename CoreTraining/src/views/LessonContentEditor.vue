@@ -40,7 +40,7 @@
           />
         </div>
 
-        <LessonContentSelection v-model="selectedContentTypes" v-model:documents="lessonForm.documents" :read-only="readOnly || loading" />
+        <LessonContentSelection v-model="selectedContentTypes" v-model:documents="lessonForm.documents" v-model:requirements="contentRequirements" :read-only="readOnly || loading" />
         <div v-if="selectedContentTypes.includes('VIDEO')" class="form-group video-source-group">
           <label id="video-source-label">Nguồn video bài học <span class="required-mark" aria-hidden="true">*</span></label>
           <div
@@ -329,7 +329,7 @@
           </small>
         </div>
         <footer v-if="!readOnly" class="modal-buttons lesson-modal-footer">
-        <button type="button" class="btn btn-secondary" @click="emit('cancel')">
+        <button type="button" class="btn btn-secondary" :disabled="loading" @click="emit('cancel')">
           Hủy
         </button>
         <button type="submit" class="btn btn-primary" :disabled="loading">
@@ -338,19 +338,16 @@
       </footer>
     </form>
 
-    <!-- FULLSCREEN LOADING OVERLAY KHI ĐANG LƯU BÀI HỌC HOẶC TẢI LÊN TÁC VỤ LÂU -->
+    <!-- CHỈ HIỆN KHI TẢI TỆP LÊN (TÁC VỤ LÂU); LƯU THÔNG THƯỜNG CHỈ DÙNG TOAST -->
     <Teleport to="body">
-      <div v-if="loading" class="fullscreen-loading-overlay">
+      <div v-if="videoUploadProgress !== null || uploadingDocs" class="fullscreen-loading-overlay">
         <div class="loading-modal-card">
           <Loader2 :size="42" class="spin-icon text-primary loading-spinner" />
           <h4 v-if="videoUploadProgress !== null">
             Đang tải lên video ({{ videoUploadProgress }}%)...
           </h4>
-          <h4 v-else-if="uploadingDocs">
-            Đang tải lên và xử lý tài liệu đính kèm...
-          </h4>
           <h4 v-else>
-            Đang lưu trữ nội dung bài học...
+            Đang tải lên và xử lý tài liệu đính kèm...
           </h4>
 
           <div v-if="videoUploadProgress !== null" class="upload-progress-track">
@@ -371,7 +368,7 @@
 <script setup lang="ts">
 import '../assets/styles/lesson-authoring.css';
 import LessonContentSelection from '../components/lesson/LessonContentSelection.vue';
-import { lessonContentTypes, selectedLessonContent, validateSelectedLessonContent, type LessonContentType } from '../utils/lessonContent';
+import { changedLessonRequirements, lessonContentLabels, lessonContentRequirements, lessonContentTypes, lessonRequirementFields, selectedLessonContent, validateSelectedLessonContent, type LessonContentType } from '../utils/lessonContent';
 import { scrollWithin } from "../utils/scrollWithin";
 import { ref, computed, nextTick, watch, defineAsyncComponent } from "vue";
 import { Upload, Link2, Plus, FileText, X, Trash2, CheckCheck, ShieldAlert, Loader2 } from "lucide-vue-next";
@@ -425,7 +422,9 @@ const lessonForm = ref({
   })),
 });
 const selectedContentTypes = ref<LessonContentType[]>(lessonContentTypes(props.lesson));
+const contentRequirements = ref(lessonContentRequirements(props.lesson));
 watch(selectedContentTypes, () => { emit("dirty", true); autoUpdateChangeSummary(); }, { deep: true });
+watch(contentRequirements, () => { emit("dirty", true); autoUpdateChangeSummary(); });
 watch(lessonForm, () => { emit("dirty", true); autoUpdateChangeSummary(); }, { deep: true });
 watch(() => lessonForm.value.title, (t) => emit("title-change", t));
 watch(
@@ -584,6 +583,12 @@ function computeDetectedChanges(): string {
     const activeNames = currentTypes.map((t) => typeLabels[t] || t).join(", ");
     diffs.push(`- Điều chỉnh định dạng bài học (${activeNames || "Chưa chọn"})`);
   }
+  const requirementChanges = changedLessonRequirements(original, contentRequirements.value, selectedContentTypes.value);
+  if (requirementChanges.length) {
+    const changes = requirementChanges.map((t) =>
+      `${lessonContentLabels[t]}: ${contentRequirements.value[t] ? "bắt buộc" : "không bắt buộc"}`).join(", ");
+    diffs.push(`- Điều chỉnh nội dung bắt buộc (${changes})`);
+  }
 
   // 4. Video bài giảng
   if (selectedContentTypes.value.includes("VIDEO")) {
@@ -657,6 +662,7 @@ function hasAnyRealChanges(): boolean {
   const origTypes = lessonContentTypes(original).sort();
   const currentTypes = [...selectedContentTypes.value].sort();
   if (JSON.stringify(origTypes) !== JSON.stringify(currentTypes)) return true;
+  if (changedLessonRequirements(original, contentRequirements.value, selectedContentTypes.value).length) return true;
   if (lessonForm.value.videoFile) return true;
   if ((lessonForm.value.videoUrl || "").trim() !== (original.videoUrl || "").trim()) return true;
   const origDocs = original.documents || [];
@@ -735,12 +741,14 @@ const saveLesson = async () => {
         } satisfies LessonDocument;
       }),
     );
+    uploadingDocs.value = false;
 
     const payload = {
       ...activeContent,
       videoUrl,
       documents,
       procedureSteps: lessonForm.value.procedureSteps,
+      ...lessonRequirementFields(contentRequirements.value, selectedContentTypes.value),
     };
     delete (payload as Partial<typeof lessonForm.value>).videoFile;
 
@@ -773,25 +781,27 @@ const saveLesson = async () => {
       })),
     };
     await nextTick();
+    let notifiedCount = 0;
         if (lessonModal.value.isEdit && isPreviouslyComposed.value && (notifyLearners.value || changeSummary.value.trim() || hasAnyRealChanges())) {
       try {
         const notifyRes = await axiosClient.post(`/api/admin/lessons/${lessonForm.value.id}/changelog-notify`, {
           changeSummary: changeSummary.value.trim() || computeDetectedChanges(),
           notifyLearners: notifyLearners.value,
         });
-        if (notifyLearners.value && (notifyRes.data?.notifiedCount || 0) > 0) {
-          showToast(`Đã gửi thông báo cập nhật kiến thức tới ${notifyRes.data.notifiedCount} cán bộ đã hoàn thành bài!`, "success");
-        }
+        if (notifyLearners.value) notifiedCount = notifyRes.data?.notifiedCount || 0;
       } catch (notifyErr) {
         console.warn("Could not send lesson change notification:", notifyErr);
       }
     }
     emit("saved");
     emit("dirty", false);
+    const savedMessage = lessonModal.value.isEdit
+      ? "Cập nhật bài học thành công."
+      : "Tạo bài học thành công.";
     showToast(
-      lessonModal.value.isEdit
-        ? "Cập nhật bài học thành công."
-        : "Tạo bài học thành công.",
+      notifiedCount > 0
+        ? `${savedMessage} Đã gửi thông báo cập nhật kiến thức tới ${notifiedCount} cán bộ đã hoàn thành bài.`
+        : savedMessage,
     );
     await courseStore.fetchCourses(true);
   } catch (err) {
@@ -808,6 +818,7 @@ const saveLesson = async () => {
     console.error(err);
   } finally {
     videoUploadProgress.value = null;
+    uploadingDocs.value = false;
     loading.value = false;
   }
 };

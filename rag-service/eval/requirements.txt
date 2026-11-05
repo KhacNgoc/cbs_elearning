@@ -1,0 +1,8 @@
+# Extra packages for the retrieval eval only. Not part of the service image.
+-r ../requirements.txt
+torch
+sentence-transformers>=3,<6
+# scipy 1.15 fails to load on macOS 27 (dyld rejects its __thread_bss section).
+scipy==1.13.1
+sentencepiece
+protobuf

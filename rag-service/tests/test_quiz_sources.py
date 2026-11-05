@@ -1,12 +1,16 @@
+import random
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from pydantic import ValidationError
 from qdrant_client import QdrantClient, models
+from fastapi import HTTPException
+from app import infrastructure
 from app.quiz_scope import quiz_source_filter
-from app.schemas import QuizGenerationRequest
-from app.services.quiz import generate_quiz
+from app.schemas import QuizGenerationRequest, QuizGenerationSource
+from app.services.quiz import candidate_slots, generate_quiz, retrieve_grounded_sources
 from app.services.documents import document_outline
+from tests.quiz_fakes import FakeQuizModel
 
 
 class SourceBoundaryTests(unittest.TestCase):
@@ -74,10 +78,10 @@ class SourceFlowTests(unittest.IsolatedAsyncioTestCase):
     async def test_lesson_scope_verification_runs_even_when_course_verification_is_disabled(self):
         point = SimpleNamespace(score=1.0, payload={"document_id": "D1", "course_id": "C1",
             "page": 2, "section": "Giải ngân", "full_text": "Kiểm tra thông tin khách hàng trước khi giải ngân khoản vay."})
-        model = AsyncMock(side_effect=[
-            '{"q":"Trước giải ngân cần kiểm tra thông tin nào?","o":["Khách hàng","Lịch nghỉ","Văn phòng","Trang phục"],"a":0}',
-            '{"reason":"Nội dung không phù hợp nguồn bài học.","correct_answers":[],"well_formed":false}',
-        ])
+        model = FakeQuizModel(
+            ['{"q":"Trước giải ngân cần kiểm tra thông tin nào?","o":["Khách hàng","Lịch nghỉ","Văn phòng","Trang phục"],"a":0}'],
+            ['{"reason":"Nội dung không phù hợp nguồn bài học.","correct_answers":[],"well_formed":false}'],
+        )
         with patch("app.infrastructure.ensure_collection", new=AsyncMock()), \
              patch("app.infrastructure.embeddings", new=AsyncMock(return_value=[[1., 0.]] * 4)), \
              patch("app.infrastructure.qdrant.query_points", new=AsyncMock(return_value=SimpleNamespace(points=[point]))), \
@@ -87,11 +91,39 @@ class SourceFlowTests(unittest.IsolatedAsyncioTestCase):
                 single_choice_count=1, sources=[{"document_id": "D1", "page_from": 2, "page_to": 2}])
             result = await generate_quiz(request)
             self.assertEqual([], result.questions)
-            self.assertEqual(2, model.await_count)
-            verification = model.await_args_list[1].args[1][1]["content"]
+            self.assertEqual(1, len(model.review_calls))
+            verification = model.review_calls[0]["prompt"]
             self.assertIn("trực tiếp phù hợp với bài học", verification)
             self.assertIn("Giải ngân", verification)
             self.assertIn("Phạm vi nguồn được giữ nguyên", result.warnings[-1])
+
+    async def run_verified_quiz(self, verifications):
+        point = SimpleNamespace(score=1.0, payload={"document_id": "D1", "course_id": "C1",
+            "page": 2, "section": "Giải ngân",
+            "full_text": "Kiểm tra thông tin khách hàng trước khi giải ngân. Đối chiếu chữ ký với hồ sơ trước khi giải ngân."})
+        model = FakeQuizModel([
+            '{"q":"Trước giải ngân cần kiểm tra thông tin nào?","o":["Khách hàng","Lịch nghỉ","Văn phòng","Trang phục"],"a":0}',
+            '{"q":"Chữ ký cần đối chiếu với tài liệu nào?","o":["Hồ sơ","Thực đơn","Báo cáo thời tiết","Lịch họp"],"a":0}',
+        ], verifications)
+        with patch("app.infrastructure.ensure_collection", new=AsyncMock()), \
+             patch("app.infrastructure.embeddings", new=AsyncMock(return_value=[[1., 0.]] * 4)), \
+             patch("app.infrastructure.qdrant.query_points", new=AsyncMock(return_value=SimpleNamespace(points=[point]))), \
+             patch("app.infrastructure.ollama_chat", new=model), \
+             patch("app.config.QUIZ_LLM_VERIFICATION_ENABLED", True):
+            request = QuizGenerationRequest(course_id="C1", course_name="Cho vay", single_choice_count=2)
+            return await generate_quiz(request)
+
+    async def test_truncated_verification_drops_only_that_question(self):
+        result = await self.run_verified_quiz([
+            '{"reason":"Đáp án đúng theo nguồn.","correct_answers":[0],"well_formed":true}',
+            infrastructure.ModelOutputTruncated("length"),
+        ])
+        self.assertEqual(1, len(result.questions))
+
+    async def test_verification_failing_for_every_question_is_unavailable(self):
+        with self.assertRaises(HTTPException) as raised:
+            await self.run_verified_quiz([infrastructure.ModelOutputTruncated("length")] * 2)
+        self.assertEqual(503, raised.exception.status_code)
 
     async def test_no_results_reports_insufficient_sources_without_broadening(self):
         query = AsyncMock(return_value=SimpleNamespace(points=[]))
@@ -123,6 +155,74 @@ class SourceFlowTests(unittest.IsolatedAsyncioTestCase):
             must = scroll.await_args_list[0].kwargs["scroll_filter"].must
             self.assertEqual(["course_id", "document_id"], [condition.key for condition in must])
             embed.assert_not_called()
+
+
+
+def chunk(document, page, score, text=None):
+    return SimpleNamespace(score=score, payload={
+        "document_id": document, "page": page, "section": f"Mục {page}",
+        "full_text": text or f"Nội dung {document} trang {page} về quy trình giải ngân khoản vay.",
+    })
+
+
+class BalancedRetrievalTests(unittest.IsolatedAsyncioTestCase):
+    async def retrieve(self, points_by_document, requested, sources):
+        async def query(collection_name, query, query_filter, limit):
+            documents = {
+                condition.match.value
+                for alternative in query_filter.must[1].should
+                for condition in alternative.must if condition.key == "document_id"
+            }
+            points = [point for document in sorted(documents) for point in points_by_document.get(document, [])]
+            return SimpleNamespace(points=sorted(points, key=lambda point: -point.score)[:limit])
+
+        request = QuizGenerationRequest(course_id="C1", course_name="Cho vay", lesson_id="L1",
+                                        lesson_name="Giải ngân", sources=sources)
+        query_mock = AsyncMock(side_effect=query)
+        with patch("app.infrastructure.ensure_collection", new=AsyncMock()), \
+             patch("app.infrastructure.embeddings", new=AsyncMock(return_value=[[1., 0.]] * 4)), \
+             patch("app.infrastructure.qdrant.query_points", new=query_mock):
+            found, _ = await retrieve_grounded_sources(request, requested, random.Random(7))
+        return found, query_mock
+
+    async def test_every_selected_document_contributes_even_when_one_ranks_higher(self):
+        strong = [chunk("D1", page, 0.95 - page / 100) for page in range(1, 21)]
+        weak = [chunk("D2", page, 0.6) for page in range(1, 6)]
+        found, query = await self.retrieve({"D1": strong, "D2": weak}, 10,
+                                           [{"document_id": "D1"}, {"document_id": "D2"}])
+        self.assertEqual(15, len(found))
+        self.assertEqual(5, sum(source.documentId == "D2" for source in found))
+        # Four shared searches plus one per document.
+        self.assertEqual(6, query.await_count)
+
+    async def test_retrieval_grows_with_requested_count(self):
+        points = {"D1": [chunk("D1", page, 0.9) for page in range(1, 41)]}
+        few, _ = await self.retrieve(points, 2, [{"document_id": "D1"}])
+        many, _ = await self.retrieve(points, 20, [{"document_id": "D1"}])
+        self.assertEqual(5, len(few))
+        self.assertEqual(30, len(many))
+
+    async def test_repeated_drafts_sample_different_chunks(self):
+        points = {"D1": [chunk("D1", page, 0.9) for page in range(1, 21)]}
+        request = QuizGenerationRequest(course_id="C1", course_name="Cho vay")
+        picks = set()
+        with patch("app.infrastructure.ensure_collection", new=AsyncMock()), \
+             patch("app.infrastructure.embeddings", new=AsyncMock(return_value=[[1., 0.]] * 4)), \
+             patch("app.infrastructure.qdrant.query_points",
+                   new=AsyncMock(return_value=SimpleNamespace(points=points["D1"]))):
+            for seed in range(5):
+                found, _ = await retrieve_grounded_sources(request, 4, random.Random(seed))
+                picks.add(tuple(source.page for source in found))
+        self.assertGreater(len(picks), 1)
+
+    def test_candidate_slots_start_at_different_sentences_and_alternate_sources(self):
+        text = " ".join(f"Câu thứ {n} mô tả một bước kiểm tra hồ sơ trước khi giải ngân." for n in range(3))
+        sources = [QuizGenerationSource(id=f"SOURCE_{n}", documentId="D1", documentName="A", page=n, section="S")
+                   for n in (1, 2)]
+        slots = candidate_slots(sources, {"SOURCE_1": text, "SOURCE_2": text}, random.Random(1))
+        self.assertEqual(6, len(slots))
+        self.assertEqual(["SOURCE_1", "SOURCE_2"] * 3, [source.id for source, _ in slots])
+        self.assertEqual({0, 1, 2}, {start for source, start in slots if source.id == "SOURCE_1"})
 
 
 if __name__ == "__main__":

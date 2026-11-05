@@ -1,7 +1,7 @@
 import { axiosClient } from './axiosClient';
 import type { ReportingRecord } from '../utils/reportingMetrics';
 export interface ReportRow extends ReportingRecord {
-  id:string; name:string; unit:string; group:string; courseId:string; courseName:string;
+  id:string; name:string; unit:string; courseId:string; courseName:string;
   program:string; domain:string; completedAt:string|null; date:string;
   status:string; score:number|null; passed:boolean;
   attemptCount?:number;
@@ -16,7 +16,7 @@ export interface ReportMetrics {
   overduePeople:number;peopleWithDeadline:number;mandatory:number;mandatoryComplete:number;
 }
 export interface ReportFact {
-  learnerId:number;name:string;unit:string;groupName:string;courseId:string;courseName:string;program:string;domain:string;
+  learnerId:number;name:string;unit:string;courseId:string;courseName:string;program:string;domain:string;
   mandatory:number;dueDate:string|null;completedAt:string|null;completed:number;status:string;attemptCount:number;
   average:number|null;everPassed:number;requiredPassed:number;passingScore:number;progress:number;
 }
@@ -32,3 +32,13 @@ export const readReportAttempts = async(learnerId:string,courseId:string,before?
   (await axiosClient.get<{items:ReportingRecord['attempts'];nextCursor:string;hasMore:boolean}>('/api/admin/reports/training/attempts',{params:{learnerId,courseId,before,size:20}})).data;
 export const exportTrainingReport = async(params:ReportParams) =>
   (await axiosClient.get<Blob>('/api/admin/reports/training/export',{params,responseType:'blob'})).data;
+export interface ReportAttemptQuestion {
+  id:number; text:string; options:string[]; selectedAnswers:number[]; correctAnswers:number[];
+  answered:boolean; correct:boolean;
+}
+export interface ReportAttemptAnalysis {
+  attemptId:number; available:boolean; source:'SNAPSHOT'|'CURRENT'|null; unavailableReason:'NO_ANSWERS'|'QUIZ_CHANGED'|null;
+  correct:number; incorrect:number; unanswered:number; questions:ReportAttemptQuestion[];
+}
+export const readReportAttemptAnalysis = async(attemptId:number) =>
+  (await axiosClient.get<ReportAttemptAnalysis>(`/api/admin/reports/training/attempts/${attemptId}/analysis`)).data;

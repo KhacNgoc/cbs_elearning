@@ -34,16 +34,16 @@ Frontend:
 
 Backend:
 
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/entity/Comment.java`
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/dto/CommentDto.java`
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/dto/CommentReplyPageDto.java` (new)
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/dto/CourseMapper.java`
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/repository/CommentRepository.java`
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/service/CourseService.java`
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/service/impl/CourseServiceImpl.java`
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/controller/CourseController.java`
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/lesson/entity/Comment.java`
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/lesson/dto/CommentDto.java`
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/lesson/dto/CommentReplyPageDto.java` (new)
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/mapper/CourseMapper.java`
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/lesson/repository/CommentRepository.java`
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/course/service/CourseService.java`
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/course/service/impl/CourseServiceImpl.java`
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/course/controller/CourseController.java`
 - `CoreTrainingAPI/src/main/resources/migrations/20261027_comment_reply_pagination.sql` (new, optional index)
-- `CoreTrainingAPI/src/test/java/com/bidv/coretraining/service/LearningQueryAuditTest.java`
+- `CoreTrainingAPI/src/test/java/com/bidv/coretraining/learner/service/LearningQueryAuditTest.java`
 - `CoreTrainingAPI/src/test/java/com/bidv/coretraining/security/AccessSecurityIntegrationTest.java`
 
 Plan: `docs/superpowers/plans/2026-10-27-comment-reply-pagination.md`.

@@ -117,19 +117,23 @@ const chartOptions = computed<ChartOptions<"radar">>(() => ({
   list-style: none;
   padding: 0;
 }
+/* Fixed value columns keep every row aligned, whatever the label length. */
 .competency-list li {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 6.5rem 6.5rem;
+  align-items: baseline;
   gap: 0.5rem;
-  justify-content: space-between;
   padding: 0.7rem 0;
   border-bottom: 1px solid var(--border-color);
   font-size: 0.8rem;
 }
 .competency-list strong {
   color: var(--primary-ink);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 .competency-list small {
   color: var(--text-muted);
+  text-align: right;
 }
 </style>

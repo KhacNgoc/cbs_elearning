@@ -26,7 +26,6 @@ export const reportFixture = people.flatMap((name, i) => courseFixtures.filter((
     : candidateDue && candidateDue < date ? '2026-10-12' : candidateDue;
   return { id: `${i}-${j}`, learnerId: `HV${String(i + 1).padStart(3, '0')}`, ...course, name,
     unit: ['Hội sở', 'Chi nhánh Hà Nội', 'Chi nhánh TP. HCM'][i % 3]!,
-    group: ['Khách hàng cá nhân', 'Khách hàng doanh nghiệp', 'Vận hành', 'Nhóm cán bộ mới'][i % 4]!,
     date, progress, score, attempts, passed, completedAt, dueDate, mandatory: ['Tín dụng', 'Vận hành'].includes(course.domain),
     status: progress === 100 ? 'Hoàn thành' : progress === 0 && !attempts.length ? 'Chưa bắt đầu' : 'Đang học',
   };

@@ -1,6 +1,9 @@
 package com.bidv.coretraining.security;
 
-import com.bidv.coretraining.entity.*;
+import com.bidv.coretraining.course.entity.Course;
+import com.bidv.coretraining.training.entity.TrainingProgram;
+import com.bidv.coretraining.user.entity.OrganizationUnit;
+import com.bidv.coretraining.user.entity.User;
 import org.springframework.security.access.AccessDeniedException;
 import java.util.*;
 
@@ -92,7 +95,7 @@ public final class AccessPolicy {
                 }
             // Compatibility aliases for existing non-route gates; route and resource checks
             // remain action-specific.
-            Map<String, String> aliases = Map.of("users", "USER_MANAGE", "groups", "GROUP_MANAGE", "units",
+            Map<String, String> aliases = Map.of("users", "USER_MANAGE", "units",
                     "ORG_MANAGE", "catalog", "CATALOG_MANAGE", "courses", "COURSE_MANAGE", "enrollments",
                     "ENROLLMENT_MANAGE", "permissions", "ROLE_ASSIGN");
             aliases.forEach((page, alias) -> {
@@ -105,7 +108,7 @@ public final class AccessPolicy {
             if (result.stream().anyMatch(p -> p.startsWith("courses:") || p.startsWith("catalog:")))
                 result.addAll(Set.of("CATALOG_MANAGE", "COURSE_MANAGE"));
             if (system(u))
-                result.addAll(Set.of("LEARN", "CONTENT_EDIT", "DISCUSSION_REPLY", "USER_MANAGE", "GROUP_MANAGE",
+                result.addAll(Set.of("LEARN", "CONTENT_EDIT", "DISCUSSION_REPLY", "USER_MANAGE",
                         "COURSE_MANAGE", "ENROLLMENT_MANAGE", "ROLE_ASSIGN", "REPORT_VIEW", "ORG_MANAGE",
                         "CATALOG_MANAGE"));
             return result;
@@ -116,14 +119,14 @@ public final class AccessPolicy {
         if (u.hasRole("ROLE_INSTRUCTOR"))
             p.addAll(Set.of("CONTENT_EDIT", "DISCUSSION_REPLY"));
         if (u.hasRole("ROLE_UNIT_ADMIN"))
-            p.addAll(Set.of("USER_MANAGE", "GROUP_MANAGE", "COURSE_MANAGE", "CONTENT_EDIT", "ENROLLMENT_MANAGE",
+            p.addAll(Set.of("USER_MANAGE", "COURSE_MANAGE", "CONTENT_EDIT", "ENROLLMENT_MANAGE",
                     "ROLE_ASSIGN", "REPORT_VIEW"));
         if (u.hasRole("ROLE_REPORT_VIEWER"))
             p.add("REPORT_VIEW");
         if (system(u))
-            p.addAll(Set.of("LEARN", "CONTENT_EDIT", "DISCUSSION_REPLY", "USER_MANAGE", "GROUP_MANAGE", "COURSE_MANAGE",
+            p.addAll(Set.of("LEARN", "CONTENT_EDIT", "DISCUSSION_REPLY", "USER_MANAGE", "COURSE_MANAGE",
                     "ENROLLMENT_MANAGE", "ROLE_ASSIGN", "REPORT_VIEW", "ORG_MANAGE", "CATALOG_MANAGE"));
-        Map<String, String> aliases = Map.of("users", "USER_MANAGE", "groups", "GROUP_MANAGE", "units", "ORG_MANAGE",
+        Map<String, String> aliases = Map.of("users", "USER_MANAGE", "units", "ORG_MANAGE",
                 "catalog", "CATALOG_MANAGE", "courses", "CONTENT_EDIT", "enrollments", "ENROLLMENT_MANAGE",
                 "permissions", "ROLE_ASSIGN", "roles", "ROLE_ASSIGN", "exams", "CONTENT_EDIT");
         aliases.forEach((page, old) -> {
@@ -136,7 +139,7 @@ public final class AccessPolicy {
                 p.add("documents:" + a);
         if (p.contains("USER_MANAGE") || p.contains("REPORT_VIEW"))
             p.add("overview:read");
-        if (p.contains("GROUP_MANAGE"))
+        if (u.hasRole("ROLE_UNIT_ADMIN"))
             p.add("units:read");
         return p;
     }

@@ -106,6 +106,25 @@ async def embeddings(
     return vectors
 
 
+_course_index_ready = False
+
+
+async def ensure_course_index() -> None:
+    """Index course_id so cross-course MatchAny filters stay fast."""
+    global _course_index_ready
+    if _course_index_ready:
+        return
+    try:
+        await qdrant.create_payload_index(
+            config.COLLECTION,
+            field_name="course_id",
+            field_schema=models.PayloadSchemaType.KEYWORD,
+        )
+        _course_index_ready = True
+    except Exception as error:  # Filtering still works without the index.
+        logger.warning("course_id payload index unavailable error_type=%s", type(error).__name__)
+
+
 async def ensure_collection(probe_timeout: float = 120) -> None:
     if await qdrant.collection_exists(config.COLLECTION):
         return
@@ -113,7 +132,7 @@ async def ensure_collection(probe_timeout: float = 120) -> None:
         if await qdrant.collection_exists(config.COLLECTION):
             return
         vector = (await embeddings(
-            ["dimension probe"], "search_document: ", probe_timeout
+            ["dimension probe"], config.EMBEDDING_DOCUMENT_PREFIX, probe_timeout
         ))[0]
         await qdrant.create_collection(
             config.COLLECTION,

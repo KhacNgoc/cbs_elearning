@@ -1,7 +1,8 @@
 package com.bidv.coretraining.security;
-import com.bidv.coretraining.service.impl.*;
-import com.bidv.coretraining.entity.*;
-import com.bidv.coretraining.service.PermissionCache;
+import com.bidv.coretraining.access.entity.AccessRole;
+import com.bidv.coretraining.access.service.PermissionCache;
+import com.bidv.coretraining.access.service.impl.PermissionCacheImpl;
+import com.bidv.coretraining.user.entity.User;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.support.*;
 import java.util.*;

@@ -5,14 +5,23 @@
       <summary aria-describedby="lesson-content-types-help">
         <span class="content-selection-copy">
           <span class="content-selection-action">Chọn nội dung bài học</span>
-          <span class="content-selection-value">{{ selected.length ? selected.map(type => labels[type]).join(', ') : 'Chưa chọn nội dung' }}</span>
+          <span class="content-selection-value">{{ selected.length ? selected.map(type => requirements[type] ? labels[type] : `${labels[type]} (không bắt buộc)`).join(', ') : 'Chưa chọn nội dung' }}</span>
         </span>
       </summary>
-      <label v-for="type in types" :key="type" class="content-option">
-        <input v-model="selected" type="checkbox" :value="type" :disabled="readOnly" /> {{ labels[type] }}
-      </label>
+      <div v-for="type in types" :key="type" class="content-option">
+        <label class="content-option-choice">
+          <input v-model="selected" type="checkbox" :value="type" :disabled="readOnly" /> {{ labels[type] }}
+        </label>
+        <label v-if="selected.includes(type)" class="content-option-required">
+          <input type="checkbox" :data-required-for="type" :checked="requirements[type]" :disabled="readOnly" @change="setRequired(type, $event)" />
+          Bắt buộc học hết<span class="visually-hidden"> {{ labels[type] }}</span>
+        </label>
+      </div>
     </details>
-    <small id="lesson-content-types-help" class="content-selection-help">Nhấn để mở danh sách. Có thể chọn nhiều mục.</small>
+    <small id="lesson-content-types-help" class="content-selection-help">Nhấn để mở danh sách. Có thể chọn nhiều mục. Nội dung không bắt buộc vẫn hiển thị cho học viên nhưng không tính vào điều kiện hoàn thành bài.</small>
+    <p v-if="selected.length && !selected.some(type => requirements[type])" class="content-selection-note" role="status">
+      Chưa có nội dung bắt buộc: học viên hoàn thành bài khi đạt bài kiểm tra bắt buộc; nếu bài không có kiểm tra bắt buộc, học viên tự bấm “Đánh dấu hoàn thành”.
+    </p>
     <section v-if="selected.includes('SLIDE')" class="slide-editor" aria-label="Slide PowerPoint">
       <div class="slide-heading">
         <h2>Slide PowerPoint <span class="required-mark" aria-hidden="true">*</span></h2>
@@ -47,14 +56,14 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue';
 import type { LessonDocument } from '../../types';
-import type { LessonContentType } from '../../utils/lessonContent';
+import { lessonContentLabels as labels, type LessonContentRequirements, type LessonContentType } from '../../utils/lessonContent';
 import { showToast } from '../../utils/toast';
 type DocumentForm = LessonDocument & { file?: File };
 const selected = defineModel<LessonContentType[]>({ required: true });
 const documents = defineModel<DocumentForm[]>('documents', { required: true });
+const requirements = defineModel<LessonContentRequirements>('requirements', { default: () => ({ TEXT: true, VIDEO: true, SLIDE: true }) });
 const props = defineProps<{ readOnly?: boolean }>();
 const types: LessonContentType[] = ['TEXT', 'VIDEO', 'SLIDE'];
-const labels = { TEXT: 'Văn bản', VIDEO: 'Video', SLIDE: 'Slide PowerPoint' };
 const slides = computed(() => documents.value.map((document, index) => ({ document, index })).filter(({ document }) => document.purpose === 'SLIDE'));
 
 // Open one upload card on selection, preserving hidden unsaved values. Legacy
@@ -63,6 +72,9 @@ watch([() => selected.value.includes('SLIDE'), () => slides.value.length, () => 
   if (selected.value.includes('SLIDE') && !props.readOnly && !slides.value.length)
     documents.value.push({ name: '', fileUrl: '', documentType: 'POWERPOINT', purpose: 'SLIDE' });
 }, { immediate: true });
+function setRequired(type: LessonContentType, event: Event) {
+  requirements.value = { ...requirements.value, [type]: (event.target as HTMLInputElement).checked };
+}
 function chooseFile(event: Event, document: DocumentForm) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
@@ -107,7 +119,11 @@ details[open] > summary { border-bottom: 1px solid var(--border-color); }
 .content-selection-action { color: var(--text-main); font-weight: 600; }
 .content-selection-value { color: var(--text-main); overflow-wrap: anywhere; }
 .content-selection-help { display: block; margin-top: .35rem; color: var(--text-muted); font-size: var(--lesson-help-font-size, .75rem); line-height: 1.6; }
-.content-option { display: flex; gap: .5rem; padding: .6rem; }
+.content-option { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1rem; min-height: 44px; padding: .6rem; }
+.content-option-choice, .content-option-required { display: flex; align-items: center; gap: .5rem; margin: 0; }
+.content-option-required { color: var(--text-muted); font-size: .85rem; }
+.content-selection-note { margin: .5rem 0 0; color: var(--text-main); font-size: .8rem; line-height: 1.6; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .slide-editor { margin-top: 1.25rem; }
 .slide-heading h2 { margin: 0 0 .2rem; font-size: 1rem; color: var(--text-main); }
 .slide-heading p, .slide-help { margin: 0; color: var(--text-muted); font-size: .8rem; line-height: 1.6; }

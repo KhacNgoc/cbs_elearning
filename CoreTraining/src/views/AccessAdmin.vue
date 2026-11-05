@@ -85,7 +85,7 @@
             <thead>
               <tr>
                 <th>Người dùng</th>
-                <th>Đơn vị / nhóm</th>
+                <th>Đơn vị</th>
                 <th>Vai trò</th>
                 <th>
                   {{ section === "users" ? "Trạng thái" : "Phạm vi quản lý" }}
@@ -103,8 +103,7 @@
                   >
                 </td>
                 <td>
-                  {{ unitName(u.unitId)
-                  }}<small v-if="u.groupNames">{{ u.groupNames }}</small>
+                  {{ unitName(u.unitId) }}
                 </td>
                 <td>
                   {{
@@ -238,103 +237,6 @@
           tên để mở hoặc thu gọn từng cấp.
         </p>
       </section>
-      <section v-if="section === 'groups'" class="admin-data-section">
-        <div class="admin-section-heading">
-          <h2>Danh sách nhóm học viên</h2>
-          <button
-            v-if="user.can('groups', 'create')"
-            class="btn btn-primary"
-            :disabled="busy"
-            @click="editGroup()"
-          >
-            <Plus :size="16" /> Thêm nhóm
-          </button>
-        </div>
-        <div class="admin-table-toolbar">
-          <div class="admin-search-box">
-            <Search :size="18" /><input
-              v-model="query"
-              type="search"
-              placeholder="Tìm mã hoặc tên nhóm…"
-              aria-label="Tìm nhóm"
-            />
-          </div>
-          <select v-model="unitFilter" aria-label="Lọc đơn vị của nhóm">
-            <option value="">Tất cả đơn vị</option>
-            <option v-for="u in units" :key="u.id" :value="u.id">
-              {{ u.name }}
-            </option>
-          </select>
-        </div>
-        <div class="admin-table-scroll">
-          <table class="admin-data-table">
-            <colgroup>
-              <col style="width: 25%" />
-              <col style="width: 20%" />
-              <col style="width: 15%" />
-              <col style="width: 15%" />
-              <col style="width: 25%" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th>Nhóm học viên</th>
-                <th>Đơn vị</th>
-                <th>Khóa bắt buộc</th>
-                <th>Thành viên</th>
-                <th>Thao tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="g in paginatedGroups" :key="g.id">
-                <td>
-                  <strong>{{ g.name }}</strong
-                  ><small>{{ g.id }}</small>
-                </td>
-                <td>{{ unitName(g.unitId) }}</td>
-                <td>{{ g.mandatoryCourseIds.length }} khóa học</td>
-                <td>{{ g.memberCount || 0 }} học viên</td>
-                <td>
-                  <div class="admin-row-actions">
-                    <button
-                      v-if="g.allowedActions?.includes('read')"
-                      type="button"
-                      class="admin-row-edit"
-                      :disabled="busy"
-                      @click="openGroupMembers(g)"
-                    >Thành viên</button>
-                    <button
-                      v-if="g.allowedActions?.includes('update')"
-                      class="admin-row-edit"
-                      :disabled="busy"
-                      @click="editGroup(g)"
-                    >
-                      Sửa</button
-                    ><button
-                      v-if="g.allowedActions?.includes('delete')"
-                      class="admin-row-delete"
-                      :disabled="busy"
-                      @click="deleteTarget = g"
-                    >
-                      Xóa
-                    </button>
-                  </div>
-                </td>
-              </tr>
-              <tr v-if="!groupTotal">
-                <td colspan="5" class="admin-empty">Không có nhóm phù hợp.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <TablePagination
-          v-model:page="groupPage"
-          v-model:page-size="groupPageSize"
-          :total="groupTotal"
-          :page-count="groupPageCount"
-          unit="nhóm"
-          unit-label="Nhóm"
-        />
-      </section>
     </template>
     <AdminModal
       :open="!!editor"
@@ -410,10 +312,6 @@
           >
         </div>
         <p class="admin-modal-help">
-          Thêm hoặc bỏ nhóm cho tài khoản tại menu Nhóm học viên → Thành viên.
-          Một học viên có thể thuộc nhiều nhóm.
-        </p>
-        <p class="admin-modal-help">
           Vai trò hiện tại:
           {{
             userForm.roles
@@ -462,178 +360,7 @@
           :disabled="busy"
         />
       </template>
-      <template v-else-if="editor === 'group'">
-        <div :class="{ 'admin-form-grid': !!editingId }">
-          <label v-if="editingId" class="admin-form-field"
-            >Mã nhóm<input
-              :value="groupForm.id"
-              disabled
-              readonly /></label
-          ><label class="admin-form-field"
-            >Tên nhóm *<input v-model="groupForm.name" required
-          /></label>
-        </div>
-        <label class="admin-form-field"
-          >Đơn vị *<select v-model="groupForm.unitId" required>
-            <option value="">Chọn đơn vị</option>
-            <option v-for="u in activeUnits" :key="u.id" :value="u.id">
-              {{ u.name }}
-            </option>
-          </select></label
-        >
-        <fieldset class="admin-choice-group">
-          <legend>Khóa học bắt buộc</legend>
-          <div class="admin-search-box group-course-search">
-            <Search :size="18" aria-hidden="true" />
-            <input
-              v-model="groupCourseQuery"
-              type="search"
-              placeholder="Tìm theo tên hoặc mã khóa học…"
-              aria-label="Tìm khóa học bắt buộc"
-              :disabled="busy"
-              @keydown.enter.prevent
-            />
-          </div>
-          <p class="group-course-summary" role="status">
-            Đã chọn {{ groupForm.mandatoryCourseIds.length }} khóa học
-            · {{ groupCourseTotal }} kết quả
-          </p>
-          <div
-            v-for="c in paginatedGroupCourses"
-            :key="c.id"
-            class="admin-choice-row group-course-row"
-          >
-            <div class="group-course-choice">
-              <ToggleSwitch
-                :model-value="groupForm.mandatoryCourseIds.includes(c.id)"
-                :label="c.name"
-                :disabled="busy"
-                @update:model-value="
-                  (checked) =>
-                    toggleSelection(groupForm.mandatoryCourseIds, c.id, checked)
-                "
-              />
-              <small v-if="c.code">Mã khóa học: {{ c.code }}</small>
-            </div>
-          </div>
-          <p v-if="!courses.length">Chưa có khóa học để giao cho nhóm.</p>
-          <p v-else-if="!groupCourseTotal" class="admin-empty">
-            Không tìm thấy khóa học phù hợp. Hãy thử tên hoặc mã khác.
-          </p>
-          <TablePagination
-            v-if="groupCourseTotal"
-            v-model:page="groupCoursePage"
-            v-model:page-size="groupCoursePageSize"
-            :total="groupCourseTotal"
-            :page-count="groupCoursePageCount"
-            :sizes="[5, 10, 20]"
-            unit="khóa học"
-            unit-label="Khóa học"
-          />
-        </fieldset>
-      </template>
     </AdminModal>
-    <AdminModal
-      :open="!!memberGroup"
-      :title="`Thành viên nhóm ${memberGroup?.name || ''}`"
-      :busy="memberSaving"
-      :width="850"
-      submit-label="Lưu thành viên"
-      :submit-disabled="!memberChangeCount || memberLoading"
-      @close="closeGroupMembers"
-      @submit="saveGroupMembers"
-    >
-      <p class="admin-modal-help">
-        Chọn học viên thuộc đơn vị của nhóm hoặc đơn vị con. Mỗi học viên có thể
-        tham gia nhiều nhóm và nhận các khóa học bắt buộc từ tất cả nhóm đó.
-        Tài khoản cần có đơn vị công tác trước khi thêm vào nhóm.
-      </p>
-      <div class="admin-table-toolbar group-members-toolbar">
-        <button
-          v-if="memberGroup?.allowedActions?.includes('update')"
-          type="button"
-          class="btn btn-secondary"
-          :disabled="memberSaving"
-          @click="membersOnly = false"
-        ><Plus :size="16" /> Thêm thành viên</button>
-        <div class="admin-search-box">
-          <Search :size="18" aria-hidden="true" />
-          <input
-            v-model="memberQuery"
-            type="search"
-            aria-label="Tìm học viên"
-            placeholder="Tìm tên, tài khoản, mã nhân viên hoặc email…"
-            :disabled="memberSaving"
-            @keydown.enter.prevent
-          />
-        </div>
-        <label class="group-members-filter">
-          <input v-model="membersOnly" type="checkbox" :disabled="memberSaving" />
-          Chỉ thành viên hiện tại
-        </label>
-      </div>
-      <p role="status" class="admin-modal-help">
-        Hiện có {{ memberCount }} thành viên
-        <template v-if="memberChangeCount"> · {{ memberChangeCount }} thay đổi chưa lưu</template>.
-        Lựa chọn được giữ khi tìm kiếm hoặc chuyển trang.
-      </p>
-      <p v-if="memberError" class="admin-notice error" role="alert">
-        {{ memberError }}
-        <button type="button" class="btn btn-secondary" @click="loadGroupMembers">Thử lại</button>
-      </p>
-      <div class="admin-table-scroll" :aria-busy="memberLoading">
-        <table class="admin-data-table group-members-table">
-          <thead>
-            <tr>
-              <th>Trong nhóm</th>
-              <th>Học viên</th>
-              <th>Mã nhân viên</th>
-              <th>Đơn vị</th>
-              <th>Trạng thái</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="memberLoading"><td colspan="5" class="admin-empty">Đang tải học viên…</td></tr>
-            <template v-else>
-              <tr v-for="m in memberRows" :key="m.id">
-                <td>
-                  <input
-                    type="checkbox"
-                    :checked="memberChanges[m.id] ?? m.member"
-                    :disabled="memberSaving || !m.selectable"
-                    :aria-label="`Thành viên nhóm: ${m.fullName}`"
-                    @change="toggleGroupMember(m, ($event.target as HTMLInputElement).checked)"
-                  />
-                </td>
-                <td><strong>{{ m.fullName }}</strong><small>{{ m.username }}</small></td>
-                <td>{{ m.employeeId || 'Chưa cập nhật' }}</td>
-                <td>{{ m.unitName }}</td>
-                <td>{{ statusNames[m.status] || m.status }}</td>
-              </tr>
-              <tr v-if="!memberRows.length && !memberError"><td colspan="5" class="admin-empty">Không có học viên phù hợp.</td></tr>
-            </template>
-          </tbody>
-        </table>
-      </div>
-      <TablePagination
-        v-model:page="memberPage"
-        v-model:page-size="memberPageSize"
-        :total="memberTotal"
-        :page-count="memberPageCount"
-        :sizes="[10, 20, 50]"
-        unit="học viên"
-        unit-label="Học viên"
-      />
-    </AdminModal>
-    <ConfirmModal
-      :open="!!deleteTarget"
-      title="Xóa nhóm học viên?"
-      :message="`Xóa nhóm ${deleteTarget?.name || ''}? Nhóm có thành viên sẽ không thể xóa.`"
-      :loading="busy"
-      confirm-label="Xóa nhóm"
-      @cancel="!busy && (deleteTarget = null)"
-      @confirm="deleteGroup"
-    />
   </main>
 </template>
 <script setup lang="ts">
@@ -649,7 +376,6 @@ import {
 } from "lucide-vue-next";
 import AdminModal from "../components/AdminModal.vue";
 import LearnerDeadlineEditor from "../components/LearnerDeadlineEditor.vue";
-import ConfirmModal from "../components/ConfirmModal.vue";
 import ToggleSwitch from "../components/ToggleSwitch.vue";
 import TablePagination from "../components/TablePagination.vue";
 import { useTablePagination } from "../composables/useTablePagination";
@@ -657,7 +383,6 @@ import { useRoute, useRouter } from "vue-router";
 import { axiosClient } from "../api/axiosClient";
 import { showToast } from "../utils/toast";
 import { adminApi, type AdminUser } from "../api/adminApi";
-import type { Course } from "../types";
 import { useUserStore } from "../stores/userStore";
 import type { OrganizationUnit as Unit } from "../types/organization";
 import OrganizationTreeTable from "../components/OrganizationTreeTable.vue";
@@ -668,31 +393,11 @@ import {
   flattenUnitForest,
   unitDescendants,
 } from "../utils/organizationTree";
-interface Group {
-  id: string;
-  name: string;
-  unitId: string;
-  mandatoryCourseIds: string[];
-  allowedActions?: string[];
-  memberCount?: number;
-}
-interface GroupMember {
-  id: number;
-  username: string;
-  fullName: string;
-  employeeId?: string;
-  unitName: string;
-  status: string;
-  member: boolean;
-  selectable: boolean;
-}
 const route = useRoute(),
   router = useRouter(),
   user = useUserStore();
 const units = ref<Unit[]>([]),
-  groups = ref<Group[]>([]),
-  users = ref<AdminUser[]>([]),
-  courses = ref<Course[]>([]);
+  users = ref<AdminUser[]>([]);
 const loading = ref(false),
   busy = ref(false),
   query = ref("");
@@ -705,10 +410,6 @@ const pages: Record<string, { title: string; description: string }> = {
   units: {
     title: "Đơn vị / phòng",
     description: "Tổ chức cơ cấu đơn vị, phòng và các cấp trực thuộc.",
-  },
-  groups: {
-    title: "Nhóm học viên",
-    description: "Quản lý nhóm học viên và các khóa học bắt buộc.",
   },
   permissions: {
     title: "Phân quyền",
@@ -736,17 +437,6 @@ const unitName = (id?: string | null) =>
   units.value.find((u) => u.id === id)?.name || id || "Chưa gán";
 const matches = (text: string, query: string) =>
   text.toLocaleLowerCase("vi").includes(query.trim().toLocaleLowerCase("vi"));
-const groupCourseQuery = ref("");
-const groupCoursePage = ref(1), groupCoursePageSize = ref(5), groupCourseTotal = ref(0), groupCoursePageCount = ref(1);
-const paginatedGroupCourses = courses;
-let groupCourseRequest = 0;
-let groupCourseTimer: ReturnType<typeof setTimeout> | undefined;
-function resetGroupCourses() { groupCoursePage.value = 1; }
-watch([groupCourseQuery, groupCoursePageSize], () => {
-  ++groupCourseRequest; clearTimeout(groupCourseTimer); resetGroupCourses();
-  groupCourseTimer = setTimeout(() => { groupCourseTimer = undefined; if (editor.value === "group") void loadGroupCourses(); }, 250);
-});
-watch(groupCoursePage, () => { if (!groupCourseTimer && editor.value === "group") void loadGroupCourses(); });
 const unitForest = computed(() => buildUnitForest(units.value));
 const unitFiltering = computed(() =>
   Boolean(query.value.trim() || statusFilter.value),
@@ -809,10 +499,8 @@ function expandUnits(all: boolean) {
 }
 
 const userPage = ref(1), userPageSize = ref(10), userTotal = ref(0), userPageCount = ref(1);
-const groupPage = ref(1), groupPageSize = ref(10), groupTotal = ref(0), groupPageCount = ref(1);
-const paginatedUsers = users, paginatedGroups = groups;
+const paginatedUsers = users;
 function resetUsers() { userPage.value = 1; }
-function resetGroups() { groupPage.value = 1; }
 const {
   page: unitPage,
   pageSize: unitPageSize,
@@ -827,27 +515,22 @@ const visibleUnitRows = computed(() =>
 const unitMatchCount = computed(() => units.value.filter(unitMatches).length);
 let listRequest = 0;
 let listTimer: ReturnType<typeof setTimeout> | undefined;
-watch([query, unitFilter, statusFilter, userPageSize, groupPageSize], () => {
+watch([query, unitFilter, statusFilter, userPageSize], () => {
   ++listRequest;
   clearTimeout(listTimer);
-  resetUnits(); resetUsers(); resetGroups();
+  resetUnits(); resetUsers();
   if (section.value !== "units") listTimer = setTimeout(() => { listTimer = undefined; void loadRows(); }, 250);
 });
-watch([userPage, groupPage], () => { if (!listTimer && section.value !== "units") void loadRows(); });
+watch(userPage, () => { if (!listTimer && section.value !== "units") void loadRows(); });
 watch(section, () => {
   ++listRequest;
   clearTimeout(listTimer);
   query.value = ""; unitFilter.value = ""; statusFilter.value = ""; editor.value = "";
-  resetUsers(); resetUnits(); resetGroups();
+  resetUsers(); resetUnits();
   void load();
 });
 onBeforeUnmount(() => { ++listRequest; clearTimeout(listTimer); });
-function toggleSelection<T>(items: T[], item: T, enabled: boolean) {
-  const index = items.indexOf(item);
-  if (enabled && index < 0) items.push(item);
-  else if (!enabled && index >= 0) items.splice(index, 1);
-}
-const editor = ref<"" | "user" | "unit" | "group">(""),
+const editor = ref<"" | "user" | "unit">(""),
   editingId = ref<string | number | null>(null);
 const blankUser = () => ({
   username: "",
@@ -871,12 +554,6 @@ const userForm = ref(blankUser()),
     type: "UNIT",
     parentId: "",
     active: true,
-  }),
-  groupForm = ref<Group>({
-    id: "",
-    name: "",
-    unitId: "",
-    mandatoryCourseIds: [],
   });
 const excludedParentIds = computed(() =>
   editor.value === "unit" && typeof editingId.value === "string"
@@ -903,10 +580,6 @@ async function loadRows() {
       const result = await adminListApi.users({ query: query.value, unitId: unitFilter.value, status: statusFilter.value, page: userPage.value, size: userPageSize.value });
       if (request !== listRequest) return;
       users.value = result.items; userTotal.value = result.total; userPageCount.value = result.pageCount;
-    } else if (currentSection === "groups") {
-      const result = await adminListApi.groups({ query: query.value, unitId: unitFilter.value, page: groupPage.value, size: groupPageSize.value });
-      if (request !== listRequest) return;
-      groups.value = result.items; groupTotal.value = result.total; groupPageCount.value = result.pageCount;
     }
   } catch (e) { if (request === listRequest) error(e); }
   finally { if (request === listRequest) loading.value = false; }
@@ -956,149 +629,19 @@ function editUnit(u?: Unit, parentId = "") {
     : { id: "", name: "", type: "UNIT", parentId, active: true };
   editor.value = "unit";
 }
-function editGroup(g?: Group) {
-  void loadGroupCourses();
-  groupCourseQuery.value = "";
-  groupCoursePageSize.value = 5;
-  resetGroupCourses();
-  editingId.value = g?.id || null;
-  groupForm.value = g
-    ? { ...g, mandatoryCourseIds: [...g.mandatoryCourseIds] }
-    : { id: "", name: "", unitId: "", mandatoryCourseIds: [] };
-  editor.value = "group";
-}
-async function loadGroupCourses() {
-  const request = ++groupCourseRequest;
-  try {
-    const result = await adminListApi.groupCourses({ query: groupCourseQuery.value, page: groupCoursePage.value, size: groupCoursePageSize.value });
-    if (request !== groupCourseRequest) return;
-    courses.value = result.items as Course[]; groupCourseTotal.value = result.total; groupCoursePageCount.value = result.pageCount;
-  } catch (e) { if (request === groupCourseRequest) error(e); }
-}
-onBeforeUnmount(() => { ++groupCourseRequest; clearTimeout(groupCourseTimer); });
-const memberGroup = ref<Group | null>(null);
-const memberRows = ref<GroupMember[]>([]);
-const memberQuery = ref("");
-const membersOnly = ref(true);
-const memberPage = ref(1);
-const memberPageSize = ref(10);
-const memberTotal = ref(0);
-const memberPageCount = ref(1);
-const memberCount = ref(0);
-const memberLoading = ref(false);
-const memberSaving = ref(false);
-const memberError = ref("");
-const memberChanges = ref<Record<number, boolean>>({});
-const memberChangeCount = computed(() => Object.keys(memberChanges.value).length);
-let memberRequest = 0;
-function openGroupMembers(group: Group) {
-  memberChanges.value = {};
-  memberRows.value = [];
-  memberQuery.value = "";
-  membersOnly.value = true;
-  memberPage.value = 1;
-  memberPageSize.value = 10;
-  memberTotal.value = 0;
-  memberPageCount.value = 1;
-  memberCount.value = group.memberCount || 0;
-  memberError.value = "";
-  memberGroup.value = group;
-}
-function closeGroupMembers() {
-  if (memberSaving.value) return;
-  memberRequest++;
-  memberGroup.value = null;
-}
-async function loadGroupMembers() {
-  const group = memberGroup.value;
-  if (!group) return;
-  const request = ++memberRequest;
-  memberLoading.value = true;
-  memberError.value = "";
-  try {
-    const { data } = await axiosClient.get<{
-      items: GroupMember[]; total: number; page: number; pageCount: number; memberCount: number;
-    }>(`/api/admin/groups/${encodeURIComponent(group.id)}/members`, {
-      params: { query: memberQuery.value, page: memberPage.value, size: memberPageSize.value, membersOnly: membersOnly.value },
-    });
-    if (request !== memberRequest) return;
-    memberRows.value = data.items;
-    memberTotal.value = data.total;
-    memberPageCount.value = data.pageCount;
-    memberCount.value = data.memberCount;
-    memberPage.value = data.page;
-  } catch (e: any) {
-    if (request !== memberRequest) return;
-    memberRows.value = [];
-    memberError.value = e.response?.data?.message || "Không tải được danh sách học viên.";
-  } finally {
-    if (request === memberRequest) memberLoading.value = false;
-  }
-}
-watch(
-  [() => memberGroup.value?.id, memberQuery, membersOnly, memberPageSize, memberPage],
-  (values, previous, onCleanup) => {
-    memberRequest++;
-    if (!values[0]) return;
-    if (values.slice(0, 4).some((value, index) => value !== previous[index]) && memberPage.value !== 1) {
-      memberPage.value = 1;
-      return;
-    }
-    memberLoading.value = true;
-    const timer = setTimeout(() => void loadGroupMembers(), values[1] !== previous[1] ? 250 : 0);
-    onCleanup(() => clearTimeout(timer));
-  },
-);
-function toggleGroupMember(member: GroupMember, selected: boolean) {
-  if (!member.selectable || memberSaving.value) return;
-  if (selected === member.member) delete memberChanges.value[member.id];
-  else memberChanges.value[member.id] = selected;
-}
-async function saveGroupMembers() {
-  if (!memberGroup.value || !memberChangeCount.value || memberLoading.value || memberSaving.value) return;
-  memberSaving.value = true;
-  try {
-    const entries = Object.entries(memberChanges.value);
-    await axiosClient.put(`/api/admin/groups/${encodeURIComponent(memberGroup.value.id)}/members`, {
-      addUserIds: entries.filter(([, selected]) => selected).map(([id]) => Number(id)),
-      removeUserIds: entries.filter(([, selected]) => !selected).map(([id]) => Number(id)),
-    });
-    memberRequest++;
-    memberGroup.value = null;
-    memberChanges.value = {};
-    showToast("Đã cập nhật thành viên nhóm", "success");
-    await load();
-  } catch (e) {
-    error(e);
-  } finally {
-    memberSaving.value = false;
-  }
-}
 async function saveEditor() {
   busy.value = true;
   try {
-    const endpoint =
-      editor.value === "user"
-        ? "users"
-        : editor.value === "unit"
-          ? "units"
-          : "groups";
+    const endpoint = editor.value === "user" ? "users" : "units";
     const data =
       editor.value === "user"
         ? userForm.value
-        : editor.value === "unit"
-          ? {
-              ...unitForm.value,
-              id: editingId.value
-                ? unitForm.value.id
-                : unitForm.value.id || undefined,
-            }
-          : {
-              ...groupForm.value,
-              id: editingId.value
-                ? groupForm.value.id
-                : groupForm.value.id || undefined,
-            };
+        : {
+            ...unitForm.value,
+            id: editingId.value
+              ? unitForm.value.id
+              : unitForm.value.id || undefined,
+          };
     await axiosClient.request({
       method: editingId.value ? "put" : "post",
       url: `/api/admin/${endpoint}${editingId.value ? "/" + encodeURIComponent(String(editingId.value)) : ""}`,
@@ -1114,35 +657,14 @@ async function saveEditor() {
     busy.value = false;
   }
 }
-const deleteTarget = ref<Group | null>(null);
-async function deleteGroup() {
-  if (!deleteTarget.value) return;
-  busy.value = true;
-  try {
-    await axiosClient.delete(
-      `/api/admin/groups/${encodeURIComponent(deleteTarget.value.id)}`,
-    );
-    deleteTarget.value = null;
-    showToast("Đã xóa nhóm", "success");
-    await load();
-  } catch (e) {
-    error(e);
-  } finally {
-    busy.value = false;
-  }
-}
 const modalTitle = computed(() =>
   editor.value === "user"
     ? editingId.value
       ? "Cập nhật tài khoản"
       : "Thêm tài khoản"
-    : editor.value === "unit"
-      ? editingId.value
-        ? "Cập nhật đơn vị / phòng"
-        : "Thêm đơn vị / phòng"
-      : editingId.value
-        ? "Cập nhật nhóm học viên"
-        : "Thêm nhóm học viên",
+    : editingId.value
+      ? "Cập nhật đơn vị / phòng"
+      : "Thêm đơn vị / phòng",
 );
 async function submitEditor() {
   await saveEditor();
@@ -1171,7 +693,7 @@ async function importExcel(event: Event) {
   try {
     await adminApi.importUsersExcel(file);
     showToast(
-      "Đã nhập tài khoản. Gán đơn vị, nhóm và role tại menu Quản lý role.",
+      "Đã nhập tài khoản. Gán đơn vị và role tại menu Quản lý role.",
       "success",
     );
     await load();
@@ -1185,59 +707,6 @@ async function importExcel(event: Event) {
 onMounted(load);
 </script>
 <style scoped>
-.group-members-toolbar {
-  margin-top: 1rem;
-}
-.group-members-filter {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8125rem;
-}
-.group-members-table {
-  margin-bottom: 1rem;
-}
-.group-members-table input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--primary-color);
-}
-.group-course-search {
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-}
-.group-course-search:focus-within {
-  border-color: var(--primary-color);
-}
-.group-course-search input {
-  min-width: 0;
-  color: var(--text-main);
-}
-.group-course-search > svg {
-  flex-shrink: 0;
-}
-.group-course-summary {
-  margin: 0.65rem 0;
-}
-.group-course-choice {
-  min-width: 0;
-  width: 100%;
-}
-.group-course-choice :deep(.toggle-switch) {
-  width: 100%;
-  min-width: 0;
-}
-.group-course-choice :deep(.toggle-label) {
-  overflow-wrap: anywhere;
-}
-.group-course-choice small {
-  margin-left: calc(38px + 0.65rem);
-  overflow-wrap: anywhere;
-}
-.group-course-row:last-of-type {
-  border-bottom: 0;
-}
 .unit-tree-toolbar {
   display: flex;
   align-items: center;

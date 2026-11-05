@@ -84,3 +84,11 @@ test('rejected enrollment uses an X icon while approved enrollment keeps its che
     assert.ok(document.querySelector('.notification-icon.COMMENT_REPLY .lucide-message-circle-reply'));
   } finally { f.app.unmount(); }
 });
+
+test('notification time is shown in Vietnam time whatever the browser timezone', async () => {
+  const previous = process.env.TZ; process.env.TZ = 'UTC';
+  const f = await fixture(() => ({ content: [{ ...item(1), createdAt: '2026-11-04T16:58:12Z' }], hasMore: false, nextBeforeId: null, unreadCount: 1 }));
+  try {
+    assert.match(document.querySelector('.notification-item small').textContent, /23:58/);
+  } finally { f.app.unmount(); process.env.TZ = previous; }
+});

@@ -1,0 +1,70 @@
+package com.bidv.coretraining.flashcard.dto;
+
+import com.bidv.coretraining.enums.FlashcardOrigin;
+import com.bidv.coretraining.enums.FlashcardType;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.*;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+/** Data contracts for lesson flashcards. */
+public final class FlashcardDto {
+    private FlashcardDto() {
+    }
+
+    public record Source(String documentId, String documentName, Integer page, String section) {
+    }
+
+    /** mine is true on the learner's own personal cards, which they may edit using version. */
+    public record Card(Long id, String courseId, String lessonId, String lessonTitle, FlashcardType type,
+            String front, String back, Source source, boolean mine, Long version) {
+    }
+
+    public record Deck(String lessonId, List<Card> cards) {
+    }
+
+    public record LibraryLesson(String id, String title, int total, int mine) {
+    }
+
+    public record LibraryCourse(String id, String name, List<LibraryLesson> lessons) {
+    }
+
+    /** Only counts: a lesson's cards load when the learner opens it, so many courses stay light. */
+    public record Library(List<LibraryCourse> courses, String nextCursor) {
+    }
+
+    public record PersonalCardRequest(
+            @NotNull FlashcardType type,
+            @NotBlank @Size(max = 1000) String front,
+            @NotBlank @Size(max = 4000) String back,
+            Long version) {
+    }
+
+    public record AdminCard(Long id, String lessonId, FlashcardType type, String front, String back,
+            FlashcardOrigin origin, String status, Source source, Integer cardOrder, LocalDateTime updatedAt,
+            Long version) {
+    }
+
+    public record CardRequest(
+            @NotNull FlashcardType type,
+            @NotBlank @Size(max = 1000) String front,
+            @NotBlank @Size(max = 4000) String back,
+            @Pattern(regexp = "DRAFT|PUBLISHED") String status,
+            FlashcardOrigin origin,
+            @Size(max = 255) String sourceDocumentId,
+            @Min(1) Integer sourcePage,
+            @Size(max = 2000) String sourceSection,
+            Long version) {
+    }
+
+    public record BatchRequest(@NotEmpty @Size(max = 50) List<@Valid CardRequest> cards) {
+    }
+
+    public record StatusRequest(@NotEmpty @Size(max = 500) List<Long> ids,
+            @NotNull @Pattern(regexp = "DRAFT|PUBLISHED") String status) {
+    }
+
+    public record GenerationRequest(@Min(1) @Max(20) int count, @Size(max = 2) List<FlashcardType> types) {
+    }
+}

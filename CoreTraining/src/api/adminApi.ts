@@ -7,6 +7,14 @@ import {
   QUIZ_GENERATION_TIMEOUT_MS,
 } from "./axiosClient";
 import type { Course, Lesson, LessonDocument, Question } from "../types";
+import {
+  runQuizGenerationJob,
+  type QuizGenerationJob,
+} from "../utils/quizGenerationJob";
+
+// Set from QUIZ_MAX_QUESTIONS at build time; the backend enforces the same value.
+export const QUIZ_MAX_QUESTIONS =
+  Number(import.meta.env.VITE_QUIZ_MAX_QUESTIONS) || 10;
 
 const configuredVideoMaxBytes = Number(
   import.meta.env.VITE_VIDEO_MAX_UPLOAD_BYTES,
@@ -31,8 +39,11 @@ export interface LessonKnowledgeSource {
 export interface DocumentOutline {
   documentId: string;
   pages: number[];
+  /** Word sections in document order, named by heading path ("Chương 1 › 1.1 ..."). */
   sections: string[];
-  excerpts: { page: number; section: string; excerpt: string }[];
+  excerpts: { page: number; section: string; heading?: string; excerpt: string }[];
+  /** PDF headings with suggested page ranges; absent for Word or older indexes. */
+  headings?: { section: string; level: number; pageFrom: number; pageTo: number }[];
 }
 
 export interface AdminUser {
@@ -51,8 +62,6 @@ export interface AdminUser {
   status?: string;
   learnerType?: string;
   points: number;
-  userGroupIds?: string[];
-  groupNames?: string;
   employeeId?: string;
   email?: string;
 }
@@ -106,6 +115,18 @@ export interface QuizGenerationResponse {
   sources: QuizGenerationSource[];
   warnings: string[];
 }
+
+export interface QuizGenerationRequest {
+  courseId: string;
+  lessonId?: string;
+  singleChoiceCount: number;
+  multipleChoiceCount: number;
+  optionCount: number;
+  /** Unsaved drafts from the previous run, so the next draft does not repeat them. */
+  excludeQuestions?: string[];
+}
+
+export type QuizGenerationJobSnapshot = QuizGenerationJob<QuizGenerationResponse>;
 
 export const adminApi = {
   async getEnrollmentRequests(): Promise<EnrollmentRequest[]> {
@@ -401,6 +422,40 @@ export const adminApi = {
     return response.data;
   },
 
+  async startQuizGenerationJob(
+    request: QuizGenerationRequest,
+  ): Promise<QuizGenerationJobSnapshot> {
+    const response = await axiosClient.post<QuizGenerationJobSnapshot>(
+      "/api/admin/quizzes/generate/jobs",
+      request,
+    );
+    return response.data;
+  },
+
+  async getQuizGenerationJob(jobId: string): Promise<QuizGenerationJobSnapshot> {
+    const response = await axiosClient.get<QuizGenerationJobSnapshot>(
+      `/api/admin/quizzes/generate/jobs/${encodeURIComponent(jobId)}`,
+    );
+    return response.data;
+  },
+
+  generateQuizWithProgress(
+    request: QuizGenerationRequest,
+    options: {
+      onProgress?: (job: QuizGenerationJobSnapshot) => void;
+      signal?: AbortSignal;
+    } = {},
+  ): Promise<QuizGenerationResponse> {
+    return runQuizGenerationJob(
+      {
+        start: (body) => adminApi.startQuizGenerationJob(body),
+        status: (jobId) => adminApi.getQuizGenerationJob(jobId),
+      },
+      request,
+      { ...options, timeoutMs: QUIZ_GENERATION_TIMEOUT_MS },
+    );
+  },
+
   async createQuestion(question: Omit<Question, "id">): Promise<Question> {
     const response = await axiosClient.post<Question>(
       "/api/admin/questions",
@@ -426,12 +481,14 @@ export const adminApi = {
     lessonId: string | undefined,
     passingScore: number,
     requiredForProgress = true,
+    timeLimitMinutes: number | null = null,
   ): Promise<void> {
     await axiosClient.put("/api/admin/quizzes/settings", {
       courseId,
       lessonId,
       passingScore,
       requiredForProgress,
+      timeLimitMinutes,
     });
   },
 

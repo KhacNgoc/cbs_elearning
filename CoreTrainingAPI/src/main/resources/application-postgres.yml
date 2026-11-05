@@ -4,9 +4,23 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME}
     password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      # Every request, even /api/auth/csrf, loads the user from the DB. With the default
+      # 30s connection-timeout a starved pool freezes the whole UI; fail fast instead.
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:20}
+      minimum-idle: ${DB_POOL_MIN_IDLE:5}
+      connection-timeout: ${DB_POOL_CONNECTION_TIMEOUT_MS:5000}
+      # Logs the stack of any connection held longer than this, to find the next holder.
+      leak-detection-threshold: ${DB_POOL_LEAK_DETECTION_MS:20000}
+  flyway:
+    enabled: true
+    # A database that predates Flyway is marked as already at V1 instead of running it.
+    baseline-on-migrate: true
+    baseline-version: 1
   jpa:
     hibernate:
-      ddl-auto: update
+      # Flyway owns the schema; Hibernate only checks that it matches the entities.
+      ddl-auto: ${JPA_DDL_AUTO:validate}
     show-sql: false
     properties:
       hibernate:
@@ -14,7 +28,7 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
   sql:
     init:
-      # Hibernate already manages the PostgreSQL schema through ddl-auto.
+      # Flyway manages the PostgreSQL schema.
       # Running schema.sql as well can fail on existing tables/constraints
       # before EntityManagerFactory is created.
       mode: never

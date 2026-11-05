@@ -1,11 +1,30 @@
 package com.bidv.coretraining.security;
-import com.bidv.coretraining.enums.VideoSource;
 import com.bidv.coretraining.enums.DocumentType;
+import com.bidv.coretraining.enums.VideoSource;
 
-import com.bidv.coretraining.dto.*;
-import com.bidv.coretraining.entity.*;
-import com.bidv.coretraining.repository.*;
-import com.bidv.coretraining.service.*;
+import com.bidv.coretraining.access.entity.AccessRole;
+import com.bidv.coretraining.access.repository.AccessRoleRepository;
+import com.bidv.coretraining.access.service.AuthorizationService;
+import com.bidv.coretraining.course.entity.Chapter;
+import com.bidv.coretraining.course.entity.Course;
+import com.bidv.coretraining.course.repository.ChapterRepository;
+import com.bidv.coretraining.course.repository.CourseRepository;
+import com.bidv.coretraining.document.entity.LessonDocument;
+import com.bidv.coretraining.lesson.entity.Lesson;
+import com.bidv.coretraining.lesson.repository.LessonRepository;
+import com.bidv.coretraining.rag.dto.RagChatRequest;
+import com.bidv.coretraining.rag.dto.RagServiceChatResponse;
+import com.bidv.coretraining.rag.service.RagChatService;
+import com.bidv.coretraining.rag.service.RagConversationSummaryService;
+import com.bidv.coretraining.training.entity.TrainingDomain;
+import com.bidv.coretraining.training.entity.TrainingProgram;
+import com.bidv.coretraining.training.repository.TrainingDomainRepository;
+import com.bidv.coretraining.training.repository.TrainingProgramRepository;
+import com.bidv.coretraining.user.entity.OrganizationUnit;
+import com.bidv.coretraining.user.entity.User;
+import com.bidv.coretraining.user.repository.OrganizationUnitRepository;
+import com.bidv.coretraining.user.repository.UserRepository;
+import com.bidv.coretraining.video.service.VideoAccessService;
 import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.Cookie;
 import org.hibernate.Hibernate;
@@ -52,7 +71,6 @@ class DetachedPrincipalIntegrationTest {
     @MockBean RagConversationSummaryService summaries;
     @Autowired MockMvc mvc;
     @Autowired UserRepository users;
-    @Autowired UserGroupRepository groups;
     @Autowired OrganizationUnitRepository units;
     @Autowired TrainingDomainRepository domains;
     @Autowired TrainingProgramRepository programs;
@@ -137,16 +155,6 @@ class DetachedPrincipalIntegrationTest {
         mvc.perform(get(first)).andExpect(status().isUnauthorized());
     }
 
-    @Test void groupMandatoryCoursesAreResolvedInResourceTransaction() throws Exception {
-        tx().executeWithoutResult(s->{
-            User user=users.findById(learnerId).orElseThrow();user.getRegisteredCourses().clear();
-            var group=UserGroup.builder().id(id("G")).name("Mandatory group").organizationUnit(user.getOrganizationUnit()).build();
-            group.getMandatoryCourses().add(courses.findById(id("C")).orElseThrow());
-            user.getUserGroups().add(groups.save(group));
-        });
-        mvc.perform(get("/uploads/documents/"+id("file0.pdf")).cookie(cookie(id("learner")))).andExpect(status().isOk());
-    }
-
     @Test void learningMetadataAndDiscussionKeepAccessChecksWithoutOpenSessionInView() throws Exception {
         var jwt = cookie(id("learner"));
         mvc.perform(get("/api/courses/" + id("C") + "/outline").cookie(jwt))
@@ -164,9 +172,7 @@ class DetachedPrincipalIntegrationTest {
         mvc.perform(get("/api/lessons/" + id("L0") + "/comments").cookie(jwt)).andExpect(status().isForbidden());
         tx().executeWithoutResult(s -> {
             User user = users.findById(learnerId).orElseThrow();
-            var group = UserGroup.builder().id(id("G")).name("Mandatory group").organizationUnit(user.getOrganizationUnit()).build();
-            group.getMandatoryCourses().add(courses.findById(id("C")).orElseThrow());
-            user.getUserGroups().add(groups.save(group));
+            user.getRegisteredCourses().add(courses.findById(id("C")).orElseThrow());
         });
         mvc.perform(get("/api/courses/" + id("C") + "/outline").cookie(jwt)).andExpect(status().isOk());
         mvc.perform(get("/api/lessons/" + id("L0")).cookie(jwt)).andExpect(status().isOk());
@@ -185,8 +191,6 @@ class DetachedPrincipalIntegrationTest {
             User user=users.findById(learnerId).orElseThrow();
             var role=roles.save(AccessRole.builder().code(id("ROLE")).name("Scoped instructor").permissions(new HashSet<>(Set.of("courses:read"))).unitIds(new HashSet<>(Set.of(id("U")))).build());
             user.setDynamicAccessInitialized(true);user.getAssignedRoles().add(role);
-            var group=UserGroup.builder().id(id("G")).name("Group").organizationUnit(user.getOrganizationUnit()).build();
-            group.getMandatoryCourses().add(courses.findById(id("C")).orElseThrow());groups.save(group);
         });
         var principal=principal(id("learner"));
         assertThat(Hibernate.isInitialized(principal.getUser().getRegisteredCourses())).isFalse();

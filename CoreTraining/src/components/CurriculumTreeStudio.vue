@@ -701,6 +701,7 @@
         <!-- DRAFT RESTORED NOTICE BANNER (Bỏ banner) -->
 
         <form @submit.prevent="submitAddModal" class="modal-form">
+          <div class="modal-form-scroll">
           <!-- SECTION 1: BASIC INFO -->
           <div class="form-section">
 
@@ -887,6 +888,8 @@
             </div>
           </div>
 
+          </div>
+
           <!-- MODAL ACTIONS -->
           <div class="modal-actions">
             <button
@@ -957,17 +960,6 @@
           </div>
         </div>
       </Transition>
-    </Teleport>
-
-    <!-- FULLSCREEN LOADING OVERLAY KHI ĐANG TẠO BÀI HỌC -->
-    <Teleport to="body">
-      <div v-if="isCreatingLessonDirectly" class="fullscreen-loading-overlay">
-        <div class="loading-modal-card">
-          <Loader2 :size="42" class="spin-icon loading-spinner" />
-          <h4>Đang khởi tạo bài học mới...</h4>
-          <p>Hệ thống đang chuẩn bị cấu trúc và chuyển hướng tới trang soạn thảo.</p>
-        </div>
-      </div>
     </Teleport>
   </div>
 </template>
@@ -2053,6 +2045,8 @@ function extractUnitsFromObject(obj: any): { mandatory: string[]; optional: stri
 const isCreatingLessonDirectly = ref(false);
 
 async function createLessonDirectly(chapter: any, course?: any) {
+  // Chặn bấm liên tiếp tạo trùng bài học
+  if (isCreatingLessonDirectly.value) return;
   try {
     const courseId =
       course?.id ||
@@ -2100,11 +2094,13 @@ async function createLessonDirectly(chapter: any, course?: any) {
     saveTreeStateToStorage();
 
     emit("refresh");
+    showToast("Tạo bài học mới thành công.");
     await router.push(`/admin/lessons/${encodeURIComponent(saved.id)}/edit`);
   } catch (err: any) {
-    isCreatingLessonDirectly.value = false;
     const msg = err.response?.data?.message || "Lỗi khi tạo bài học!";
     showToast(msg, "error");
+  } finally {
+    isCreatingLessonDirectly.value = false;
   }
 }
 
@@ -3614,6 +3610,9 @@ watch(
 .delete-confirm-modal {
   width: 100%;
   max-width: 460px;
+  max-height: 90dvh;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 14px;
@@ -3711,7 +3710,7 @@ watch(
 .tree-quick-modal.enriched-modal {
   width: 100%;
   max-width: 600px;
-  max-height: 90vh;
+  height: min(720px, 90dvh);
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 14px;
@@ -3719,8 +3718,41 @@ watch(
   box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
   color: var(--text-main);
+}
+
+.enriched-modal > .modal-header,
+.delete-confirm-modal > .modal-header,
+.enriched-modal .modal-actions,
+.delete-confirm-modal .modal-actions {
+  flex-shrink: 0;
+}
+
+.enriched-modal > .modal-form,
+.delete-confirm-modal > .modal-form {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.modal-form-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  /* Chừa chỗ cho viền focus và thanh cuộn của các trường nhập liệu. */
+  margin: 0 -0.75rem 0 -0.25rem;
+  padding: 0.25rem 0.75rem 0.25rem 0.25rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.delete-confirm-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .modal-header {
@@ -4596,42 +4628,5 @@ watch(
 
 .impeccable-desc-popover .popover-footer-meta strong {
   color: var(--text-main);
-}
-
-.fullscreen-loading-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 999999;
-  background: rgba(10, 16, 26, 0.78);
-  backdrop-filter: blur(5px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.loading-modal-card {
-  background: var(--bg-surface, #1e293b);
-  border: 1px solid var(--border-color, #334155);
-  border-radius: 16px;
-  padding: 2.2rem 3rem;
-  text-align: center;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.65);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.9rem;
-}
-.loading-modal-card h4 {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #fff;
-}
-.loading-modal-card p {
-  margin: 0;
-  font-size: 0.9rem;
-  color: #94a3b8;
-}
-.loading-spinner {
-  color: #10b981;
 }
 </style>

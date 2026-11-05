@@ -1,8 +1,21 @@
 package com.bidv.coretraining.config;
 import com.bidv.coretraining.enums.QuestionType;
 
-import com.bidv.coretraining.entity.*;
-import com.bidv.coretraining.repository.*;
+import com.bidv.coretraining.course.entity.Chapter;
+import com.bidv.coretraining.course.entity.Course;
+import com.bidv.coretraining.course.repository.ChapterRepository;
+import com.bidv.coretraining.course.repository.CourseRepository;
+import com.bidv.coretraining.lesson.entity.Lesson;
+import com.bidv.coretraining.lesson.entity.ProcedureSection;
+import com.bidv.coretraining.lesson.repository.LessonRepository;
+import com.bidv.coretraining.quiz.entity.Question;
+import com.bidv.coretraining.quiz.repository.QuestionRepository;
+import com.bidv.coretraining.training.entity.TrainingDomain;
+import com.bidv.coretraining.training.entity.TrainingProgram;
+import com.bidv.coretraining.training.repository.TrainingDomainRepository;
+import com.bidv.coretraining.training.repository.TrainingProgramRepository;
+import com.bidv.coretraining.user.entity.User;
+import com.bidv.coretraining.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -23,7 +36,6 @@ public class FreshTrainingDataInitializer implements CommandLineRunner {
         private final LessonRepository lessons;
         private final QuestionRepository questions;
         private final UserRepository users;
-        private final UserGroupRepository groups;
         private final PasswordEncoder passwords;
         @org.springframework.beans.factory.annotation.Value("${app.data-initializer.admin-password:123@qwe}")
         private String initialPassword;
@@ -95,8 +107,6 @@ public class FreshTrainingDataInitializer implements CommandLineRunner {
                                 .program(program).iconName("BookOpen").description("Khóa nháp để soạn nội dung")
                                 .build());
                 chapters.save(Chapter.builder().course(draft).code("GN01").title("Quy trình tại quầy").build());
-                UserGroup group = groups.save(UserGroup.builder().id("QHKH").name("Quan hệ khách hàng")
-                                .mandatoryCourses(new HashSet<>(Set.of(course))).build());
                 if (!users.existsByUsername("admin"))
                         users.save(User.builder().username("admin").password(passwords.encode(initialPassword))
                                         .fullName("Quản trị hệ thống").role("ROLE_ADMIN").avatarColor("#005B41")
@@ -106,6 +116,6 @@ public class FreshTrainingDataInitializer implements CommandLineRunner {
                         users.save(User.builder().username("quantrh").password(passwords.encode(initialPassword))
                                         .fullName("Học viên nghiệp vụ").role("ROLE_USER").avatarColor("#005B41")
                                         .mustChangePassword(false)
-                                        .userGroups(new HashSet<>(Set.of(group))).build());
+                                        .registeredCourses(new HashSet<>(Set.of(course))).build());
         }
 }

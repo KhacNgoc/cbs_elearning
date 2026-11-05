@@ -11,7 +11,7 @@
 ## Global constraints
 
 - Preserve existing working-tree changes, API schemas, query semantics, scope, ordering and transaction coverage.
-- Use existing lowercase service.impl convention and repository.impl for custom persistence.
+- Use existing lowercase <domain>.service.impl convention and <domain>.repository.impl for custom persistence.
 - Keep generated Spring Data implementations; do not duplicate CRUD.
 - Do not introduce ports/adapters packages or new runtime dependencies.
 - Work in current user checkout to preserve the uncommitted query changes. Snapshot saved at /tmp/cbs-before-layer-refactor.tar.gz. No automatic commits.
@@ -50,7 +50,7 @@ Files: AdminOptionsController, NavigationController, LearnerDeadlineController, 
 
 ## Task 4: Backend service contracts and shared models
 
-Files: remaining concrete Spring business services, service.impl implementations, shared dto types, all consumers and tests referencing moved implementations.
+Files: remaining concrete Spring business services, <domain>.service.impl implementations, shared dto types, all consumers and tests referencing moved implementations.
 
 - [ ] Move shared public data records to dto before extracting service interfaces.
 - [ ] Extract public instance methods into service contracts and move bodies/annotations to impl.

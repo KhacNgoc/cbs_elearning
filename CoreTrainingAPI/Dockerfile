@@ -20,10 +20,7 @@ RUN mvn clean package -DskipTests -B
 FROM eclipse-temurin:17-jre-jammy
 
 # Inspect container and codecs before accepting browser video uploads.
-RUN sed -i 's|archive.ubuntu.com|azure.archive.ubuntu.com|g' /etc/apt/sources.list \
-    && sed -i 's|security.ubuntu.com|azure.archive.ubuntu.com|g' /etc/apt/sources.list \
-    && echo 'Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries \
-    && apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -12,29 +12,43 @@
       <h1>{{ lessonTitle }}</h1>
     </div>
     <div class="header-actions">
-      <div
-        v-if="hasText || hasVideo || hasSlides"
-        class="lesson-content-switch"
-        role="group"
-        aria-label="Chọn nội dung bài học"
-      >
-        <button
-          v-if="hasText"
-          type="button"
-          :aria-pressed="activeContent === 'TEXT'"
-          @click="$emit('select-content', 'TEXT')"
+      <div class="lesson-tools">
+        <div
+          v-if="hasText || hasVideo || hasSlides"
+          class="lesson-content-switch"
+          role="group"
+          aria-label="Chọn nội dung bài học"
         >
-          <FileText :size="17" /><span>Văn bản</span>
-        </button>
+          <button
+            v-if="hasText"
+            type="button"
+            :aria-pressed="activeContent === 'TEXT'"
+            @click="$emit('select-content', 'TEXT')"
+          >
+            <FileText :size="17" /><span>Văn bản</span>
+            <small v-if="optionalContent?.includes('TEXT')" class="content-optional-tag">Tùy chọn</small>
+          </button>
+          <button
+            v-if="hasVideo"
+            type="button"
+            :aria-pressed="activeContent === 'VIDEO'"
+            @click="$emit('select-content', 'VIDEO')"
+          >
+            <PlayCircle :size="17" /><span>Video</span>
+            <small v-if="optionalContent?.includes('VIDEO')" class="content-optional-tag">Tùy chọn</small>
+          </button>
+          <button v-if="hasSlides" type="button" :aria-pressed="activeContent === 'SLIDE'" @click="$emit('select-content', 'SLIDE')"><FileText :size="17" /><span>Slide</span><small v-if="optionalContent?.includes('SLIDE')" class="content-optional-tag">Tùy chọn</small></button>
+        </div>
         <button
-          v-if="hasVideo"
+          v-if="flashcardsEnabled"
           type="button"
-          :aria-pressed="activeContent === 'VIDEO'"
-          @click="$emit('select-content', 'VIDEO')"
+          class="flashcard-shortcut"
+          :title="flashcardTotal ? `${flashcardTotal} flashcard` : 'Tạo flashcard của bạn'"
+          @click="$emit('open-flashcards')"
         >
-          <PlayCircle :size="17" /><span>Video</span>
+          <Layers3 :size="17" /><span>Flashcard</span>
+          <strong v-if="flashcardTotal">{{ flashcardTotal }}</strong>
         </button>
-        <button v-if="hasSlides" type="button" :aria-pressed="activeContent === 'SLIDE'" @click="$emit('select-content', 'SLIDE')"><FileText :size="17" /><span>Slide</span></button>
       </div>
       <div
         class="header-completion"
@@ -96,6 +110,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   FileText,
+  Layers3,
   ListVideo,
   PlayCircle,
   Trophy,
@@ -106,6 +121,7 @@ defineProps<{
   hasSlides: boolean;
   hasText: boolean;
   hasVideo: boolean;
+  optionalContent?: ("TEXT" | "VIDEO" | "SLIDE")[];
   courseName?: string;
   backTo?: string;
   lessonTitle: string;
@@ -113,10 +129,14 @@ defineProps<{
   totalLessons: number;
   completed: boolean;
   canComplete?: boolean;
+  flashcardTotal?: number;
+  /** Shown even with no cards so learners can write their own. */
+  flashcardsEnabled?: boolean;
 }>();
 defineEmits<{
   complete: [];
   "open-content": [];
+  "open-flashcards": [];
   "select-content": [type: "VIDEO" | "TEXT" | "SLIDE"];
 }>();
 </script>

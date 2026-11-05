@@ -1,5 +1,6 @@
 """Pure retrieval and validation helpers for quiz generation."""
 
+import random
 import re
 import unicodedata
 
@@ -12,16 +13,26 @@ def normalized_quiz_text(text: str) -> str:
     return " ".join(re.findall(r"\w+", text))
 
 
+QUESTION_STOP_TERMS = {
+    "trong", "phan", "he", "cho", "vay", "duoc", "dung", "de", "nao", "gi", "la", "cua",
+}
+
+
+def question_terms(text: str) -> frozenset[str]:
+    return frozenset(normalized_quiz_text(text).split()) - QUESTION_STOP_TERMS
+
+
+def similar_terms(left: frozenset[str], right: frozenset[str], threshold: float = 0.75) -> bool:
+    return bool(left and right) and len(left & right) / len(left | right) >= threshold
+
+
 def same_question_objective(left: GeneratedQuizQuestion, right: GeneratedQuizQuestion) -> bool:
     if left.type != right.type:
         return False
     answers = lambda q: {normalized_quiz_text(q.options[i]) for i in q.correct_answers}
     if answers(left) != answers(right):
         return False
-    ignored = {"trong", "phan", "he", "cho", "vay", "duoc", "dung", "de", "nao", "gi", "la", "cua"}
-    terms = lambda q: set(normalized_quiz_text(q.text).split()) - ignored
-    a, b = terms(left), terms(right)
-    return bool(a and b) and len(a & b) / len(a | b) >= 0.75
+    return similar_terms(question_terms(left.text), question_terms(right.text))
 
 
 def question_quality_error(question: GeneratedQuizQuestion) -> str | None:
@@ -43,15 +54,27 @@ def question_quality_error(question: GeneratedQuizQuestion) -> str | None:
     return None
 
 
-def quiz_retrieval_queries(request: QuizGenerationRequest) -> list[str]:
+QUIZ_RETRIEVAL_ASPECTS = (
+    "khái niệm, điều kiện và quy định quan trọng",
+    "vai trò, trách nhiệm và trường hợp áp dụng",
+    "ngoại lệ, rủi ro và sai sót thường gặp",
+    "số liệu, giới hạn và thời điểm áp dụng",
+    "quy trình, các bước thực hiện và thứ tự xử lý",
+    "chức năng, màn hình và thao tác trên hệ thống",
+    "phân biệt các loại, phân loại và so sánh",
+    "hồ sơ, chứng từ và thông tin cần kiểm tra",
+)
+
+
+def quiz_retrieval_queries(
+    request: QuizGenerationRequest, rng: random.Random | None = None, count: int = 4
+) -> list[str]:
+    """Return ``count`` aspect queries; a random sample makes repeated drafts differ."""
     scope = f"Khóa học: {request.course_name}."
     if request.lesson_name:
         scope += f" Bài học: {request.lesson_name}."
     aspects = (
-        "khái niệm, điều kiện và quy định quan trọng",
-        "vai trò, trách nhiệm và trường hợp áp dụng",
-        "ngoại lệ, rủi ro và sai sót thường gặp",
-        "số liệu, giới hạn và thời điểm áp dụng",
+        rng.sample(QUIZ_RETRIEVAL_ASPECTS, count) if rng else QUIZ_RETRIEVAL_ASPECTS[:count]
     )
     return [f"{scope} Tìm nội dung về {aspect}." for aspect in aspects]
 
@@ -63,14 +86,18 @@ def low_value_quiz_section(section: str) -> bool:
     }
 
 
-def quiz_focus_snippet(
-    text: str, candidate_index: int, max_chars: int = 650
-) -> str:
-    sentences = [
+def quiz_sentences(text: str) -> list[str]:
+    return [
         sentence.strip(" -•\t")
         for sentence in re.split(r"(?<=[.!?;])\s+|\n+", text)
         if len(sentence.strip()) >= 40
     ]
+
+
+def quiz_focus_snippet(
+    text: str, candidate_index: int, max_chars: int = 650
+) -> str:
+    sentences = quiz_sentences(text)
     if not sentences:
         return text[:max_chars]
     start = candidate_index % len(sentences)

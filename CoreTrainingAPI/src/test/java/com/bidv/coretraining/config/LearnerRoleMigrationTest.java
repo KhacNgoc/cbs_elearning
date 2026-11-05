@@ -1,8 +1,8 @@
 package com.bidv.coretraining.config;
 
-import com.bidv.coretraining.entity.AccessRole;
-import com.bidv.coretraining.repository.AccessRoleRepository;
-import com.bidv.coretraining.service.PermissionCache;
+import com.bidv.coretraining.access.entity.AccessRole;
+import com.bidv.coretraining.access.repository.AccessRoleRepository;
+import com.bidv.coretraining.access.service.PermissionCache;
 import org.junit.jupiter.api.Test;
 import java.util.*;
 import static org.assertj.core.api.Assertions.assertThat;

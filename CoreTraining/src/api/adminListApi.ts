@@ -4,7 +4,6 @@ import type { AdminUser, EnrollmentRequest } from './adminApi';
 import type { AccessRole, RoleMember } from './roleApi';
 export interface CursorPage<T> { items: T[]; nextCursor: string | null; hasMore: boolean }
 export interface NumberedPage<T> { items: T[]; total: number; page: number; pageCount: number }
-export interface AdminGroup { id: string; name: string; unitId: string; mandatoryCourseIds: string[]; allowedActions?: string[]; memberCount?: number }
 export const adminListApi = {
   async enrollments(params: { query?: string; status?: string; size: number; cursor?: string }) {
     return (await axiosClient.get<CursorPage<EnrollmentRequest>>('/api/admin/enrollment-requests/page', { params })).data;
@@ -18,12 +17,6 @@ export const adminListApi = {
   async report(id: number) { return (await axiosClient.get<LessonReport>(`/api/admin/content-reports/${id}`)).data; },
   async users(params: { query?: string; unitId?: string; status?: string; page: number; size: number }) {
     return (await axiosClient.get<NumberedPage<AdminUser>>('/api/admin/users/page', { params })).data;
-  },
-  async groups(params: { query?: string; unitId?: string; page: number; size: number }) {
-    return (await axiosClient.get<NumberedPage<AdminGroup>>('/api/admin/access/groups/page', { params })).data;
-  },
-  async groupCourses(params: { query?: string; page: number; size: number }) {
-    return (await axiosClient.get<NumberedPage<{ id: string; name: string; code?: string }>>('/api/admin/access/groups/course-options', { params })).data;
   },
   async roleOption(id: string) {
     return (await axiosClient.get<AccessRole & { memberCount: number }>(`/api/admin/rbac/role-options/item/${encodeURIComponent(id)}`)).data;

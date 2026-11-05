@@ -1825,7 +1825,7 @@ async function executeCsvImport() {
   border-radius: 16px;
   width: 92%;
   max-width: 860px;
-  max-height: 90vh;
+  height: min(760px, 90dvh);
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.4);
@@ -1943,10 +1943,16 @@ async function executeCsvImport() {
 }
 
 /* MODAL BODY */
+.quick-import-modal > :not(.modal-body-scroll) {
+  flex-shrink: 0;
+}
+
 .modal-body-scroll {
   padding: 1.25rem 1.5rem;
   overflow-y: auto;
-  flex: 1;
+  overscroll-behavior: contain;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .wizard-grid-2 {

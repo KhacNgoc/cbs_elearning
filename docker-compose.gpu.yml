@@ -1,0 +1,11 @@
+# Gives the Ollama container access to NVIDIA GPUs. Use only on machines that have one:
+# docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.gpu.yml --profile chatbot up -d --build
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

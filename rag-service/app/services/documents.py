@@ -4,60 +4,38 @@ import uuid
 from io import BytesIO
 
 from docx import Document as DocxDocument
-from docx.document import Document as DocxDocumentType
-from docx.oxml.table import CT_Tbl
-from docx.oxml.text.paragraph import CT_P
-from docx.table import Table
-from docx.text.paragraph import Paragraph
 from fastapi import HTTPException, UploadFile
 from pypdf import PdfReader
 from qdrant_client import models
 
 from app import config, infrastructure
+from app.section_outline import docx_sections, heading_page_ranges, pdf_page_headings
 from app.utils import split_text
 
 
-def iter_docx_blocks(document: DocxDocumentType):
-    for child in document.element.body.iterchildren():
-        if isinstance(child, CT_P):
-            yield Paragraph(child, document)
-        elif isinstance(child, CT_Tbl):
-            yield Table(child, document)
+def extract_pages(content: bytes, filename: str) -> list[dict]:
+    """Return text units in document order.
 
-
-def extract_pages(content: bytes, filename: str) -> list[tuple[int, str, str]]:
+    Each unit has ``page``, ``section`` (the filter key: "Trang n" for PDF, the
+    heading path for Word), ``text``, ``heading`` (heading path shown to users)
+    and ``heading_starts`` (PDF headings that begin on that page).
+    """
     suffix = filename.lower().rsplit(".", 1)[-1]
     if suffix == "pdf":
         reader = PdfReader(BytesIO(content))
+        texts = [page.extract_text() or "" for page in reader.pages]
+        headings = pdf_page_headings(reader, texts)
         return [
-            (index + 1, f"Trang {index + 1}", page.extract_text() or "")
-            for index, page in enumerate(reader.pages)
+            {"page": index + 1, "section": f"Trang {index + 1}", "text": text,
+             "heading": headings[index]["heading"], "heading_starts": headings[index]["starts"]}
+            for index, text in enumerate(texts)
         ]
     if suffix == "docx":
         document = DocxDocument(BytesIO(content))
-        sections: list[tuple[int, str, str]] = []
-        heading = "Nội dung tài liệu"
-        paragraphs: list[str] = []
-        for block in iter_docx_blocks(document):
-            if isinstance(block, Paragraph):
-                text = block.text.strip()
-                if not text:
-                    continue
-                if block.style and block.style.name.lower().startswith("heading"):
-                    if paragraphs:
-                        sections.append((1, heading, "\n".join(paragraphs)))
-                    heading = text
-                    paragraphs = []
-                else:
-                    paragraphs.append(text)
-            else:
-                for row in block.rows:
-                    cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
-                    if cells:
-                        paragraphs.append(" | ".join(cells))
-        if paragraphs:
-            sections.append((1, heading, "\n".join(paragraphs)))
-        return sections
+        return [
+            {"page": 1, "section": section, "text": text, "heading": section, "heading_starts": []}
+            for section, text in docx_sections(document)
+        ]
     raise HTTPException(415, "Only PDF and DOCX files are supported")
 
 
@@ -66,10 +44,11 @@ async def ingest_document(
 ) -> dict:
     content = await file.read()
     pages = extract_pages(content, file.filename or "document")
+    # Keep document order so the outline lists sections and excerpts as written.
     chunks = [
-        (page, section, chunk)
-        for page, section, text in pages
-        for chunk in split_text(text)
+        (unit, chunk, section_order, chunk_index)
+        for section_order, unit in enumerate(pages)
+        for chunk_index, chunk in enumerate(split_text(unit["text"]))
     ]
     if not chunks:
         raise HTTPException(400, "No extractable text was found in the document")
@@ -91,8 +70,8 @@ async def ingest_document(
     for start in range(0, len(chunks), config.EMBEDDING_BATCH_SIZE):
         chunk_batch = chunks[start:start + config.EMBEDDING_BATCH_SIZE]
         vectors = await infrastructure.embeddings(
-            [f"{section}\n{full_text}" for _, section, full_text in chunk_batch],
-            "search_document: ",
+            [f"{unit['heading'] or unit['section']}\n{full_text}" for unit, full_text, _, _ in chunk_batch],
+            config.EMBEDDING_DOCUMENT_PREFIX,
         )
         await infrastructure.qdrant.upsert(
             config.COLLECTION,
@@ -105,13 +84,18 @@ async def ingest_document(
                             "document_id": document_id,
                             "course_id": course_id,
                             "file_name": file.filename,
-                            "page": page,
-                            "section": section,
+                            "page": unit["page"],
+                            "section": unit["section"],
+                            "heading": unit["heading"],
+                            "heading_starts": unit["heading_starts"],
+                            "section_order": section_order,
+                            "chunk_index": chunk_index,
                             "excerpt": full_text[:config.EXCERPT_LENGTH],
                             "full_text": full_text,
                         },
                     )
-                    for (page, section, full_text), vector in zip(chunk_batch, vectors)
+                    for (unit, full_text, section_order, chunk_index), vector
+                    in zip(chunk_batch, vectors)
                 ]
             ),
         )
@@ -144,29 +128,46 @@ async def document_outline(document_id: str, course_id: str) -> dict:
         models.FieldCondition(key="course_id", match=models.MatchValue(value=course_id)),
         models.FieldCondition(key="document_id", match=models.MatchValue(value=document_id)),
     ])
-    pages, sections, excerpts = set(), set(), {}
+    # Chunks indexed before section_order/chunk_index existed sort last, by name.
+    unordered = float("inf")
+    pages, section_orders, excerpts, heading_starts = set(), {}, {}, {}
     offset = None
     while True:
         points, offset = await infrastructure.qdrant.scroll(
             collection_name=config.COLLECTION, scroll_filter=source_filter,
             offset=offset, limit=256, with_vectors=False,
-            with_payload=["page", "section", "excerpt"],
+            with_payload=["page", "section", "excerpt", "heading", "heading_starts",
+                          "section_order", "chunk_index"],
         )
         for point in points:
             payload = point.payload or {}
             page = int(payload.get("page", 1))
             section = str(payload.get("section", ""))
+            order = payload.get("section_order")
+            order = unordered if order is None else int(order)
+            chunk_index = payload.get("chunk_index")
+            chunk_index = unordered if chunk_index is None else int(chunk_index)
             pages.add(page)
             if section:
-                sections.add(section)
+                section_orders[section] = min(order, section_orders.get(section, unordered))
+            if payload.get("heading_starts"):
+                heading_starts[page] = payload["heading_starts"]
             key = (page, section)
-            if key not in excerpts:
-                excerpts[key] = {"page": page, "section": section,
-                                 "excerpt": str(payload.get("excerpt", ""))[:500]}
+            # The first chunk of a section is where its text actually starts.
+            if key not in excerpts or chunk_index < excerpts[key][0]:
+                excerpts[key] = (chunk_index, order, {
+                    "page": page, "section": section,
+                    "heading": str(payload.get("heading") or ""),
+                    "excerpt": str(payload.get("excerpt", ""))[:500],
+                })
         if offset is None:
             break
     if not pages:
         raise HTTPException(404, "Document has no indexed content")
+    ordered_excerpts = sorted(
+        excerpts.values(), key=lambda item: (item[1], item[2]["page"], item[2]["section"])
+    )
     return {"documentId": document_id, "pages": sorted(pages),
-            "sections": sorted(sections),
-            "excerpts": [excerpts[key] for key in sorted(excerpts)]}
+            "sections": sorted(section_orders, key=lambda name: (section_orders[name], name)),
+            "excerpts": [excerpt for _, _, excerpt in ordered_excerpts],
+            "headings": heading_page_ranges(heading_starts, max(pages))}

@@ -1,7 +1,16 @@
 package com.bidv.coretraining.config;
 
-import com.bidv.coretraining.entity.*;
-import com.bidv.coretraining.repository.*;
+import com.bidv.coretraining.access.entity.AccessRole;
+import com.bidv.coretraining.access.entity.AdminPage;
+import com.bidv.coretraining.access.repository.AccessRoleRepository;
+import com.bidv.coretraining.access.repository.AdminPageRepository;
+import com.bidv.coretraining.course.repository.CourseRepository;
+import com.bidv.coretraining.navigation.entity.NavigationItem;
+import com.bidv.coretraining.navigation.repository.NavigationItemRepository;
+import com.bidv.coretraining.training.entity.TrainingProgram;
+import com.bidv.coretraining.training.repository.TrainingProgramRepository;
+import com.bidv.coretraining.user.entity.User;
+import com.bidv.coretraining.user.repository.UserRepository;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,7 +45,6 @@ public class DynamicAccessInitializer {
         page("courses", "Khóa học và nội dung", "/admin/courses", 30, "create", "read", "update", "delete");
         page("users", "Tài khoản", "/admin/users", 40, "create", "read", "update", "delete");
         page("units", "Đơn vị / phòng", "/admin/units", 50, "create", "read", "update");
-        page("groups", "Nhóm học viên", "/admin/groups", 60, "create", "read", "update", "delete");
         page("roles", "Quản lý role", "/admin/roles", 70, "create", "read", "update", "delete");
         page("permissions", "Phân quyền", "/admin/permissions", 80, "read", "update");
         page("enrollments", "Duyệt đăng ký", "/admin?tab=enrollments", 90, "read", "update");
@@ -113,7 +121,7 @@ public class DynamicAccessInitializer {
                             }
                             case "ROLE_UNIT_ADMIN" -> {
                                 name = "Quản trị viên đơn vị";
-                                for (String page : List.of("courses", "users", "groups", "roles", "exams", "documents"))
+                                for (String page : List.of("courses", "users", "roles", "exams", "documents"))
                                     pages.findById(page).ifPresent(
                                             p -> p.getActions().forEach(a -> permissions.add(page + ":" + a)));
                                 permissions.addAll(Set.of("permissions:read", "permissions:update", "units:read",

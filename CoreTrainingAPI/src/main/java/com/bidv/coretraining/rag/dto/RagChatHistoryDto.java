@@ -1,0 +1,16 @@
+package com.bidv.coretraining.rag.dto;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+public record RagChatHistoryDto(
+                Long id,
+                String conversationId,
+                String courseId,
+                String question,
+                String answer,
+                boolean grounded,
+                boolean needsClarification,
+                List<RagSourceDto> sources,
+                LocalDateTime createdAt) {
+}

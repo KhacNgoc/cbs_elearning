@@ -288,9 +288,8 @@
                 <col style="width: 17%" />
                 <col style="width: 13%" />
                 <col style="width: 10%" />
-                <col style="width: 18%" />
-                <col style="width: 13%" />
-                <col style="width: 9%" />
+                <col style="width: 24%" />
+                <col style="width: 16%" />
                 <col style="width: 8%" />
                 <col style="width: 12%" />
               </colgroup>
@@ -300,7 +299,6 @@
                   <th>Tên đăng nhập</th>
                   <th>Mã NV</th>
                   <th>Email</th>
-                  <th>Nhóm nghiệp vụ</th>
                   <th>Vai trò</th>
                   <th>Điểm số tích lũy</th>
                   <th class="actions-col">Thao tác</th>
@@ -326,7 +324,6 @@
                   </td>
                   <td>{{ u.employeeId || "-" }}</td>
                   <td>{{ u.email || "-" }}</td>
-                  <td>{{ u.groupNames || "-" }}</td>
                   <td>
                     <span
                       class="role-tag"
@@ -359,7 +356,7 @@
                   </td>
                 </tr>
                 <tr v-if="filteredUsers.length === 0">
-                  <td colspan="8" class="empty-row">
+                  <td colspan="7" class="empty-row">
                     Không tìm thấy thành viên phù hợp.
                   </td>
                 </tr>
@@ -969,7 +966,7 @@
                   </tr>
 
                   <!-- Data Rows -->
-                  <tr v-for="document in courseDocuments" :key="document.id">
+                  <tr v-for="document in courseDocuments" :key="document.id" style="text-align: center;">
                     <td>
                       <div class="doc-file-item">
                         <FileText :size="17" class="doc-file-icon" />
@@ -1200,7 +1197,6 @@
           required
         />
       </div>
-      <p class="admin-modal-help">Quản lý nhóm của tài khoản tại menu Nhóm học viên → Thành viên.</p>
       <div class="form-group">
         <label>Vai trò hệ thống</label>
         <select v-model="userForm.role" class="form-control">
@@ -1270,7 +1266,7 @@
           />
         </div>
 
-        <LessonContentSelection v-model="selectedContentTypes" v-model:documents="lessonForm.documents" :read-only="loading" />
+        <LessonContentSelection v-model="selectedContentTypes" v-model:documents="lessonForm.documents" v-model:requirements="contentRequirements" :read-only="loading" />
         <div v-if="selectedContentTypes.includes('VIDEO')" class="form-group video-source-group">
           <label id="video-source-label">Nguồn video bài học <span class="required-mark" aria-hidden="true">*</span></label>
           <div
@@ -1552,7 +1548,7 @@
 <script setup lang="ts">
 import '../assets/styles/lesson-authoring.css';
 import LessonContentSelection from '../components/lesson/LessonContentSelection.vue';
-import { lessonContentTypes, selectedLessonContent, validateSelectedLessonContent, type LessonContentType } from '../utils/lessonContent';
+import { lessonContentRequirements, lessonContentTypes, lessonRequirementFields, selectedLessonContent, validateSelectedLessonContent, type LessonContentType } from '../utils/lessonContent';
 const LessonTextEditor = defineAsyncComponent(() => import("../components/lesson/LessonTextEditor.vue"));
 import { scrollWithin } from "../utils/scrollWithin";
 import { showToast } from "../utils/toast";
@@ -1768,6 +1764,7 @@ const userForm = ref({
 
 const lessonModal = ref({ show: false, isEdit: false });
 const selectedContentTypes = ref<LessonContentType[]>([]);
+const contentRequirements = ref(lessonContentRequirements({}));
 type LessonDocumentForm = LessonDocument & { file?: File };
 const lessonForm = ref({
   id: "",
@@ -2995,6 +2992,7 @@ const handleDeleteUser = (user: AdminUser) => {
 // ==========================================
 const openLessonModal = (lesson?: Lesson) => {
   selectedContentTypes.value = lesson ? lessonContentTypes(lesson) : [];
+  contentRequirements.value = lessonContentRequirements(lesson ?? {});
   if (lesson) {
     lessonModal.value = { show: true, isEdit: true };
     lessonForm.value = {
@@ -3179,6 +3177,7 @@ const saveLesson = async () => {
       videoUrl,
       documents,
       procedureSteps: lessonForm.value.procedureSteps,
+      ...lessonRequirementFields(contentRequirements.value, selectedContentTypes.value),
     };
     delete (payload as Partial<typeof lessonForm.value>).videoFile;
 

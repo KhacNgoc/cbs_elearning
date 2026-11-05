@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -6,6 +7,7 @@ from app.schemas import QuizGenerationRequest
 from app.quiz_utils import generated_question_validation_error, same_question_objective
 from app.services.quiz import generate_quiz
 from app import config
+from tests.quiz_fakes import FakeQuizModel, REVIEW_SYSTEM_PREFIX
 
 
 class QuizQualityTests(unittest.TestCase):
@@ -78,44 +80,116 @@ class QuizQualityTests(unittest.TestCase):
             ["Quản lý các giao: liên quan", "Kế toán", "Nhân sự", "Kho hàng"]))
 
 
+GOOD = '{"q":"CIF dùng để nhận diện đối tượng nào?","o":["Khách hàng","Hồ sơ khoản vay","Lịch trả nợ","Lãi suất"],"a":0}'
+LEAK = '{"q":"Mã hồ sơ nhận diện hồ sơ khoản vay cụ thể là gì?","o":["Mã hồ sơ","CIF","Hạn mức","Dư nợ"],"a":0}'
+ACCEPT = '{"reason":"Nguồn xác định CIF là mã định danh khách hàng, các lựa chọn khác không đúng.","correct_answers":[0],"well_formed":true}'
+REJECT = '{"reason":"Câu hỏi lộ đáp án.","correct_answers":[0],"well_formed":false}'
+POINT = SimpleNamespace(score=1., payload={"document_id": "D1", "course_id": "C1",
+    "page": 1, "section": "Tổng quan", "full_text": "CIF là mã định danh khách hàng. Mã hồ sơ nhận diện hồ sơ khoản vay cụ thể."})
+
+
 class QuizQualityFlowTests(unittest.IsolatedAsyncioTestCase):
-    async def test_bad_candidate_is_replaced_and_reviewed_before_returning(self):
-        point = SimpleNamespace(score=1., payload={"document_id": "D1", "course_id": "C1",
-            "page": 1, "section": "Tổng quan", "full_text": "CIF là mã định danh khách hàng. Mã hồ sơ nhận diện hồ sơ khoản vay cụ thể."})
-        model = AsyncMock(side_effect=[
-            '{"q":"Mã hồ sơ nhận diện hồ sơ khoản vay cụ thể là gì?","o":["Mã hồ sơ","CIF","Hạn mức","Dư nợ"],"a":0}',
-            '{"q":"CIF dùng để nhận diện đối tượng nào?","o":["Khách hàng","Hồ sơ khoản vay","Lịch trả nợ","Lãi suất"],"a":0}',
-            '{"reason":"Nguồn xác định CIF là mã định danh khách hàng, các lựa chọn khác không đúng.","correct_answers":[0],"well_formed":true}',
-        ])
+    async def run_quiz(self, model, single=1, **request):
         with patch("app.infrastructure.ensure_collection", AsyncMock()), \
              patch("app.infrastructure.embeddings", AsyncMock(return_value=[[1., 0.]] * 4)), \
-             patch("app.infrastructure.qdrant.query_points", AsyncMock(return_value=SimpleNamespace(points=[point]))), \
-             patch("app.infrastructure.ollama_chat", model), \
-             patch("app.config.QUIZ_LLM_VERIFICATION_ENABLED", True), \
-             patch("app.config.QUIZ_GENERATION_MAX_ATTEMPTS", 2):
-            result = await generate_quiz(QuizGenerationRequest(course_id="C1", course_name="Cho vay",
-                single_choice_count=1, multiple_choice_count=0))
-        self.assertEqual(1, len(result.questions))
-        self.assertEqual("CIF dùng để nhận diện đối tượng nào?", result.questions[0].text)
-        self.assertEqual(config.CHAT_MODEL, model.await_args_list[-1].args[0])
-        self.assertIn("answer_in_question", model.await_args_list[1].args[1][1]["content"])
-        candidate_json = model.await_args_list[-1].args[1][1]["content"].split("<candidate_questions>")[1].split("</candidate_questions>")[0]
+             patch("app.infrastructure.qdrant.query_points", AsyncMock(return_value=SimpleNamespace(points=[POINT]))), \
+             patch("app.infrastructure.ollama_chat", new=model), \
+             patch("app.config.QUIZ_LLM_VERIFICATION_ENABLED", True):
+            return await generate_quiz(QuizGenerationRequest(course_id="C1", course_name="Cho vay",
+                single_choice_count=single, multiple_choice_count=0, **request))
+
+    async def test_bad_candidate_is_replaced_and_reviewed_before_returning(self):
+        model = FakeQuizModel([LEAK, GOOD], [ACCEPT])
+        result = await self.run_quiz(model)
+        self.assertEqual(["CIF dùng để nhận diện đối tượng nào?"], [q.text for q in result.questions])
+        self.assertEqual(1, len(model.review_calls))
+        self.assertEqual(config.CHAT_MODEL, model.review_calls[0]["model"])
+        candidate_json = model.review_calls[0]["prompt"].split("<candidate_questions>")[1].split("</candidate_questions>")[0]
         self.assertNotIn("correct_answers", candidate_json)
 
+    async def test_replacements_carry_the_rejection_reasons(self):
+        model = FakeQuizModel([LEAK, LEAK, GOOD], [ACCEPT])
+        result = await self.run_quiz(model)
+        self.assertEqual(1, len(result.questions))
+        self.assertTrue(any("answer_in_question" in call["prompt"] for call in model.generation_calls[2:]))
+
+    async def test_question_rejected_in_review_is_refilled(self):
+        second = '{"q":"Mã hồ sơ dùng để nhận diện đối tượng nào?","o":["Hồ sơ khoản vay","Khách hàng","Lãi suất","Tài sản"],"a":0}'
+        third = '{"q":"Hồ sơ khoản vay cụ thể được nhận diện bằng mã nào?","o":["Mã hồ sơ","Mã chi nhánh","Mã sản phẩm","Mã giao dịch viên"],"a":0}'
+        model = FakeQuizModel([GOOD, second, third], [REJECT, ACCEPT, ACCEPT])
+        result = await self.run_quiz(model, single=2)
+        self.assertEqual(2, len(result.questions))
+        self.assertEqual([], result.warnings)
+        self.assertEqual(3, len(model.review_calls))
+
+    async def test_existing_questions_are_not_generated_again(self):
+        model = FakeQuizModel([GOOD], [ACCEPT])
+        result = await self.run_quiz(model, existing_questions=["CIF được dùng để nhận diện đối tượng nào?"])
+        self.assertEqual([], result.questions)
+        self.assertEqual([], model.review_calls)
+        self.assertIn("CIF được dùng để nhận diện đối tượng nào?", model.generation_calls[0]["prompt"])
+
     async def test_independent_review_rejects_two_synonymous_correct_options(self):
-        point = SimpleNamespace(score=1., payload={"document_id": "D1", "course_id": "C1",
-            "page": 1, "section": "Tổng quan", "full_text": "CIF là mã định danh khách hàng."})
-        model = AsyncMock(side_effect=[
-            '{"q":"Mã định danh khách hàng được gọi là gì?","o":["CIF","Mã CIF","Hạn mức","Dư nợ"],"a":0}',
-            '{"reason":"CIF và Mã CIF đồng nghĩa nên có hai đáp án đúng.","correct_answers":[0,1],"well_formed":true}',
-        ])
-        with patch("app.infrastructure.ensure_collection", AsyncMock()), \
-             patch("app.infrastructure.embeddings", AsyncMock(return_value=[[1., 0.]] * 4)), \
-             patch("app.infrastructure.qdrant.query_points", AsyncMock(return_value=SimpleNamespace(points=[point]))), \
-             patch("app.infrastructure.ollama_chat", model), \
-             patch("app.config.QUIZ_LLM_VERIFICATION_ENABLED", True), \
-             patch("app.config.QUIZ_GENERATION_MAX_ATTEMPTS", 1):
-            result = await generate_quiz(QuizGenerationRequest(course_id="C1", course_name="Cho vay",
-                single_choice_count=1, multiple_choice_count=0))
+        model = FakeQuizModel(
+            ['{"q":"Mã định danh khách hàng được gọi là gì?","o":["CIF","Mã CIF","Hạn mức","Dư nợ"],"a":0}'],
+            ['{"reason":"CIF và Mã CIF đồng nghĩa nên có hai đáp án đúng.","correct_answers":[0,1],"well_formed":true}'],
+        )
+        result = await self.run_quiz(model)
         self.assertEqual([], result.questions)
         self.assertIn("0/1", result.warnings[0])
+
+    async def test_reviews_do_not_wait_behind_every_generation(self):
+        second = '{"q":"Mã hồ sơ dùng để nhận diện đối tượng nào?","o":["Hồ sơ khoản vay","Khách hàng","Lãi suất","Tài sản"],"a":0}'
+        third = '{"q":"Hồ sơ khoản vay cụ thể được nhận diện bằng mã nào?","o":["Mã hồ sơ","Mã chi nhánh","Mã sản phẩm","Mã giao dịch viên"],"a":0}'
+        fake = FakeQuizModel([GOOD, second, third], [ACCEPT] * 3)
+        order = []
+
+        async def model(name, messages, *args, **kwargs):
+            order.append("review" if messages[0]["content"].startswith(REVIEW_SYSTEM_PREFIX) else "generate")
+            return await fake(name, messages, *args, **kwargs)
+
+        with patch("app.config.QUIZ_GENERATION_CONCURRENCY", 2):
+            await self.run_quiz(model, single=3)
+        self.assertEqual("review", order[2])
+
+    async def test_generation_window_is_shared_between_question_types(self):
+        model = FakeQuizModel([LEAK] * 12)
+        with patch("app.config.QUIZ_GENERATION_CONCURRENCY", 2), \
+             patch("app.infrastructure.ensure_collection", AsyncMock()), \
+             patch("app.infrastructure.embeddings", AsyncMock(return_value=[[1., 0.]] * 4)), \
+             patch("app.infrastructure.qdrant.query_points", AsyncMock(return_value=SimpleNamespace(points=[POINT]))), \
+             patch("app.infrastructure.ollama_chat", new=model):
+            await generate_quiz(QuizGenerationRequest(course_id="C1", course_name="Cho vay",
+                single_choice_count=2, multiple_choice_count=2))
+        first_two = " ".join(call["prompt"] for call in model.generation_calls[:2])
+        self.assertIn("Tạo SINGLE_CHOICE", first_two)
+        self.assertIn("Tạo MULTIPLE_CHOICE", first_two)
+
+    async def test_concurrent_jobs_take_turns_on_the_model_queue(self):
+        order = []
+
+        async def model(name, messages, *args, **kwargs):
+            order.append("B" if "Khóa học: Khóa B" in messages[1]["content"] else "A")
+            await asyncio.sleep(0)
+            return LEAK
+
+        def job(name):
+            return generate_quiz(QuizGenerationRequest(course_id="C1", course_name=name,
+                single_choice_count=10, multiple_choice_count=0))
+
+        with patch("app.config.QUIZ_GENERATION_CONCURRENCY", 2), \
+             patch("app.infrastructure.quiz_generation_semaphore", asyncio.Semaphore(1)), \
+             patch("app.infrastructure.ensure_collection", AsyncMock()), \
+             patch("app.infrastructure.embeddings", AsyncMock(return_value=[[1., 0.]] * 4)), \
+             patch("app.infrastructure.qdrant.query_points", AsyncMock(return_value=SimpleNamespace(points=[POINT]))), \
+             patch("app.infrastructure.ollama_chat", new=model):
+            await asyncio.gather(job("Khóa A"), job("Khóa B"))
+        self.assertIn("A", order[:4])
+        self.assertIn("B", order[:4])
+
+    async def test_candidate_budget_bounds_model_calls(self):
+        model = FakeQuizModel([LEAK] * 20)
+        with patch("app.config.QUIZ_CANDIDATE_BUDGET_FACTOR", 3):
+            result = await self.run_quiz(model, single=2)
+        self.assertEqual([], result.questions)
+        self.assertEqual(6, len(model.generation_calls))

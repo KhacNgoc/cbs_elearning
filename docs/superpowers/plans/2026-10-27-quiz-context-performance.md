@@ -11,7 +11,7 @@
 
 ## Changed files
 
-- Backend: `dto/QuizLessonContextDto.java`, `repository/LessonRepository.java`, `service/QuizContextService.java`, `controller/AdminController.java`, and test `service/LearningQueryAuditTest.java`.
+- Backend: `quiz/dto/QuizLessonContextDto.java`, `lesson/repository/LessonRepository.java`, `quiz/service/QuizContextService.java`, `controller/AdminController.java`, and test `learner/service/LearningQueryAuditTest.java`.
 - Frontend: `src/api/quizContextApi.ts`, `src/views/AdminQuizDetail.vue`, `src/components/QuestionBankPanel.vue`, `tests/quizDetailLoading.test.mjs`, `tests/questionBankContext.test.mjs`.
 
 ## Verification and limits

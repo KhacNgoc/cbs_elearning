@@ -1,0 +1,24 @@
+package com.bidv.coretraining.course.dto;
+
+import com.bidv.coretraining.enums.EnrollmentStatus;
+import lombok.*;
+
+import java.time.LocalDateTime;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class EnrollmentRequestDto {
+    private Long id;
+    private Long userId;
+    private String username;
+    private String fullName;
+    private String courseId;
+    private String courseName;
+    private EnrollmentStatus status;
+    private LocalDateTime requestedAt;
+    private LocalDateTime reviewedAt;
+    private String reviewedBy;
+    private String rejectionReason;
+}

@@ -166,16 +166,6 @@ CREATE TABLE public.courses (
 
 
 --
--- Name: group_mandatory_courses; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.group_mandatory_courses (
-    group_id character varying(255) NOT NULL,
-    course_id character varying(255) NOT NULL
-);
-
-
---
 -- Name: lesson_contents; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -572,7 +562,9 @@ CREATE TABLE public.rag_conversation_sources (
     document_name character varying(255) NOT NULL,
     page integer NOT NULL,
     section character varying(255) NOT NULL,
-    message_id bigint NOT NULL
+    message_id bigint NOT NULL,
+    course_id character varying(255),
+    course_name character varying(500)
 );
 
 
@@ -601,7 +593,7 @@ CREATE TABLE public.rag_conversations (
     summary text,
     title character varying(255),
     updated_at timestamp(6) without time zone NOT NULL,
-    course_id character varying(255) NOT NULL,
+    course_id character varying(255),
     user_id bigint NOT NULL
 );
 
@@ -683,16 +675,6 @@ CREATE TABLE public.user_completed_lessons (
 
 
 --
--- Name: user_groups; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.user_groups (
-    id character varying(255) NOT NULL,
-    name character varying(255) NOT NULL
-);
-
-
---
 -- Name: user_quiz_score_answer_sets; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -767,8 +749,7 @@ CREATE TABLE public.users (
     password character varying(255) NOT NULL,
     points integer NOT NULL,
     role character varying(255) NOT NULL,
-    username character varying(255) NOT NULL,
-    group_id character varying(255)
+    username character varying(255) NOT NULL
 );
 
 
@@ -861,14 +842,6 @@ ALTER TABLE ONLY public.course_enrollment_requests
 
 ALTER TABLE ONLY public.courses
     ADD CONSTRAINT courses_pkey PRIMARY KEY (id);
-
-
---
--- Name: group_mandatory_courses group_mandatory_courses_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.group_mandatory_courses
-    ADD CONSTRAINT group_mandatory_courses_pkey PRIMARY KEY (group_id, course_id);
 
 
 --
@@ -1160,14 +1133,6 @@ ALTER TABLE ONLY public.user_completed_lessons
 
 
 --
--- Name: user_groups user_groups_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.user_groups
-    ADD CONSTRAINT user_groups_pkey PRIMARY KEY (id);
-
-
---
 -- Name: user_quiz_score_answer_sets user_quiz_score_answer_sets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1234,6 +1199,7 @@ CREATE INDEX idx_rag_conversation_message_order ON public.rag_conversation_messa
 --
 
 CREATE INDEX idx_rag_conversation_owner_course_updated ON public.rag_conversations USING btree (user_id, course_id, updated_at);
+CREATE INDEX idx_rag_conversation_owner_updated ON public.rag_conversations USING btree (user_id, updated_at);
 
 
 --
@@ -1273,14 +1239,6 @@ ALTER TABLE ONLY public.question_correct_answers
 
 ALTER TABLE ONLY public.rag_conversations
     ADD CONSTRAINT fk24tqm1i0mlvhgkrj4ls51vo0r FOREIGN KEY (user_id) REFERENCES public.users(id);
-
-
---
--- Name: users fk2e2079vao3svqhmmjkbafth32; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.users
-    ADD CONSTRAINT fk2e2079vao3svqhmmjkbafth32 FOREIGN KEY (group_id) REFERENCES public.user_groups(id);
 
 
 --
@@ -1417,14 +1375,6 @@ ALTER TABLE ONLY public.course_documents
 
 ALTER TABLE ONLY public.quizzes
     ADD CONSTRAINT fkbdv8uggpsin6pnkx0d80ryqey FOREIGN KEY (lesson_id) REFERENCES public.lessons(id);
-
-
---
--- Name: group_mandatory_courses fkdioils1nvhyt118vfjjrm57ba; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.group_mandatory_courses
-    ADD CONSTRAINT fkdioils1nvhyt118vfjjrm57ba FOREIGN KEY (group_id) REFERENCES public.user_groups(id);
 
 
 --
@@ -1633,14 +1583,6 @@ ALTER TABLE ONLY public.user_badges
 
 ALTER TABLE ONLY public.rag_conversation_sources
     ADD CONSTRAINT fkrhbw451h8rbeojcup641no9s FOREIGN KEY (message_id) REFERENCES public.rag_conversation_messages(id);
-
-
---
--- Name: group_mandatory_courses fkrwre98uv6fysh9rn57g89cmv3; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.group_mandatory_courses
-    ADD CONSTRAINT fkrwre98uv6fysh9rn57g89cmv3 FOREIGN KEY (course_id) REFERENCES public.courses(id);
 
 
 --

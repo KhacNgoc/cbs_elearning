@@ -57,7 +57,7 @@ public class JwtTokenProvider {
         return claims.getSubject();
     }
 
-    public boolean matchesUser(String token, com.bidv.coretraining.entity.User user) {
+    public boolean matchesUser(String token, com.bidv.coretraining.user.entity.User user) {
         Claims claims = Jwts.parserBuilder().setSigningKey(jwtSecretKey).build().parseClaimsJws(token).getBody();
         Number version = claims.get("ver", Number.class);
         return java.util.Objects.equals(claims.getSubject(), String.valueOf(user.getId())) && user.activeAccount()

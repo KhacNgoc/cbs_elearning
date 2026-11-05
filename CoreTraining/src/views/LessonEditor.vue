@@ -65,6 +65,16 @@
         >
           Nội dung bài học</button
         ><button
+          id="flashcard-tab"
+          role="tab"
+          :aria-selected="tab === 'flashcards'"
+          aria-controls="flashcard-panel"
+          :class="{ active: tab === 'flashcards' }"
+          @click="tab = 'flashcards'"
+        >
+          Flashcard
+        </button
+        ><button
           v-if="user.can('exams')"
           id="quiz-tab"
           role="tab"
@@ -128,6 +138,19 @@
             @saved="refreshLesson"
           />
         </section>
+        <section
+          id="flashcard-panel"
+          v-if="tab === 'flashcards'"
+          role="tabpanel"
+          aria-labelledby="flashcard-tab"
+        >
+          <LessonFlashcardManager
+            :course-id="chapter.courseId"
+            :lesson-id="lesson.id"
+            :actions="course?.allowedActions || []"
+            :read-only="!canEdit"
+          />
+        </section>
       </fieldset>
     </template>
     <p v-else-if="loading">Đang tải bài học...</p>
@@ -148,6 +171,7 @@ import type { Lesson, Chapter, Course } from "../types";
 import LessonContentEditor from "./LessonContentEditor.vue";
 import AdminQuizDetail from "./AdminQuizDetail.vue";
 import AdminBackButton from "../components/AdminBackButton.vue";
+import LessonFlashcardManager from "../components/flashcards/LessonFlashcardManager.vue";
 import { Pencil } from "lucide-vue-next";
 
 const route = useRoute(),
@@ -285,7 +309,6 @@ watch(
 );
 async function savedContent() {
   dirty.value = false;
-  showToast("Đã lưu nội dung bài học. Đang chuyển tới màn hình xem trước...", "success");
   const courseId = chapter.value?.courseId;
   if (courseId) {
     ensureTreeBranchSavedInSession();
@@ -413,13 +436,13 @@ h1 {
   transition: background 0.15s ease;
 }
 .header-title-interactive:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--primary-light);
 }
 .header-title-interactive h1 {
   margin: 0;
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--text-heading, #fff);
+  color: var(--text-main);
 }
 .btn-edit-title {
   display: inline-flex;
@@ -440,8 +463,8 @@ h1 {
 .header-title-input {
   font-size: 1.35rem;
   font-weight: 700;
-  background: var(--bg-surface, #1e293b);
-  color: #fff;
+  background: var(--bg-card);
+  color: var(--text-main);
   border: 1.5px solid #10b981;
   border-radius: 8px;
   padding: 0.35rem 0.75rem;

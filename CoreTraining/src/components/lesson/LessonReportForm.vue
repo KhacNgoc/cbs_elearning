@@ -23,14 +23,24 @@
       ></textarea
       ><small>{{ content.length }}/5.000 ký tự</small></label
     >
-    <label class="report-field"
-      >Ảnh minh chứng (không bắt buộc)<input
-        type="file"
-        accept="image/png,image/jpeg"
-        multiple
-        @change="choose"
-      /><small>Tối đa 3 ảnh PNG/JPEG, mỗi ảnh không quá 5 MB.</small></label
-    >
+    <div class="report-field">
+      <span class="report-field-label">Ảnh minh chứng (không bắt buộc)</span>
+      <label class="file-picker">
+        <Upload :size="18" />
+        <span>{{
+          images.length ? `Đã chọn ${images.length}/3 ảnh` : "Chọn ảnh từ máy"
+        }}</span>
+        <input
+          type="file"
+          aria-label="Ảnh minh chứng (không bắt buộc)"
+          accept="image/png,image/jpeg"
+          multiple
+          :disabled="sending"
+          @change="choose"
+        />
+      </label>
+      <small>Tối đa 3 ảnh PNG/JPEG, mỗi ảnh không quá 5 MB.</small>
+    </div>
     <div class="evidence-list">
       <div v-for="(file, index) in images" :key="file.name + index">
         <img :src="previews[index]" :alt="file.name" /><span>{{
@@ -51,7 +61,7 @@
 </template>
 <script setup lang="ts">
 import { ref, watch, onBeforeUnmount } from "vue";
-import { Flag, X } from "lucide-vue-next";
+import { Flag, Upload, X } from "lucide-vue-next";
 import AdminModal from "../AdminModal.vue";
 import { contentToolsApi, contentToolsError } from "../../api/contentToolsApi";
 import { showToast } from "../../utils/toast";
@@ -169,6 +179,44 @@ onBeforeUnmount(clear);
   display: grid;
   gap: 0.5rem;
   margin: 1rem 0;
+}
+.report-field-label {
+  font-size: 0.8125rem;
+}
+.file-picker {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 44px;
+  padding: 0.55rem 0.75rem;
+  border: 1px dashed var(--line-9ab9ae);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--surface-ffffff);
+  color: var(--primary-ink);
+  cursor: pointer;
+}
+.file-picker:hover {
+  border-color: var(--primary-color);
+  background: var(--primary-light);
+}
+.file-picker:focus-within {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+.file-picker svg {
+  flex-shrink: 0;
+}
+.file-picker span {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.file-picker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
 }
 .report-lesson {
   font-weight: 700;

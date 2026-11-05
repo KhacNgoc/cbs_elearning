@@ -24,6 +24,14 @@ trên loopback để debug; người dùng đi qua frontend.
 Cookie Secure vẫn tắt ở cấu hình cơ sở để hỗ trợ HTTP trên máy phát triển.
 Không áp dụng file override production khi thử bằng HTTP.
 
+**Máy có GPU NVIDIA:** thêm `-f docker-compose.yml -f docker-compose.gpu.yml` vào lệnh để Ollama trong
+Docker dùng GPU. Không có file này thì Ollama chạy bằng CPU. Xem mục "Ollama GPU on NVIDIA" trong
+`rag-service/README.md`.
+
+**Máy đã có dữ liệu chatbot từ trước khi đổi sang `bge-m3`:** phải tạo collection mới trước khi
+khởi động lại `rag-service`, nếu không chatbot sẽ không tìm thấy tài liệu nào. Xem mục "Changing the
+embedding model" trong `rag-service/README.md`.
+
 Khi bật profile chatbot, lần đầu Ollama tải model có thể mất lâu. Database mới không có dữ liệu mẫu
 vì `DATA_INITIALIZER_ENABLED=false`; cần tài khoản và bài học hợp lệ để thử
 luồng người học. Kiểm thử tự động dùng dữ liệu riêng, không sửa database thật.
@@ -138,3 +146,43 @@ năng thời gian thực. Tránh log query string của URL stream vì có token
 Nginx frontend đã bỏ query string trong access log. Thay các secret mẫu
 trước khi triển khai. Khi giữ API cùng origin, không cần mở CORS cho nhiều
 domain; nếu tách domain cần cấu hình lại origin/cookie và kiểm thử riêng.
+
+## Migration database (Flyway)
+
+Profile `postgres` dùng Flyway: khi backend khởi động, các script còn thiếu trong `CoreTrainingAPI/src/main/resources/db/migration/` tự chạy theo thứ tự phiên bản, lịch sử nằm trong bảng `flyway_schema_history`. Sau đó Hibernate chỉ kiểm tra schema khớp với entity (`ddl-auto=validate`), không tự sửa. Thiếu bảng hoặc cột thì backend dừng và báo lỗi.
+
+Thêm thay đổi schema:
+
+1. Tạo file mới `V<yyyyMMdd>_<số thứ tự>__<mô tả>.sql`, phiên bản cao hơn mọi script đã có, không ghi `BEGIN`/`COMMIT`.
+2. Thêm giá trị vào enum lưu trong database cũng cần script, vì check constraint không còn do Hibernate cập nhật.
+3. Không sửa script đã chạy ở bất kỳ môi trường nào: Flyway so checksum và sẽ không cho backend khởi động. Muốn đổi thì thêm script mới.
+
+Thư mục `migrations/` chỉ còn là lịch sử, Flyway không đọc. Riêng `20261105_timestamps_to_vietnam_time.sql` có điều kiện nên vẫn chạy tay theo mục Múi giờ backend.
+
+### Lần đầu chuyển sang Flyway ở môi trường đang có dữ liệu
+
+Deploy này **tự động** chạy các script `V20261102_1` đến `V20261105_1`. Chúng chạy lại an toàn nếu môi trường đã chạy trước đó, nhưng `V20261104_3` xóa lịch sử ôn flashcard cũ, còn `V20261105_1` xóa vĩnh viễn nhóm học viên: học viên mất quyền học các khóa chỉ được giao qua nhóm (lịch sử học vẫn giữ; quyền học trở lại nếu khóa được giao theo đơn vị hoặc học viên đăng ký).
+
+1. Sao lưu database (`pg_dump -Fc`).
+2. Nếu cần lưu danh sách học viên bị ảnh hưởng, truy vấn `user_group_memberships` và `group_mandatory_courses` trước khi deploy.
+3. Nếu môi trường từng chạy UTC, dừng backend và chạy script múi giờ trước (xem mục Múi giờ backend).
+4. Deploy như bình thường. Log cần có `Successfully baselined schema with version: 1` và `Successfully applied ... migrations`.
+
+Flyway đánh dấu database cũ là đã ở `V1` mà không kiểm tra schema thật. Nếu backend dừng với lỗi `Schema-validation: missing ...`, schema môi trường đó đang lệch so với `V1`:
+
+- Cách đúng: thêm script `V...` bổ sung phần thiếu rồi deploy lại.
+- Cách tạm: đặt `JPA_DDL_AUTO=update` trong file env để Hibernate tự thêm phần thiếu, khởi động một lần, rồi bỏ biến này.
+
+Script lỗi giữa chừng thì transaction của script đó được hoàn tác và backend không khởi động. Bản miễn phí của Flyway không có lệnh undo: muốn quay lại phiên bản cũ thì khôi phục từ bản sao lưu.
+
+## Múi giờ backend
+
+Backend cố định múi giờ `Asia/Ho_Chi_Minh` khi khởi động. Các cột thời gian không có múi giờ lưu giờ Việt Nam, riêng `notifications.created_at` lưu UTC.
+
+Khi lần đầu triển khai thay đổi này trên môi trường có backend từng chạy UTC:
+
+1. Sao lưu cơ sở dữ liệu và dừng backend.
+2. Chạy `CoreTrainingAPI/src/main/resources/migrations/20261105_timestamps_to_vietnam_time.sql` (chạy lại không có tác dụng).
+3. Khởi động phiên bản backend mới.
+
+Không chạy script này trên môi trường có backend vốn đã chạy giờ Việt Nam.

@@ -1,7 +1,7 @@
 package com.bidv.coretraining.websocket;
 
-import com.bidv.coretraining.security.JwtTokenProvider;
 import com.bidv.coretraining.security.JwtCookieService;
+import com.bidv.coretraining.security.JwtTokenProvider;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.ServerHttpRequest;
@@ -38,7 +38,7 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
             return false;
         }
 
-        com.bidv.coretraining.entity.User user;
+        com.bidv.coretraining.user.entity.User user;
         try {
             user = ((com.bidv.coretraining.security.CustomUserDetails) detailsService
                     .loadUserById(tokenProvider.getUserIdFromJWT(token))).getUser();

@@ -1,7 +1,7 @@
 package com.bidv.coretraining.config;
 
-import com.bidv.coretraining.entity.NavigationItem;
-import com.bidv.coretraining.repository.NavigationItemRepository;
+import com.bidv.coretraining.navigation.entity.NavigationItem;
+import com.bidv.coretraining.navigation.repository.NavigationItemRepository;
 import org.springframework.boot.*;
 import org.springframework.stereotype.Component;
 
@@ -20,6 +20,7 @@ public class NavigationDataInitializer implements ApplicationRunner {
                 seed("dashboard", "Tổng quan", "/", "Home", "MAIN", 10, true, "ROLE_USER", "ROLE_ADMIN");
                 seed("leaderboard", "Bảng vinh danh", "/leaderboard", "Trophy", "MAIN", 20, true, "ROLE_USER",
                                 "ROLE_ADMIN");
+                seed("flashcards", "Flashcard", "/flashcards", "Layers3", "MAIN", 25, true, "ROLE_USER", "ROLE_ADMIN");
                 seed("profile", "Hồ sơ", "/profile", "UserCircle", "MAIN", 30, false, "ROLE_USER", "ROLE_ADMIN");
                 seed("lesson", "Bài học", "/lesson", "BookOpen", "MAIN", 40, false, "ROLE_USER", "ROLE_ADMIN");
                 seed("quiz", "Bài kiểm tra", "/quiz", "HelpCircle", "MAIN", 50, false, "ROLE_USER", "ROLE_ADMIN");
@@ -32,7 +33,6 @@ public class NavigationDataInitializer implements ApplicationRunner {
                                 "ROLE_ADMIN");
                 seed("admin.users", "Tài khoản", "/admin/users", "Users", "ADMIN", 110, true, "ROLE_ADMIN");
                 seed("admin.units", "Đơn vị / phòng", "/admin/units", "Building2", "ADMIN", 111, true, "ROLE_ADMIN");
-                seed("admin.groups", "Nhóm học viên", "/admin/groups", "UsersRound", "ADMIN", 112, true, "ROLE_ADMIN");
                 seed("admin.permissions", "Phân quyền", "/admin/permissions", "ShieldCheck", "ADMIN", 114, true,
                                 "ROLE_ADMIN");
                 seed("admin.enrollments", "Duyệt đăng ký", "/admin?tab=enrollments", "ClipboardCheck", "ADMIN", 120,
@@ -63,7 +63,7 @@ public class NavigationDataInitializer implements ApplicationRunner {
         private void seed(String id, String label, String route, String icon, String area,
                         int order, boolean visible, String... roles) {
                 if (repository.existsById(id)) {
-                        if (Set.of("admin.access", "admin.users", "admin.units", "admin.groups", "admin.permissions")
+                        if (Set.of("admin.access", "admin.users", "admin.units", "admin.permissions")
                                         .contains(id)) {
                                 var item = repository.findById(id).orElseThrow();
                                 item.setLabel(label);

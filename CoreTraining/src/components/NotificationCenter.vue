@@ -39,6 +39,7 @@
                 v-else-if="item.type === 'COURSE_CONTENT_UPDATED'"
                 :size="18"
               />
+              <Layers3 v-else-if="item.type === 'FLASHCARD_STUDY_REMINDER'" :size="18" />
               <UserRoundX v-else-if="item.type === 'ENROLLMENT_REJECTED'" :size="18" />
               <UserRoundCheck v-else :size="18" />
             </span>
@@ -68,13 +69,13 @@
           :class="`system-toast--${toast.variant}`"
           :role="toast.variant === 'error' ? 'alert' : 'status'"
         >
-          <CircleAlert v-if="toast.variant === 'error'" :size="19" />
-          <TriangleAlert v-else-if="toast.variant === 'warning'" :size="19" />
-          <CircleCheck v-else-if="toast.variant === 'success'" :size="19" />
-          <Info v-else :size="19" />
+          <CircleAlert v-if="toast.variant === 'error'" :size="26" />
+          <TriangleAlert v-else-if="toast.variant === 'warning'" :size="26" />
+          <CircleCheck v-else-if="toast.variant === 'success'" :size="26" />
+          <Info v-else :size="26" />
           <span>{{ toast.message }}</span>
           <button aria-label="Đóng" @click="toast = null">
-            <X :size="16" />
+            <X :size="20" />
           </button>
         </div> </Transition
     ></Teleport>
@@ -91,6 +92,7 @@ import {
   CircleCheck,
   CircleAlert,
   Info,
+  Layers3,
   MessageCircleReply,
   TriangleAlert,
   UserRoundCheck,
@@ -195,6 +197,7 @@ const formatTime = (value: string) =>
   new Intl.DateTimeFormat("vi-VN", {
     dateStyle: "short",
     timeStyle: "short",
+    timeZone: "Asia/Ho_Chi_Minh",
   }).format(new Date(value));
 const closeOnOutside = (event: MouseEvent) => {
   if (root.value && !root.value.contains(event.target as Node))
@@ -397,18 +400,21 @@ onBeforeUnmount(() => {
   position: fixed;
   top: 86px;
   right: 22px;
-  max-width: 390px;
-  padding: 12px 14px;
+  min-width: 340px;
+  max-width: 520px;
+  padding: 18px 20px;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 14px;
   border: 1px solid var(--line-bfdbfe);
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--surface-eff6ff);
   color: var(--ink-1d4ed8);
   box-shadow: var(--shadow-lg);
   z-index: 3000;
-  font-size: 0.82rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.4;
 }
 .system-toast--success {
   border-color: var(--line-a7f3d0);
@@ -468,7 +474,10 @@ onBeforeUnmount(() => {
     top: 76px;
     right: 12px;
     left: 12px;
+    min-width: 0;
     max-width: none;
+    padding: 14px 16px;
+    font-size: 0.95rem;
   }
 }
 </style>

@@ -56,6 +56,14 @@
         </label>
       </div>
       <div class="required-quiz-setting"><ToggleSwitch v-model="requiredForProgress" :disabled="!canAction('update') && !isNew" label="Bắt buộc đạt để sang bài tiếp theo" /><small>Tắt tùy chọn: bài kiểm tra tự luyện, không chặn hoàn thành bài, chương hoặc khóa.</small></div>
+      <div class="required-quiz-setting time-limit-setting">
+        <ToggleSwitch v-model="hasTimeLimit" :disabled="!canAction('update') && !isNew" label="Giới hạn thời gian làm bài" />
+        <div v-if="hasTimeLimit" class="score-input time-limit-input">
+          <input v-model.number="timeLimitMinutes" :disabled="!canAction('update') && !isNew" type="number" min="1" max="300" aria-label="Số phút làm bài" />
+          <strong>phút</strong>
+        </div>
+        <small>{{ hasTimeLimit ? 'Hết giờ, bài làm sẽ được tự động nộp; câu chưa trả lời tính là sai.' : 'Không giới hạn: học viên làm bài đến khi tự nộp.' }}</small>
+      </div>
       <div v-if="isNew && canEdit" class="settings-action">
         <p>Phạm vi sẽ tự động áp dụng cho mọi câu hỏi được thêm hoặc import.</p>
         <button class="primary-button" :disabled="!courseId || !lessonId || scopeLoading || !!scopeError" @click="confirmScope">
@@ -63,10 +71,10 @@
         </button>
       </div>
       <div v-else-if="canAction('update')" class="settings-action">
-        <p>{{ questions.length ? 'Thay đổi ngưỡng đạt sẽ áp dụng cho những lượt làm bài tiếp theo.' : 'Lưu ít nhất một câu hỏi để tạo bài kiểm tra và lưu cấu hình.' }}</p>
+        <p>{{ questions.length ? 'Thay đổi ngưỡng đạt và thời gian sẽ áp dụng cho những lượt làm bài tiếp theo.' : 'Lưu ít nhất một câu hỏi để tạo bài kiểm tra và lưu cấu hình.' }}</p>
         <button class="primary-button" :disabled="savingSettings || !questions.length" @click="saveSettings"
           :title="!questions.length ? 'Thêm ít nhất một câu hỏi trước khi lưu cấu hình' : undefined">
-          {{ savingSettings ? "Đang lưu..." : "Lưu ngưỡng đạt" }}
+          {{ savingSettings ? "Đang lưu..." : "Lưu cấu hình" }}
         </button>
       </div>
     </section>
@@ -105,14 +113,21 @@
           </div>
           <LessonKnowledgeSources permission-page="exams" v-if="lessonId" :key="`${courseId}:${lessonId}`" :course-id="courseId" :lesson-id="lessonId" :disabled="generating || savingDrafts" @ready="handleSourceReady" />
           <div class="ai-settings">
-            <label><span>Single choice</span><input v-model.number="aiConfig.singleChoiceCount" type="number" min="0" max="10" /></label>
-            <label><span>Multiple choice</span><input v-model.number="aiConfig.multipleChoiceCount" type="number" min="0" max="10" /></label>
+            <label><span>Single choice</span><input v-model.number="aiConfig.singleChoiceCount" type="number" min="0" :max="QUIZ_MAX_QUESTIONS" /></label>
+            <label><span>Multiple choice</span><input v-model.number="aiConfig.multipleChoiceCount" type="number" min="0" :max="QUIZ_MAX_QUESTIONS" /></label>
             <label><span>Số lựa chọn</span><input v-model.number="aiConfig.optionCount" type="number" min="3" max="6" /></label>
             <button class="primary-button" :disabled="generating || (Boolean(lessonId) && !sourceReady)" @click="generateQuestions">
               <LoaderCircle v-if="generating" class="spin" :size="17" />
               <Sparkles v-else :size="17" />
-              {{ generating ? "Đang truy xuất và tạo..." : "Tạo bản nháp" }}
+              {{ generating ? `Đang tạo... ${generationProgress?.percent ?? 0}%` : "Tạo bản nháp" }}
             </button>
+          </div>
+          <div v-if="generationProgress" class="ai-progress" :class="{ failed: generationProgress.failed }" role="status" aria-live="polite">
+            <div class="ai-progress-header"><span>{{ generationProgress.label }}</span><strong>{{ generationProgress.percent }}%</strong></div>
+            <div class="ai-progress-track" role="progressbar" aria-label="Tiến độ tạo câu hỏi" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="generationProgress.percent">
+              <div class="ai-progress-fill" :style="{ width: `${generationProgress.percent}%` }" />
+            </div>
+            <small v-if="generationProgress.detail">{{ generationProgress.detail }}</small>
           </div>
           <p v-for="warning in aiWarnings" :key="warning" class="ai-warning">{{ warning }}</p>
           <div v-if="aiDrafts.length" class="ai-drafts">
@@ -202,7 +217,7 @@
           </fieldset>
           <label class="question-text-field"><span>Giải thích đáp án</span><textarea v-model="form.explanation" rows="3" maxlength="20000" /></label>
         </div></AdminModal>
-        <AdminModal :open="showBank" title="Thêm câu hỏi từ ngân hàng" :width="1200" @close="showBank=false"><QuestionBankPanel v-if="showBank" picker :lesson-id="lessonId" :existing-ids="questions.map(q=>q.bankQuestionId).filter((id):id is number=>id!=null)" @added="bankAdded" /><template #footer><button type="button" class="btn btn-secondary" @click="showBank=false">Đóng</button></template></AdminModal>
+        <AdminModal :open="showBank" title="Thêm câu hỏi từ ngân hàng" :width="1200" fixed-height @close="showBank=false"><QuestionBankPanel v-if="showBank" picker :lesson-id="lessonId" :existing-ids="questions.map(q=>q.bankQuestionId).filter((id):id is number=>id!=null)" @added="bankAdded" /><template #footer><button type="button" class="btn btn-secondary" @click="showBank=false">Đóng</button></template></AdminModal>
 
 
         <div class="admin-table-scroll">
@@ -262,8 +277,9 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ArrowLeft, ArrowRight, CheckCircle2, Download, Edit, FileUp, LoaderCircle, Plus, Search, Sparkles, Trash2, X } from "lucide-vue-next";
 
-import { adminApi } from "../api/adminApi";
-import type { GeneratedQuizQuestion, QuizGenerationSource } from "../api/adminApi";
+import { adminApi, QUIZ_MAX_QUESTIONS } from "../api/adminApi";
+import type { GeneratedQuizQuestion, QuizGenerationJobSnapshot, QuizGenerationSource } from "../api/adminApi";
+import { describeQuizJob, describeQuizJobDetail, QuizGenerationJobError } from "../utils/quizGenerationJob";
 import type { Question, Lesson } from "../types";
 import AdminModal from '../components/AdminModal.vue';
 import ToggleSwitch from '../components/ToggleSwitch.vue';
@@ -278,6 +294,9 @@ import {contentToolsApi,contentToolsError} from '../api/contentToolsApi';
 const props=defineProps<{embedded?:boolean; lesson?:Lesson; readOnly?:boolean}>();
 const emit=defineEmits<{saved:[]}>();
 const requiredForProgress=ref(true);
+const hasTimeLimit=ref(false);
+const timeLimitMinutes=ref(30);
+const applyTimeLimit=(minutes?:number|null)=>{hasTimeLimit.value=!!minutes;timeLimitMinutes.value=minutes||30;};
 const route = useRoute();
 const router = useRouter();
 const quizCourses = ref<QuizCourseContext[]>([]);
@@ -310,6 +329,16 @@ const aiDrafts = ref<AiDraft[]>([]);
 const editingDraftIndex = ref<number | null>(null);
 const draftBackup = ref<GeneratedQuizQuestion | null>(null);
 const aiConfig = reactive({ singleChoiceCount: 5, multipleChoiceCount: 0, optionCount: 4 });
+const generationProgress = ref<{ percent: number; label: string; detail: string; failed: boolean } | null>(null);
+let generationAbort: AbortController | null = null;
+const showGenerationProgress = (job: QuizGenerationJobSnapshot) => {
+  generationProgress.value = {
+    percent: job.percent,
+    label: describeQuizJob(job),
+    detail: describeQuizJobDetail(job),
+    failed: false,
+  };
+};
 const confirmationModal = ref<{
   show: boolean;
   title: string;
@@ -364,7 +393,7 @@ async function refreshQuizContext() {
 
 let initialRequestId = 0;
 let questionRequestId = 0;
-let pendingCreationSettings: { courseId: string; lessonId: string; passingScore: number; requiredForProgress: boolean } | null = null;
+let pendingCreationSettings: { courseId: string; lessonId: string; passingScore: number; requiredForProgress: boolean; timeLimitMinutes: number | null } | null = null;
 async function initialize() {
   const id = ++initialRequestId;
   ++questionRequestId;
@@ -398,9 +427,11 @@ async function initialize() {
     const lesson = course?.lessons.find((item) => item.id === lessonId.value);
     passingScore.value = lesson?.quizPassingScore ?? course?.quizPassingScore ?? 80;
     requiredForProgress.value = lesson?.quizRequired ?? true;
+    applyTimeLimit(lesson?.quizTimeLimitMinutes);
     if (pendingCreationSettings?.courseId === context.id && pendingCreationSettings.lessonId === lessonId.value) {
       passingScore.value = pendingCreationSettings.passingScore;
       requiredForProgress.value = pendingCreationSettings.requiredForProgress;
+      applyTimeLimit(pendingCreationSettings.timeLimitMinutes);
     }
     await loadQuestions();
     if (id === initialRequestId) pendingCreationSettings = null;
@@ -440,10 +471,11 @@ const loadQuestions = async () => {
   if (id === questionRequestId) questions.value = data;
 };
 watch(() => [route.name, route.params.scopeType, route.params.scopeId, props.lesson?.id], initialize, { immediate: true });
-onBeforeUnmount(() => { ++initialRequestId; ++questionRequestId; ++scopeRequestId; });
+onBeforeUnmount(() => { ++initialRequestId; ++questionRequestId; ++scopeRequestId; generationAbort?.abort(); });
 const confirmScope = () => {
   pendingCreationSettings = { courseId: courseId.value, lessonId: lessonId.value,
-    passingScore: passingScore.value, requiredForProgress: requiredForProgress.value };
+    passingScore: passingScore.value, requiredForProgress: requiredForProgress.value,
+    timeLimitMinutes: hasTimeLimit.value ? timeLimitMinutes.value : null };
   return router.replace(lessonId.value
     ? `/admin/quizzes/lesson/${encodeURIComponent(lessonId.value)}`
     : `/admin/quizzes/course/${encodeURIComponent(courseId.value)}`);
@@ -453,9 +485,14 @@ const saveSettings = async () => {
     showToast("Ngưỡng đạt phải là số nguyên từ 1 đến 100.", "warning");
     return;
   }
+  if (hasTimeLimit.value && (!Number.isInteger(timeLimitMinutes.value) || timeLimitMinutes.value < 1 || timeLimitMinutes.value > 300)) {
+    showToast("Thời gian làm bài phải là số nguyên từ 1 đến 300 phút.", "warning");
+    return;
+  }
   savingSettings.value = true;
   try {
-    await adminApi.updateQuizSettings(courseId.value, lessonId.value || undefined, passingScore.value, requiredForProgress.value);
+    await adminApi.updateQuizSettings(courseId.value, lessonId.value || undefined, passingScore.value, requiredForProgress.value,
+      hasTimeLimit.value ? timeLimitMinutes.value : null);
     showToast("Đã lưu cấu hình bài kiểm tra.");
     await refreshQuizContext();
     emit("saved");
@@ -662,8 +699,8 @@ const generateQuestions = async () => {
     return;
   }
   const total = aiConfig.singleChoiceCount + aiConfig.multipleChoiceCount;
-  if (!Number.isInteger(total) || total < 1 || total > 20) {
-    showToast("Tổng số câu hỏi phải từ 1 đến 20.", "warning");
+  if (!Number.isInteger(total) || total < 1 || total > QUIZ_MAX_QUESTIONS) {
+    showToast(`Tổng số câu hỏi phải từ 1 đến ${QUIZ_MAX_QUESTIONS}.`, "warning");
     return;
   }
   if (!Number.isInteger(aiConfig.optionCount) || aiConfig.optionCount < 3 || aiConfig.optionCount > 6) {
@@ -672,12 +709,17 @@ const generateQuestions = async () => {
   }
   generating.value = true;
   aiWarnings.value = [];
+  generationProgress.value = { percent: 0, label: "Đang gửi yêu cầu tạo câu hỏi", detail: "", failed: false };
+  const abort = new AbortController();
+  generationAbort = abort;
   try {
-    const result = await adminApi.generateQuizQuestions({
+    const result = await adminApi.generateQuizWithProgress({
       courseId: courseId.value,
       lessonId: lessonId.value || undefined,
       ...aiConfig,
-    });
+      excludeQuestions: aiDrafts.value.map(draft => draft.text).filter(Boolean).slice(0, 40),
+    }, { onProgress: showGenerationProgress, signal: abort.signal });
+    generationProgress.value = null;
     aiSources.value = result.sources || [];
     aiWarnings.value = result.warnings || [];
     editingDraftIndex.value = null;
@@ -687,8 +729,12 @@ const generateQuestions = async () => {
       selected: true,
     }));
   } catch (error) {
-    showToast(error instanceof Error ? error.message : "Không thể tạo câu hỏi. Vui lòng thử lại.", "error");
+    if (error instanceof QuizGenerationJobError && error.kind === "cancelled") return;
+    const message = error instanceof Error ? error.message : "Không thể tạo câu hỏi. Vui lòng thử lại.";
+    generationProgress.value = { percent: generationProgress.value?.percent ?? 0, label: message, detail: "", failed: true };
+    showToast(message, "error");
   } finally {
+    if (generationAbort === abort) generationAbort = null;
     generating.value = false;
   }
 };
@@ -842,7 +888,7 @@ const importCsv = async (event: Event) => {
 .quiz-editor-page .admin-data-table .bank-save-status { font-size: var(--admin-text-label, .8125rem); font-weight: 600; }
 .quiz-questions-table{min-width:960px}.quiz-question-actions{display:flex;align-items:center;flex-wrap:wrap;gap:.5rem}.quiz-question-actions button{white-space:nowrap}.bank-save-action{padding:.45rem .65rem;font-size:.8rem}.bank-save-action:disabled{opacity:.55;cursor:wait}.bank-save-status{display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .55rem;border-radius:6px;background:var(--surface-f1f5f9);color:var(--text-muted);font-size:.78rem;white-space:nowrap}.bank-save-status.saved{background:var(--primary-light);color:var(--primary-ink)}.bank-source-code{display:block;margin-top:.4rem;color:var(--text-muted);font-size:.72rem;overflow-wrap:anywhere}
 
-.required-quiz-setting{display:block;margin:1rem 0;color:var(--primary-ink);font-weight:600}.required-quiz-setting input{margin-right:.5rem}.required-quiz-setting small{display:block;margin-top:.5rem;font-weight:400;color:var(--text-muted)}
+.required-quiz-setting{display:block;margin:1rem 0;color:var(--primary-ink);font-weight:600}.required-quiz-setting input{margin-right:.5rem}.time-limit-input{max-width:12rem;margin-top:.75rem}.time-limit-input input{padding-right:3.5rem}.required-quiz-setting small{display:block;margin-top:.5rem;font-weight:400;color:var(--text-muted)}
 .quiz-editor-page { width: min(1240px, calc(100% - 3rem)); min-height: 100%; margin: 0 auto; padding: 1.5rem; color: var(--text-color); }
 .quiz-editor-header { display: grid; grid-template-columns: 180px 1fr; gap: 1rem; align-items: start; margin-bottom: 1.2rem; }
 .back-button { display: flex; align-items: center; gap: .65rem; min-width: 170px; padding: .7rem .85rem; border: 1px solid var(--primary-color); border-radius: var(--radius-md); background: var(--primary-color); color: white; cursor: pointer; text-align: left; box-shadow: 0 5px 14px rgba(0,91,65,.18); }
@@ -896,6 +942,13 @@ select, textarea, .question-text-field input { width: 100%; padding: .7rem; bord
 .ai-settings { display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)) auto; gap: .7rem; align-items: end; }
 .ai-settings label span, .question-type-field > span { display: block; margin-bottom: .3rem; font-size: var(--admin-text-label); font-weight: 700; }
 .ai-settings input { width: 100%; padding: .65rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); }
+.ai-progress { margin: .85rem 0 0; padding: .7rem .8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); }
+.ai-progress-header { display: flex; justify-content: space-between; gap: .75rem; margin-bottom: .45rem; font-size: var(--admin-text-label); font-weight: 700; }
+.ai-progress-track { height: 8px; overflow: hidden; border-radius: 999px; background: var(--border-color); }
+.ai-progress-fill { height: 100%; border-radius: inherit; background: var(--primary-color); transition: width .4s ease; }
+.ai-progress small { display: block; margin-top: .4rem; color: var(--text-muted); }
+.ai-progress.failed .ai-progress-header { color: var(--ink-9a3412); }
+.ai-progress.failed .ai-progress-fill { background: var(--ink-9a3412); }
 .ai-warning { margin: .75rem 0 0; padding: .65rem .75rem; border-radius: var(--radius-sm); background: var(--surface-fff7ed); color: var(--ink-9a3412); }
 .ai-drafts { display: grid; gap: .75rem; margin-top: 1rem; }
 .ai-draft-card { position: relative; padding: 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--surface-ffffff); }

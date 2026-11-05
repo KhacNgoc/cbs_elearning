@@ -4,6 +4,16 @@ export type LessonContentType = "TEXT" | "VIDEO" | "SLIDE";
 type Content = Partial<
   Pick<Lesson, "videoUrl" | "textBody" | "documents" | "videoSource">
 > & { videoFile?: File };
+type RequirementFlags = Partial<
+  Pick<Lesson, "textRequired" | "videoRequired" | "slideRequired">
+>;
+export type LessonContentRequirements = Record<LessonContentType, boolean>;
+
+export const lessonContentLabels: Record<LessonContentType, string> = {
+  TEXT: "Văn bản",
+  VIDEO: "Video",
+  SLIDE: "Slide PowerPoint",
+};
 
 export const requiredSlides = (lesson: Content) =>
   (lesson.documents || []).filter(document => document.purpose === "SLIDE");
@@ -14,6 +24,55 @@ export function lessonContentTypes(lesson: Content): LessonContentType[] {
     ...(lesson.videoUrl?.trim() || lesson.videoFile ? ["VIDEO" as const] : []),
     ...(requiredSlides(lesson).length ? ["SLIDE" as const] : []),
   ];
+}
+
+/** A lesson without a saved choice requires everything it contains. */
+export function lessonContentRequirements(lesson: RequirementFlags): LessonContentRequirements {
+  return {
+    TEXT: lesson.textRequired !== false,
+    VIDEO: lesson.videoRequired !== false,
+    SLIDE: lesson.slideRequired !== false,
+  };
+}
+
+/** Payload fields for saving; content that is not selected has no choice to keep. */
+export function lessonRequirementFields(
+  requirements: LessonContentRequirements,
+  selected: LessonContentType[],
+) {
+  return {
+    textRequired: !selected.includes("TEXT") || requirements.TEXT,
+    videoRequired: !selected.includes("VIDEO") || requirements.VIDEO,
+    slideRequired: !selected.includes("SLIDE") || requirements.SLIDE,
+  };
+}
+
+/** Selected content that existed before and whose requirement choice differs from the saved one. */
+export function changedLessonRequirements(
+  original: Content & RequirementFlags,
+  requirements: LessonContentRequirements,
+  selected: LessonContentType[],
+) {
+  const saved = lessonContentRequirements(original);
+  const existing = lessonContentTypes(original);
+  return selected.filter(type => existing.includes(type) && saved[type] !== requirements[type]);
+}
+
+export function optionalLessonContent(lesson: Content & RequirementFlags) {
+  const requirements = lessonContentRequirements(lesson);
+  return lessonContentTypes(lesson).filter(type => !requirements[type]);
+}
+
+/** What the learner has to do to finish the lesson, in the words the lesson page shows. */
+export function lessonCompletionRule(lesson: Content & RequirementFlags, quizRequired: boolean) {
+  const requirements = lessonContentRequirements(lesson);
+  const required = lessonContentTypes(lesson).filter(type => requirements[type]);
+  if (required.length) {
+    const content = required.map(type => lessonContentLabels[type]).join(", ");
+    return `Học hết ${content}${quizRequired ? " và đạt bài kiểm tra" : ""}`;
+  }
+  if (quizRequired) return "Đạt bài kiểm tra bắt buộc";
+  return "Bấm “Đánh dấu hoàn thành”";
 }
 
 export function selectedLessonContent<T extends Content>(

@@ -57,22 +57,33 @@ public class SecurityConfig {
         return authenticationConfiguration.getAuthenticationManager();
     }
 
+    /** Shared with AuthController, which rotates the token on login and logout. */
+    @Bean
+    public org.springframework.security.web.csrf.CsrfTokenRepository csrfTokenRepository() {
+        var csrfCookies = org.springframework.security.web.csrf.CookieCsrfTokenRepository.withHttpOnlyFalse();
+        csrfCookies.setCookieCustomizer(cookie -> cookie.secure(csrfCookieSecure).sameSite(csrfCookieSameSite));
+        return csrfCookies;
+    }
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         JwtAuthenticationFilter jwtAuthenticationFilter = new JwtAuthenticationFilter(
                 tokenProvider, userDetailsService, jwtCookieService);
         RequestLoggingFilter requestLoggingFilter = new RequestLoggingFilter();
 
-        var csrfCookies = org.springframework.security.web.csrf.CookieCsrfTokenRepository.withHttpOnlyFalse();
-        csrfCookies.setCookieCustomizer(cookie -> cookie.secure(csrfCookieSecure).sameSite(csrfCookieSameSite));
         http.headers(headers -> headers
                 .frameOptions(frame -> frame.disable())
                 .contentSecurityPolicy(csp -> csp.policyDirectives(
                         "frame-ancestors 'self'")))
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.csrfTokenRepository(csrfCookies)
+                .csrf(csrf -> csrf.csrfTokenRepository(csrfTokenRepository())
                         .csrfTokenRequestHandler(
-                                new org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler()))
+                                new org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler())
+                        // The JWT filter authenticates every request, and Spring's default strategy
+                        // then clears the CSRF cookie each time, so the UI had to fetch a new token
+                        // before every write. Rotation happens on login and logout instead.
+                        .sessionAuthenticationStrategy(
+                                new org.springframework.security.web.authentication.session.NullAuthenticatedSessionStrategy()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(exceptions -> exceptions
                         .accessDeniedHandler((request, response, exception) -> {

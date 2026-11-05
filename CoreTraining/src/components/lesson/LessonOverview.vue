@@ -4,11 +4,6 @@
       <div class="lesson-overview">
         <span class="eyebrow">Tổng quan bài học</span>
         <h2>{{ lesson.title }}</h2>
-        <LessonRichText
-          v-if="overviewText"
-          :content="overviewText"
-          class="overview-text"
-        />
         <div class="hint-box">
           <Lightbulb :size="22" />
           <div>
@@ -48,46 +43,27 @@
           ><strong>{{ completed ? "Đã hoàn thành" : "Đang học" }}</strong></span
         >
       </div>
+      <div v-if="completionRule">
+        <ListChecks :size="18" /><span
+          ><small>Điều kiện hoàn thành</small><strong>{{ completionRule }}</strong></span
+        >
+      </div>
       <slot name="actions" />
     </aside>
   </div>
 </template>
 <script setup lang="ts">
-import { computed } from "vue";
-import { BookOpen, Layers3, Lightbulb, ShieldCheck } from "lucide-vue-next";
+import { BookOpen, Layers3, Lightbulb, ListChecks, ShieldCheck } from "lucide-vue-next";
 import type { Lesson } from "../../types";
-import LessonRichText from "./LessonRichText.vue";
-const props = defineProps<{
+// The lesson text is shown in the main viewer (header switch), so it is not repeated here.
+defineProps<{
   lesson: Lesson;
   courseName?: string;
   completed: boolean;
+  completionRule?: string;
 }>();
-const overviewText = computed(() => {
-  // Text-only lessons already show their content in the main viewer.
-  if (!props.lesson.videoUrl?.trim()) return "";
-  const lines = (props.lesson.textBody || "").trim().split(/\r?\n/);
-  // Seeded content starts with the title, which is already shown above.
-  if (lines[0]?.trim() === props.lesson.title.trim()) lines.shift();
-  return lines.join("\n").trim();
-});
 </script>
 <style scoped>
-.overview-text {
-  margin: 0 0 1.25rem;
-  padding: 1.15rem 1.25rem;
-  border: 1px solid var(--line-dce9e3);
-  border-radius: var(--radius-md);
-  background: var(--surface-f7faf8);
-  color: var(--ink-3f544b);
-  font-size: 0.95rem;
-  line-height: 1.8;
-  overflow-wrap: anywhere;
-}
-@media (max-width: 600px) {
-  .overview-text {
-    padding: 1rem;
-  }
-}
 .procedure-content {
   display: flex;
   flex-direction: column;

@@ -2,6 +2,7 @@
 
 import json
 import re
+import unicodedata
 
 from app.config import QUERY_STOP_WORDS
 from app.schemas import ConversationMessage, RewriteResult
@@ -14,12 +15,10 @@ SUMMARY_LABELS = (
     "đính chính/phủ định mới nhất:",
     "điểm chưa giải quyết:",
 )
+# Matched against fold_vietnamese text, so "khoá"/"khóa" and missing accents all match.
 COURSE_SUMMARY_PATTERN = re.compile(
-    r"(tóm\s+tắt|tom\s+tat|tổng\s+quan|tong\s+quan|"
-    r"nội\s+dung\s+(?:của\s+)?(?:khóa|khoá)\s+học|"
-    r"noi\s+dung\s+(?:cua\s+)?khoa\s+hoc|course\s+summary|"
-    r"summari[sz]e\s+(?:this\s+)?course)",
-    re.IGNORECASE,
+    r"\b(tom tat|tong quan|noi dung(?: \w+){0,3}? khoa hoc|course summary|"
+    r"summari[sz]e(?: this)? course)\b"
 )
 
 
@@ -50,7 +49,80 @@ def looks_like_internal_summary(answer: str) -> bool:
 
 
 def is_course_summary_question(question: str) -> bool:
-    return bool(COURSE_SUMMARY_PATTERN.search(question))
+    return bool(COURSE_SUMMARY_PATTERN.search(fold_vietnamese(question)))
+
+
+def fold_vietnamese(text: str) -> str:
+    """Lowercase and strip diacritics so "Tín dụng" matches "tin dung"."""
+    decomposed = unicodedata.normalize("NFD", text.lower().replace("đ", "d"))
+    folded = "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn")
+    return " ".join(re.findall(r"\w+", folded, flags=re.UNICODE))
+
+
+# Folded words that fit any course ("các bước nghiệp vụ quan trọng là gì?"), so a
+# question made only of these names no topic to search for. Folding merges words, so
+# "the", "tin", "dung" stay out ("thẻ", "tín dụng" are topics); the generic phrases
+# that use them are removed first.
+GENERIC_QUESTION_PHRASES = re.compile(r"\b(noi dung|thong tin)\b")
+GENERIC_QUESTION_WORDS = {
+    "ai", "bao", "biet", "buoc", "can", "cac", "chi", "chinh", "cho", "co", "cua",
+    "dieu", "duoc", "gi", "giai", "gom", "hay", "hoc", "kien", "khi", "khoa", "ke",
+    "la", "liet", "luu", "mot", "nao", "nay", "neu", "nghiep", "nhat", "nhung",
+    "quan", "quy", "sao", "thich", "tiet", "toi", "trinh", "trong", "va", "ve",
+    "voi", "vu", "y",
+}
+
+
+def is_generic_question(question: str) -> bool:
+    terms = GENERIC_QUESTION_PHRASES.sub(" ", fold_vietnamese(question)).split()
+    return bool(terms) and all(term in GENERIC_QUESTION_WORDS for term in terms)
+
+
+def find_mentioned_course(question: str, course_names: dict[str, str]) -> str | None:
+    """Return the id of the longest course name written in the question."""
+    folded_question = f" {fold_vietnamese(question)} "
+    best_id, best_length = None, 0
+    for course_id, name in course_names.items():
+        folded_name = fold_vietnamese(name or "")
+        if len(folded_name) < 4 or len(folded_name) <= best_length:
+            continue
+        if f" {folded_name} " in folded_question:
+            best_id, best_length = course_id, len(folded_name)
+    return best_id
+
+
+# Words a learner may wrap around a course name when answering "which course?".
+COURSE_REPLY_FILLER_WORDS = {"a", "cho", "em", "hoc", "hoi", "khoa", "la", "minh", "nhe", "toi", "ve"}
+
+
+def find_replied_courses(reply: str, course_names: dict[str, str]) -> list[str]:
+    """Return the courses whose name contains the reply, so "CIF" finds "CIF cơ bản"."""
+    terms = [term for term in fold_vietnamese(reply).split() if term not in COURSE_REPLY_FILLER_WORDS]
+    if not terms:
+        return []
+    phrase = f" {' '.join(terms)} "
+    return [
+        course_id for course_id, name in course_names.items()
+        if phrase in f" {fold_vietnamese(name or '')} "
+    ]
+
+
+# Whole-section headings that mention every topic but explain none. Matched on folded text.
+NAVIGATION_TERMS = r"muc luc(?: noi dung)?|ket luan"
+NAVIGATION_SECTION_PATTERN = re.compile(rf"(?:\d+ )?(?:{NAVIGATION_TERMS})")
+NAVIGATION_QUESTION_PATTERN = re.compile(rf"\b(?:{NAVIGATION_TERMS})\b")
+
+
+def drop_navigation_results(results: list, question: str) -> list:
+    """Remove contents and conclusion chunks, unless the question asks for them."""
+    if NAVIGATION_QUESTION_PATTERN.search(fold_vietnamese(question)):
+        return results
+    return [
+        item for item in results
+        if not NAVIGATION_SECTION_PATTERN.fullmatch(
+            fold_vietnamese(str((item.payload or {}).get("section", "")))
+        )
+    ]
 
 
 def diversify_course_summary_results(results: list) -> list:

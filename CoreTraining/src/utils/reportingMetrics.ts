@@ -5,7 +5,7 @@ export interface ReportingRecord {
   passingScore: number;
   mandatory: boolean;
   dueDate: string | null;
-  attempts: {score:number;takenAt:string;passingScore?:number;assessment?:string}[];
+  attempts: {id?:number;score:number;takenAt:string;passingScore?:number;assessment?:string}[];
   completed?:boolean;
   started?:boolean;
   assessmentAverage?:number|null;
@@ -20,7 +20,7 @@ export const reportingRules = [
   ['Học viên quá hạn', 'Học viên có ít nhất một lượt chưa hoàn thành và đã quá hạn / học viên có ít nhất một lượt có hạn. Đếm người duy nhất trong phạm vi.'],
   ['Lượt học quá hạn', 'Lượt học chưa hoàn thành có hạn trước ngày chốt / tổng lượt học có hạn. Chỉ số này khác tỷ lệ học viên quá hạn và luôn ghi rõ tên.'],
   ['Tiến độ chương trình', 'Lượt khóa bắt buộc được giao đã hoàn thành / tổng lượt khóa bắt buộc được giao trong chương trình và phạm vi. Không trung bình phần trăm các khóa hoặc các nhóm.'],
-  ['Gộp dữ liệu', 'Tính lại từ tử số và mẫu số gốc khi gộp đơn vị, nhóm hay chương trình. Không cộng số học viên giữa các nhóm và không trung bình các tỷ lệ đã làm tròn.'],
+  ['Gộp dữ liệu', 'Tính lại từ tử số và mẫu số gốc khi gộp đơn vị hay chương trình. Không cộng số học viên giữa các nhóm và không trung bình các tỷ lệ đã làm tròn.'],
   ['Thiếu dữ liệu', 'Mẫu số bằng 0 hiển thị —. Không suy ra bỏ dở từ đang học; chưa có nhóm kiến thức và mục tiêu thì chưa tính điểm hoặc khoảng cách năng lực.'],
 ] as const;
 export const ratio = (count:number,total:number):number|null => total ? count/total*100 : null;

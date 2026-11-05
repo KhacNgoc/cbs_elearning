@@ -1,10 +1,29 @@
 package com.bidv.coretraining.security;
+import com.bidv.coretraining.enums.DocumentPurpose;
 import com.bidv.coretraining.enums.DocumentType;
 import com.bidv.coretraining.enums.EnrollmentStatus;
-import com.bidv.coretraining.enums.DocumentPurpose;
 
-import com.bidv.coretraining.entity.*;
-import com.bidv.coretraining.repository.*;
+import com.bidv.coretraining.access.entity.AccessRole;
+import com.bidv.coretraining.access.repository.AccessRoleRepository;
+import com.bidv.coretraining.auth.repository.PasswordResetOtpRepository;
+import com.bidv.coretraining.course.entity.Chapter;
+import com.bidv.coretraining.course.entity.Course;
+import com.bidv.coretraining.course.repository.ChapterRepository;
+import com.bidv.coretraining.course.repository.CourseEnrollmentRequestRepository;
+import com.bidv.coretraining.course.repository.CourseRepository;
+import com.bidv.coretraining.document.entity.LessonDocument;
+import com.bidv.coretraining.lesson.entity.Comment;
+import com.bidv.coretraining.lesson.entity.Lesson;
+import com.bidv.coretraining.lesson.repository.CommentRepository;
+import com.bidv.coretraining.lesson.repository.LessonRepository;
+import com.bidv.coretraining.training.entity.TrainingDomain;
+import com.bidv.coretraining.training.entity.TrainingProgram;
+import com.bidv.coretraining.training.repository.TrainingDomainRepository;
+import com.bidv.coretraining.training.repository.TrainingProgramRepository;
+import com.bidv.coretraining.user.entity.OrganizationUnit;
+import com.bidv.coretraining.user.entity.User;
+import com.bidv.coretraining.user.repository.OrganizationUnitRepository;
+import com.bidv.coretraining.user.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.*;
@@ -41,7 +60,6 @@ class AccessSecurityIntegrationTest {
     @Autowired CourseRepository courses;
     @Autowired ChapterRepository chapters;
     @Autowired LessonRepository lessons;
-    @Autowired UserGroupRepository groups;
     @Autowired CourseEnrollmentRequestRepository enrollmentRequests;
     @Autowired CommentRepository comments;
     OrganizationUnit a,b,child;
@@ -225,6 +243,21 @@ class AccessSecurityIntegrationTest {
         mvc.perform(get("/uploads/documents/protected.pdf").cookie(login(ub))).andExpect(status().isForbidden());
         mvc.perform(get("/uploads/documents/protected.pdf").cookie(login(learner))).andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store"));
     }
+    @Test void csrfCookieSurvivesAuthenticatedRequestsAndRotatesOnLoginAndLogout() throws Exception {
+        Cookie jwt=login(learner);
+        var csrf=new Cookie("XSRF-TOKEN","kept-token");
+        // An authenticated read must not clear the cookie, or the UI needs a token round trip per write.
+        var read=mvc.perform(get("/api/auth/session").cookie(jwt,csrf)).andExpect(status().isOk()).andReturn();
+        assertThat(read.getResponse().getCookie("XSRF-TOKEN")).isNull();
+        // The cookie value alone is a valid header token for a write.
+        var comment=mvc.perform(post("/api/lessons/"+la.getId()+"/comments").cookie(jwt,csrf).header("X-XSRF-TOKEN","kept-token")
+                .contentType("application/json").content("{\"content\":\"Hello\"}")).andReturn();
+        assertThat(comment.getResponse().getStatus()).isNotEqualTo(403);
+        var login=write(post("/api/auth/login"),null,Map.of("username",learner.getUsername(),"password",password)).andReturn();
+        assertThat(login.getResponse().getCookie("XSRF-TOKEN").getMaxAge()).isZero();
+        var logout=write(post("/api/auth/logout"),jwt,null).andExpect(status().isNoContent()).andReturn();
+        assertThat(logout.getResponse().getCookie("XSRF-TOKEN").getMaxAge()).isZero();
+    }
     @Test void logoutAndLockInvalidateExistingTokens() throws Exception {
         Cookie jwt=login(learner);write(post("/api/auth/logout"),jwt,null).andExpect(status().isNoContent());
         mvc.perform(get("/api/auth/session").cookie(jwt)).andExpect(status().isUnauthorized());
@@ -294,95 +327,11 @@ class AccessSecurityIntegrationTest {
         mvc.perform(get("/api/courses").cookie(jwt)).andExpect(status().isForbidden());
         write(post("/api/users/me/change-password"),jwt,Map.of("newPassword","Changed-Password-123")).andExpect(status().isOk());
     }
-    @Test void scopedGroupsAndUserCreationEnforceScope() throws Exception {
+    @Test void userCreationEnforcesScope() throws Exception {
         Cookie jwt=login(ua);
-        write(post("/api/admin/groups"),jwt,Map.of("id","FOREIGN","name","Foreign","unitId","B","mandatoryCourseIds",List.of())).andExpect(status().isForbidden());
-        write(post("/api/admin/groups"),jwt,Map.of("id","LOCAL","name","Local","unitId","A1","mandatoryCourseIds",List.of("CA"))).andExpect(status().isOk());
-        var body=userBody(learner);body.put("username","child-user");body.put("unitId","A1");body.put("password",password);body.put("userGroupId","LOCAL");
-        write(post("/api/admin/users"),jwt,body).andExpect(status().isOk())
-                .andExpect(jsonPath("$.userGroupIds.length()").value(0));
+        var body=userBody(learner);body.put("username","child-user");body.put("unitId","A1");body.put("password",password);
+        write(post("/api/admin/users"),jwt,body).andExpect(status().isOk());
         body.put("username","foreign-user");body.put("unitId","B");write(post("/api/admin/users"),jwt,body).andExpect(status().isForbidden());
-    }
-
-    @Test void learnerCanJoinMultipleGroupsAndCoursesAreUnioned() throws Exception {
-        UserGroup first=groups.save(UserGroup.builder().id("G1").name("First").organizationUnit(a)
-                .mandatoryCourses(new HashSet<>(Set.of(ca))).build());
-        var secondCourse=courses.save(Course.builder().id("CA2").name("Course A2").code("CA2")
-                .ownerUnit(a).program(ca.getProgram()).status("PUBLISHED").build());
-        groups.save(UserGroup.builder().id("G2").name("Second").organizationUnit(a)
-                .mandatoryCourses(new HashSet<>(Set.of(ca,secondCourse))).build());
-        Cookie jwt=login(ua);
-        write(put("/api/admin/groups/G1/members"),jwt,Map.of("addUserIds",List.of(learner.getId())))
-                .andExpect(status().isOk());
-        write(put("/api/admin/groups/G2/members"),jwt,Map.of("addUserIds",List.of(learner.getId())))
-                .andExpect(status().isOk());
-        users.flush();
-        assertThat(users.findById(learner.getId()).orElseThrow().groupIds()).containsExactly("G1","G2");
-        assertThat(users.hasMandatoryCourse(learner.getUsername(),"CA2")).isTrue();
-        Cookie learnerJwt=login(learner);
-        mvc.perform(get("/api/users/me").cookie(learnerJwt)).andExpect(status().isOk())
-                .andExpect(jsonPath("$.groupIds.length()").value(2))
-                .andExpect(jsonPath("$.mandatoryCourses.length()").value(2));
-        write(put("/api/admin/groups/G1/members"),jwt,Map.of("removeUserIds",List.of(learner.getId())))
-                .andExpect(status().isOk());
-        assertThat(users.findById(learner.getId()).orElseThrow().groupIds()).containsExactly("G2");
-        mvc.perform(get("/api/users/me").cookie(learnerJwt)).andExpect(status().isOk())
-                .andExpect(jsonPath("$.mandatoryCourses.length()").value(2));
-        write(delete("/api/admin/groups/G2"),jwt,null).andExpect(status().isBadRequest());
-        write(delete("/api/admin/groups/G1"),jwt,null).andExpect(status().isOk());
-    }
-
-    @Test void membersCanBeSearchedAndPagedWithinGroupScope() throws Exception {
-        groups.save(UserGroup.builder().id("LOCAL").name("Local").organizationUnit(a).build());
-        user("child-member","ROLE_USER",child);
-        Cookie jwt=login(ua);
-        mvc.perform(get("/api/admin/groups/LOCAL/members").param("query","child-member").param("size","1").cookie(jwt))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1))
-                .andExpect(jsonPath("$.items[0].username").value("child-member"));
-        mvc.perform(get("/api/admin/groups/LOCAL/members").param("query","admin-b").cookie(jwt))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
-        mvc.perform(get("/api/admin/groups/LOCAL/members").param("membersOnly","true").cookie(jwt))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
-        mvc.perform(get("/api/admin/groups/LOCAL/members").param("size","101").cookie(jwt))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test void groupMembershipChangesEnforcePermissionsAndUnitRulesAtomically() throws Exception {
-        groups.save(UserGroup.builder().id("LOCAL").name("Local").organizationUnit(a).build());
-        Cookie jwt=login(ua);
-        write(put("/api/admin/groups/LOCAL/members"),jwt,
-                Map.of("addUserIds",List.of(learner.getId(),ub.getId()))).andExpect(status().isForbidden());
-        assertThat(users.findById(learner.getId()).orElseThrow().getUserGroups()).isEmpty();
-        write(put("/api/admin/groups/LOCAL/members"),login(learner),
-                Map.of("addUserIds",List.of(learner.getId()))).andExpect(status().isForbidden());
-        write(put("/api/admin/groups/LOCAL/members"),login(admin),
-                Map.of("addUserIds",List.of(ub.getId()))).andExpect(status().isBadRequest());
-        write(put("/api/admin/groups/LOCAL/members"),jwt,
-                Map.of("addUserIds",List.of(learner.getId()),"removeUserIds",List.of(learner.getId())))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test void editingAccountDoesNotOverwriteItsGroups() throws Exception {
-        var group=groups.save(UserGroup.builder().id("LOCAL").name("Local").organizationUnit(a).build());
-        learner.getUserGroups().add(group);users.saveAndFlush(learner);
-        var body=userBody(learner);
-        body.put("userGroupIds",List.of());
-        write(put("/api/admin/users/"+learner.getId()),login(ua),body).andExpect(status().isOk())
-                .andExpect(jsonPath("$.userGroupIds[0]").value("LOCAL"));
-    }
-
-    @Test void globalAdminCanSeeAndRemoveLegacyMemberWithoutUnitButCannotAddUnassignedAccounts() throws Exception {
-        var group=groups.save(UserGroup.builder().id("LOCAL").name("Local").organizationUnit(a).build());
-        var unassigned=user("legacy-unassigned","ROLE_USER",null);
-        unassigned.getUserGroups().add(group);users.saveAndFlush(unassigned);
-        Cookie jwt=login(admin);
-        mvc.perform(get("/api/admin/groups/LOCAL/members").param("membersOnly","true").cookie(jwt))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1))
-                .andExpect(jsonPath("$.items[0].selectable").value(true));
-        write(put("/api/admin/groups/LOCAL/members"),jwt,Map.of("removeUserIds",List.of(unassigned.getId())))
-                .andExpect(status().isOk());
-        write(put("/api/admin/groups/LOCAL/members"),jwt,Map.of("addUserIds",List.of(unassigned.getId())))
-                .andExpect(status().isBadRequest());
     }
 
     @Test void excelImportDoesNotCreatePredictablePasswords() throws Exception {
@@ -402,13 +351,13 @@ class AccessSecurityIntegrationTest {
         String response=mvc.perform(get("/api/navigation/me").cookie(login(ua))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         java.util.List<String> visibleRoutes=new java.util.ArrayList<>();
         for(var item:json.readTree(response)) if(item.path("visible").asBoolean()) visibleRoutes.add(item.path("route").asText());
-        assertThat(visibleRoutes).contains("/admin/users","/admin/units","/admin/groups","/admin/permissions").doesNotContain("/admin/access");
+        assertThat(visibleRoutes).contains("/admin/users","/admin/units","/admin/permissions").doesNotContain("/admin/access","/admin/groups");
         String teacher=mvc.perform(get("/api/navigation/me").cookie(login(instructor))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(teacher).doesNotContain("/admin/users","/admin/units","/admin/groups","/admin/permissions");
+        assertThat(teacher).doesNotContain("/admin/users","/admin/units","/admin/permissions");
     }
 
     @Autowired AccessRoleRepository dynamicRoles;
-    @Autowired com.bidv.coretraining.service.PermissionCache permissionCache;
+    @Autowired com.bidv.coretraining.access.service.PermissionCache permissionCache;
     @Autowired com.bidv.coretraining.config.DynamicAccessInitializer migration;
     AccessRole dynamicRole(String code,Set<String> p,Set<String> scope){return dynamicRoles.save(AccessRole.builder().code(code).name(code).learningEnabled(false).permissions(new HashSet<>(p)).unitIds(new HashSet<>(scope)).build());}
     void assignDynamic(User u,AccessRole...roles){u.setDynamicAccessInitialized(true);u.setPolicySnapshot(null);u.setAssignedRoles(new HashSet<>(List.of(roles)));users.saveAndFlush(u);permissionCache.invalidate();}
@@ -470,24 +419,6 @@ class AccessSecurityIntegrationTest {
         ca.setStatus("DRAFT");courses.saveAndFlush(ca);
         write(post("/api/users/me/register-course/CA"),jwt,null).andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.message").value("Khóa học chưa được xuất bản hoặc đã ngừng sử dụng nên không thể đăng ký."));
-    }
-
-    @Test void groupManagerDoesNotNeedAccountEditingPermissionAndReaderCannotChangeMembers() throws Exception {
-        groups.save(UserGroup.builder().id("LOCAL").name("Local").organizationUnit(a).build());
-        var managerRole=dynamicRole("GROUP_MANAGER",Set.of("groups:read","groups:update"),Set.of("A"));
-        assignDynamic(ua,managerRole);
-        Cookie manager=login(ua);
-        mvc.perform(get("/api/admin/groups/LOCAL/members").cookie(manager)).andExpect(status().isOk());
-        write(put("/api/admin/groups/LOCAL/members"),manager,Map.of("addUserIds",List.of(learner.getId())))
-                .andExpect(status().isOk());
-        mvc.perform(get("/api/admin/users").cookie(manager)).andExpect(status().isForbidden());
-        var readerRole=dynamicRole("GROUP_READER",Set.of("groups:read"),Set.of("A"));
-        assignDynamic(viewer,readerRole);
-        Cookie reader=login(viewer);
-        mvc.perform(get("/api/admin/groups/LOCAL/members").param("membersOnly","true").cookie(reader))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].selectable").value(false));
-        write(put("/api/admin/groups/LOCAL/members"),reader,Map.of("removeUserIds",List.of(learner.getId())))
-                .andExpect(status().isForbidden());
     }
 
     @Test void jwtContainsOnlyImmutableUserIdAndSessionVersion() throws Exception {

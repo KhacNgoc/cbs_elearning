@@ -1,8 +1,10 @@
 """Pydantic request, response, and structured-model schemas."""
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr, model_validator
+
+from app import config
 
 
 class ConversationMessage(BaseModel):
@@ -12,8 +14,14 @@ class ConversationMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
+    # Optional context course (e.g. the lesson the learner is viewing). It is a
+    # ranking hint only when course_ids is provided.
     course_id: str | None = None
     course_name: str | None = Field(default=None, max_length=500)
+    # Courses the learner may search. None keeps the legacy single-course
+    # behaviour; an empty list means the learner has no searchable course.
+    course_ids: list[str] | None = Field(default=None, max_length=2000)
+    course_names: dict[str, str] = Field(default_factory=dict)
     page: int | None = Field(default=None, ge=1)
     conversation_summary: str = Field(default="", max_length=20000)
     recent_messages: list[ConversationMessage] = Field(default_factory=list, max_length=30)
@@ -25,6 +33,12 @@ class RewriteResult(BaseModel):
     standalone_question: StrictStr = Field(max_length=4000)
     needs_clarification: StrictBool
     reason: StrictStr = Field(max_length=1000)
+
+
+class TopicCheckResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    has_topic: StrictBool
 
 
 class SummaryRequest(BaseModel):
@@ -54,6 +68,8 @@ class Source(BaseModel):
     documentName: str
     page: int
     section: str
+    courseId: str = ""
+    courseName: str = ""
 
 
 class ChatResponse(BaseModel):
@@ -88,9 +104,13 @@ class QuizGenerationRequest(BaseModel):
     lesson_name: str | None = Field(default=None, max_length=500)
     lesson_id: str | None = Field(default=None, min_length=1, max_length=200)
     sources: list[QuizKnowledgeSource] = Field(default_factory=list, max_length=50)
-    single_choice_count: int = Field(default=5, ge=0, le=10)
-    multiple_choice_count: int = Field(default=0, ge=0, le=10)
+    single_choice_count: int = Field(default=5, ge=0, le=config.QUIZ_MAX_QUESTIONS)
+    multiple_choice_count: int = Field(default=0, ge=0, le=config.QUIZ_MAX_QUESTIONS)
     option_count: int = Field(default=4, ge=3, le=6)
+    # Saved questions and earlier drafts; new candidates repeating them are rejected.
+    existing_questions: list[Annotated[str, Field(max_length=2000)]] = Field(
+        default_factory=list, max_length=300
+    )
 
     @model_validator(mode="after")
     def require_lesson_sources(self):
@@ -156,6 +176,53 @@ class QuizGenerationSource(BaseModel):
 
 class QuizGenerationResponse(BaseModel):
     questions: list[GeneratedQuizQuestion]
+    sources: list[QuizGenerationSource]
+    warnings: list[str] = Field(default_factory=list)
+
+
+FlashcardType = Literal["TERM", "CLOZE"]
+
+
+class FlashcardGenerationRequest(BaseModel):
+    """Flashcards are always drafted from a lesson's explicitly assigned sources."""
+
+    model_config = ConfigDict(extra="forbid")
+    course_id: str = Field(min_length=1, max_length=200)
+    course_name: str = Field(min_length=1, max_length=500)
+    lesson_id: str = Field(min_length=1, max_length=200)
+    lesson_name: str = Field(min_length=1, max_length=500)
+    sources: list[QuizKnowledgeSource] = Field(min_length=1, max_length=50)
+    count: int = Field(default=10, ge=1, le=20)
+    types: list[FlashcardType] = Field(default_factory=lambda: ["TERM", "CLOZE"], min_length=1, max_length=2)
+
+
+class CompactFlashcard(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    f: StrictStr = Field(min_length=1, max_length=300)
+    b: StrictStr = Field(min_length=1, max_length=400)
+
+
+class GeneratedFlashcard(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: FlashcardType
+    front: StrictStr = Field(min_length=1, max_length=1000)
+    back: StrictStr = Field(min_length=1, max_length=4000)
+    source_ids: list[StrictStr]
+
+
+class FlashcardReview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Only the verdict matters; a verbose reason must not discard a valid card.
+    reason: StrictStr = Field(min_length=1, max_length=4000)
+    grounded: StrictBool
+    well_formed: StrictBool
+
+
+class FlashcardGenerationResponse(BaseModel):
+    cards: list[GeneratedFlashcard]
     sources: list[QuizGenerationSource]
     warnings: list[str] = Field(default_factory=list)
 

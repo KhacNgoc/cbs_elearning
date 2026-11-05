@@ -73,6 +73,7 @@
       title="Chi tiết báo cáo nội dung"
       :busy="saving"
       :width="850"
+      fixed-height
       @close="detail = null"
       @submit="save"
     >

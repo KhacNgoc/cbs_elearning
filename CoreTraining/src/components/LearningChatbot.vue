@@ -50,29 +50,15 @@
         </div>
 
         <template v-else>
-          <div class="chat-course-filter">
-            <label for="chat-course">Khóa học</label>
-            <input v-model="courseSearch" type="search" aria-label="Tìm khóa học cho trợ lý" placeholder="Tìm khóa học..." />
-            <span v-if="loadingChoices" role="status">Đang tìm khóa học...</span>
-            <p v-if="choicesError" role="alert">{{ choicesError }} <button @click="loadChoices">Thử lại</button></p>
-            <select
-              id="chat-course"
-              v-model="selectedCourseId"
-              :disabled="sending"
-              @change="loadHistory"
-            >
-              <option
-                v-for="course in accessibleCourses"
-                :key="course.id"
-                :value="course.id"
-              >
-                {{ course.name }}
-              </option>
-            </select>
-          </div>
+          <p v-if="contextCourse" class="chat-context">
+            Ưu tiên tài liệu khóa <strong>{{ contextCourse.name }}</strong>
+          </p>
 
-          <div ref="chatBody" class="chat-body">
-            <button v-if="historyBeforeId" class="btn btn-secondary" :disabled="loadingOlder" @click="loadOlderHistory">{{ loadingOlder ? "Đang tải..." : "Tải trao đổi trước" }}</button>
+          <div ref="chatBody" class="chat-body" @scroll.passive="onChatScroll">
+            <div v-if="loadingOlder" class="chat-loading-older" role="status">
+              Đang tải trao đổi trước...
+            </div>
+            <button v-else-if="historyBeforeId && olderFailed" class="btn btn-secondary" @click="loadOlderHistory">Tải lại trao đổi trước</button>
             <div class="chat-date">Hôm nay</div>
             <div v-if="loadingHistory" class="chat-loading">
               Đang tải lịch sử trao đổi...
@@ -81,8 +67,8 @@
               <span class="message-avatar"><Bot :size="17" /></span>
               <div>
                 <p>
-                  Xin chào! Tôi chỉ trả lời dựa trên tài liệu đã được index của
-                  khóa học đang chọn.
+                  Xin chào! Tôi chỉ trả lời dựa trên tài liệu của các khóa học
+                  bạn đang tham gia. Cứ hỏi, tôi sẽ tự tìm đúng khóa học.
                 </p>
                 <span>Trợ lý học tập · Bây giờ</span>
               </div>
@@ -119,6 +105,7 @@
                     >
                       <FileText :size="13" />
                       <span
+                        ><em v-if="source.courseName" class="source-course">{{ source.courseName }}</em
                         ><strong>{{ source.documentName }}</strong> · Trang
                         {{ source.page }} · {{ source.section }}</span
                       >
@@ -140,7 +127,7 @@
                   {{
                     longWait
                       ? "Mô hình đang tổng hợp câu trả lời, quá trình này có thể mất thêm một chút thời gian..."
-                      : "Đang tìm trong tài liệu khóa học..."
+                      : "Đang tìm trong tài liệu các khóa học của bạn..."
                   }}
                 </p>
               </div>
@@ -173,19 +160,19 @@
               v-model="question"
               rows="1"
               placeholder="Hỏi về nội dung bài học..."
-              :disabled="sending || !selectedCourseId"
+              :disabled="sending"
               @keydown.enter.exact="handleQuestionEnter"
             ></textarea>
             <button
               type="submit"
               aria-label="Gửi câu hỏi"
-              :disabled="sending || !question.trim() || !selectedCourseId"
+              :disabled="sending || !question.trim()"
             >
               <SendHorizontal :size="19" />
             </button>
             <p>
-              <Sparkles :size="13" /> Chỉ trả lời từ tài liệu của khóa học đã
-              chọn
+              <Sparkles :size="13" /> Chỉ trả lời từ tài liệu các khóa học của
+              bạn
             </p>
           </form>
         </template>
@@ -219,6 +206,7 @@
 
 <script setup lang="ts">
 import {
+  computed,
   nextTick,
   onBeforeUnmount,
   onMounted,
@@ -252,20 +240,25 @@ const chatbotElement = ref<HTMLElement | null>(null);
 const dragging = ref(false);
 const position = ref({ x: 0, y: 0 });
 const chatBody = ref<HTMLElement | null>(null);
-const selectedCourseId = ref("");
 const messages = ref<RagChatHistory[]>([]);
-const conversationIds = ref<Record<string, string>>({});
+// One conversation per learner: the server searches all accessible courses.
+const conversationId = ref("");
+// The course being viewed is sent only as a ranking hint, never as a filter.
+const contextCourse = computed(() =>
+  route.name === "LessonDetail" ? courseStore.currentCourse : null,
+);
 const question = ref("");
 const pendingQuestion = ref("");
 const sending = ref(false);
 const longWait = ref(false);
 const loadingHistory = ref(false);
 const chatError = ref("");
-const quickPrompts = [
-  "Tóm tắt nội dung chính của khóa học",
+// A course summary needs a course, so offer it only inside a course.
+const quickPrompts = computed(() => [
+  ...(contextCourse.value ? ["Tóm tắt nội dung chính của khóa học"] : []),
   "Các bước nghiệp vụ quan trọng là gì?",
   "Những điều kiện nào cần lưu ý?",
-];
+]);
 const dragOffset = { x: 0, y: 0 };
 let longWaitTimer: number | undefined;
 
@@ -275,52 +268,48 @@ const clearLongWaitTimer = () => {
   longWait.value = false;
 };
 
-const accessibleCourses = ref<{id:string;name:string}[]>([]),courseSearch=ref(""),loadingChoices=ref(false),choicesError=ref("");
-const historyBeforeId=ref<number|null>(null),loadingOlder=ref(false);
-let choiceVersion=0,historyVersion=0,choiceTimer:ReturnType<typeof setTimeout>|undefined;
-async function loadChoices(){const version=++choiceVersion;loadingChoices.value=true;choicesError.value="";try{let choices=await ragApi.courseChoices(courseSearch.value);const context=route.name === "LessonDetail" ? courseStore.currentCourse : null;if(!courseSearch.value && context && !choices.some(c=>c.id===context.id)){const contextual=await ragApi.courseChoices(context.name);choices=[...contextual.filter(c=>c.id===context.id),...choices];}if(version!==choiceVersion)return;const selected=accessibleCourses.value.find(c=>c.id===selectedCourseId.value);accessibleCourses.value=selected&&!choices.some(c=>c.id===selected.id)?[selected,...choices]:choices;}catch{if(version===choiceVersion)choicesError.value="Không tải được danh sách khóa học.";}finally{if(version===choiceVersion)loadingChoices.value=false;}}
-watch(courseSearch,()=>{++choiceVersion;clearTimeout(choiceTimer);choiceTimer=setTimeout(()=>void loadChoices(),250)});
+const historyBeforeId=ref<number|null>(null),loadingOlder=ref(false),olderFailed=ref(false);
+let historyVersion=0;
+// Older exchanges load once the reader scrolls this close to the top.
+const OLDER_HISTORY_THRESHOLD_PX=120;
 
 const scrollToLatest = async () => {
   await nextTick();
   if (chatBody.value) chatBody.value.scrollTop = chatBody.value.scrollHeight;
 };
 
-const selectCourseFromContext = () => {
-  const contextualCourseId =
-    route.name === "LessonDetail" ? courseStore.currentCourse?.id : undefined;
-  const nextCourseId =
-    contextualCourseId &&
-    accessibleCourses.value.some((course) => course.id === contextualCourseId)
-      ? contextualCourseId
-      : accessibleCourses.value.some(
-            (course) => course.id === selectedCourseId.value,
-          )
-        ? selectedCourseId.value
-        : accessibleCourses.value[0]?.id || "";
-  const changed = nextCourseId !== selectedCourseId.value;
-  selectedCourseId.value = nextCourseId;
-  if (changed) messages.value = [];
-  return changed;
-};
-
 const loadHistory = async () => {
- const version=++historyVersion,course=selectedCourseId.value;historyBeforeId.value=null;messages.value=[];
- if(!course)return;loadingHistory.value=true;chatError.value="";
- try{const page=await ragApi.getHistoryPage(course,conversationIds.value[course]);if(version!==historyVersion)return;messages.value=page.items;historyBeforeId.value=page.nextBeforeId;const conversation=page.items[0]?.conversationId;if(conversation)conversationIds.value[course]=conversation;await scrollToLatest();}
+ const version=++historyVersion;historyBeforeId.value=null;messages.value=[];
+ loadingHistory.value=true;chatError.value="";
+ olderFailed.value=false;
+ try{const page=await ragApi.getHistoryPage(conversationId.value||undefined);if(version!==historyVersion)return;messages.value=page.items;historyBeforeId.value=page.nextBeforeId;const conversation=page.items[0]?.conversationId;if(conversation)conversationId.value=conversation;await scrollToLatest();}
  catch{if(version===historyVersion)chatError.value="Không thể tải lịch sử trợ lý.";}
  finally{if(version===historyVersion)loadingHistory.value=false;}
+ if(version===historyVersion)await fillChatBody();
 };
 const loadOlderHistory = async () => {
- const version=historyVersion,course=selectedCourseId.value;if(!historyBeforeId.value||loadingOlder.value)return;loadingOlder.value=true;chatError.value="";const body=chatBody.value,oldHeight=body?.scrollHeight||0;
- try{const page=await ragApi.getHistoryPage(course,conversationIds.value[course],historyBeforeId.value);if(version!==historyVersion)return;const ids=new Set(messages.value.map(m=>m.id));messages.value=[...page.items.filter(m=>!ids.has(m.id)),...messages.value];historyBeforeId.value=page.nextBeforeId;await nextTick();if(body)body.scrollTop+=body.scrollHeight-oldHeight;}
- catch{if(version===historyVersion)chatError.value="Không thể tải trao đổi trước. Vui lòng thử lại.";}
+ const version=historyVersion;if(!historyBeforeId.value||loadingOlder.value)return;loadingOlder.value=true;olderFailed.value=false;chatError.value="";const body=chatBody.value,oldHeight=body?.scrollHeight||0;
+ let loaded=false;
+ try{const page=await ragApi.getHistoryPage(conversationId.value||undefined,historyBeforeId.value);if(version!==historyVersion)return;const ids=new Set(messages.value.map(m=>m.id));messages.value=[...page.items.filter(m=>!ids.has(m.id)),...messages.value];historyBeforeId.value=page.nextBeforeId;await nextTick();if(body)body.scrollTop+=body.scrollHeight-oldHeight;loaded=true;}
+ catch{if(version===historyVersion){olderFailed.value=true;chatError.value="Không thể tải trao đổi trước. Vui lòng thử lại.";}}
  finally{loadingOlder.value=false;}
+ if(loaded)await fillChatBody();
+};
+// Scrolling up near the top pulls in the previous page, so history loads gradually.
+const onChatScroll = () => {
+ const body=chatBody.value;
+ if(body&&body.scrollTop<=OLDER_HISTORY_THRESHOLD_PX&&!olderFailed.value)void loadOlderHistory();
+};
+// A first page shorter than the panel has no scrollbar to scroll up with, so keep loading
+// until the panel overflows or the history ends. Skipped before layout (clientHeight 0).
+const fillChatBody = async () => {
+ await nextTick();const body=chatBody.value;
+ if(body&&body.clientHeight>0&&body.scrollHeight<=body.clientHeight&&historyBeforeId.value&&!olderFailed.value)await loadOlderHistory();
 };
 
 const sendQuestion = async () => {
   const content = question.value.trim();
-  if (!content || !selectedCourseId.value || sending.value) return;
+  if (!content || sending.value) return;
   sending.value = true;
   chatError.value = "";
   pendingQuestion.value = content;
@@ -333,15 +322,15 @@ const sendQuestion = async () => {
   try {
     const response = await ragApi.chat(
       content,
-      selectedCourseId.value,
+      contextCourse.value?.id,
       undefined,
-      conversationIds.value[selectedCourseId.value],
+      conversationId.value || undefined,
     );
-    conversationIds.value[selectedCourseId.value] = response.conversationId;
+    conversationId.value = response.conversationId;
     messages.value.push({
       id: Date.now(),
       conversationId: response.conversationId,
-      courseId: selectedCourseId.value,
+      courseId: contextCourse.value?.id ?? null,
       question: content,
       answer: response.answer,
       grounded: response.grounded,
@@ -441,8 +430,6 @@ const toggleChat = async () => {
   await placeAtBottomRight();
   closeButton.value?.focus({ preventScroll: true });
   if (props.locked) return;
-  await loadChoices();
-  selectCourseFromContext();
   await loadHistory();
 };
 
@@ -473,27 +460,13 @@ watch(
   },
 );
 
-watch(
-  () => [
-    route.name,
-    courseStore.currentCourse?.id,
-  ],
-  async () => {
-    if (open.value) await loadChoices();
-    const changed = selectCourseFromContext();
-    if (open.value && changed) await loadHistory();
-  },
-  { immediate: true },
-);
-
 onMounted(() => {
   window.addEventListener("resize", clampPosition);
 });
 
 onBeforeUnmount(() => {
   clearLongWaitTimer();
-  clearTimeout(choiceTimer);
-  ++choiceVersion; ++historyVersion;
+  ++historyVersion;
   window.removeEventListener("resize", clampPosition);
   window.removeEventListener("pointermove", moveChatbot);
   window.removeEventListener("pointerup", stopDrag);
@@ -642,30 +615,28 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.12);
 }
 
-.chat-course-filter {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
+.chat-context {
+  margin: 0;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--line-e2e8f0);
   background: var(--surface-ffffff);
-}
-
-.chat-course-filter label {
   color: var(--ink-64748b);
   font-size: 0.72rem;
-  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.chat-course-filter select {
-  min-width: 0;
-  padding: 7px 9px;
-  border: 1px solid var(--line-cbd5e1);
-  border-radius: 9px;
-  background: var(--surface-f8fafc);
+.chat-context strong {
   color: var(--ink-334155);
-  font-size: 0.78rem;
+}
+
+.source-course {
+  display: block;
+  color: var(--ink-64748b);
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 700;
 }
 
 .chat-body {
@@ -843,6 +814,7 @@ onBeforeUnmount(() => {
 }
 
 .chat-loading,
+.chat-loading-older,
 .chat-error {
   margin: 12px 0;
   color: var(--ink-64748b);
