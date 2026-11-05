@@ -11,7 +11,6 @@ import com.bidv.coretraining.repository.*;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -30,7 +29,7 @@ import static org.assertj.core.api.Assertions.*;
         "spring.profiles.active=test", "spring.application.name=knowledge-source-tests"})
 @ContextConfiguration(classes = LessonKnowledgeSourceServiceTest.Config.class)
 class LessonKnowledgeSourceServiceTest {
-    @SpringBootConfiguration @EnableAutoConfiguration
+    @org.springframework.context.annotation.Configuration @EnableAutoConfiguration
     @EntityScan("com.bidv.coretraining.entity")
     @EnableJpaRepositories("com.bidv.coretraining.repository")
     @Import(LessonKnowledgeSourceServiceImpl.class)
