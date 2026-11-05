@@ -1,5 +1,6 @@
 package com.bidv.coretraining.service;
 
+import com.bidv.coretraining.dto.NotificationDraft;
 import com.bidv.coretraining.dto.NotificationDto;
 import com.bidv.coretraining.enums.NotificationType;
 
@@ -7,6 +8,9 @@ import java.util.List;
 
 public interface NotificationService {
     NotificationDto create(String username, NotificationType type, String title, String message, String targetUrl);
+
+    /** Inserts all in one batch and pushes them after commit; recipients are already known, so none is reloaded. */
+    void createAll(List<NotificationDraft> drafts);
 
     void createForAdmins(NotificationType type, String title, String message, String targetUrl);
 

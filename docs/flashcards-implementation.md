@@ -41,6 +41,31 @@ Trang `/flashcards` (mục **Flashcard** trên thanh điều hướng) cho học
 - Thêm, sửa, xóa chỉ áp dụng cho **Thẻ của tôi**. Thẻ bài học do quản trị soạn, dùng chung cho mọi học viên nên học viên không sửa được.
 - Mục điều hướng được `NavigationDataInitializer` tự thêm khi backend khởi động.
 
+## Lịch học (04/11/2026)
+
+Trên trang Flashcard, học viên chọn thẻ rồi **Đặt lịch học**: một ngày hoặc khoảng ngày, các thứ trong tuần, giờ nhắc hoặc không nhắc.
+Mỗi học viên tối đa 20 lịch, mỗi lịch kéo dài tối đa 366 ngày. Lịch có thể học ngay, tạm dừng, sửa, xóa.
+
+- Giờ và ngày tính theo `Asia/Ho_Chi_Minh` (`FlashcardPlanSchedule`), không phụ thuộc múi giờ máy chủ hay trình duyệt.
+- Nhắc qua thông báo trong app (chuông và WebSocket), loại `FLASHCARD_STUDY_REMINDER`, mở `/flashcards?plan={id}`. Chưa có email.
+- `next_reminder_at` có index nên tác vụ mỗi phút chỉ đọc lịch đã đến giờ. Mỗi lần xử lý 200 lịch trong một transaction, tối đa 10 lần mỗi lượt;
+  `FOR UPDATE SKIP LOCKED` để nhiều backend cùng chạy không gửi trùng.
+- Bỏ lỡ không dồn: backend chậm quá 2 giờ thì bỏ lần nhắc đó và chuyển sang lần sau.
+- Chọn cả bài thì thẻ mới của bài tự vào lịch; chọn từng thẻ thì giữ đúng các thẻ đó. Thẻ đã xóa và bài không còn quyền học được bỏ qua khi vào học.
+- API: `GET/POST /api/users/me/flashcard-plans`, `PUT/DELETE .../{id}`, `GET .../{id}/cards`.
+- Migration **bắt buộc ở mọi môi trường**: `CoreTrainingAPI/src/main/resources/migrations/20261104_flashcard_study_plans.sql` (idempotent).
+  Hibernate tự tạo bảng nhưng không nới `notifications_type_check`, nên thiếu script thì lưu nhắc học bị lỗi và tác vụ nhắc thất bại.
+
+`GET /api/users/me/flashcards/library` kiểm tra quyền, tiến độ và thứ tự chương theo lô (`LearningAccessService.learnableCourses`,
+`@BatchSize` trên khóa, chương trình, lĩnh vực, đơn vị). `FlashcardPlanQueryAuditTest` đo được 16 câu lệnh với 2 khóa và 17 câu lệnh với 32 khóa trong DB.
+
+## Hiệu năng trang Flashcard và nhắc học (05/11/2026)
+
+- `library` lọc khóa ngay trong SQL (`LearnerDashboardSqlRelations.learnable`), trả về scalar và phân trang theo khóa: `GET /api/users/me/flashcards/library?after={courseId}&size=30`, tối đa 50 khóa mỗi trang. `FlashcardAccessParityTest` giữ kết quả khớp `requireCourse` và `requireLesson`.
+- Phiên học đọc thẻ bằng projection; tạo, sửa lịch và mở phiên chỉ đọc các khóa của bài trong lịch.
+- `job.FlashcardPlanReminderJob` gửi nhắc theo batch JDBC. `FlashcardReminderConcurrencyTest` kiểm tra hai transaction cùng chạy trên PostgreSQL không gửi trùng (cần `-Dcbs.postgres.tests=true`).
+- Scheduler có 2 luồng để job không chặn bước quét WebSocket.
+
 ## AI và tải hệ thống
 
 - RAG: `POST /flashcards/jobs`, `GET /flashcards/jobs/{id}`. Dùng chung truy xuất (`retrieve_grounded_sources`), semaphore Ollama

@@ -1,4 +1,4 @@
--- PostgreSQL 15+: consolidated inventory of the 16 explicit application indexes.
+-- PostgreSQL 15+: consolidated inventory of the 21 explicit application indexes.
 -- Sources: CoreTrainingAPI entity @Index, resources/schema.sql and migrations/.
 -- Apply table/column migrations FIRST. This script does not create tables,
 -- migrate data, or recreate indexes supplied by PRIMARY KEY / UNIQUE constraints.
@@ -45,7 +45,12 @@ INSERT INTO pg_temp.cbs_production_index_inventory VALUES
     ('idx_rag_conversation_owner_course_updated', 'rag_conversations', ARRAY['user_id', 'course_id', 'updated_at']),
     ('idx_rag_conversation_message_order', 'rag_conversation_messages', ARRAY['conversation_id', 'id']),
     ('idx_lesson_knowledge_source_lesson', 'lesson_knowledge_sources', ARRAY['lesson_id']),
-    ('idx_lesson_knowledge_source_document', 'lesson_knowledge_sources', ARRAY['document_id']);
+    ('idx_lesson_knowledge_source_document', 'lesson_knowledge_sources', ARRAY['document_id']),
+    ('idx_flashcards_lesson_order', 'flashcards', ARRAY['lesson_id', 'card_order']),
+    ('idx_flashcards_course_status', 'flashcards', ARRAY['course_id', 'status']),
+    ('idx_flashcards_owner_lesson', 'flashcards', ARRAY['owner_user_id', 'lesson_id']),
+    ('idx_flashcard_plans_user', 'flashcard_study_plans', ARRAY['user_id']),
+    ('idx_flashcard_plans_next_reminder', 'flashcard_study_plans', ARRAY['next_reminder_at']);
 
 -- Fail before building any indexes when prerequisites are absent or an existing
 -- namesake is invalid / refers to a different table or set/order of key columns.
@@ -133,7 +138,16 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_rag_conversation_message_order ON pu
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lesson_knowledge_source_lesson ON public.lesson_knowledge_sources (lesson_id);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lesson_knowledge_source_document ON public.lesson_knowledge_sources (document_id);
 
--- Deployment report: expect 16 rows, all status=OK. Preserve indexdef in the
+-- Flashcards: entity Flashcard
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_flashcards_lesson_order ON public.flashcards (lesson_id, card_order);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_flashcards_course_status ON public.flashcards (course_id, status);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_flashcards_owner_lesson ON public.flashcards (owner_user_id, lesson_id);
+
+-- Study plans: migrations/20261104_flashcard_study_plans.sql
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_flashcard_plans_user ON public.flashcard_study_plans (user_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_flashcard_plans_next_reminder ON public.flashcard_study_plans (next_reminder_at);
+
+-- Deployment report: expect 21 rows, all status=OK. Preserve indexdef in the
 -- deployment log; a future definition change needs a new migration, not just IF NOT EXISTS.
 SELECT e.table_name, e.index_name,
        CASE WHEN i.indisvalid AND i.indisready THEN 'OK' ELSE 'MISSING / INVALID' END AS status,

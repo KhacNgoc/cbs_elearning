@@ -59,6 +59,45 @@ export interface FlashcardLibrary {
   nextCursor: string | null;
 }
 
+/** cardIds null means the whole lesson, including cards added to it later. */
+export interface FlashcardPlanItem {
+  lessonId: string;
+  cardIds: number[] | null;
+}
+
+export interface FlashcardPlan {
+  id: number;
+  name: string;
+  startDate: string;
+  endDate: string;
+  /** ISO weekdays: 1 is Monday, 7 is Sunday. */
+  weekdays: number[];
+  /** HH:mm in Vietnam time; null means no reminders. */
+  reminderTime: string | null;
+  active: boolean;
+  nextReminderAt: string | null;
+  items: FlashcardPlanItem[];
+  version: number;
+}
+
+export interface FlashcardPlanRequest {
+  name: string;
+  startDate: string;
+  endDate: string;
+  weekdays: number[];
+  reminderTime: string | null;
+  active: boolean;
+  /** Left out on an update to keep the plan's cards. */
+  items?: FlashcardPlanItem[];
+  version?: number;
+}
+
+export interface FlashcardPlanSession {
+  planId: number;
+  name: string;
+  cards: Flashcard[];
+}
+
 export interface AdminFlashcard {
   id: number;
   lessonId: string;
@@ -158,6 +197,30 @@ export const flashcardApi = {
 
   async removeMine(id: number): Promise<void> {
     await axiosClient.delete(`/api/flashcards/mine/${id}`);
+  },
+};
+
+const PLANS_PATH = "/api/users/me/flashcard-plans";
+
+export const flashcardPlanApi = {
+  async list(): Promise<FlashcardPlan[]> {
+    return (await axiosClient.get<FlashcardPlan[]>(PLANS_PATH)).data;
+  },
+
+  async create(plan: FlashcardPlanRequest): Promise<FlashcardPlan> {
+    return (await axiosClient.post<FlashcardPlan>(PLANS_PATH, plan)).data;
+  },
+
+  async update(id: number, plan: FlashcardPlanRequest): Promise<FlashcardPlan> {
+    return (await axiosClient.put<FlashcardPlan>(`${PLANS_PATH}/${id}`, plan)).data;
+  },
+
+  async remove(id: number): Promise<void> {
+    await axiosClient.delete(`${PLANS_PATH}/${id}`);
+  },
+
+  async session(id: number): Promise<FlashcardPlanSession> {
+    return (await axiosClient.get<FlashcardPlanSession>(`${PLANS_PATH}/${id}/cards`)).data;
   },
 };
 

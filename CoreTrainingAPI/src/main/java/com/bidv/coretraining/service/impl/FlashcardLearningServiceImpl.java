@@ -12,6 +12,7 @@ import com.bidv.coretraining.repository.ChapterRepository;
 import com.bidv.coretraining.repository.FlashcardRepository;
 import com.bidv.coretraining.repository.LessonRepository;
 import com.bidv.coretraining.repository.UserRepository;
+import com.bidv.coretraining.repository.projection.FlashcardCardView;
 import com.bidv.coretraining.repository.projection.FlashcardLessonCountView;
 import com.bidv.coretraining.repository.projection.LessonOutlineView;
 import com.bidv.coretraining.repository.projection.PublishedChapterView;
@@ -26,7 +27,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -90,6 +93,32 @@ public class FlashcardLearningServiceImpl implements FlashcardLearningService {
             if (learnable.get(i).id().equals(courseId))
                 return i + 1;
         return 0;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> openLessonIds(Collection<String> lessonIds, String username) {
+        if (lessonIds.isEmpty())
+            return List.of();
+        User user = user(username);
+        Set<String> courseIds = lessons.findCourseIdsOf(lessonIds);
+        List<LearnableCourse> learnable = sortedLearnable(user).stream()
+                .filter(course -> courseIds.contains(course.id())).toList();
+        Set<String> wanted = new HashSet<>(lessonIds);
+        return openCourses(user, learnable).stream().flatMap(item -> item.lessons().stream())
+                .map(LessonOutlineView::getId).filter(wanted::contains).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<FlashcardDto.Card> cardsInLessons(List<String> lessonIds, String username) {
+        if (lessonIds.isEmpty())
+            return List.of();
+        Long userId = user(username).getId();
+        Map<String, List<FlashcardCardView>> byLesson = flashcards.findVisibleInLessons(lessonIds, userId).stream()
+                .collect(Collectors.groupingBy(FlashcardCardView::getLessonId));
+        return lessonIds.stream().flatMap(id -> byLesson.getOrDefault(id, List.of()).stream())
+                .map(card -> toCard(card, userId)).toList();
     }
 
     private record OpenCourse(LearnableCourse course, List<LessonOutlineView> lessons) {
@@ -206,6 +235,15 @@ public class FlashcardLearningServiceImpl implements FlashcardLearningService {
                 card.getLesson().getTitle(), card.getType(), card.getFront(), card.getBack(),
                 FlashcardAdminServiceImpl.source(card), mine(card, user),
                 mine(card, user) ? card.getVersion() : null);
+    }
+
+    private static FlashcardDto.Card toCard(FlashcardCardView card, Long userId) {
+        boolean mine = userId.equals(card.getOwnerId());
+        FlashcardDto.Source source = card.getSourceDocumentId() == null ? null
+                : new FlashcardDto.Source(card.getSourceDocumentId(), card.getSourceDocumentName(),
+                        card.getSourcePage(), card.getSourceSection());
+        return new FlashcardDto.Card(card.getId(), card.getCourseId(), card.getLessonId(), card.getLessonTitle(),
+                card.getType(), card.getFront(), card.getBack(), source, mine, mine ? card.getVersion() : null);
     }
 
     private static boolean mine(Flashcard card, User user) {

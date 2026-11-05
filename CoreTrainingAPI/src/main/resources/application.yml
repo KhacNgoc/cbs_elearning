@@ -5,6 +5,11 @@ server:
     context-path: ${SERVER_SERVLET_CONTEXT_PATH}
 
 spring:
+  task:
+    scheduling:
+      pool:
+        # The reminder job must not hold up the WebSocket heartbeat sweep.
+        size: 2
   mail:
     host: ${SMTP_HOST:}
     port: ${SMTP_PORT:587}

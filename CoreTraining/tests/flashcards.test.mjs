@@ -79,3 +79,43 @@ test('deleting a card forgets it and study keeps the deck order', () => {
   assert.equal(flashcards.selectedCards(cards, 'all').length, 3);
   assert.deepEqual(flashcards.selectedCards(cards, undefined), []);
 });
+
+const draft = { name: 'Ôn tối', singleDay: false, startDate: '2026-11-10', endDate: '2026-11-20', weekdays: [1], remind: true, reminderTime: '20:00' };
+
+test('plan drafts follow the server rules', () => {
+  const today = '2026-11-04';
+  assert.equal(flashcards.planDraftError(draft, today, true), null);
+  assert.match(flashcards.planDraftError({ ...draft, name: ' ' }, today, true), /tên/);
+  assert.match(flashcards.planDraftError({ ...draft, endDate: '2026-11-01' }, today, true), /sau ngày/);
+  assert.match(flashcards.planDraftError({ ...draft, weekdays: [] }, today, true), /trong tuần/);
+  assert.match(flashcards.planDraftError({ ...draft, reminderTime: '' }, today, true), /giờ nhắc/);
+  assert.equal(flashcards.planDraftError({ ...draft, remind: false, reminderTime: '' }, today, true), null);
+  // A single day needs no end date or weekdays, but must not have passed for a new plan.
+  const day = { ...draft, singleDay: true, endDate: '', weekdays: [] };
+  assert.equal(flashcards.planDraftError(day, today, true), null);
+  assert.match(flashcards.planDraftError({ ...day, startDate: '2026-11-01' }, today, true), /đã qua/);
+  assert.equal(flashcards.planDraftError({ ...day, startDate: '2026-11-01' }, today, false), null);
+});
+
+test('the Vietnam date decides today whatever the browser zone', () => {
+  assert.equal(flashcards.vietnamToday(new Date('2026-11-04T17:30:00Z')), '2026-11-05');
+  assert.equal(flashcards.vietnamToday(new Date('2026-11-04T16:30:00Z')), '2026-11-04');
+});
+
+test('plans describe their schedule and count only cards still open', () => {
+  const plan = { startDate: '2026-11-10', endDate: '2026-11-20', weekdays: [1, 3, 5], reminderTime: '20:00', active: true };
+  assert.equal(flashcards.planSchedule(plan), '10/11/2026 – 20/11/2026 · T2, T4, T6 · Nhắc lúc 20:00');
+  assert.equal(flashcards.planSchedule({ ...plan, weekdays: [1, 2, 3, 4, 5, 6, 7], reminderTime: null }), '10/11/2026 – 20/11/2026 · Hằng ngày · Không nhắc');
+  assert.equal(flashcards.planSchedule({ ...plan, endDate: plan.startDate }), '10/11/2026 · Nhắc lúc 20:00');
+  assert.equal(flashcards.planStatus(plan, '2026-11-21'), 'ended');
+  assert.equal(flashcards.planStatus({ ...plan, active: false }, '2026-11-11'), 'paused');
+  assert.equal(flashcards.planStatus(plan, '2026-11-20'), 'running');
+
+  assert.deepEqual(flashcards.selectionToItems({ A: 'all', B: [1, 2] }), [
+    { lessonId: 'A', cardIds: null }, { lessonId: 'B', cardIds: [1, 2] },
+  ]);
+  const items = [{ lessonId: 'A', cardIds: null }, { lessonId: 'B', cardIds: [1, 2] }, { lessonId: 'LOCKED', cardIds: null }];
+  assert.equal(flashcards.planCardCount(items, [{ id: 'A', total: 5 }, { id: 'B', total: 8 }]), 7);
+  assert.equal(flashcards.planSizeLabel(items, [{ id: 'A', total: 5 }, { id: 'B', total: 8 }], true), '7 thẻ');
+  assert.equal(flashcards.planSizeLabel(items, [{ id: 'A', total: 5 }, { id: 'B', total: 8 }], false), '3 bài');
+});

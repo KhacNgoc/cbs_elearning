@@ -96,6 +96,10 @@ public class User {
     }
 
     public boolean activeAccount() {
+        return activeStatus(status);
+    }
+
+    public static boolean activeStatus(String status) {
         return "ACTIVE".equals(status);
     }
     // e.g. "ROLE_USER", "ROLE_ADMIN"

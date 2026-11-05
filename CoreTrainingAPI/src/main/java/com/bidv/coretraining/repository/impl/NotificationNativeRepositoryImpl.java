@@ -1,8 +1,14 @@
 package com.bidv.coretraining.repository.impl;
 
+import com.bidv.coretraining.dto.NotificationDraft;
 import com.bidv.coretraining.repository.NotificationNativeRepository;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.core.namedparam.SqlParameterSource;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -40,6 +46,20 @@ public class NotificationNativeRepositoryImpl implements NotificationNativeRepos
             """;
         return jdbc.update(insertSql, Map.of("lessonId", lessonId, "title", title, "message", message,
                 "targetUrl", targetUrl != null ? targetUrl : ""));
+    }
+
+    @Override
+    public List<Long> insertAll(List<NotificationDraft> drafts, LocalDateTime createdAt) {
+        SqlParameterSource[] rows = drafts.stream().map(draft -> new MapSqlParameterSource()
+                .addValue("recipientId", draft.recipientId()).addValue("type", draft.type().name())
+                .addValue("title", draft.title()).addValue("message", draft.message())
+                .addValue("targetUrl", draft.targetUrl()).addValue("createdAt", createdAt))
+                .toArray(SqlParameterSource[]::new);
+        KeyHolder keys = new GeneratedKeyHolder();
+        jdbc.batchUpdate("INSERT INTO notifications (recipient_id, type, title, message, target_url, is_read, created_at) "
+                + "VALUES (:recipientId, :type, :title, :message, :targetUrl, false, :createdAt)",
+                rows, keys, new String[] { "id" });
+        return keys.getKeyList().stream().map(row -> ((Number) row.values().iterator().next()).longValue()).toList();
     }
 
     @Override

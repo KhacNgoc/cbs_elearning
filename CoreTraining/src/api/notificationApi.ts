@@ -6,7 +6,8 @@ export type NotificationType =
   | "ENROLLMENT_APPROVED"
   | "ENROLLMENT_REJECTED"
   | "LESSON_REPORT"
-  | "COURSE_CONTENT_UPDATED";
+  | "COURSE_CONTENT_UPDATED"
+  | "FLASHCARD_STUDY_REMINDER";
 
 export interface AppNotification {
   id: number;

@@ -147,6 +147,14 @@ class FlashcardLibraryTest {
         assertThat(service.library(null, 1000, "learner").courses()).hasSize(50);
     }
 
+    @Test void onlyTheAskedLessonsAreOpenedAndOnlyTheirCoursesRead() {
+        when(access.learnableCourses(learner)).thenReturn(editorCourses("A", "B"));
+        when(lessons.findCourseIdsOf(List.of("AL"))).thenReturn(Set.of("A"));
+        lessonInEach("A", "B");
+        assertThat(service.openLessonIds(List.of("AL"), "learner")).containsExactly("AL");
+        verify(lessons).findOutlines(List.of("A"), false);
+    }
+
     @Test void coursesTheLearnerCannotStudyStayOut() {
         when(access.learnableCourses(learner)).thenReturn(List.of());
         assertThat(service.library(null, 30, "learner").courses()).isEmpty();

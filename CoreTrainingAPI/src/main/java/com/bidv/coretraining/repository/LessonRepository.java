@@ -44,6 +44,10 @@ public interface LessonRepository extends JpaRepository<Lesson, String> {
       @org.springframework.data.repository.query.Param("courseIds") java.util.Collection<String> courseIds,
       @org.springframework.data.repository.query.Param("includeDraft") boolean includeDraft);
 
+  @org.springframework.data.jpa.repository.Query("select distinct l.course.id from Lesson l where l.id in :ids")
+  java.util.Set<String> findCourseIdsOf(
+      @org.springframework.data.repository.query.Param("ids") java.util.Collection<String> ids);
+
   default List<LessonOutlineView> findOutline(String courseId, boolean includeDraft) {
     return findOutlines(List.of(courseId), includeDraft);
   }

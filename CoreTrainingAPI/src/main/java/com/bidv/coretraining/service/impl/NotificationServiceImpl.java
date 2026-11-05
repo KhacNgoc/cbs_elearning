@@ -1,5 +1,6 @@
 package com.bidv.coretraining.service.impl;
 
+import com.bidv.coretraining.dto.NotificationDraft;
 import com.bidv.coretraining.dto.NotificationDto;
 import com.bidv.coretraining.entity.Notification;
 import com.bidv.coretraining.enums.NotificationType;
@@ -57,6 +58,33 @@ public class NotificationServiceImpl implements NotificationService {
         } else
             socketHandler.sendToUser(username, dto);
         return dto;
+    }
+
+    @Override
+    @Transactional
+    public void createAll(List<NotificationDraft> drafts) {
+        if (drafts.isEmpty())
+            return;
+        LocalDateTime createdAt = LocalDateTime.now(ZoneOffset.UTC);
+        List<Long> ids = nativeQueries.insertAll(drafts, createdAt);
+        List<Runnable> pushes = new java.util.ArrayList<>(drafts.size());
+        for (int i = 0; i < drafts.size(); i++) {
+            NotificationDraft draft = drafts.get(i);
+            NotificationDto dto = NotificationDto.builder().id(ids.get(i)).type(draft.type()).title(draft.title())
+                    .message(draft.message()).targetUrl(draft.targetUrl()).read(false)
+                    .createdAt(createdAt.toInstant(ZoneOffset.UTC)).build();
+            pushes.add(() -> socketHandler.sendToUser(draft.username(), dto));
+        }
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager
+                    .registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            pushes.forEach(Runnable::run);
+                        }
+                    });
+        } else
+            pushes.forEach(Runnable::run);
     }
 
     @Override

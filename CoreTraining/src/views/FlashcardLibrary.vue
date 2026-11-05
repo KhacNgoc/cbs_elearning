@@ -15,10 +15,26 @@
       <RouterLink class="btn btn-primary" to="/">Về trang chủ</RouterLink>
     </div>
     <template v-else>
+      <FlashcardPlanList
+        :plans="plans"
+        :lessons="allLessons"
+        :all-loaded="!nextCursor"
+        :error="plansError"
+        :busy-id="busyPlanId"
+        @study="openPlan($event.id)"
+        @edit="openPlanForm($event)"
+        @toggle="togglePlan"
+        @remove="removePlan"
+        @retry="loadPlans"
+      />
+
       <div class="selection-bar">
         <span class="selection-count" aria-live="polite">Đã chọn <strong>{{ selectedTotal }}</strong> thẻ</span>
         <button type="button" class="btn btn-secondary" :disabled="!selectedTotal" @click="selection = {}">
           Bỏ chọn
+        </button>
+        <button type="button" class="btn btn-secondary" :disabled="!selectedTotal" @click="openPlanForm(null)">
+          <CalendarClock :size="16" /> Đặt lịch học
         </button>
         <button type="button" class="btn btn-primary" :disabled="!selectedTotal || starting" @click="startStudy">
           <Layers3 :size="16" /> {{ starting ? "Đang tải thẻ..." : `Học ${selectedTotal} thẻ` }}
@@ -108,6 +124,28 @@
     </AdminModal>
 
     <AdminModal
+      :open="planFormOpen"
+      :title="editingPlan ? `Sửa lịch học · ${editingPlan.name}` : 'Đặt lịch học'"
+      :width="560"
+      @close="planFormOpen = false"
+    >
+      <FlashcardPlanForm
+        v-if="planFormOpen"
+        v-model:replace-cards="replacePlanCards"
+        form-id="flashcard-plan-form"
+        :plan="editingPlan"
+        :selected-count="selectedTotal"
+        @submit="savePlan"
+      />
+      <template #footer>
+        <button type="button" class="btn btn-secondary" @click="planFormOpen = false">Hủy</button>
+        <button type="submit" form="flashcard-plan-form" class="btn btn-primary" :disabled="savingPlan">
+          {{ savingPlan ? "Đang lưu..." : "Lưu lịch học" }}
+        </button>
+      </template>
+    </AdminModal>
+
+    <AdminModal
       :open="!!managing"
       :title="managing ? `Thẻ của tôi · ${managing.title}` : ''"
       :width="680"
@@ -131,24 +169,31 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
-import { ChevronDown, ChevronRight, Layers3, PencilLine } from "lucide-vue-next";
+import { computed, onMounted, reactive, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { CalendarClock, ChevronDown, ChevronRight, Layers3, PencilLine } from "lucide-vue-next";
 import AdminModal from "../components/AdminModal.vue";
 import PageLoading from "../components/PageLoading.vue";
+import FlashcardPlanForm from "../components/flashcards/FlashcardPlanForm.vue";
+import FlashcardPlanList from "../components/flashcards/FlashcardPlanList.vue";
 import FlashcardStudy from "../components/flashcards/FlashcardStudy.vue";
 import PersonalFlashcards from "../components/flashcards/PersonalFlashcards.vue";
 import {
   apiErrorMessage,
   flashcardApi,
+  flashcardPlanApi,
   type Flashcard,
   type FlashcardLibraryCourse,
   type FlashcardLibraryLesson,
+  type FlashcardPlan,
+  type FlashcardPlanRequest,
 } from "../api/flashcardApi";
 import {
   dropCard,
   isCardSelected,
   selectedCards,
   selectedInLesson,
+  selectionToItems,
   toggleCard,
   toggleLessons,
   upsertCard,
@@ -173,7 +218,19 @@ const starting = ref(false);
 const studyCards = ref<Flashcard[]>([]);
 const shuffled = ref(false);
 const managing = ref<FlashcardLibraryLesson | null>(null);
-const studyTitle = computed(() => `Học ${studyCards.value.length} thẻ`);
+const route = useRoute();
+const router = useRouter();
+const plans = ref<FlashcardPlan[]>([]);
+const plansError = ref("");
+const busyPlanId = ref<number | null>(null);
+const planFormOpen = ref(false);
+const editingPlan = ref<FlashcardPlan | null>(null);
+const replacePlanCards = ref(false);
+const savingPlan = ref(false);
+const studyName = ref("");
+const studyTitle = computed(() =>
+  studyName.value ? `${studyName.value} · ${studyCards.value.length} thẻ` : `Học ${studyCards.value.length} thẻ`,
+);
 
 const allLessons = computed(() => courses.value.flatMap((course) => course.lessons));
 const selectedTotal = computed(() =>
@@ -238,7 +295,101 @@ async function load() {
 }
 onMounted(() => {
   void load();
+  void loadPlans();
 });
+
+async function loadPlans() {
+  plansError.value = "";
+  try {
+    plans.value = await flashcardPlanApi.list();
+  } catch (e) {
+    // The rest of the page works without plans.
+    plansError.value = apiErrorMessage(e, "Không tải được lịch học.");
+  }
+}
+
+function openPlanForm(plan: FlashcardPlan | null) {
+  editingPlan.value = plan;
+  replacePlanCards.value = false;
+  planFormOpen.value = true;
+}
+
+async function savePlan(request: FlashcardPlanRequest) {
+  const editing = editingPlan.value;
+  savingPlan.value = true;
+  try {
+    const items = !editing || replacePlanCards.value ? selectionToItems(selection.value) : undefined;
+    const saved = editing
+      ? await flashcardPlanApi.update(editing.id, { ...request, items, active: editing.active, version: editing.version })
+      : await flashcardPlanApi.create({ ...request, items });
+    plans.value = editing ? plans.value.map((plan) => (plan.id === saved.id ? saved : plan)) : [saved, ...plans.value];
+    planFormOpen.value = false;
+    showToast(editing ? "Đã cập nhật lịch học." : "Đã đặt lịch học.");
+  } catch (e) {
+    showToast(apiErrorMessage(e, "Không lưu được lịch học."), "error");
+  } finally {
+    savingPlan.value = false;
+  }
+}
+
+async function togglePlan(plan: FlashcardPlan) {
+  busyPlanId.value = plan.id;
+  try {
+    const saved = await flashcardPlanApi.update(plan.id, {
+      name: plan.name,
+      startDate: plan.startDate,
+      endDate: plan.endDate,
+      weekdays: plan.weekdays,
+      reminderTime: plan.reminderTime,
+      active: !plan.active,
+      version: plan.version,
+    });
+    plans.value = plans.value.map((item) => (item.id === saved.id ? saved : item));
+  } catch (e) {
+    showToast(apiErrorMessage(e, "Không cập nhật được lịch học."), "error");
+  } finally {
+    busyPlanId.value = null;
+  }
+}
+
+async function removePlan(plan: FlashcardPlan) {
+  busyPlanId.value = plan.id;
+  try {
+    await flashcardPlanApi.remove(plan.id);
+    plans.value = plans.value.filter((item) => item.id !== plan.id);
+    showToast("Đã xóa lịch học.");
+  } catch (e) {
+    showToast(apiErrorMessage(e, "Không xóa được lịch học."), "error");
+  } finally {
+    busyPlanId.value = null;
+  }
+}
+
+async function openPlan(id: number) {
+  try {
+    const session = await flashcardPlanApi.session(id);
+    if (!session.cards.length) {
+      showToast("Lịch học này hiện không còn thẻ nào để học.", "error");
+      return;
+    }
+    studyName.value = session.name;
+    studyCards.value = session.cards;
+  } catch (e) {
+    showToast(apiErrorMessage(e, "Không mở được lịch học."), "error");
+  }
+}
+
+// A reminder links here with ?plan=; the query is removed so a reload does not reopen it and the same link works twice.
+watch(
+  () => route.query.plan,
+  (plan) => {
+    const id = Number(plan);
+    if (!plan || !Number.isInteger(id)) return;
+    void router.replace({ query: {} });
+    void openPlan(id);
+  },
+  { immediate: true },
+);
 
 async function loadDeck(lessonId: string): Promise<Flashcard[]> {
   if (decks.value[lessonId]) return decks.value[lessonId];
@@ -272,6 +423,7 @@ async function startStudy() {
       await Promise.all(batch.map((lesson) => loadDeck(lesson.id).catch(() => failed.push(lesson.title))));
     }
     const cards = lessons.flatMap((lesson) => selectedCards(decks.value[lesson.id] ?? [], selection.value[lesson.id]));
+    studyName.value = "";
     if (failed.length) showToast(`Không tải được thẻ của ${failed.length} bài, các bài còn lại vẫn học được.`, "error");
     studyCards.value = cards;
   } finally {

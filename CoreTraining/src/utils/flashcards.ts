@@ -114,3 +114,90 @@ export function flashcardDraftError(card: { type: "TERM" | "CLOZE"; front: strin
   }
   return null;
 }
+
+export interface PlanDraft {
+  name: string;
+  singleDay: boolean;
+  startDate: string;
+  endDate: string;
+  weekdays: number[];
+  remind: boolean;
+  reminderTime: string;
+}
+
+interface PlanLike {
+  startDate: string;
+  endDate: string;
+  weekdays: number[];
+  reminderTime: string | null;
+  active: boolean;
+}
+
+const WEEKDAY_LABELS: Record<number, string> = { 1: "T2", 2: "T3", 3: "T4", 4: "T5", 5: "T6", 6: "T7", 7: "CN" };
+export const WEEKDAYS = Object.entries(WEEKDAY_LABELS).map(([value, label]) => ({ value: Number(value), label }));
+
+/** Plans run on Vietnam dates, whichever zone the browser is in. */
+export function vietnamToday(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(now);
+}
+
+/** Mirrors the server rules so the form can warn before saving. */
+export function planDraftError(draft: PlanDraft, today: string, isNew: boolean): string | null {
+  if (!draft.name.trim()) return "Nhập tên lịch học.";
+  if (!draft.startDate) return "Chọn ngày học.";
+  if (!draft.singleDay) {
+    if (!draft.endDate) return "Chọn ngày kết thúc.";
+    if (draft.endDate < draft.startDate) return "Ngày kết thúc phải sau ngày bắt đầu.";
+    if (!draft.weekdays.length) return "Chọn ít nhất một ngày trong tuần.";
+  }
+  if (isNew && (draft.singleDay ? draft.startDate : draft.endDate) < today) return "Ngày học đã qua.";
+  if (draft.remind && !draft.reminderTime) return "Chọn giờ nhắc.";
+  return null;
+}
+
+export function selectionToItems(selection: CardSelection): { lessonId: string; cardIds: number[] | null }[] {
+  return Object.entries(selection).map(([lessonId, chosen]) => ({
+    lessonId,
+    cardIds: chosen === "all" ? null : chosen,
+  }));
+}
+
+/** Lessons of courses not loaded yet look like no cards, so such a plan is described by its lessons instead. */
+export function planSizeLabel(
+  items: readonly { lessonId: string; cardIds: number[] | null }[],
+  lessons: readonly { id: string; total: number }[],
+  allLoaded: boolean,
+): string {
+  const known = new Set(lessons.map((lesson) => lesson.id));
+  if (!allLoaded && items.some((item) => !known.has(item.lessonId))) return `${items.length} bài`;
+  return `${planCardCount(items, lessons)} thẻ`;
+}
+
+/** Lessons the learner cannot open any more count as empty, as they do when studying. */
+export function planCardCount(
+  items: readonly { lessonId: string; cardIds: number[] | null }[],
+  lessons: readonly { id: string; total: number }[],
+): number {
+  const totals = new Map(lessons.map((lesson) => [lesson.id, lesson.total]));
+  return items.reduce((sum, item) => {
+    const total = totals.get(item.lessonId) ?? 0;
+    return sum + (item.cardIds ? Math.min(item.cardIds.length, total) : total);
+  }, 0);
+}
+
+const displayDate = (iso: string) => iso.split("-").reverse().join("/");
+
+export function planSchedule(plan: PlanLike): string {
+  const single = plan.startDate === plan.endDate;
+  const parts = [single ? displayDate(plan.startDate) : `${displayDate(plan.startDate)} – ${displayDate(plan.endDate)}`];
+  if (!single) {
+    parts.push(plan.weekdays.length === 7 ? "Hằng ngày" : plan.weekdays.map((day) => WEEKDAY_LABELS[day]).join(", "));
+  }
+  parts.push(plan.reminderTime ? `Nhắc lúc ${plan.reminderTime}` : "Không nhắc");
+  return parts.join(" · ");
+}
+
+export function planStatus(plan: PlanLike, today: string): "running" | "paused" | "ended" {
+  if (plan.endDate < today) return "ended";
+  return plan.active ? "running" : "paused";
+}

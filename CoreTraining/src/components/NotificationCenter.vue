@@ -39,6 +39,7 @@
                 v-else-if="item.type === 'COURSE_CONTENT_UPDATED'"
                 :size="18"
               />
+              <Layers3 v-else-if="item.type === 'FLASHCARD_STUDY_REMINDER'" :size="18" />
               <UserRoundX v-else-if="item.type === 'ENROLLMENT_REJECTED'" :size="18" />
               <UserRoundCheck v-else :size="18" />
             </span>
@@ -91,6 +92,7 @@ import {
   CircleCheck,
   CircleAlert,
   Info,
+  Layers3,
   MessageCircleReply,
   TriangleAlert,
   UserRoundCheck,
