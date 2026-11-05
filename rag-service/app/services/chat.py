@@ -15,10 +15,13 @@ from app.schemas import (
     ChatResponse,
     RewriteResult,
     Source,
+    TopicCheckResult,
 )
 from app.utils import (
     diversify_course_summary_results,
+    drop_navigation_results,
     find_mentioned_course,
+    find_replied_courses,
     format_messages,
     is_course_summary_question,
     is_generic_question,
@@ -141,9 +144,111 @@ def course_label(request: ChatRequest, course_id: str | None) -> str:
     return (request.course_names.get(course_id) or course_id).strip()
 
 
+def is_course_clarification(content: str) -> bool:
+    generic_prefix = config.GENERIC_QUESTION_CLARIFICATION.split("{courses}")[0]
+    return content == config.COURSE_SUMMARY_CLARIFICATION or content.startswith(generic_prefix)
+
+
+def resume_clarified_question(request: ChatRequest) -> ChatRequest | ChatResponse:
+    """A course name answering "which course?" continues the question that prompted it.
+
+    A reply fitting several courses ("cơ bản") asks again among just those courses.
+    """
+    if not request.course_ids:
+        return request
+    recent = request.recent_messages
+    names = {cid: request.course_names.get(cid, "") for cid in dict.fromkeys(request.course_ids)}
+
+    def is_clarified_turn(index: int) -> bool:
+        return (
+            index >= 0
+            and recent[index].role == "user"
+            and recent[index + 1].role == "assistant"
+            and is_course_clarification(recent[index + 1].content)
+        )
+
+    asked = len(recent) - 2
+    if not is_clarified_turn(asked):
+        return request
+    replied = find_replied_courses(request.question, names)
+    if not replied:
+        return request
+    # Earlier partial course replies are not the question being asked.
+    while is_clarified_turn(asked - 2) and find_replied_courses(recent[asked].content, names):
+        asked -= 2
+    question = recent[asked].content
+    if len(replied) > 1:
+        return ChatResponse(
+            answer=config.GENERIC_QUESTION_CLARIFICATION.format(
+                courses=", ".join(names[cid] for cid in replied)
+            ),
+            grounded=False,
+            sources=[],
+            standaloneQuestion=question,
+            needsClarification=True,
+            rewriteReason="ambiguous_course_reply",
+        )
+    return request.model_copy(update={
+        "question": question,
+        "course_id": replied[0],
+        "course_name": names[replied[0]],
+        "course_ids": replied,
+        "page": None,
+        "recent_messages": recent[:asked],
+    })
+
+
+# When the model is too busy to answer in time, the next questions skip the check instead of
+# each waiting out the same timeout. Monotonic loop time; 0 means the check is available.
+topic_check_paused_until = 0.0
+
+
+async def question_has_topic(question: str, courses: str) -> bool:
+    """Ask the small model whether a question names a topic; assume it does on any failure."""
+    global topic_check_paused_until
+    now = asyncio.get_running_loop().time()
+    if now < topic_check_paused_until:
+        return True
+    prompt = f"""Bạn phân loại câu hỏi của học viên ngân hàng. Học viên có thể học nhiều khóa: {courses}.
+Trả lời has_topic=true nếu câu hỏi nêu một nghiệp vụ, sản phẩm, thuật ngữ hoặc chủ đề cụ thể có thể tra cứu.
+Trả lời has_topic=false nếu câu hỏi chung chung, áp dụng cho khóa nào cũng được (ví dụ: "các bước quan trọng là gì", "cần lưu ý gì").
+Câu hỏi: {question}"""
+    try:
+        raw = await asyncio.wait_for(
+            infrastructure.ollama_chat(
+                config.REWRITE_MODEL,
+                [{"role": "user", "content": prompt}],
+                config.OLLAMA_TOPIC_TIMEOUT_SECONDS,
+                json_schema=ollama_compatible_schema(TopicCheckResult.model_json_schema()),
+                num_predict=config.OLLAMA_TOPIC_NUM_PREDICT,
+            ),
+            config.OLLAMA_TOPIC_TIMEOUT_SECONDS,
+        )
+        return TopicCheckResult.model_validate(json.loads(strip_model_thinking(raw))).has_topic
+    except (
+        TimeoutError,
+        asyncio.TimeoutError,
+        httpx.HTTPError,
+        KeyError,
+        TypeError,
+        ValueError,
+        RuntimeError,
+    ) as error:
+        infrastructure.logger.warning("Topic check failed error_type=%s", type(error).__name__)
+        if isinstance(error, (TimeoutError, asyncio.TimeoutError, httpx.TimeoutException)):
+            topic_check_paused_until = (
+                asyncio.get_running_loop().time() + config.OLLAMA_TOPIC_PAUSE_SECONDS
+            )
+        return True
+
+
 async def answer_chat(request: ChatRequest) -> ChatResponse:
     started_at = asyncio.get_running_loop().time()
     stage_started_at = started_at
+    resumed = resume_clarified_question(request)
+    if isinstance(resumed, ChatResponse):
+        return resumed
+    request = resumed
     if request.course_ids is not None and not request.course_ids:
         return ChatResponse(
             answer=config.NO_ACCESSIBLE_COURSE_ANSWER,
@@ -182,24 +287,27 @@ async def answer_chat(request: ChatRequest) -> ChatResponse:
             needsClarification=True,
             rewriteReason="course_summary_without_course",
         )
-    if (
-        not focus_course_id
-        and search_course_ids is not None
-        and len(search_course_ids) > 1
-        and is_generic_question(standalone_question)
-    ):
+    multi_course = search_course_ids is not None and len(search_course_ids) > 1
+    topic_ms = 0
+    if multi_course and not focus_course_id:
         # Without a topic, retrieval would pick whichever course's wording matches best.
         courses = ", ".join(
             label for label in (course_label(request, cid) for cid in search_course_ids) if label
         )
-        return ChatResponse(
-            answer=config.GENERIC_QUESTION_CLARIFICATION.format(courses=courses),
-            grounded=False,
-            sources=[],
-            standaloneQuestion=standalone_question,
-            needsClarification=True,
-            rewriteReason="generic_question_without_course",
+        stage_started_at = asyncio.get_running_loop().time()
+        generic = is_generic_question(standalone_question) or not await question_has_topic(
+            standalone_question, courses
         )
+        topic_ms = int((asyncio.get_running_loop().time() - stage_started_at) * 1000)
+        if generic:
+            return ChatResponse(
+                answer=config.GENERIC_QUESTION_CLARIFICATION.format(courses=courses),
+                grounded=False,
+                sources=[],
+                standaloneQuestion=standalone_question,
+                needsClarification=True,
+                rewriteReason="generic_question_without_course",
+            )
     course_summary_intent = bool(focus_course_id and summary_question)
     retrieval_question = standalone_question
     if course_summary_intent:
@@ -208,7 +316,7 @@ async def answer_chat(request: ChatRequest) -> ChatResponse:
             f"{course_label(request, focus_course_id) or 'khóa học'}: tổng quan, nội dung chính, "
             "nghiệp vụ, quy trình, trách nhiệm và lưu ý quan trọng"
         )
-    multi_course = search_course_ids is not None and len(search_course_ids) > 1
+        multi_course = False
 
     stage_started_at = asyncio.get_running_loop().time()
     await infrastructure.ensure_collection(config.OLLAMA_QUERY_EMBEDDING_TIMEOUT_SECONDS)
@@ -274,7 +382,7 @@ async def answer_chat(request: ChatRequest) -> ChatResponse:
         relevant_results = diversify_course_summary_results(ranked_results)
     else:
         relevant_results = [
-            item for item in ranked_results
+            item for item in drop_navigation_results(ranked_results, standalone_question)
             if item_relevance(item) >= config.RETRIEVAL_SCORE_THRESHOLD
         ]
     if not relevant_results:
@@ -472,6 +580,14 @@ Chỉ trả lời current_question dựa trên reference_documents."""
             rewriteReason=rewrite.reason,
         )
 
+    if multi_course and not focus_course_id:
+        # The learner chose no course, so always say which one this answer came from.
+        answer_courses = ", ".join(dict.fromkeys(
+            source["courseName"] for source in valid_sources if source["courseName"]
+        ))
+        if answer_courses:
+            answer = config.COURSE_ATTRIBUTION_ANSWER.format(courses=answer_courses, answer=answer)
+
     result = ChatResponse(
         answer=answer,
         grounded=True,
@@ -492,7 +608,7 @@ Chỉ trả lời current_question dựa trên reference_documents."""
     infrastructure.logger.info(
         "RAG chat completed focus_course_id=%s course_count=%d rewritten=%s summary_intent=%s "
         "retrieved=%d top_score=%.4f "
-        "rewrite_ms=%d embedding_ms=%d retrieval_ms=%d generation_ms=%d elapsed_ms=%d model=%s",
+        "rewrite_ms=%d topic_ms=%d embedding_ms=%d retrieval_ms=%d generation_ms=%d elapsed_ms=%d model=%s",
         focus_course_id,
         len(search_course_ids) if search_course_ids is not None else 0,
         standalone_question != request.question.strip(),
@@ -500,6 +616,7 @@ Chỉ trả lời current_question dựa trên reference_documents."""
         len(retrieved_sources),
         relevant_results[0].score if relevant_results else 0.0,
         rewrite_ms,
+        topic_ms,
         embedding_ms,
         retrieval_ms,
         generation_ms,

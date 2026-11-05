@@ -36,6 +36,11 @@ GENERIC_QUESTION_CLARIFICATION = (
     "Câu hỏi này có thể áp dụng cho nhiều khóa học ({courses}). Bạn muốn hỏi về "
     "khóa nào? Hãy nêu tên khóa học trong câu hỏi hoặc mở khóa học đó rồi hỏi lại."
 )
+# Shown whenever an answer searched several courses without the learner choosing one.
+COURSE_ATTRIBUTION_ANSWER = (
+    "Theo tài liệu khóa {courses}:\n\n{answer}\n\n"
+    "Nếu bạn muốn hỏi về khóa khác, hãy nêu tên khóa đó."
+)
 NO_ACCESSIBLE_COURSE_ANSWER = (
     "Bạn chưa có khóa học nào để trợ lý tra cứu tài liệu."
 )
@@ -78,6 +83,8 @@ QUIZ_LLM_VERIFICATION_ENABLED = os.getenv(
     "QUIZ_LLM_VERIFICATION_ENABLED", "true"
 ).strip().lower() in {"1", "true", "yes", "on"}
 OLLAMA_REWRITE_TIMEOUT_SECONDS = float(os.getenv("OLLAMA_REWRITE_TIMEOUT_SECONDS", "45"))
+# The topic check is optional: past this deadline the question is simply answered.
+OLLAMA_TOPIC_TIMEOUT_SECONDS = float(os.getenv("OLLAMA_TOPIC_TIMEOUT_SECONDS", "2"))
 OLLAMA_QUERY_EMBEDDING_TIMEOUT_SECONDS = float(
     os.getenv("OLLAMA_QUERY_EMBEDDING_TIMEOUT_SECONDS", "30")
 )
@@ -86,6 +93,9 @@ OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
 OLLAMA_CHAT_NUM_PREDICT = int(os.getenv("OLLAMA_CHAT_NUM_PREDICT", "384"))
 COURSE_SUMMARY_NUM_PREDICT = int(os.getenv("RAG_COURSE_SUMMARY_NUM_PREDICT", "256"))
 OLLAMA_REWRITE_NUM_PREDICT = int(os.getenv("OLLAMA_REWRITE_NUM_PREDICT", "96"))
+# After a timeout the model is probably queueing, so questions skip the check for this long.
+OLLAMA_TOPIC_PAUSE_SECONDS = float(os.getenv("OLLAMA_TOPIC_PAUSE_SECONDS", "30"))
+OLLAMA_TOPIC_NUM_PREDICT = int(os.getenv("OLLAMA_TOPIC_NUM_PREDICT", "16"))
 OLLAMA_SUMMARY_NUM_PREDICT = int(os.getenv("OLLAMA_SUMMARY_NUM_PREDICT", "192"))
 
 REFUSAL_ANSWER = "Tôi chưa tìm thấy thông tin này trong tài liệu của khóa học."

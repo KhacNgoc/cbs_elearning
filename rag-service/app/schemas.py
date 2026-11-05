@@ -35,6 +35,12 @@ class RewriteResult(BaseModel):
     reason: StrictStr = Field(max_length=1000)
 
 
+class TopicCheckResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    has_topic: StrictBool
+
+
 class SummaryRequest(BaseModel):
     current_summary: str = Field(default="", max_length=20000)
     new_messages: list[ConversationMessage] = Field(min_length=1, max_length=100)

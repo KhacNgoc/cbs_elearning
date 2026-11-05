@@ -115,6 +115,10 @@ OLLAMA_URL=http://localhost:11434 \
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
 ```
 
+Contents and conclusion sections ("Mục lục", "Kết luận") mention every topic without
+explaining any, so they are excluded from normal answers. They stay available for
+course summaries and for questions that ask for them by name.
+
 The first anti-hallucination gate uses a combined vector/lexical relevance
 score. Its default threshold is `0.40`, chosen for `bge-m3` in `eval/results/REPORT.md`; override it with
 `RAG_SCORE_THRESHOLD` only after measuring with `eval/retrieval_eval.py`.
@@ -124,6 +128,16 @@ Context-aware chat uses `OLLAMA_REWRITE_MODEL` and `OLLAMA_SUMMARY_MODEL`
 `RAG_CANDIDATE_LIMIT`, and `RAG_CONTEXT_MAX_CHARS`. Ollama timeouts are
 configured independently through `OLLAMA_CHAT_TIMEOUT_SECONDS`,
 `OLLAMA_REWRITE_TIMEOUT_SECONDS`, and `OLLAMA_SUMMARY_TIMEOUT_SECONDS`.
+
+When a question searches several courses and neither names nor is asked from one,
+the service asks which course is meant if the question has no topic. A word list
+catches the common phrasings; `OLLAMA_REWRITE_MODEL` classifies the rest, bounded by
+`OLLAMA_TOPIC_TIMEOUT_SECONDS` (2) and answering normally if that check fails. After a
+timeout the check pauses for `OLLAMA_TOPIC_PAUSE_SECONDS` (30), so a busy model costs one
+question the wait rather than every question. Answers
+in this situation always state which course they came from. Replying to that question
+with a course name, whole or in part ("CIF" for "CIF cơ bản"), answers the original
+question inside that course.
 
 Quiz generation defaults to `OLLAMA_QUIZ_MODEL=qwen3:4b`. Each candidate is a compact,
 single-source generation. Retrieval scales with the request: about 1.5 chunks per
