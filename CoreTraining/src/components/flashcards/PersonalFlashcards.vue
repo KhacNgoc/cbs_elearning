@@ -1,6 +1,6 @@
 <template>
   <div class="personal-flashcards">
-    <form class="personal-form" @submit.prevent="save">
+    <form v-if="formOpen" class="personal-form" @submit.prevent="save">
       <div class="form-head">
         <strong>{{ editing ? "Sửa thẻ của bạn" : "Thêm thẻ của bạn" }}</strong>
         <div class="type-switch" role="radiogroup" aria-label="Loại thẻ">
@@ -24,7 +24,6 @@
           rows="2"
           maxlength="1000"
           :placeholder="form.type === 'CLOZE' ? 'VD: Hồ sơ mở CIF phải được phê duyệt trong vòng ____.' : 'VD: CIF'"
-          data-autofocus
         />
         <small v-if="form.type === 'CLOZE'" class="field-hint">
           Dùng ____ để đánh dấu cụm từ cần nhớ.
@@ -42,23 +41,28 @@
       </label>
       <p v-if="touched && draftError" class="field-error">{{ draftError }}</p>
       <div class="form-actions">
-        <button v-if="editing" type="button" class="btn btn-secondary" @click="reset">Hủy sửa</button>
+        <button type="button" class="btn btn-secondary" @click="closeForm">Quay lại</button>
         <button type="submit" class="btn btn-primary" :disabled="saving">
           <Plus v-if="!editing" :size="16" />{{ editing ? "Lưu thay đổi" : "Thêm thẻ" }}
         </button>
       </div>
     </form>
 
-    <div class="personal-list">
+    <div v-else class="personal-list">
       <div class="list-head">
-        <strong>Thẻ của tôi</strong>
-        <span>{{ cards.length }} thẻ · chỉ bạn nhìn thấy</span>
+        <div class="list-title">
+          <strong>Thẻ của tôi</strong>
+          <span>{{ cards.length }} thẻ · chỉ bạn nhìn thấy</span>
+        </div>
+        <button ref="addButton" type="button" class="btn btn-primary add-button" data-autofocus @click="openNew">
+          <Plus :size="16" /> Thêm thẻ
+        </button>
       </div>
       <p v-if="!cards.length" class="list-empty">
-        Bạn chưa có thẻ nào ở bài này. Ghi lại thuật ngữ hay ý chính cần nhớ, thẻ sẽ được nhắc ôn theo lịch.
+        Bạn chưa có thẻ nào ở bài này. Ghi lại thuật ngữ hay ý chính cần nhớ.
       </p>
       <ul v-else>
-        <li v-for="card in cards" :key="card.id" :class="{ active: editing?.id === card.id }">
+        <li v-for="card in cards" :key="card.id">
           <div class="card-copy">
             <span class="card-type">{{ TYPE_LABELS[card.type] }}</span>
             <strong>{{ card.front }}</strong>
@@ -108,7 +112,10 @@ const touched = ref(false);
 const saving = ref(false);
 const deletingId = ref<number | null>(null);
 const removing = ref(false);
+// The list comes first; adding or editing a card is a separate step.
+const formOpen = ref(false);
 const frontInput = ref<HTMLTextAreaElement | null>(null);
+const addButton = ref<HTMLButtonElement | null>(null);
 
 const draftError = computed(() => flashcardDraftError(form));
 
@@ -118,11 +125,29 @@ function reset() {
   Object.assign(form, { type: "TERM", front: "", back: "" });
 }
 
-function edit(card: Flashcard) {
-  editing.value = card;
-  touched.value = false;
-  Object.assign(form, { type: card.type, front: card.front, back: card.back });
+function openForm() {
+  deletingId.value = null;
+  formOpen.value = true;
   nextTick(() => frontInput.value?.focus());
+}
+
+function openNew() {
+  reset();
+  openForm();
+}
+
+function edit(card: Flashcard) {
+  reset();
+  editing.value = card;
+  Object.assign(form, { type: card.type, front: card.front, back: card.back });
+  openForm();
+}
+
+/** Keeps focus inside the dialog when the focused control disappears, so Esc still closes it. */
+function closeForm() {
+  formOpen.value = false;
+  reset();
+  nextTick(() => addButton.value?.focus());
 }
 
 function insertBlank() {
@@ -147,8 +172,7 @@ async function save() {
       : await flashcardApi.createMine(props.lessonId, request);
     emit("saved", saved);
     showToast(editing.value ? "Đã cập nhật thẻ." : "Đã thêm thẻ.");
-    reset();
-    nextTick(() => frontInput.value?.focus());
+    closeForm();
   } catch (error) {
     showToast(apiErrorMessage(error, "Không lưu được thẻ."), "error");
   } finally {
@@ -160,10 +184,10 @@ async function remove(card: Flashcard) {
   removing.value = true;
   try {
     await flashcardApi.removeMine(card.id);
-    if (editing.value?.id === card.id) reset();
     deletingId.value = null;
     emit("removed", card.id);
     showToast("Đã xóa thẻ.");
+    nextTick(() => addButton.value?.focus());
   } catch (error) {
     showToast(apiErrorMessage(error, "Không xóa được thẻ."), "error");
   } finally {
@@ -187,12 +211,13 @@ async function remove(card: Flashcard) {
 .field-error { margin: 0; color: var(--danger-ink); font-size: var(--admin-text-label, .85rem); }
 .form-actions { display: flex; justify-content: flex-end; gap: .5rem; }
 .form-actions .btn { display: inline-flex; align-items: center; gap: .35rem; }
-.list-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .4rem; margin-bottom: .5rem; }
-.list-head span, .list-empty { color: var(--text-muted); font-size: var(--admin-text-label, .85rem); }
+.list-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem; margin-bottom: .6rem; }
+.list-title { display: flex; flex-direction: column; gap: .1rem; }
+.add-button { display: inline-flex; align-items: center; gap: .35rem; }
+.list-title span, .list-empty { color: var(--text-muted); font-size: var(--admin-text-label, .85rem); }
 .list-empty { margin: 0; padding: .9rem 1rem; border: 1px dashed var(--border-color); border-radius: var(--radius-md); }
-.personal-list ul { display: grid; gap: .5rem; max-height: 320px; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.personal-list ul { display: grid; gap: .5rem; max-height: 420px; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
 .personal-list li { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; padding: .7rem .85rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--surface-ffffff); }
-.personal-list li.active { border-color: var(--primary-color); }
 .card-copy { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
 .card-copy strong { overflow-wrap: anywhere; }
 .card-type { color: var(--text-muted); font-size: var(--admin-text-caption, .75rem); font-weight: 700; text-transform: uppercase; }
