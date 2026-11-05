@@ -1,6 +1,5 @@
 -- Flashcard study plans. Hibernate ddl-auto=update creates the table but never widens the notification type check
 -- it generated, so every environment must run this idempotent script or reminders fail to save.
-BEGIN;
 CREATE TABLE IF NOT EXISTS flashcard_study_plans (
     id bigserial PRIMARY KEY,
     version bigint,
@@ -22,4 +21,3 @@ ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_type_check;
 ALTER TABLE notifications ADD CONSTRAINT notifications_type_check CHECK (type IN (
     'COMMENT_REPLY', 'ENROLLMENT_REQUEST', 'ENROLLMENT_APPROVED', 'ENROLLMENT_REJECTED', 'LESSON_REPORT',
     'COURSE_CONTENT_UPDATED', 'FLASHCARD_STUDY_REMINDER'));
-COMMIT;

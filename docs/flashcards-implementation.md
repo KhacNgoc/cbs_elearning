@@ -27,8 +27,8 @@ Tự đánh giá Chưa nhớ/Khó/Nhớ/Dễ không phản ánh được học v
 xem nhanh. Đã gỡ `FlashcardSchedulingPolicy`, `FlashcardReview`, API ôn, banner **Ôn tập hôm nay** trên Dashboard và trang
 `/flashcards/review`.
 
-Migration **bắt buộc ở mọi môi trường**, kể cả khi dùng `ddl-auto=update`:
-`CoreTrainingAPI/src/main/resources/migrations/20261104_remove_flashcard_reviews.sql`. Hibernate không tự xóa bảng cũ, mà
+Migration (Flyway tự chạy):
+`CoreTrainingAPI/src/main/resources/db/migration/V20261104_3__remove_flashcard_reviews.sql`. Hibernate không tự xóa bảng cũ, mà
 bảng này có FK tới `flashcards`, nên thiếu script thì xóa thẻ đã từng được ôn sẽ lỗi. Script xóa vĩnh viễn lịch sử ôn.
 
 ## Trang Flashcard (04/11/2026)
@@ -53,7 +53,7 @@ Mỗi học viên tối đa 20 lịch, mỗi lịch kéo dài tối đa 366 ngà
 - Bỏ lỡ không dồn: backend chậm quá 2 giờ thì bỏ lần nhắc đó và chuyển sang lần sau.
 - Chọn cả bài thì thẻ mới của bài tự vào lịch; chọn từng thẻ thì giữ đúng các thẻ đó. Thẻ đã xóa và bài không còn quyền học được bỏ qua khi vào học.
 - API: `GET/POST /api/users/me/flashcard-plans`, `PUT/DELETE .../{id}`, `GET .../{id}/cards`.
-- Migration **bắt buộc ở mọi môi trường**: `CoreTrainingAPI/src/main/resources/migrations/20261104_flashcard_study_plans.sql` (idempotent).
+- Migration (Flyway tự chạy): `CoreTrainingAPI/src/main/resources/db/migration/V20261104_1__flashcard_study_plans.sql` (idempotent).
   Hibernate tự tạo bảng nhưng không nới `notifications_type_check`, nên thiếu script thì lưu nhắc học bị lỗi và tác vụ nhắc thất bại.
 
 `GET /api/users/me/flashcards/library` kiểm tra quyền, tiến độ và thứ tự chương theo lô (`LearningAccessService.learnableCourses`,
@@ -86,8 +86,8 @@ Mỗi học viên tối đa 20 lịch, mỗi lịch kéo dài tối đa 366 ngà
 
 ## Schema
 
-Hibernate `ddl-auto=update` tự tạo bảng `flashcards`. Môi trường quản lý schema thủ công dùng
-`CoreTrainingAPI/src/main/resources/migrations/20261103_flashcards.sql` (idempotent). Cần deploy đồng thời backend, frontend và RAG service.
+Flyway tự tạo bảng `flashcards` bằng
+`CoreTrainingAPI/src/main/resources/db/migration/V20261103_1__flashcards.sql` (idempotent). Cần deploy đồng thời backend, frontend và RAG service.
 
 ## Kiểm chứng
 
@@ -114,8 +114,8 @@ Học viên tự viết thẻ cho từng bài: nút **Flashcard** trên thanh ti
   và `version` (chỉ có trên thẻ của mình).
 - Thẻ của người khác trả 404 khi sửa hoặc xóa. Tối đa 200 thẻ cá nhân mỗi bài. Xóa thẻ không cần còn quyền vào bài.
 - API: `POST /api/lessons/{id}/flashcards/mine`, `PUT`/`DELETE /api/flashcards/mine/{cardId}` (sửa có khóa lạc quan theo `version`).
-- Migration **bắt buộc ở mọi môi trường**, kể cả khi dùng `ddl-auto=update`:
-  `CoreTrainingAPI/src/main/resources/migrations/20261104_personal_flashcards.sql` (idempotent). Hibernate tự thêm cột
+- Migration (Flyway tự chạy):
+  `CoreTrainingAPI/src/main/resources/db/migration/V20261104_2__personal_flashcards.sql` (idempotent). Hibernate tự thêm cột
   nhưng không nới ràng buộc `flashcards_origin_check` nó đã sinh, nên thiếu script này thì tạo thẻ cá nhân lỗi 409.
 - Test: `PersonalFlashcardTest`, bổ sung `FlashcardControllerContractTest`, `upsertCard` trong `tests/flashcards.test.mjs`.
 

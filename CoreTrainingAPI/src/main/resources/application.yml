@@ -5,6 +5,9 @@ server:
     context-path: ${SERVER_SERVLET_CONTEXT_PATH}
 
 spring:
+  flyway:
+    # Scripts are PostgreSQL-only; the postgres profile turns this on.
+    enabled: false
   task:
     scheduling:
       pool:

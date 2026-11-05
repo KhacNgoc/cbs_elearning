@@ -138,7 +138,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_flashcards_lesson_order ON public.fl
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_flashcards_course_status ON public.flashcards (course_id, status);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_flashcards_owner_lesson ON public.flashcards (owner_user_id, lesson_id);
 
--- Study plans: migrations/20261104_flashcard_study_plans.sql
+-- Study plans: db/migration/V20261104_1__flashcard_study_plans.sql
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_flashcard_plans_user ON public.flashcard_study_plans (user_id);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_flashcard_plans_next_reminder ON public.flashcard_study_plans (next_reminder_at);
 

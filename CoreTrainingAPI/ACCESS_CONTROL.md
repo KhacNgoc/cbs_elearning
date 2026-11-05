@@ -36,7 +36,7 @@ Quản trị viên đơn vị chỉ thấy dữ liệu trong phạm vi. Giảng 
 
 ## Nâng cấp dữ liệu
 
-Sao lưu database trước khi triển khai. Ứng dụng hiện dùng Hibernate `ddl-auto: update`, có thể tạo cấu trúc mới. Nếu quản lý schema thủ công, chạy `src/main/resources/migrations/20261012_access_control.sql` trước khi khởi động bản mới. Đây là script vận hành, không được chạy tự động bằng Flyway. Không chạy lại `schema.sql` (đó là dump cấu trúc cũ).
+Sao lưu database trước khi triển khai. Schema do Flyway quản lý (xem `DEPLOYMENT.md`). Nếu quản lý schema thủ công, chạy `src/main/resources/migrations/20261012_access_control.sql` trước khi khởi động bản mới. Đây là script vận hành, không được chạy tự động bằng Flyway. Không chạy lại `schema.sql` (đó là dump cấu trúc cũ).
 
 JWT cũ không có trường phiên `ver` sẽ mất hiệu lực sau nâng cấp; người dùng cần đăng nhập lại. Dữ liệu vai trò cũ vẫn được dùng. Khóa chưa gán đơn vị chỉ hiển thị cho học viên chưa gán đơn vị và quản trị toàn hệ thống, giữ tương thích dữ liệu cũ nhưng không đưa khóa vào đơn vị mới một cách ngầm định.
 

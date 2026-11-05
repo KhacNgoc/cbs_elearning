@@ -14,8 +14,8 @@ Có thể xem trích đoạn trong phạm vi đã chọn hoặc tải thêm tài
 Tài liệu phải xử lý xong trước khi chọn.
 
 Nguồn được lưu trong bảng `lesson_knowledge_sources`, liên kết bài học với
-`course_documents` và phạm vi trang/mục. Bảng được Hibernate tạo bổ sung khi
-backend khởi động với cấu hình `ddl-auto: update` hiện tại. Cần cập nhật đồng thời
+`course_documents` và phạm vi trang/mục. Bảng đã có trong script nền Flyway của
+backend. Cần cập nhật đồng thời
 backend, frontend và RAG service. Không cần reset database hoặc embedding lại
 tài liệu đã có: truy vấn sử dụng các payload `course_id`, `document_id`, `page`
 và `section` hiện có. Một tài liệu/phần tài liệu có thể được dùng cho nhiều bài.
