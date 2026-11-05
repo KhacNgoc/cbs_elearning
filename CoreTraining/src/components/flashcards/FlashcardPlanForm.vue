@@ -31,7 +31,9 @@
           :key="day.value"
           type="button"
           class="weekday"
-          :aria-pressed="draft.weekdays.includes(day.value)"
+          :aria-pressed="chosenDays.includes(day.value)"
+          :disabled="!availableDays.includes(day.value)"
+          :title="availableDays.includes(day.value) ? undefined : 'Không có trong khoảng ngày đã chọn'"
           @click="toggleDay(day.value)"
         >
           {{ day.label }}
@@ -63,7 +65,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
 import type { FlashcardPlan, FlashcardPlanRequest } from "../../api/flashcardApi";
-import { planDraftError, vietnamToday, WEEKDAYS, type PlanDraft } from "../../utils/flashcards";
+import { planDraftError, planWeekdays, vietnamToday, WEEKDAYS, weekdaysInRange, type PlanDraft } from "../../utils/flashcards";
 
 const props = defineProps<{ formId: string; plan: FlashcardPlan | null; selectedCount: number }>();
 const emit = defineEmits<{ submit: [request: FlashcardPlanRequest] }>();
@@ -82,6 +84,8 @@ const draft = reactive<PlanDraft>({
   remind: plan ? !!plan.reminderTime : true,
   reminderTime: plan?.reminderTime ?? "20:00",
 });
+const availableDays = computed(() => weekdaysInRange(draft.startDate, draft.endDate));
+const chosenDays = computed(() => planWeekdays(draft));
 const touched = ref(false);
 const error = computed(() => planDraftError(draft, today, !plan));
 
@@ -98,7 +102,7 @@ function submit() {
     name: draft.name.trim(),
     startDate: draft.startDate,
     endDate: draft.singleDay ? draft.startDate : draft.endDate,
-    weekdays: draft.singleDay ? allDays() : draft.weekdays,
+    weekdays: draft.singleDay ? allDays() : chosenDays.value,
     reminderTime: draft.remind ? draft.reminderTime : null,
     active: true,
   });
@@ -122,6 +126,7 @@ input[type="time"]:disabled { opacity: .55; }
 .weekday-row { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
 .weekday { min-width: 2.5rem; padding: .35rem .5rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-ffffff); color: var(--text-muted); font-weight: 700; cursor: pointer; }
 .weekday[aria-pressed="true"] { border-color: var(--primary-color); background: var(--primary-light); color: var(--primary-ink); }
+.weekday:disabled { opacity: .4; cursor: not-allowed; }
 .link-button { margin-left: .3rem; padding: .3rem .5rem; border: 0; background: transparent; color: var(--primary-ink); font-weight: 700; cursor: pointer; }
 .check { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; font-size: .88rem; }
 .check input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--primary-color); }

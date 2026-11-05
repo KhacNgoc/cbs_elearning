@@ -86,14 +86,30 @@
             </footer>
           </form>
         </section>
-        <template>
-          <section
-            id="profile-stats-panel"
-            v-if="activeTab === 'stats'"
-            role="tabpanel"
-            aria-labelledby="profile-stats-tab"
-          >
-            <p v-if="dataLoading" role="status">Đang tải dữ liệu...</p>
+        <section
+          id="profile-stats-panel"
+          v-if="activeTab === 'stats'"
+          role="tabpanel"
+          aria-labelledby="profile-stats-tab"
+          :aria-busy="dataLoading"
+        >
+          <div v-if="dataError" class="card empty" role="alert">
+            <p>{{ dataError }}</p>
+            <button class="btn btn-primary" @click="loadTab">Thử lại</button>
+          </div>
+          <p v-else-if="!statsLoaded" class="card empty" role="status">
+            Đang tải thống kê học tập...
+          </p>
+          <div v-else-if="!stats.joined" class="card empty">
+            <h2>Chưa có dữ liệu học tập</h2>
+            <p>
+              Thống kê sẽ xuất hiện khi bạn được giao hoặc đăng ký một khóa học.
+            </p>
+            <RouterLink to="/" class="view-link"
+              >Đến khóa học của tôi →</RouterLink
+            >
+          </div>
+          <template v-else>
             <div class="summary-grid">
               <article
                 v-for="metric in metrics"
@@ -112,15 +128,12 @@
                   Bình quân điểm cao nhất mỗi bài đánh giá, theo phiên bản đã
                   thi gần nhất.
                 </p>
-                <RadarChart
-                  v-if="activeTab === 'stats'"
-                  :competencies="competencies"
-                />
+                <RadarChart :competencies="competencies" />
               </section>
-              <section class="card">
+              <section class="card stats-courses">
                 <h2>Tiến độ theo khóa học</h2>
-                <p v-if="!stats.joined" class="subtitle">
-                  Chưa có khóa học tham gia.
+                <p v-if="dataLoading" class="subtitle" role="status">
+                  Đang cập nhật...
                 </p>
                 <article
                   v-for="item in statsCourses"
@@ -142,52 +155,73 @@
                     <ProgressBar :progress="item.percent" height="6px" />
                   </div>
                 </article>
-                <button class="btn btn-secondary" :disabled="statsCoursePage === 0 || dataLoading" @click="statsCoursePage--">Trước</button> <button class="btn btn-secondary" :disabled="(statsCoursePage + 1) * 10 >= statsCourseTotal || dataLoading" @click="statsCoursePage++">Sau</button>
+                <TablePagination
+                  v-if="statsCourseTotal > statsCoursePageSize"
+                  :page="statsCoursePage + 1"
+                  :page-size="statsCoursePageSize"
+                  :total="statsCourseTotal"
+                  :page-count="resultPageCountOf(statsCourseTotal, statsCoursePageSize)"
+                  :sizes="[statsCoursePageSize]"
+                  unit="khóa học"
+                  unit-label="Khóa học"
+                  @update:page="statsCoursePage = $event - 1"
+                />
                 <RouterLink to="/" class="view-link"
                   >Đến khóa học của tôi →</RouterLink
                 >
               </section>
             </div>
-          </section>
-          <section
-            id="profile-results-panel"
-            v-if="activeTab === 'results'"
-            role="tabpanel"
-            aria-labelledby="profile-results-tab"
-            class="card"
-          >
-            <h2>Kết quả kiểm tra</h2>
-            <p v-if="dataLoading" role="status">Đang tải kết quả...</p>
-            <p class="subtitle">
-              Điểm gần nhất và điểm cao nhất được so sánh trong cùng phiên bản
-              đề.
-            </p>
-            <div class="result-toolbar">
-              <input
-                v-model="resultSearch"
-                type="search"
-                placeholder="Tìm khóa hoặc bài kiểm tra..."
-                aria-label="Tìm kết quả kiểm tra"
-              /><span v-if="bestScore !== null"
-                >Điểm cao nhất: <strong>{{ bestScore }}/100</strong></span
-              >
-            </div>
-            <div class="table-scroll">
-              <table class="results-table">
+          </template>
+        </section>
+        <section
+          id="profile-results-panel"
+          v-if="activeTab === 'results'"
+          role="tabpanel"
+          aria-labelledby="profile-results-tab"
+          :aria-busy="dataLoading"
+          class="card"
+        >
+          <h2>Kết quả kiểm tra</h2>
+          <p class="subtitle">
+            Điểm gần nhất và điểm cao nhất được so sánh trong cùng phiên bản đề.
+          </p>
+          <div class="result-toolbar">
+            <input
+              v-model="resultSearch"
+              type="search"
+              placeholder="Tìm khóa hoặc bài kiểm tra..."
+              aria-label="Tìm kết quả kiểm tra"
+            /><span v-if="dataLoading && resultData" role="status"
+              >Đang cập nhật...</span
+            ><span v-else-if="bestScore !== null"
+              >Điểm cao nhất: <strong>{{ bestScore }}/100</strong></span
+            >
+          </div>
+          <div v-if="dataError" class="empty" role="alert">
+            <p>{{ dataError }}</p>
+            <button class="btn btn-primary" @click="loadTab">Thử lại</button>
+          </div>
+          <p v-else-if="!resultData" class="empty" role="status">
+            Đang tải kết quả...
+          </p>
+          <template v-else>
+            <div v-if="results.length" class="table-scroll">
+              <table class="results-table stacked-table">
                 <thead>
                   <tr>
                     <th>Bài kiểm tra</th>
                     <th>Lần gần nhất</th>
+                    <th>Kết quả</th>
                     <th>Điểm cao nhất</th>
                     <th>Lịch sử</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr
-                    v-for="group in paginatedResults"
+                    v-for="group in results"
                     :key="`${group.latest.quizId}-${group.latest.revision}`"
                   >
-                    <td>
+                    <td data-label="Bài kiểm tra">
                       <strong>{{ group.latest.title }}</strong
                       ><small
                         >{{ group.courseName }} · Phiên bản
@@ -195,60 +229,63 @@
                         {{ group.latest.passingScore }}%</small
                       >
                     </td>
-                    <td>
+                    <td data-label="Lần gần nhất">
                       <strong
-                        >{{ group.latest.score }}/{{
-                          group.latest.total
-                        }}</strong
-                      ><small
-                        >{{ formatLearningDate(group.latest.takenAt) }} ·
-                        {{ group.latest.passed ? "Đạt" : "Chưa đạt" }}</small
+                        >{{ group.latest.score }}/{{ group.latest.total }} ({{
+                          attemptPercent(group.latest.score, group.latest.total)
+                        }}%)</strong
+                      ><small>{{
+                        formatLearningDateTime(group.latest.takenAt)
+                      }}</small>
+                    </td>
+                    <td data-label="Kết quả">
+                      <span
+                        class="result-badge"
+                        :class="group.latest.passed ? 'passed' : 'failed'"
+                        >{{ group.latest.passed ? "Đạt" : "Chưa đạt" }}</span
                       >
                     </td>
-                    <td>
+                    <td data-label="Điểm cao nhất">
                       <strong
                         >{{ group.best.score }}/{{ group.best.total }}</strong
                       ><small
                         >{{
-                          Math.round(
-                            (group.best.score / group.best.total) * 100,
-                          )
+                          attemptPercent(group.best.score, group.best.total)
                         }}%</small
                       >
                     </td>
-                    <td>
-                      <button
-                        class="view-link"
-                        @click="openHistory(group)"
-                      >
+                    <td data-label="Lịch sử">
+                      <button class="view-link" @click="openHistory(group)">
                         {{ group.attemptCount }} lần thi →
                       </button>
+                      <RouterLink
+                        v-if="group.best.passed"
+                        class="view-link review-link"
+                        :to="{
+                          path: `/quiz/${encodeURIComponent(group.latest.courseId)}`,
+                          query: { lessonId: group.latest.lessonId },
+                        }"
+                        >Xem lại bài làm →</RouterLink
+                      >
                     </td>
                   </tr>
                 </tbody>
               </table>
             </div>
-            <p v-if="!dataLoading && !results.length" class="empty">
-              {{
-                resultSearch
-                  ? "Không có kết quả phù hợp."
-                  : "Chưa có kết quả kiểm tra."
-              }}
-            </p>
+            <p v-else-if="resultEmpty" class="empty">{{ resultEmpty }}</p>
             <TablePagination
+              v-if="resultRows > 0"
               v-model:page="resultPage"
               v-model:page-size="resultPageSize"
-              :total="Math.max(resultData?.total || 0,resultData?.legacyTotal || 0)"
-              :page-count="resultPageCount"
+              :total="resultRows"
+              :page-count="resultPages"
               unit="bài kiểm tra"
               unit-label="Bài kiểm tra"
             />
-          </section>
-        </template>
+          </template>
+        </section>
         <section
-          v-if="
-            activeTab === 'results' && resultData?.legacyScores?.length
-          "
+          v-if="activeTab === 'results' && showLegacyScores"
           class="card"
           aria-label="Kết quả lưu trước đây"
         >
@@ -258,7 +295,7 @@
             bản ghi này làm điểm lần thi gần nhất.
           </p>
           <div class="table-scroll">
-            <table class="results-table">
+            <table class="results-table stacked-table">
               <thead>
                 <tr>
                   <th>Bài kiểm tra / khóa học</th>
@@ -271,31 +308,20 @@
                   v-for="score in resultData?.legacyScores"
                   :key="`${score.courseId}-${score.lessonId}`"
                 >
-                  <td>
-                    {{ score.title
-                    }}<small>{{ score.courseName }}</small>
+                  <td data-label="Bài kiểm tra / khóa học">
+                    {{ score.title }}<small>{{ score.courseName }}</small>
                   </td>
-                  <td>{{ score.score }}/{{ score.total }}</td>
-                  <td>{{ formatLearningDate(score.takenAt) }}</td>
+                  <td data-label="Điểm đã lưu">
+                    {{ score.score }}/{{ score.total }}
+                  </td>
+                  <td data-label="Ngày ghi nhận">
+                    {{ formatLearningDateTime(score.takenAt) }}
+                  </td>
                 </tr>
               </tbody>
             </table>
           </div>
         </section>
-        <div
-          v-if="
-            dataError &&
-            activeTab !== 'info' &&
-            activeTab !== 'awards'
-          "
-          class="card empty data-reveal"
-          role="alert"
-        >
-          <p>{{ dataError }}</p>
-          <button class="btn btn-primary" @click="loadTab">
-            Thử lại
-          </button>
-        </div>
         <section
           id="profile-awards-panel"
           v-if="activeTab === 'awards'"
@@ -362,12 +388,11 @@
             </header>
             <p v-if="historyLoading" role="status">Đang tải lịch sử...</p>
             <p v-if="historyError" role="alert">{{ historyError }} <button @click="loadMoreHistory">Thử lại</button></p>
-            <button v-if="historyCursor" class="btn btn-secondary" :disabled="historyLoading" @click="loadMoreHistory">Tải thêm lịch sử</button>
             <div class="table-scroll">
-              <table class="results-table">
+              <table class="results-table stacked-table">
                 <thead>
                   <tr>
-                    <th>Ngày thi</th>
+                    <th>Thời gian thi</th>
                     <th>Phiên bản</th>
                     <th>Điểm</th>
                     <th>Kết quả</th>
@@ -375,14 +400,27 @@
                 </thead>
                 <tbody>
                   <tr v-for="attempt in history" :key="attempt.id">
-                    <td>{{ formatLearningDate(attempt.takenAt) }}</td>
-                    <td>{{ attempt.revision }}</td>
-                    <td>{{ attempt.score }}/{{ attempt.total }}</td>
-                    <td>{{ attempt.passed ? "Đạt" : "Chưa đạt" }}</td>
+                    <td data-label="Thời gian thi">
+                      {{ formatLearningDateTime(attempt.takenAt) }}
+                    </td>
+                    <td data-label="Phiên bản">{{ attempt.revision }}</td>
+                    <td data-label="Điểm">
+                      {{ attempt.score }}/{{ attempt.total }} ({{
+                        attemptPercent(attempt.score, attempt.total)
+                      }}%)
+                    </td>
+                    <td data-label="Kết quả">
+                      <span
+                        class="result-badge"
+                        :class="attempt.passed ? 'passed' : 'failed'"
+                        >{{ attempt.passed ? "Đạt" : "Chưa đạt" }}</span
+                      >
+                    </td>
                   </tr>
                 </tbody>
               </table>
             </div>
+            <button v-if="historyCursor" class="btn btn-secondary history-more" :disabled="historyLoading" @click="loadMoreHistory">Tải thêm lịch sử</button>
           </section>
         </div></Transition
       ></Teleport
@@ -400,8 +438,16 @@ import type { UserProfile, LearnerAttempt, LearnerCourse } from "../types";
 import { roleLabel } from "../utils/permissions";
 import {
   formatLearningDate,
+  formatLearningDateTime,
   learningStatusLabel,
 } from "../utils/learning";
+import {
+  attemptPercent,
+  profileMetrics,
+  resultEmptyMessage,
+  resultPageCount as resultPageCountOf,
+  resultRowCount,
+} from "../utils/profileProgress";
 import CourseThumbnail from "../components/CourseThumbnail.vue";
 import RadarChart from "../components/RadarChart.vue";
 import ProgressBar from "../components/ProgressBar.vue";
@@ -485,8 +531,8 @@ async function saveProfile() {
   }
 }
 const emptyStats: ProfileStats = {joined:0,completed:0,total:0,percent:null,notStarted:0,inProgress:0,complete:0,mandatory:0,mandatoryComplete:0,competencies:[]};
-const stats = ref<ProfileStats>(emptyStats), statsCourses = ref<LearnerCourse[]>([]), statsCoursePage=ref(0), statsCourseTotal=ref(0);
-const summary = stats;
+const stats = ref<ProfileStats>(emptyStats), statsLoaded = ref(false), statsCourses = ref<LearnerCourse[]>([]), statsCoursePage=ref(0), statsCourseTotal=ref(0);
+const statsCoursePageSize = 10;
 const competencies = computed(() => stats.value.competencies);
 const awardPage=ref(1),awardsData=ref<import('../api/profileReadApi').AwardsPage|null>(null);
 watch(awardPage,()=>{if(activeTab.value==='awards')void loadTab()});
@@ -497,7 +543,7 @@ async function loadTab() {
  try {
   if(activeTab.value==='stats') {
    const [data,courses]=await Promise.all([profileReadApi.stats(),profileReadApi.courses(statsCoursePage.value)]);
-   if(version!==requestVersion)return;stats.value=data;statsCourses.value=courses.items;statsCourseTotal.value=courses.total;
+   if(version!==requestVersion)return;stats.value=data;statsLoaded.value=true;statsCourses.value=courses.items;statsCourseTotal.value=courses.total;
   } else if(activeTab.value==='results') {
    const data=await profileReadApi.results(resultPage.value-1,resultPageSize.value,resultSearch.value);
    if(version===requestVersion)resultData.value=data;
@@ -507,38 +553,19 @@ async function loadTab() {
 }
 watch(activeTab,loadTab);
 watch(statsCoursePage,()=>{if(activeTab.value==='stats')void loadTab()});
-const metrics = computed(() => [
-  {
-    label: "Khóa tham gia",
-    value: summary.value.joined,
-    detail: `${summary.value.inProgress} đang học · ${summary.value.notStarted} chưa bắt đầu`,
-  },
-  {
-    label: "Hoàn thành khóa",
-    value: summary.value.joined
-      ? `${Math.round((summary.value.complete / summary.value.joined) * 100)}%`
-      : "—",
-    detail: `${summary.value.complete}/${summary.value.joined} khóa`,
-  },
-  {
-    label: "Hoàn thành bài",
-    value: summary.value.percent === null ? "—" : `${summary.value.percent}%`,
-    detail: `${summary.value.completed}/${summary.value.total} bài`,
-  },
-  {
-    label: "Bắt buộc hoàn thành",
-    value: `${summary.value.mandatoryComplete}/${summary.value.mandatory}`,
-    detail: "khóa học bắt buộc",
-  },
-]);
+const metrics = computed(() => profileMetrics(stats.value));
 const resultSearch = ref(""),
   resultPage = ref(1),
   resultPageSize = ref(10),
   history = ref<LearnerAttempt[] | null>(null);
-const paginatedResults=computed(()=>resultData.value?.items || []);
-const results=paginatedResults;
+const results=computed(()=>resultData.value?.items || []);
+const searching=computed(()=>resultSearch.value.trim().length>0);
+const resultCounts=computed(()=>({total:resultData.value?.total||0,legacyTotal:resultData.value?.legacyTotal||0}));
+const resultRows=computed(()=>resultRowCount(resultCounts.value,searching.value));
+const resultPages=computed(()=>resultPageCountOf(resultRows.value,resultPageSize.value));
+const resultEmpty=computed(()=>resultEmptyMessage(resultCounts.value,searching.value));
+const showLegacyScores=computed(()=>!dataError.value&&!searching.value&&Boolean(resultData.value?.legacyScores?.length));
 const bestScore=computed(()=>resultData.value?.bestScore??null);
-const resultPageCount=computed(()=>Math.max(1,Math.ceil(Math.max(resultData.value?.total||0,resultData.value?.legacyTotal||0)/resultPageSize.value)));
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 watch(resultSearch,()=>{ clearTimeout(searchTimer);++requestVersion;searchTimer=setTimeout(()=>{if(resultPage.value!==1)resultPage.value=1;else void loadTab()},250); });
 watch(resultPageSize,()=>{if(resultPage.value!==1)resultPage.value=1;else void loadTab()});
@@ -682,8 +709,9 @@ h2 {
 }
 .stats-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1.3rem;
+  align-items: start;
 }
 .course-progress-row {
   display: flex;
@@ -699,6 +727,7 @@ h2 {
 .course-progress-row h3 {
   font-size: 0.9rem;
   margin-bottom: 0.3rem;
+  overflow-wrap: anywhere;
 }
 .course-progress-row p {
   font-size: 0.75rem;
@@ -764,6 +793,38 @@ h2 {
   text-align: center;
   color: var(--text-muted);
 }
+.empty h2 {
+  color: var(--text-main);
+}
+.empty .btn {
+  margin-top: 0.8rem;
+}
+.result-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.result-badge.passed {
+  color: var(--success-ink);
+  background: var(--success-surface);
+  border-color: var(--success-border);
+}
+.result-badge.failed {
+  color: var(--danger-ink);
+  background: var(--danger-surface);
+  border-color: var(--danger-border);
+}
+.review-link {
+  display: block;
+  padding-top: 0;
+}
+.history-more {
+  margin-top: 1rem;
+}
 .awards-heading {
   display: flex;
   justify-content: space-between;
@@ -826,6 +887,42 @@ h2 {
   }
   .stats-grid {
     grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 640px) {
+  .stacked-table thead {
+    display: none;
+  }
+  .table-scroll > .stacked-table {
+    min-width: 0;
+  }
+  .stacked-table,
+  .stacked-table tbody,
+  .stacked-table tr,
+  .stacked-table td {
+    display: block;
+    width: 100%;
+  }
+  .stacked-table tr {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color);
+  }
+  .stacked-table td {
+    padding: 0.4rem 0;
+    border-bottom: 0;
+    overflow-wrap: anywhere;
+  }
+  .stacked-table td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.2rem;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+  .result-toolbar input {
+    max-width: none;
+    flex-basis: 100%;
   }
 }
 @media (max-width: 550px) {

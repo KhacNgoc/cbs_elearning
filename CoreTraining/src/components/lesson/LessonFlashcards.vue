@@ -6,7 +6,6 @@
       :key="sessionKey"
       v-model:shuffled="shuffled"
       :cards="session"
-      @exit="view = null"
     />
     <PersonalFlashcards
       v-else-if="view === 'manage'"

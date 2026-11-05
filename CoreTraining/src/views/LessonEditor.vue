@@ -437,13 +437,13 @@ h1 {
   transition: background 0.15s ease;
 }
 .header-title-interactive:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--primary-light);
 }
 .header-title-interactive h1 {
   margin: 0;
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--text-heading, #fff);
+  color: var(--text-main);
 }
 .btn-edit-title {
   display: inline-flex;
@@ -464,8 +464,8 @@ h1 {
 .header-title-input {
   font-size: 1.35rem;
   font-weight: 700;
-  background: var(--bg-surface, #1e293b);
-  color: #fff;
+  background: var(--bg-card);
+  color: var(--text-main);
   border: 1.5px solid #10b981;
   border-radius: 8px;
   padding: 0.35rem 0.75rem;

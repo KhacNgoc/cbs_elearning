@@ -102,7 +102,6 @@
       <strong>Bạn đã lướt qua hết {{ queue.length }} thẻ</strong>
       <div class="finished-actions">
         <button type="button" class="btn btn-secondary" @click="restart(cards)">Xem lại từ đầu</button>
-        <button type="button" class="btn btn-primary" @click="$emit('exit')">Đóng</button>
       </div>
     </div>
   </div>
@@ -124,7 +123,6 @@ import { TYPE_LABELS, type Flashcard } from "../../api/flashcardApi";
 import { frontParts as splitFront, shuffleCards, sourceLabel } from "../../utils/flashcards";
 
 const props = defineProps<{ cards: Flashcard[]; showLesson?: boolean }>();
-defineEmits<{ exit: [] }>();
 // A parent may bind this to keep the choice across study sessions.
 const shuffled = defineModel<boolean>("shuffled", { default: false });
 

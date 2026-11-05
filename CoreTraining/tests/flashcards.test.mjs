@@ -97,6 +97,23 @@ test('plan drafts follow the server rules', () => {
   assert.equal(flashcards.planDraftError({ ...day, startDate: '2026-11-01' }, today, false), null);
 });
 
+test('a plan only counts the weekdays its date range contains', () => {
+  // 5 and 6 November 2026 are a Thursday and a Friday.
+  assert.deepEqual(flashcards.weekdaysInRange('2026-11-05', '2026-11-06'), [4, 5]);
+  assert.deepEqual(flashcards.weekdaysInRange('2026-11-08', '2026-11-09'), [1, 7]);
+  assert.deepEqual(flashcards.weekdaysInRange('2026-11-05', '2026-11-05'), [4]);
+  assert.deepEqual(flashcards.weekdaysInRange('2026-11-05', '2026-11-11'), [1, 2, 3, 4, 5, 6, 7]);
+  assert.deepEqual(flashcards.weekdaysInRange('2026-11-05', '2026-12-30'), [1, 2, 3, 4, 5, 6, 7]);
+  // Until the range is valid nothing is ruled out, and the date error is the one to show.
+  assert.equal(flashcards.weekdaysInRange('2026-11-05', '').length, 7);
+  assert.equal(flashcards.weekdaysInRange('2026-11-06', '2026-11-05').length, 7);
+
+  const short = { ...draft, startDate: '2026-11-05', endDate: '2026-11-06' };
+  assert.deepEqual(flashcards.planWeekdays({ ...short, weekdays: [1, 2, 3, 4, 5, 6, 7] }), [4, 5]);
+  assert.match(flashcards.planDraftError({ ...short, weekdays: [1] }, '2026-11-04', true), /trong tuần/);
+  assert.equal(flashcards.planDraftError({ ...short, weekdays: [1, 5] }, '2026-11-04', true), null);
+});
+
 test('the Vietnam date decides today whatever the browser zone', () => {
   assert.equal(flashcards.vietnamToday(new Date('2026-11-04T17:30:00Z')), '2026-11-05');
   assert.equal(flashcards.vietnamToday(new Date('2026-11-04T16:30:00Z')), '2026-11-04');

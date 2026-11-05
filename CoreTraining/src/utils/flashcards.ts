@@ -136,6 +136,24 @@ interface PlanLike {
 const WEEKDAY_LABELS: Record<number, string> = { 1: "T2", 2: "T3", 3: "T4", 4: "T5", 5: "T6", 6: "T7", 7: "CN" };
 export const WEEKDAYS = Object.entries(WEEKDAY_LABELS).map(([value, label]) => ({ value: Number(value), label }));
 
+const DAY_MS = 86_400_000;
+
+/** The ISO weekdays a date range actually contains; every weekday while the range is not valid yet. */
+export function weekdaysInRange(startDate: string, endDate: string): number[] {
+  const start = Date.parse(startDate);
+  const end = Date.parse(endDate);
+  if (!(start <= end)) return WEEKDAYS.map((day) => day.value);
+  const count = Math.min((end - start) / DAY_MS + 1, 7);
+  const first = new Date(start).getUTCDay();
+  return Array.from({ length: count }, (_, offset) => ((first + 6 + offset) % 7) + 1).sort((a, b) => a - b);
+}
+
+/** Days picked before the range was narrowed stay in the draft, but only those inside the range count. */
+export function planWeekdays(draft: Pick<PlanDraft, "startDate" | "endDate" | "weekdays">): number[] {
+  const available = weekdaysInRange(draft.startDate, draft.endDate);
+  return draft.weekdays.filter((day) => available.includes(day));
+}
+
 /** Plans run on Vietnam dates, whichever zone the browser is in. */
 export function vietnamToday(now: Date = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(now);
@@ -148,7 +166,7 @@ export function planDraftError(draft: PlanDraft, today: string, isNew: boolean):
   if (!draft.singleDay) {
     if (!draft.endDate) return "Chọn ngày kết thúc.";
     if (draft.endDate < draft.startDate) return "Ngày kết thúc phải sau ngày bắt đầu.";
-    if (!draft.weekdays.length) return "Chọn ít nhất một ngày trong tuần.";
+    if (!planWeekdays(draft).length) return "Chọn ít nhất một ngày trong tuần.";
   }
   if (isNew && (draft.singleDay ? draft.startDate : draft.endDate) < today) return "Ngày học đã qua.";
   if (draft.remind && !draft.reminderTime) return "Chọn giờ nhắc.";

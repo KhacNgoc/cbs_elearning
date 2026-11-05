@@ -96,18 +96,35 @@ export function resumeRoute(target: ResumeTarget) {
     query: target.documentId ? { documentId: String(target.documentId) } : {},
   };
 }
-export function formatLearningDate(value?: string | null) {
-  if (!value) return "Không quy định";
-  const date = new Date(
+const parseLearningDate = (value: string) =>
+  new Date(
     value.length === 10
       ? `${value}T00:00:00+07:00`
       : /Z$|[+-]\d\d:\d\d$/.test(value)
         ? value
         : `${value}+07:00`,
   );
+export function formatLearningDate(value?: string | null) {
+  if (!value) return "Không quy định";
+  const date = parseLearningDate(value);
   return Number.isNaN(date.getTime())
     ? "Chưa xác định"
     : date.toLocaleDateString("vi-VN", { timeZone: "Asia/Saigon" });
+}
+export function formatLearningDateTime(value?: string | null) {
+  if (!value) return "Chưa xác định";
+  const date = parseLearningDate(value);
+  return Number.isNaN(date.getTime())
+    ? "Chưa xác định"
+    : date.toLocaleString("vi-VN", {
+        timeZone: "Asia/Saigon",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
 }
 export function deadlineState(item: LearnerCourse, now = Date.now()) {
   if (!item.dueDate || !isEnrolled(item) || item.learningStatus === "COMPLETED")

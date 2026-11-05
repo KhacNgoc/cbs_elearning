@@ -115,7 +115,6 @@
         v-model:shuffled="shuffled"
         :cards="studyCards"
         show-lesson
-        @exit="studyCards = []"
       />
       <template #footer>
         <span class="study-shortcuts">Space lật thẻ · ← → chuyển thẻ · Esc đóng</span>
