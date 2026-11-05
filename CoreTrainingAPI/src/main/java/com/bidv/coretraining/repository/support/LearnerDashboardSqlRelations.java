@@ -114,14 +114,26 @@ public class LearnerDashboardSqlRelations {
                 + (allow.isEmpty() ? "1=0" : "(" + String.join(" or ", allow) + ")") + ")", p);
     }
 
-    public Context facts(LearnerQueryScope u) {
+    /**
+     * Published courses the actor edits or, with the learn permission, is assigned or registered in. Decides what
+     * requireCourse decides one course at a time; FlashcardAccessParityTest holds the two together.
+     */
+    public Context learnable(LearnerQueryScope u, boolean learner) {
         var v = visible(u);
         Map<String, Object> p = new HashMap<>(v.params());
+        String enrolled = !learner ? "" : " or exists(select 1 from user_registered_courses rc where rc.user_id=:uid"
+                + " and rc.course_id=c.id) or " + mandatory(u, p);
+        return new Context(v.sql() + " select c.id,c.name,c.editor_access from visible c"
+                + " where c.status='PUBLISHED' and (c.editor_access=1" + enrolled + ")", p);
+    }
+
+    /** Expects alias c with program_id and domain_id, as the visible relation provides. */
+    private static String mandatory(LearnerQueryScope u, Map<String, Object> p) {
         Set<String> own = u.grantUnits();
         String courseGrant = in("cg.unit_id", own, "grantUnits", p),
                 programGrant = in("pg.unit_id", own, "grantUnits", p),
                 domainGrant = in("dg.unit_id", own, "grantUnits", p);
-        String mandatory = "(case when exists(select 1 from course_unit_grants cg where cg.course_id=c.id and "
+        return "(case when exists(select 1 from course_unit_grants cg where cg.course_id=c.id and "
                 + courseGrant
                 + ") then case when exists(select 1 from course_unit_grants cg where cg.course_id=c.id and "
                 + courseGrant
@@ -132,6 +144,12 @@ public class LearnerDashboardSqlRelations {
                 + " and upper(pg.grant_type)='MANDATORY') then 1 else 0 end when exists(select 1 from domain_unit_grants dg where dg.domain_id=c.domain_id and "
                 + domainGrant
                 + " and upper(dg.grant_type)='MANDATORY') then 1 else 0 end=1 or exists(select 1 from user_group_memberships gm join group_mandatory_courses gc on gc.group_id=gm.group_id where gm.user_id=:uid and gc.course_id=c.id))";
+    }
+
+    public Context facts(LearnerQueryScope u) {
+        var v = visible(u);
+        Map<String, Object> p = new HashMap<>(v.params());
+        String mandatory = mandatory(u, p);
         String sql = v.sql()
                 + """
                         , lessons_visible as (

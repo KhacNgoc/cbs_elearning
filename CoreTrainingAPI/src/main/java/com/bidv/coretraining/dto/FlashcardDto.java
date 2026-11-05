@@ -24,6 +24,16 @@ public final class FlashcardDto {
     public record Deck(String lessonId, List<Card> cards) {
     }
 
+    public record LibraryLesson(String id, String title, int total, int mine) {
+    }
+
+    public record LibraryCourse(String id, String name, List<LibraryLesson> lessons) {
+    }
+
+    /** Only counts: a lesson's cards load when the learner opens it, so many courses stay light. */
+    public record Library(List<LibraryCourse> courses, String nextCursor) {
+    }
+
     public record PersonalCardRequest(
             @NotNull FlashcardType type,
             @NotBlank @Size(max = 1000) String front,

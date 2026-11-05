@@ -31,6 +31,16 @@ Migration **bắt buộc ở mọi môi trường**, kể cả khi dùng `ddl-au
 `CoreTrainingAPI/src/main/resources/migrations/20261104_remove_flashcard_reviews.sql`. Hibernate không tự xóa bảng cũ, mà
 bảng này có FK tới `flashcards`, nên thiếu script thì xóa thẻ đã từng được ôn sẽ lỗi. Script xóa vĩnh viễn lịch sử ôn.
 
+## Trang Flashcard (04/11/2026)
+
+Trang `/flashcards` (mục **Flashcard** trên thanh điều hướng) cho học viên chọn thẻ từ nhiều bài, nhiều khóa rồi học chung một phiên.
+
+- Chỉ liệt kê khóa học viên được học và bài đã mở khóa, cùng quy tắc với `requireLesson`. `GET /api/users/me/flashcards/library`
+  chỉ trả số thẻ theo bài; thẻ được tải khi mở bài hoặc khi bắt đầu học, nên học viên nhiều khóa vẫn tải nhẹ.
+- Chọn cả khóa, cả bài hoặc từng thẻ. Lựa chọn chỉ nằm ở frontend, tải lại trang là mất.
+- Thêm, sửa, xóa chỉ áp dụng cho **Thẻ của tôi**. Thẻ bài học do quản trị soạn, dùng chung cho mọi học viên nên học viên không sửa được.
+- Mục điều hướng được `NavigationDataInitializer` tự thêm khi backend khởi động.
+
 ## AI và tải hệ thống
 
 - RAG: `POST /flashcards/jobs`, `GET /flashcards/jobs/{id}`. Dùng chung truy xuất (`retrieve_grounded_sources`), semaphore Ollama

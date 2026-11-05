@@ -29,7 +29,8 @@ class PersonalFlashcardTest {
     final UserRepository users = mock(UserRepository.class);
     final LessonRepository lessons = mock(LessonRepository.class);
     final LearningAccessService access = mock(LearningAccessService.class);
-    final FlashcardLearningService service = new FlashcardLearningServiceImpl(flashcards, users, lessons, access);
+    final FlashcardLearningService service = new FlashcardLearningServiceImpl(flashcards, users, lessons,
+            mock(ChapterRepository.class), access);
     final User learner = User.builder().id(1L).username("learner").build();
     final Course course = Course.builder().id("C1").build();
     final Lesson lesson = Lesson.builder().id("L1").title("Bài 1").course(course).build();

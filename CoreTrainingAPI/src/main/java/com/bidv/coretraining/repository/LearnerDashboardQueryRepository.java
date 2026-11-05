@@ -9,8 +9,10 @@ public interface LearnerDashboardQueryRepository {
  String resumeCourseId(LearnerQueryScope scope);
  List<CourseChoice> courseChoices(LearnerQueryScope scope,String search,int size);
  List<CourseChoice> accessibleCourses(LearnerQueryScope scope,int limit);
+ List<LearnableCourseRow> learnableCourses(LearnerQueryScope scope,boolean learner);
  boolean canResume(LearnerQueryScope scope,String id);
  ResumeFacts resumeFacts(Long userId,String courseId);
+ record LearnableCourseRow(String id,String name,boolean editor) {}
  record ResumeScore(String lessonId,int score,int total) {}
  record ResumeFacts(List<String> completedLessons,List<ResumeScore> scores) {}
 }

@@ -46,3 +46,36 @@ test('saving a personal card replaces it in place or appends a new one', () => {
   assert.deepEqual(flashcards.upsertCard(cards, { id: 3, front: 'KYC' }).map((card) => card.id), [1, 2, 3]);
   assert.equal(cards.length, 2);
 });
+
+test('selecting a whole lesson counts cards that are not loaded yet', () => {
+  const lessons = [{ id: 'A', total: 3 }, { id: 'B', total: 2 }, { id: 'EMPTY', total: 0 }];
+  const selected = flashcards.toggleLessons({}, lessons);
+  assert.deepEqual(selected, { A: 'all', B: 'all' });
+  assert.equal(flashcards.selectedInLesson(selected, 'A', 3), 3);
+  assert.equal(flashcards.selectedInLesson(selected, 'EMPTY', 0), 0);
+  assert.deepEqual(flashcards.toggleLessons(selected, lessons), {});
+  assert.deepEqual(flashcards.toggleLessons({ A: [1] }, lessons), { A: 'all', B: 'all' });
+});
+
+test('picking single cards moves between all, some and none', () => {
+  const ids = [1, 2];
+  let selected = flashcards.toggleCard({ A: 'all' }, 'A', 1, ids);
+  assert.deepEqual(selected, { A: [2] });
+  assert.equal(flashcards.isCardSelected(selected, 'A', 1), false);
+  selected = flashcards.toggleCard(selected, 'A', 1, ids);
+  assert.deepEqual(selected, { A: 'all' });
+  assert.equal(flashcards.isCardSelected(selected, 'A', 1), true);
+  selected = flashcards.toggleCard({ A: [1] }, 'A', 1, ids);
+  assert.deepEqual(selected, {});
+});
+
+test('deleting a card forgets it and study keeps the deck order', () => {
+  assert.deepEqual(flashcards.dropCard({ A: [1, 2] }, 'A', 1, 3), { A: [2] });
+  assert.deepEqual(flashcards.dropCard({ A: [1] }, 'A', 1, 3), {});
+  assert.deepEqual(flashcards.dropCard({ A: 'all' }, 'A', 1, 2), { A: 'all' });
+  assert.deepEqual(flashcards.dropCard({ A: 'all' }, 'A', 1, 0), {});
+  const cards = [{ id: 1 }, { id: 2 }, { id: 3 }];
+  assert.deepEqual(flashcards.selectedCards(cards, [3, 1]).map((card) => card.id), [1, 3]);
+  assert.equal(flashcards.selectedCards(cards, 'all').length, 3);
+  assert.deepEqual(flashcards.selectedCards(cards, undefined), []);
+});

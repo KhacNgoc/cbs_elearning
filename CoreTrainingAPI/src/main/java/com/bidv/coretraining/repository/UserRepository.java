@@ -43,6 +43,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
                         "join userGroup.mandatoryCourses course where user.username = :username and course.id = :courseId")
         boolean hasMandatoryCourse(@Param("username") String username, @Param("courseId") String courseId);
 
+        @Query("select lesson.id from User user join user.completedLessons lesson "
+                        + "where user.id = :userId and lesson.course.id in :courseIds")
+        java.util.Set<String> findCompletedLessonIdsInCourses(@Param("userId") Long userId,
+                        @Param("courseIds") java.util.Collection<String> courseIds);
+
         long countByUserGroupsId(String groupId);
 
         boolean existsByUserGroupsId(String groupId);

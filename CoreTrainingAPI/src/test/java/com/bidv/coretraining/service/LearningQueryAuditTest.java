@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DataJpaTest(showSql = false, properties = { "spring.config.location=classpath:access-test.yml",
         "spring.sql.init.mode=never", "spring.jpa.properties.hibernate.generate_statistics=true" })
 @ContextConfiguration(classes = com.bidv.coretraining.CoreTrainingApiApplication.class)
-@Import({ QuizContextServiceImpl.class, QuizSummaryServiceImpl.class, LearningAccessServiceImpl.class, LearningOutlineServiceImpl.class, TrainingStructureServiceImpl.class,
+@Import({ QuizContextServiceImpl.class, QuizSummaryServiceImpl.class, LearningAccessServiceImpl.class, com.bidv.coretraining.repository.impl.LearnerDashboardQueryRepositoryImpl.class, com.bidv.coretraining.repository.support.LearnerDashboardSqlRelations.class, LearningOutlineServiceImpl.class, TrainingStructureServiceImpl.class,
         LearnerWorkspaceServiceImpl.class, CourseMapperImpl.class, LessonProgressServiceImpl.class, CourseServiceImpl.class,
         com.bidv.coretraining.service.impl.QuizServiceImpl.class, com.bidv.coretraining.service.impl.QuizSessionServiceImpl.class, QuizMapperImpl.class, com.fasterxml.jackson.databind.ObjectMapper.class,
         com.bidv.coretraining.repository.impl.UnitAllocationNativeRepositoryImpl.class })

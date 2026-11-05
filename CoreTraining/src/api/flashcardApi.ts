@@ -41,6 +41,24 @@ export interface FlashcardDeck {
   cards: Flashcard[];
 }
 
+export interface FlashcardLibraryLesson {
+  id: string;
+  title: string;
+  total: number;
+  mine: number;
+}
+
+export interface FlashcardLibraryCourse {
+  id: string;
+  name: string;
+  lessons: FlashcardLibraryLesson[];
+}
+
+export interface FlashcardLibrary {
+  courses: FlashcardLibraryCourse[];
+  nextCursor: string | null;
+}
+
 export interface AdminFlashcard {
   id: number;
   lessonId: string;
@@ -115,6 +133,13 @@ export const flashcardApi = {
     const response = await axiosClient.get<FlashcardDeck>(
       `/api/lessons/${encodeURIComponent(lessonId)}/flashcards`,
     );
+    return response.data;
+  },
+
+  async library(after?: string): Promise<FlashcardLibrary> {
+    const response = await axiosClient.get<FlashcardLibrary>("/api/users/me/flashcards/library", {
+      params: after ? { after } : undefined,
+    });
     return response.data;
   },
 

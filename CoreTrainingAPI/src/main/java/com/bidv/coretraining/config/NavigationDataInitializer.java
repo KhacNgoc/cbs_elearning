@@ -20,6 +20,7 @@ public class NavigationDataInitializer implements ApplicationRunner {
                 seed("dashboard", "Tổng quan", "/", "Home", "MAIN", 10, true, "ROLE_USER", "ROLE_ADMIN");
                 seed("leaderboard", "Bảng vinh danh", "/leaderboard", "Trophy", "MAIN", 20, true, "ROLE_USER",
                                 "ROLE_ADMIN");
+                seed("flashcards", "Flashcard", "/flashcards", "Layers3", "MAIN", 25, true, "ROLE_USER", "ROLE_ADMIN");
                 seed("profile", "Hồ sơ", "/profile", "UserCircle", "MAIN", 30, false, "ROLE_USER", "ROLE_ADMIN");
                 seed("lesson", "Bài học", "/lesson", "BookOpen", "MAIN", 40, false, "ROLE_USER", "ROLE_ADMIN");
                 seed("quiz", "Bài kiểm tra", "/quiz", "HelpCircle", "MAIN", 50, false, "ROLE_USER", "ROLE_ADMIN");

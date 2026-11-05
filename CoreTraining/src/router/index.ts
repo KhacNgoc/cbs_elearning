@@ -39,6 +39,12 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true, pageKey: 'lesson' }
   },
   {
+    path: '/flashcards',
+    name: 'FlashcardLibrary',
+    component: () => import('../views/FlashcardLibrary.vue'),
+    meta: { requiresAuth: true, pageKey: 'flashcards' }
+  },
+  {
     path: '/lesson-reports/:id',
     name: 'LessonReportDetail',
     component: () => import('../views/LessonReportDetail.vue'),

@@ -139,6 +139,12 @@ public class LearnerDashboardQueryRepositoryImpl implements LearnerDashboardQuer
                 (r, n) -> new CourseChoice(r.getString(1), r.getString(2)));
     }
 
+    public List<LearnableCourseRow> learnableCourses(LearnerQueryScope u, boolean learner) {
+        var c = relations.learnable(u, learner);
+        return jdbc.query(c.sql(), c.params(),
+                (r, n) -> new LearnableCourseRow(r.getString(1), r.getString(2), r.getInt(3) == 1));
+    }
+
     public boolean canResume(LearnerQueryScope u,String id) {
         var ctx=relations.facts(u);var params=new HashMap<>(ctx.params());params.put("courseId",id);
         var count=jdbc.queryForObject(ctx.sql()+" select count(*) from facts where id=:courseId and source in ('ASSIGNED','REGISTERED')",params,Integer.class);

@@ -14,6 +14,66 @@ export function shuffleCards<T>(cards: readonly T[], random: () => number = Math
   return shuffled;
 }
 
+/** Per lesson: every card, including ones not loaded yet, or the chosen card ids. Unlisted lessons have none. */
+export type CardSelection = Record<string, "all" | number[]>;
+
+export function selectedInLesson(selection: CardSelection, lessonId: string, total: number): number {
+  const chosen = selection[lessonId];
+  return chosen === "all" ? total : (chosen?.length ?? 0);
+}
+
+export function isCardSelected(selection: CardSelection, lessonId: string, cardId: number): boolean {
+  const chosen = selection[lessonId];
+  return chosen === "all" || !!chosen?.includes(cardId);
+}
+
+/** Selects every given lesson that has cards, or clears them all when they are already fully selected. */
+export function toggleLessons(
+  selection: CardSelection,
+  lessons: readonly { id: string; total: number }[],
+): CardSelection {
+  const withCards = lessons.filter((lesson) => lesson.total > 0);
+  const allChosen = withCards.every((lesson) => selectedInLesson(selection, lesson.id, lesson.total) === lesson.total);
+  const next = { ...selection };
+  for (const lesson of withCards) {
+    if (allChosen) delete next[lesson.id];
+    else next[lesson.id] = "all";
+  }
+  return next;
+}
+
+export function toggleCard(
+  selection: CardSelection,
+  lessonId: string,
+  cardId: number,
+  lessonCardIds: readonly number[],
+): CardSelection {
+  const chosen = selection[lessonId];
+  const current = chosen === "all" ? [...lessonCardIds] : (chosen ?? []);
+  const updated = current.includes(cardId) ? current.filter((id) => id !== cardId) : [...current, cardId];
+  const next = { ...selection };
+  if (!updated.length) delete next[lessonId];
+  else next[lessonId] = updated.length === lessonCardIds.length ? "all" : updated;
+  return next;
+}
+
+/** Forgets a deleted card, and the lesson once nothing chosen remains in it. */
+export function dropCard(selection: CardSelection, lessonId: string, cardId: number, remaining: number): CardSelection {
+  const chosen = selection[lessonId];
+  if (!chosen) return selection;
+  const next = { ...selection };
+  const updated = chosen === "all" ? chosen : chosen.filter((id) => id !== cardId);
+  if (!remaining || !updated.length) delete next[lessonId];
+  else next[lessonId] = updated;
+  return next;
+}
+
+/** Keeps the deck order of the chosen cards. */
+export function selectedCards<T extends { id: number }>(cards: readonly T[], chosen: "all" | number[] | undefined): T[] {
+  if (chosen === "all") return [...cards];
+  return cards.filter((card) => chosen?.includes(card.id));
+}
+
 /** Replaces a saved card in place, or appends it when it is new (the deck lists own cards last). */
 export function upsertCard<T extends { id: number }>(cards: readonly T[], saved: T): T[] {
   return cards.some((card) => card.id === saved.id)

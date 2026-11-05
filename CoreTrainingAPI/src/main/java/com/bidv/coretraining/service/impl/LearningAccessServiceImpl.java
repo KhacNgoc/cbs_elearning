@@ -4,10 +4,12 @@ import com.bidv.coretraining.repository.projection.LessonAccessView;
 import com.bidv.coretraining.service.*;
 
 import com.bidv.coretraining.service.model.AuthorizedLesson;
+import com.bidv.coretraining.service.model.LearnableCourse;
 
 import com.bidv.coretraining.entity.*;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
 import com.bidv.coretraining.repository.*;
+import com.bidv.coretraining.repository.support.LearnerQueryScopeFactory;
 import com.bidv.coretraining.security.AccessPolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -22,6 +24,7 @@ public class LearningAccessServiceImpl implements LearningAccessService {
     private final UserRepository users;
     private final CourseRepository courses;
     private final LessonRepository lessons;
+    private final LearnerDashboardQueryRepository learnerQueries;
 
     public boolean requireCourse(User user, Course course) {
         AccessPolicy.require(user.activeAccount());
@@ -34,6 +37,13 @@ public class LearningAccessServiceImpl implements LearningAccessService {
         if (!"PUBLISHED".equals(course.getStatus()) || !enrolled)
             throw new AccessDeniedException("Bạn chưa được cấp quyền học khóa này");
         return false;
+    }
+
+    public java.util.List<LearnableCourse> learnableCourses(User user) {
+        if (!user.activeAccount()) return java.util.List.of();
+        return learnerQueries.learnableCourses(LearnerQueryScopeFactory.from(user),
+                AccessPolicy.permissions(user).contains("LEARN")).stream()
+            .map(row -> new LearnableCourse(row.id(), row.name(), row.editor())).toList();
     }
 
     public AuthorizedLesson requireLesson(String username, String id) {

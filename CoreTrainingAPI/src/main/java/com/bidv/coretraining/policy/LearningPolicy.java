@@ -51,6 +51,27 @@ public final class LearningPolicy {
                 .takeWhile(l -> !l.getId().equals(lesson.getId())).allMatch(l -> completed(user, l));
     }
 
+    /**
+     * Every lesson open to a learner in one course, computed at once from ids in published order. Must agree with
+     * {@code LessonRepository.hasIncompletePredecessors}: a chapter with no published lesson blocks those after it.
+     */
+    public static java.util.Set<String> unlockedLessonIds(List<String> chapterIds,
+            java.util.Map<String, List<String>> lessonIdsByChapter, java.util.Set<String> completed) {
+        java.util.Set<String> unlocked = new java.util.HashSet<>();
+        for (String chapterId : chapterIds) {
+            List<String> lessonIds = lessonIdsByChapter.getOrDefault(chapterId, List.of());
+            boolean predecessorsDone = !lessonIds.isEmpty();
+            for (String lessonId : lessonIds) {
+                if (predecessorsDone)
+                    unlocked.add(lessonId);
+                predecessorsDone &= completed.contains(lessonId);
+            }
+            if (!predecessorsDone)
+                break;
+        }
+        return unlocked;
+    }
+
     public static void assertCourseAccess(User user, Course course) {
         com.bidv.coretraining.security.AccessPolicy.require(user.activeAccount());
         if (com.bidv.coretraining.security.AccessPolicy.canReadCourse(user, course))

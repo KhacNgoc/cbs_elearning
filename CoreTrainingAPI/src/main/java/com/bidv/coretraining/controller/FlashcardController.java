@@ -23,6 +23,13 @@ public class FlashcardController {
         return service.lessonDeck(id, userDetails.getUsername());
     }
 
+    @GetMapping("/users/me/flashcards/library")
+    public FlashcardDto.Library library(@RequestParam(required = false) String after,
+            @RequestParam(defaultValue = "30") int size,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return service.library(after, size, userDetails.getUsername());
+    }
+
     @PostMapping("/lessons/{id}/flashcards/mine")
     public FlashcardDto.Card createPersonal(@PathVariable String id,
             @Valid @RequestBody FlashcardDto.PersonalCardRequest request,

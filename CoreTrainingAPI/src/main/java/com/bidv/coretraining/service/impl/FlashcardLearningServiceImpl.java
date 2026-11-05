@@ -7,9 +7,15 @@ import com.bidv.coretraining.entity.User;
 import com.bidv.coretraining.enums.FlashcardOrigin;
 import com.bidv.coretraining.exception.BadRequestException;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
+import com.bidv.coretraining.policy.LearningPolicy;
+import com.bidv.coretraining.repository.ChapterRepository;
 import com.bidv.coretraining.repository.FlashcardRepository;
 import com.bidv.coretraining.repository.LessonRepository;
 import com.bidv.coretraining.repository.UserRepository;
+import com.bidv.coretraining.repository.projection.FlashcardLessonCountView;
+import com.bidv.coretraining.repository.projection.LessonOutlineView;
+import com.bidv.coretraining.repository.projection.PublishedChapterView;
+import com.bidv.coretraining.service.model.LearnableCourse;
 import com.bidv.coretraining.service.FlashcardLearningService;
 import com.bidv.coretraining.service.LearningAccessService;
 import lombok.RequiredArgsConstructor;
@@ -20,18 +26,26 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class FlashcardLearningServiceImpl implements FlashcardLearningService {
     private static final String PUBLISHED = "PUBLISHED";
     static final int MAX_PERSONAL_PER_LESSON = 200;
+    private static final int MAX_LIBRARY_PAGE = 50;
+    private static final int MAX_LIBRARY_ROUNDS = 5;
 
     private final FlashcardRepository flashcards;
     private final UserRepository users;
     private final LessonRepository lessons;
+    private final ChapterRepository chapters;
     private final LearningAccessService learningAccess;
 
     @Override
@@ -43,6 +57,88 @@ public class FlashcardLearningServiceImpl implements FlashcardLearningService {
                 flashcards.findByLessonIdAndOwnerIsNullAndStatusOrderByCardOrderAscIdAsc(lessonId, PUBLISHED));
         cards.addAll(flashcards.findByLessonIdAndOwnerIdOrderByCreatedAtAscIdAsc(lessonId, user.getId()));
         return new FlashcardDto.Deck(lessonId, cards.stream().map(card -> toCard(card, user)).toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public FlashcardDto.Library library(String after, int size, String username) {
+        User user = user(username);
+        int limit = Math.max(1, Math.min(size, MAX_LIBRARY_PAGE));
+        List<LearnableCourse> learnable = sortedLearnable(user);
+        int position = after == null ? 0 : positionAfter(learnable, after);
+        List<OpenCourse> page = new ArrayList<>();
+        // Courses without an open lesson drop out of a page, so read on, but only a few times per request.
+        for (int round = 0; round < MAX_LIBRARY_ROUNDS && page.size() < limit && position < learnable.size(); round++) {
+            int end = Math.min(position + limit - page.size(), learnable.size());
+            page.addAll(openCourses(user, learnable.subList(position, end)));
+            position = end;
+        }
+        String nextCursor = position < learnable.size() ? learnable.get(position - 1).id() : null;
+        if (page.isEmpty())
+            return new FlashcardDto.Library(List.of(), nextCursor);
+        List<String> courseIds = page.stream().map(item -> item.course().id()).toList();
+        Map<String, FlashcardLessonCountView> counts = flashcards.countByLesson(courseIds, user.getId()).stream()
+                .collect(Collectors.toMap(FlashcardLessonCountView::getLessonId, Function.identity()));
+        return new FlashcardDto.Library(page.stream().map(item -> new FlashcardDto.LibraryCourse(item.course().id(),
+                item.course().name(), item.lessons().stream()
+                        .map(row -> libraryLesson(row, counts.get(row.getId()))).toList())).toList(), nextCursor);
+    }
+
+    /** A course dropped since the previous page restarts the list; the client ignores courses it already has. */
+    private static int positionAfter(List<LearnableCourse> learnable, String courseId) {
+        for (int i = 0; i < learnable.size(); i++)
+            if (learnable.get(i).id().equals(courseId))
+                return i + 1;
+        return 0;
+    }
+
+    private record OpenCourse(LearnableCourse course, List<LessonOutlineView> lessons) {
+    }
+
+    private List<LearnableCourse> sortedLearnable(User user) {
+        List<LearnableCourse> learnable = new ArrayList<>(learningAccess.learnableCourses(user));
+        learnable.sort(Comparator.comparing(LearnableCourse::name, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(LearnableCourse::id));
+        return learnable;
+    }
+
+    /** These courses with their open lessons, dropping those with none; lookups run per batch, not per course. */
+    private List<OpenCourse> openCourses(User user, List<LearnableCourse> learnable) {
+        if (learnable.isEmpty())
+            return List.of();
+        List<String> courseIds = learnable.stream().map(LearnableCourse::id).toList();
+        List<String> lockedCourseIds = learnable.stream().filter(item -> !item.editor())
+                .map(LearnableCourse::id).toList();
+        Map<String, List<LessonOutlineView>> outlines = lessons.findOutlines(courseIds, false).stream()
+                .collect(Collectors.groupingBy(LessonOutlineView::getCourseId));
+        Set<String> completed = lockedCourseIds.isEmpty() ? Set.of()
+                : users.findCompletedLessonIdsInCourses(user.getId(), lockedCourseIds);
+        Map<String, List<String>> chaptersByCourse = lockedCourseIds.isEmpty() ? Map.of()
+                : chapters.findPublishedOrder(lockedCourseIds).stream().collect(Collectors.groupingBy(
+                        PublishedChapterView::getCourseId,
+                        Collectors.mapping(PublishedChapterView::getId, Collectors.toList())));
+        List<OpenCourse> result = new ArrayList<>();
+        for (LearnableCourse item : learnable) {
+            List<LessonOutlineView> rows = outlines.getOrDefault(item.id(), List.of());
+            List<LessonOutlineView> open = item.editor() ? rows
+                    : openRows(rows, chaptersByCourse.getOrDefault(item.id(), List.of()), completed);
+            if (!open.isEmpty())
+                result.add(new OpenCourse(item, open));
+        }
+        return result;
+    }
+
+    private static List<LessonOutlineView> openRows(List<LessonOutlineView> rows, List<String> chapterIds,
+            Set<String> completed) {
+        Map<String, List<String>> byChapter = rows.stream().collect(Collectors.groupingBy(
+                LessonOutlineView::getChapterId, Collectors.mapping(LessonOutlineView::getId, Collectors.toList())));
+        Set<String> unlocked = LearningPolicy.unlockedLessonIds(chapterIds, byChapter, completed);
+        return rows.stream().filter(row -> unlocked.contains(row.getId())).toList();
+    }
+
+    private static FlashcardDto.LibraryLesson libraryLesson(LessonOutlineView row, FlashcardLessonCountView count) {
+        return new FlashcardDto.LibraryLesson(row.getId(), row.getTitle(),
+                count == null ? 0 : count.getTotal().intValue(), count == null ? 0 : count.getMine().intValue());
     }
 
     @Override
