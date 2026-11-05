@@ -538,6 +538,7 @@
       :title="`Thành viên nhóm ${memberGroup?.name || ''}`"
       :busy="memberSaving"
       :width="850"
+      fixed-height
       submit-label="Lưu thành viên"
       :submit-disabled="!memberChangeCount || memberLoading"
       @close="closeGroupMembers"

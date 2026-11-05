@@ -206,6 +206,7 @@
       :title="`Gán tài khoản · ${selected?.name || ''}`"
       :busy="busy"
       :width="850"
+      fixed-height
       @submit="saveMembers"
       @close="editor = ''"
     >

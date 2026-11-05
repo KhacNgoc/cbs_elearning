@@ -29,3 +29,9 @@ Design system and visual tokens for CBS E-Learning Admin and Learner portals, ad
 - **Rules**:
   - Numbers, codes, and sequence numbers strictly use monospace or `tabular-nums`.
   - Emphasis comes from weight, clear contrast, and semantic Emerald/Gold brand tints.
+
+## 4. Modal Layout (Admin Pages)
+- **Default component**: use `AdminModal` for new modals so the rules below apply automatically. Custom modals, including native `<dialog>` elements, must follow the same rules.
+- **Fixed header & footer**: header and footer never scroll or shrink. Only the content area between them scrolls (`flex: 1 1 auto; min-height: 0; overflow-y: auto`). The dialog itself never scrolls.
+- **Stable height**: a modal whose content loads or changes after opening (tables, search results, pagination, tabs, images) must keep one height, using `fixed-height` on `AdminModal`: `min(760px, viewport - margin)`. Loading, empty and full states all share that height.
+- **Content-sized modals**: forms and confirmations whose content is known when they open may size to their content, capped at the viewport height.

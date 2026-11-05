@@ -701,6 +701,7 @@
         <!-- DRAFT RESTORED NOTICE BANNER (Bỏ banner) -->
 
         <form @submit.prevent="submitAddModal" class="modal-form">
+          <div class="modal-form-scroll">
           <!-- SECTION 1: BASIC INFO -->
           <div class="form-section">
 
@@ -885,6 +886,8 @@
                 </span>
               </div>
             </div>
+          </div>
+
           </div>
 
           <!-- MODAL ACTIONS -->
@@ -3614,6 +3617,9 @@ watch(
 .delete-confirm-modal {
   width: 100%;
   max-width: 460px;
+  max-height: 90dvh;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 14px;
@@ -3711,7 +3717,7 @@ watch(
 .tree-quick-modal.enriched-modal {
   width: 100%;
   max-width: 600px;
-  max-height: 90vh;
+  height: min(720px, 90dvh);
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 14px;
@@ -3719,8 +3725,41 @@ watch(
   box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
   color: var(--text-main);
+}
+
+.enriched-modal > .modal-header,
+.delete-confirm-modal > .modal-header,
+.enriched-modal .modal-actions,
+.delete-confirm-modal .modal-actions {
+  flex-shrink: 0;
+}
+
+.enriched-modal > .modal-form,
+.delete-confirm-modal > .modal-form {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.modal-form-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  /* Chừa chỗ cho viền focus và thanh cuộn của các trường nhập liệu. */
+  margin: 0 -0.75rem 0 -0.25rem;
+  padding: 0.25rem 0.75rem 0.25rem 0.25rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.delete-confirm-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .modal-header {

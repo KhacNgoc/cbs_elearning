@@ -2929,6 +2929,9 @@ async function handleExecuteBatchSync() {
   border-radius: 12px;
   max-width: 460px;
   width: 100%;
+  max-height: calc(100dvh - 2rem);
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
   overflow: hidden;
   animation: modalScaleIn 0.18s ease-out;
@@ -2966,7 +2969,16 @@ async function handleExecuteBatchSync() {
   color: #64748b;
 }
 
+.confirm-modal-header,
+.confirm-modal-footer {
+  flex-shrink: 0;
+}
+
 .confirm-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0.75rem 1.25rem 1.25rem;
 }
 

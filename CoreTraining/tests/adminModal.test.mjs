@@ -23,6 +23,36 @@ code = code.replace(/import\s+([\s\S]*?)\s+from\s+["']([^"']+)["'];/g, (_, bindi
 ).replace('export default', 'return');
 const AdminModal = new Function('modules', code)({ vue, 'lucide-vue-next': { X: { render: () => null } } });
 
+test('fixedHeight keeps the dialog class stable while body content changes', async () => {
+  const { createApp, h, nextTick, reactive } = vue;
+  const state = reactive({ rows: 0, fixed: false });
+  const app = createApp({ render: () => h(AdminModal, {
+    open: true, title: 'Thành viên', fixedHeight: state.fixed,
+  }, { default: () => Array.from({ length: state.rows }, (_, i) => h('p', { key: i }, String(i))) }) });
+  const host = document.createElement('div');
+  document.body.append(host);
+  app.mount(host);
+  try {
+    await nextTick();
+    const dialog = document.querySelector('.admin-modal-dialog');
+    assert.equal(dialog.classList.contains('is-fixed-height'), false);
+    state.fixed = true;
+    state.rows = 200;
+    await nextTick();
+    assert.equal(dialog.classList.contains('is-fixed-height'), true);
+    const body = dialog.querySelector('.admin-modal-body');
+    assert.equal(body.querySelectorAll('p').length, 200);
+    assert.equal(dialog.querySelector('.admin-modal-header').contains(body), false);
+    assert.equal(dialog.querySelector('.admin-modal-footer').contains(body), false);
+    assert.match(source, /\.admin-modal-dialog\.is-fixed-height \{\s*height: min\(760px, var\(--admin-modal-max-height\)\);/);
+    assert.match(source, /\.admin-modal-body \{[^}]*min-height: 0;[^}]*overflow-y: auto;/);
+  } finally {
+    app.unmount();
+    host.remove();
+    await new Promise(resolve => setTimeout(resolve, 60));
+  }
+});
+
 test('text selection and background clicks keep entered data; only explicit close actions dismiss the form', async () => {
   const { createApp, h, nextTick, reactive } = vue;
   const state = reactive({ busy: false });

@@ -217,7 +217,7 @@
           </fieldset>
           <label class="question-text-field"><span>Giải thích đáp án</span><textarea v-model="form.explanation" rows="3" maxlength="20000" /></label>
         </div></AdminModal>
-        <AdminModal :open="showBank" title="Thêm câu hỏi từ ngân hàng" :width="1200" @close="showBank=false"><QuestionBankPanel v-if="showBank" picker :lesson-id="lessonId" :existing-ids="questions.map(q=>q.bankQuestionId).filter((id):id is number=>id!=null)" @added="bankAdded" /><template #footer><button type="button" class="btn btn-secondary" @click="showBank=false">Đóng</button></template></AdminModal>
+        <AdminModal :open="showBank" title="Thêm câu hỏi từ ngân hàng" :width="1200" fixed-height @close="showBank=false"><QuestionBankPanel v-if="showBank" picker :lesson-id="lessonId" :existing-ids="questions.map(q=>q.bankQuestionId).filter((id):id is number=>id!=null)" @added="bankAdded" /><template #footer><button type="button" class="btn btn-secondary" @click="showBank=false">Đóng</button></template></AdminModal>
 
 
         <div class="admin-table-scroll">

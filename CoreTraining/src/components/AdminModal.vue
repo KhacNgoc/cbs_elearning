@@ -15,6 +15,8 @@ const props = withDefaults(
     submitDisabled?: boolean;
     danger?: boolean;
     alert?: boolean;
+    /** Giữ nguyên chiều cao khi dữ liệu trong modal được tải thêm hoặc thay đổi. */
+    fixedHeight?: boolean;
   }>(),
   {
     busy: false,
@@ -23,6 +25,7 @@ const props = withDefaults(
     submitDisabled: false,
     danger: false,
     alert: false,
+    fixedHeight: false,
   },
 );
 const emit = defineEmits<{ close: []; submit: [] }>();
@@ -112,7 +115,7 @@ onBeforeUnmount(release);
         <form
           ref="dialog"
           class="admin-modal-dialog"
-          :class="{ 'is-alert-modal': alert }"
+          :class="{ 'is-alert-modal': alert, 'is-fixed-height': fixedHeight }"
           :style="{ maxWidth: `${width}px` }"
           :role="alert ? 'alertdialog' : 'dialog'"
           aria-modal="true"
@@ -170,8 +173,9 @@ onBeforeUnmount(release);
   backdrop-filter: blur(4px);
 }
 .admin-modal-dialog {
+  --admin-modal-max-height: calc(100dvh - 2.5rem);
   width: 100%;
-  max-height: calc(100dvh - 2.5rem);
+  max-height: var(--admin-modal-max-height);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -182,6 +186,9 @@ onBeforeUnmount(release);
   outline: 0;
   margin: 0;
   padding: 0;
+}
+.admin-modal-dialog.is-fixed-height {
+  height: min(760px, var(--admin-modal-max-height));
 }
 .admin-modal-header {
   flex: 0 0 auto;
@@ -292,7 +299,7 @@ onBeforeUnmount(release);
     padding: 0.65rem;
   }
   .admin-modal-dialog {
-    max-height: calc(100dvh - 1.3rem);
+    --admin-modal-max-height: calc(100dvh - 1.3rem);
   }
   .admin-modal-header,
   .admin-modal-body,
