@@ -1,0 +1,33 @@
+package com.bidv.coretraining.rag.entity;
+
+import jakarta.persistence.*;
+import lombok.*;
+
+@Entity
+@Table(name = "rag_chat_sources")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class RagChatSource {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "message_id", nullable = false)
+    private RagChatMessage message;
+
+    @Column(name = "document_id", nullable = false)
+    private String documentId;
+
+    @Column(name = "document_name", nullable = false)
+    private String documentName;
+
+    @Column(nullable = false)
+    private Integer page;
+
+    @Column(nullable = false)
+    private String section;
+}

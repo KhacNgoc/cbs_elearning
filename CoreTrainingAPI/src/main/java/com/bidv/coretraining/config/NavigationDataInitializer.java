@@ -1,7 +1,7 @@
 package com.bidv.coretraining.config;
 
-import com.bidv.coretraining.entity.NavigationItem;
-import com.bidv.coretraining.repository.NavigationItemRepository;
+import com.bidv.coretraining.navigation.entity.NavigationItem;
+import com.bidv.coretraining.navigation.repository.NavigationItemRepository;
 import org.springframework.boot.*;
 import org.springframework.stereotype.Component;
 

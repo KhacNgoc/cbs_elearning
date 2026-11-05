@@ -60,9 +60,9 @@ Kiểm thử bổ sung: khi mở outline khóa 4 bài, nếu học viên có 12 
 
 Vị trí:
 
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/service/TrainingStructureService.java:253`: map toàn bộ LessonDto của từng chương.
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/training/service/TrainingStructureService.java:253`: map toàn bộ LessonDto của từng chương.
 - Dòng 265–270: `outlineOnly()` chỉ xóa text/video/documents/procedureSteps/comments **sau khi đã map**.
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/dto/CourseMapper.java:39`: mapper chi tiết truy cập các quan hệ của bài.
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/mapper/CourseMapper.java:39`: mapper chi tiết truy cập các quan hệ của bài.
 
 Hệ quả: lazy collections đã được load, DTO con đã được tạo, rồi mới bị loại khỏi response. JSON gọn không đồng nghĩa với ít SQL hoặc ít bộ nhớ. Phép đo xác nhận response đã null text và bỏ comments, nhưng Hibernate vẫn hydrate toàn bộ text/comment/document/question của 4/12 bài.
 
@@ -70,7 +70,7 @@ Hệ quả: lazy collections đã được load, DTO con đã được tạo, r�
 
 ## 2. Ưu tiên cao: chỉ kiểm tra có quiz nhưng tải câu hỏi
 
-`CoreTrainingAPI/src/main/java/com/bidv/coretraining/entity/Lesson.java:64` dùng `quiz.getQuestions().isEmpty()`; `CourseMapper` gọi `lesson.hasQuiz()` cho từng bài. Quan hệ questions không có cấu hình extra-lazy/batch trong đường này. Phép đo outline hydrate 4/12 entity Question dù giao diện chỉ cần boolean `hasQuiz`.
+`CoreTrainingAPI/src/main/java/com/bidv/coretraining/lesson/entity/Lesson.java:64` dùng `quiz.getQuestions().isEmpty()`; `CourseMapper` gọi `lesson.hasQuiz()` cho từng bài. Quan hệ questions không có cấu hình extra-lazy/batch trong đường này. Phép đo outline hydrate 4/12 entity Question dù giao diện chỉ cần boolean `hasQuiz`.
 
 Đề xuất: `exists`/count theo nhóm lesson/quiz, hoặc lấy boolean trong projection. Không lấy nội dung câu hỏi/đáp án chỉ để hiển thị nhãn kiểm tra. Cần giữ đúng quy tắc hiện tại: quiz rỗng không được chặn tiến độ.
 

@@ -1,10 +1,29 @@
 package com.bidv.coretraining.security;
+import com.bidv.coretraining.enums.DocumentPurpose;
 import com.bidv.coretraining.enums.DocumentType;
 import com.bidv.coretraining.enums.EnrollmentStatus;
-import com.bidv.coretraining.enums.DocumentPurpose;
 
-import com.bidv.coretraining.entity.*;
-import com.bidv.coretraining.repository.*;
+import com.bidv.coretraining.access.entity.AccessRole;
+import com.bidv.coretraining.access.repository.AccessRoleRepository;
+import com.bidv.coretraining.auth.repository.PasswordResetOtpRepository;
+import com.bidv.coretraining.course.entity.Chapter;
+import com.bidv.coretraining.course.entity.Course;
+import com.bidv.coretraining.course.repository.ChapterRepository;
+import com.bidv.coretraining.course.repository.CourseEnrollmentRequestRepository;
+import com.bidv.coretraining.course.repository.CourseRepository;
+import com.bidv.coretraining.document.entity.LessonDocument;
+import com.bidv.coretraining.lesson.entity.Comment;
+import com.bidv.coretraining.lesson.entity.Lesson;
+import com.bidv.coretraining.lesson.repository.CommentRepository;
+import com.bidv.coretraining.lesson.repository.LessonRepository;
+import com.bidv.coretraining.training.entity.TrainingDomain;
+import com.bidv.coretraining.training.entity.TrainingProgram;
+import com.bidv.coretraining.training.repository.TrainingDomainRepository;
+import com.bidv.coretraining.training.repository.TrainingProgramRepository;
+import com.bidv.coretraining.user.entity.OrganizationUnit;
+import com.bidv.coretraining.user.entity.User;
+import com.bidv.coretraining.user.repository.OrganizationUnitRepository;
+import com.bidv.coretraining.user.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.*;
@@ -338,7 +357,7 @@ class AccessSecurityIntegrationTest {
     }
 
     @Autowired AccessRoleRepository dynamicRoles;
-    @Autowired com.bidv.coretraining.service.PermissionCache permissionCache;
+    @Autowired com.bidv.coretraining.access.service.PermissionCache permissionCache;
     @Autowired com.bidv.coretraining.config.DynamicAccessInitializer migration;
     AccessRole dynamicRole(String code,Set<String> p,Set<String> scope){return dynamicRoles.save(AccessRole.builder().code(code).name(code).learningEnabled(false).permissions(new HashSet<>(p)).unitIds(new HashSet<>(scope)).build());}
     void assignDynamic(User u,AccessRole...roles){u.setDynamicAccessInitialized(true);u.setPolicySnapshot(null);u.setAssignedRoles(new HashSet<>(List.of(roles)));users.saveAndFlush(u);permissionCache.invalidate();}

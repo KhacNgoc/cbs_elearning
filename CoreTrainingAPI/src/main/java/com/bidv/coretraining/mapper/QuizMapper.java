@@ -1,7 +1,7 @@
 package com.bidv.coretraining.mapper;
-import com.bidv.coretraining.dto.QuestionDto;
+import com.bidv.coretraining.quiz.dto.QuestionDto;
 
-import com.bidv.coretraining.entity.Question;
+import com.bidv.coretraining.quiz.entity.Question;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 

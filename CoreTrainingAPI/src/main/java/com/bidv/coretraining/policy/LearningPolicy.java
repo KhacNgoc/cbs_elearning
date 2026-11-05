@@ -1,8 +1,11 @@
 package com.bidv.coretraining.policy;
 
-import com.bidv.coretraining.entity.*;
+import com.bidv.coretraining.course.entity.Chapter;
+import com.bidv.coretraining.course.entity.Course;
 import com.bidv.coretraining.exception.BadRequestException;
+import com.bidv.coretraining.lesson.entity.Lesson;
 import com.bidv.coretraining.security.AccessPolicy;
+import com.bidv.coretraining.user.entity.User;
 import org.springframework.security.access.AccessDeniedException;
 import java.util.List;
 

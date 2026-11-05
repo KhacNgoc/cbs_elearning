@@ -1,16 +1,16 @@
 package com.bidv.coretraining.mapper;
-import com.bidv.coretraining.dto.LessonDocumentDto;
-import com.bidv.coretraining.dto.CourseDto;
-import com.bidv.coretraining.dto.ProcedureSectionDto;
-import com.bidv.coretraining.dto.LessonDto;
-import com.bidv.coretraining.dto.CommentDto;
+import com.bidv.coretraining.course.dto.CourseDto;
+import com.bidv.coretraining.document.dto.LessonDocumentDto;
+import com.bidv.coretraining.lesson.dto.CommentDto;
+import com.bidv.coretraining.lesson.dto.LessonDto;
+import com.bidv.coretraining.lesson.dto.ProcedureSectionDto;
 
-import com.bidv.coretraining.entity.Comment;
-import com.bidv.coretraining.entity.Lesson;
-import com.bidv.coretraining.entity.LessonDocument;
-import com.bidv.coretraining.entity.ProcedureSection;
-import com.bidv.coretraining.entity.Course;
+import com.bidv.coretraining.course.entity.Course;
+import com.bidv.coretraining.document.entity.LessonDocument;
 import com.bidv.coretraining.enums.VideoSource;
+import com.bidv.coretraining.lesson.entity.Comment;
+import com.bidv.coretraining.lesson.entity.Lesson;
+import com.bidv.coretraining.lesson.entity.ProcedureSection;
 import org.mapstruct.AfterMapping;
 import org.mapstruct.InheritConfiguration;
 import org.mapstruct.Mapper;
@@ -64,7 +64,7 @@ public interface CourseMapper {
         @AfterMapping
         default void chapterOrder(Course course, @MappingTarget CourseDto dto) {
                 dto.setLessons(toLessonDtoList(course.getChapters().stream()
-                                .sorted(Comparator.comparing(com.bidv.coretraining.entity.Chapter::getChapterOrder))
+                                .sorted(Comparator.comparing(com.bidv.coretraining.course.entity.Chapter::getChapterOrder))
                                 .flatMap(chapter -> chapter.getLessons().stream()
                                                 .sorted(Comparator.comparing(Lesson::getLessonOrder)))
                                 .toList()));

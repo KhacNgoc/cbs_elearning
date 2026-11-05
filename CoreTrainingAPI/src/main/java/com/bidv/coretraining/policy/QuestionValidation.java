@@ -1,8 +1,8 @@
 package com.bidv.coretraining.policy;
 
-import com.bidv.coretraining.dto.QuestionDto;
 import com.bidv.coretraining.enums.QuestionType;
 import com.bidv.coretraining.exception.BadRequestException;
+import com.bidv.coretraining.quiz.dto.QuestionDto;
 import java.util.*;
 
 public final class QuestionValidation {

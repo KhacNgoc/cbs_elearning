@@ -1,7 +1,9 @@
 package com.bidv.coretraining.policy;
+import com.bidv.coretraining.document.entity.LessonDocument;
 import com.bidv.coretraining.enums.DocumentPurpose;
+import com.bidv.coretraining.lesson.entity.Lesson;
+import com.bidv.coretraining.lesson.entity.LessonProgress;
 
-import com.bidv.coretraining.entity.*;
 import java.util.List;
 
 /** Learning requirements exclude supporting resources, irrespective of file format. */

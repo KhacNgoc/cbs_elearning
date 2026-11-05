@@ -295,34 +295,34 @@ Các đường dẫn dưới đây tính từ `D:/psnPrj/cbs_elearning`. Đây l
 |---|---|
 | `CoreTrainingAPI/src/main/resources/migrations/20261026_progress_content_versions.sql` (mới) | Migration additive, backfill legacy, đổi unique và các kiểm tra đối chiếu |
 | `CoreTrainingAPI/src/main/resources/migrations/20261026_progress_content_versions_runbook.md` (mới) | Các bước dừng writer, backup, chạy/kiểm tra, cutover, đối soát, rollback |
-| `CoreTrainingAPI/src/main/java/com/bidv/coretraining/entity/Lesson.java` | Thêm contentVersion; giữ @Version kỹ thuật |
-| `.../entity/LessonProgress.java` | Unique mới, version nội dung, snapshot, bằng chứng hoàn thành |
-| `.../entity/QuizAttempt.java` | Content version cho lần thi |
-| `.../repository/LessonRepository.java` | Query/projection version nội dung và phương thức khóa hàng cho học/sửa |
+| `CoreTrainingAPI/src/main/java/com/bidv/coretraining/lesson/entity/Lesson.java` | Thêm contentVersion; giữ @Version kỹ thuật |
+| `.../lesson/entity/LessonProgress.java` | Unique mới, version nội dung, snapshot, bằng chứng hoàn thành |
+| `.../quiz/entity/QuizAttempt.java` | Content version cho lần thi |
+| `.../lesson/repository/LessonRepository.java` | Query/projection version nội dung và phương thức khóa hàng cho học/sửa |
 | `.../repository/LessonAccessView.java`, `.../repository/LessonOutlineView.java` | Thêm contentVersion |
-| `.../repository/LessonProgressRepository.java` | Query đúng phiên bản; current-list và history tách tên; bỏ Optional user/bài không version |
-| `.../repository/QuizAttemptRepository.java` | Tìm lần đạt đúng user/bài/contentVersion/quizRevision |
-| `.../dto/LessonDto.java`, `.../dto/CourseMapper.java` | Trả phiên bản ở detail và mapper |
-| `.../dto/LessonProgressRequest.java`, `.../dto/LessonProgressDto.java` | Contract phiên bản và trạng thái current/bảo lưu |
+| `.../lesson/repository/LessonProgressRepository.java` | Query đúng phiên bản; current-list và history tách tên; bỏ Optional user/bài không version |
+| `.../quiz/repository/QuizAttemptRepository.java` | Tìm lần đạt đúng user/bài/contentVersion/quizRevision |
+| `.../lesson/dto/LessonDto.java`, `.../dto/CourseMapper.java` | Trả phiên bản ở detail và mapper |
+| `.../lesson/dto/LessonProgressRequest.java`, `.../lesson/dto/LessonProgressDto.java` | Contract phiên bản và trạng thái current/bảo lưu |
 | `.../dto/LessonVersionRequest.java` (mới) | Body có contentVersion cho các endpoint hoàn thành |
-| `.../dto/QuizSessionDto.java` (mới), `.../dto/QuizSubmitRequest.java` | Snapshot session và request version/revision |
-| `.../dto/QuizResultDto.java`, `.../dto/QuizReviewDto.java` | Kết quả/review có attemptId, contentVersion, quizRevision, historical; result có lessonCompleted để đồng bộ ngay |
+| `.../quiz/dto/QuizSessionDto.java` (mới), `.../quiz/dto/QuizSubmitRequest.java` | Snapshot session và request version/revision |
+| `.../quiz/dto/QuizResultDto.java`, `.../quiz/dto/QuizReviewDto.java` | Kết quả/review có attemptId, contentVersion, quizRevision, historical; result có lessonCompleted để đồng bộ ngay |
 | `.../dto/LessonContentVersionRequest.java` (mới) | Body version kỹ thuật bắt buộc cho thao tác đánh dấu nội dung thay đổi |
 | `.../exception/LessonContentChangedException.java` (mới), `.../exception/GlobalExceptionHandler.java` | 409/428 có cấu trúc; không biến lỗi phiên bản thành lỗi mạng |
 | `.../exception/ErrorResponse.java` | Thêm code, lessonId và currentContentVersion tùy chọn; giữ trường lỗi hiện có cho các API khác |
 | `.../service/LessonContentVersionService.java` (mới) | Chuẩn hóa/so sánh nội dung, khóa khi sửa, tăng một lần, tạo snapshot; thao tác đánh dấu nội dung thay đổi |
 | `.../service/LessonCompletionService.java` (mới) | Một hàm đánh giá đủ nội dung + quiz và cấp thành tích idempotent; ghi bằng chứng theo phiên bản |
-| `.../service/LessonProgressService.java` | Luồng current read/write; bỏ trộn version và gate completionVersion cũ; không cung cấp đường xóa toàn lịch sử qua resetProgress |
+| `.../lesson/service/LessonProgressService.java` | Luồng current read/write; bỏ trộn version và gate completionVersion cũ; không cung cấp đường xóa toàn lịch sử qua resetProgress |
 | `.../service/impl/AdminServiceImpl.java` | Giữ ID tài liệu; hook contentVersion trong lưu bài, CRUD câu hỏi và cấu hình quiz |
 | `.../service/AdminService.java` | Chữ ký bumpLessonContentVersion phục vụ endpoint mới; trả LessonDto |
-| `.../service/TrainingStructureService.java` | Bài mới/copy bắt đầu version 1; các thao tác nội dung/quiz thực sự ghi phải dùng cùng cơ chế; metadata/reorder không bump |
-| `.../service/impl/UserServiceImpl.java`, `.../service/UserService.java` | Hoàn thành có version, không bypass nội dung; bảo lưu thành tích; cập nhật chữ ký API |
-| `.../service/impl/QuizServiceImpl.java`, `.../service/QuizService.java` | Session nhất quán, submit có version, attempt theo version, gọi completion dùng chung |
+| `.../training/service/TrainingStructureService.java` | Bài mới/copy bắt đầu version 1; các thao tác nội dung/quiz thực sự ghi phải dùng cùng cơ chế; metadata/reorder không bump |
+| `.../user/service/impl/UserServiceImpl.java`, `.../user/service/UserService.java` | Hoàn thành có version, không bypass nội dung; bảo lưu thành tích; cập nhật chữ ký API |
+| `.../quiz/service/impl/QuizServiceImpl.java`, `.../quiz/service/QuizService.java` | Session nhất quán, submit có version, attempt theo version, gọi completion dùng chung |
 | `.../service/LearningPolicy.java` | Ưu tiên thành tích bảo lưu; không phủ định bằng quiz mới; dùng chung chính sách khóa học |
-| `.../service/LearningOutlineService.java` | Projection version, current-only resume và quiz gating theo version |
-| `.../service/LearnerWorkspaceService.java` | Current-only history map/resume; completed ưu tiên thành tích |
-| `.../service/TrainingReportService.java` | Không lẫn lịch sử vào tiến độ hiện tại; giữ định nghĩa báo cáo đã từng học/thành tích |
-| `.../controller/UserController.java`, `.../controller/QuizController.java` | Body bắt buộc có phiên bản; thêm quiz session |
+| `.../learner/service/LearningOutlineService.java` | Projection version, current-only resume và quiz gating theo version |
+| `.../learner/service/LearnerWorkspaceService.java` | Current-only history map/resume; completed ưu tiên thành tích |
+| `.../report/service/TrainingReportService.java` | Không lẫn lịch sử vào tiến độ hiện tại; giữ định nghĩa báo cáo đã từng học/thành tích |
+| `.../user/controller/UserController.java`, `.../quiz/controller/QuizController.java` | Body bắt buộc có phiên bản; thêm quiz session |
 | `.../controller/AdminController.java` | Endpoint đánh dấu nội dung thay đổi, có quyền sửa và version kỹ thuật |
 | `CoreTrainingAPI/README.md` | Ghi rõ cách chạy migration/rollout mới, không hứa Hibernate tự chuyển dữ liệu |
 | `CoreTrainingAPI/pom.xml` | Profile kiểm thử `progress-postgres-it`, tách tag PostgreSQL khỏi `mvn test` mặc định |
@@ -360,7 +360,7 @@ Sidebar tiếp tục nhận danh sách completed thống nhất cho thành tích
 
 ### 19. Kiểm thử cần bổ sung
 
-Backend, dưới `CoreTrainingAPI/src/test/java/com/bidv/coretraining/service/`:
+Backend, dưới `CoreTrainingAPI/src/test/java/com/bidv/coretraining/<domain>/service/` (`lesson` hoặc `quiz` tùy nội dung test):
 
 - `LessonContentVersionServiceTest.java` (mới): thay đổi thật/no-op, URL chuẩn hóa, metadata-only, ID tài liệu giữ nguyên, sửa/thêm/xóa/đổi thứ tự quy trình, quiz thay đổi; assert lifecycle quizRevision và bump thủ công lặp/stale/không có quyền.
 - `LessonProgressVersioningTest.java` (mới): query current, row mới từ 0, snapshot server, legacy không áp vào current, request sai/missing version, bảo lưu completed, video ngắn hơn.

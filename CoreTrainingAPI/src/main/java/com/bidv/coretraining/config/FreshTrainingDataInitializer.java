@@ -1,8 +1,21 @@
 package com.bidv.coretraining.config;
 import com.bidv.coretraining.enums.QuestionType;
 
-import com.bidv.coretraining.entity.*;
-import com.bidv.coretraining.repository.*;
+import com.bidv.coretraining.course.entity.Chapter;
+import com.bidv.coretraining.course.entity.Course;
+import com.bidv.coretraining.course.repository.ChapterRepository;
+import com.bidv.coretraining.course.repository.CourseRepository;
+import com.bidv.coretraining.lesson.entity.Lesson;
+import com.bidv.coretraining.lesson.entity.ProcedureSection;
+import com.bidv.coretraining.lesson.repository.LessonRepository;
+import com.bidv.coretraining.quiz.entity.Question;
+import com.bidv.coretraining.quiz.repository.QuestionRepository;
+import com.bidv.coretraining.training.entity.TrainingDomain;
+import com.bidv.coretraining.training.entity.TrainingProgram;
+import com.bidv.coretraining.training.repository.TrainingDomainRepository;
+import com.bidv.coretraining.training.repository.TrainingProgramRepository;
+import com.bidv.coretraining.user.entity.User;
+import com.bidv.coretraining.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

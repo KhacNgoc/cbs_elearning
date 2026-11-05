@@ -1,6 +1,6 @@
 package com.bidv.coretraining.job;
 
-import com.bidv.coretraining.service.FlashcardPlanService;
+import com.bidv.coretraining.flashcard.service.FlashcardPlanService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;

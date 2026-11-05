@@ -1,5 +1,5 @@
 package com.bidv.coretraining.mapper;
-import com.bidv.coretraining.dto.LessonDto;
+import com.bidv.coretraining.lesson.dto.LessonDto;
 
 import java.util.List;
 

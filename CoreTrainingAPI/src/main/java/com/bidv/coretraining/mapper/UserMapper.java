@@ -1,7 +1,7 @@
 package com.bidv.coretraining.mapper;
-import com.bidv.coretraining.dto.UserBadgeDto;
+import com.bidv.coretraining.leaderboard.dto.UserBadgeDto;
 
-import com.bidv.coretraining.entity.UserBadge;
+import com.bidv.coretraining.leaderboard.entity.UserBadge;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 

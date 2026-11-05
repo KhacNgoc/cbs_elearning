@@ -1,6 +1,6 @@
 package com.bidv.coretraining.security;
 
-import com.bidv.coretraining.entity.User;
+import com.bidv.coretraining.user.entity.User;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import static org.assertj.core.api.Assertions.assertThat;

@@ -1,9 +1,9 @@
 package com.bidv.coretraining.security;
 
-import com.bidv.coretraining.service.PermissionCache;
+import com.bidv.coretraining.access.service.PermissionCache;
 
-import com.bidv.coretraining.entity.User;
-import com.bidv.coretraining.repository.UserRepository;
+import com.bidv.coretraining.user.entity.User;
+import com.bidv.coretraining.user.repository.UserRepository;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;

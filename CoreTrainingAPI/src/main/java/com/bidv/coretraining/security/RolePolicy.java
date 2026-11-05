@@ -1,6 +1,6 @@
 package com.bidv.coretraining.security;
 
-import com.bidv.coretraining.entity.AccessRole;
+import com.bidv.coretraining.access.entity.AccessRole;
 import java.util.Set;
 
 /** Immutable cache value: permissions and scopes stay paired per role. */

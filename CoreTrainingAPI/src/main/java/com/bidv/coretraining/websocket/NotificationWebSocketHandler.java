@@ -1,6 +1,6 @@
 package com.bidv.coretraining.websocket;
 
-import com.bidv.coretraining.dto.NotificationDto;
+import com.bidv.coretraining.notification.dto.NotificationDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;

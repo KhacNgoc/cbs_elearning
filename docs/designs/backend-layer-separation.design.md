@@ -5,15 +5,15 @@ Status: Design proposed for approval.
 
 ## Selected architecture
 
-Keep the current backend root and its controller, service, repository, dto, entity, and security packages. The user selected service interfaces with implementations and repository interfaces with implementations. Do not introduce application/domain/infrastructure package roots.
+Packages are grouped by domain first, then by layer: `<domain>/controller`, `<domain>/service`, `<domain>/service/impl`, `<domain>/repository`, `<domain>/repository/impl`, `<domain>/dto`, `<domain>/entity`. Shared packages such as enums, mapper, policy, config, and security stay at the backend root. The user selected service interfaces with implementations and repository interfaces with implementations. Do not introduce application/infrastructure package roots.
 
 Dependency flow:
 
-controller -> service interface -> service.impl implementation -> repository interface -> repository.impl implementation -> database
+controller -> service interface -> <domain>.service.impl implementation -> repository interface -> <domain>.repository.impl implementation -> database
 
 Services may collaborate through other service interfaces. Repository implementations must not depend on services or controllers. DTOs and entities must not depend on controller/service/repository implementations.
 
-Use lowercase impl package names, matching existing service.impl and Java package conventions.
+Use lowercase impl package names, matching existing <domain>.service.impl and Java package conventions.
 
 ## Responsibilities
 
@@ -21,17 +21,17 @@ Use lowercase impl package names, matching existing service.impl and Java packag
 
 Handle HTTP binding, request validation at the transport boundary, response status/headers, and output streaming. Inject service interfaces. Do not access repositories, JDBC, EntityManager, SQL contexts, or persistence implementation classes. Return DTOs for structured application data, never JPA entities.
 
-### Service and service.impl
+### Service and <domain>.service.impl
 
-Put business service contracts in service and their concrete Spring Service classes in service.impl. Interfaces expose use-case methods using DTOs and appropriate scalar arguments. Implementations resolve the current actor, make permission and business decisions, coordinate repositories, and own transaction boundaries.
+Put business service contracts in service and their concrete Spring Service classes in <domain>.service.impl. Interfaces expose use-case methods using DTOs and appropriate scalar arguments. Implementations resolve the current actor, make permission and business decisions, coordinate repositories, and own transaction boundaries.
 
 Extract database operations into repositories. Keep business-derived response fields and orchestration in services; returning DTO projections from repositories does not require relocating business logic to persistence.
 
 Do not turn stateless policies, validators, or value types into service interfaces simply because they currently reside in service. Classify these by their actual responsibility and prevent repository dependencies on service-owned helper types.
 
-### Repository and repository.impl
+### Repository and <domain>.repository.impl
 
-Put custom database contracts in repository and JDBC/EntityManager implementations in repository.impl, with Repository annotations on implementations. Inject interfaces into services.
+Put custom database contracts in repository and JDBC/EntityManager implementations in <domain>.repository.impl, with Repository annotations on implementations. Inject interfaces into services.
 
 Existing interfaces extending JpaRepository retain framework-generated implementations. They already satisfy the interface/implementation separation; do not handwrite copies of Spring Data CRUD. Custom SQL implementations use explicit interfaces and concrete classes. Avoid bean ambiguity and accidental Spring Data repository discovery for custom contracts.
 
@@ -52,7 +52,7 @@ Apply this convention across the Java backend, in buildable increments:
 1. Establish verification for the current working tree and preserve all existing uncommitted edits in the four query files.
 2. Separate persistence and business logic in AdminListQueryService, LearnerDashboardQuery, ProfileAssessmentQuery, TrainingReportQuery, LearnerDashboardService, LearnerQuizEntryService, and LeaderboardReadService. Replace query implementations consumed by controllers with service interfaces and move shared data contracts to dto.
 3. Route AdminOptionsController, NavigationController, LearnerDeadlineController, and LessonKnowledgeSourceController through service interfaces. Reuse existing services where responsibility matches; add narrowly scoped services otherwise.
-4. Audit remaining controllers and business services. Convert concrete business service dependencies to service interfaces and move implementations into service.impl. Update application wiring, security/configuration integration, and tests where these classes are referenced. Preserve utility/policy roles rather than generating empty abstractions for every class.
+4. Audit remaining controllers and business services. Convert concrete business service dependencies to service interfaces and move implementations into <domain>.service.impl. Update application wiring, security/configuration integration, and tests where these classes are referenced. Preserve utility/policy roles rather than generating empty abstractions for every class.
 5. Remove reverse dependencies, concrete implementation imports outside wiring/tests, and service/query-owned response types from the affected public contracts. Check the full backend against the agreed layer rules.
 
 Service class names remain recognizable. For example, LearnerDashboardService becomes the contract and LearnerDashboardServiceImpl implements it; LearnerDashboardQuery becomes an interface such as LearnerDashboardQueryRepository with LearnerDashboardQueryRepositoryImpl handling SQL. Final repository grouping may reuse existing repositories when the responsibility is the same.

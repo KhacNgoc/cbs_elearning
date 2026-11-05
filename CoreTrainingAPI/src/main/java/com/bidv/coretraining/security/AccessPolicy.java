@@ -1,6 +1,9 @@
 package com.bidv.coretraining.security;
 
-import com.bidv.coretraining.entity.*;
+import com.bidv.coretraining.course.entity.Course;
+import com.bidv.coretraining.training.entity.TrainingProgram;
+import com.bidv.coretraining.user.entity.OrganizationUnit;
+import com.bidv.coretraining.user.entity.User;
 import org.springframework.security.access.AccessDeniedException;
 import java.util.*;
 

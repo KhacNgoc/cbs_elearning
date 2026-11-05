@@ -1,7 +1,7 @@
 package com.bidv.coretraining.config;
 
-import com.bidv.coretraining.repository.AccessRoleRepository;
-import com.bidv.coretraining.service.PermissionCache;
+import com.bidv.coretraining.access.repository.AccessRoleRepository;
+import com.bidv.coretraining.access.service.PermissionCache;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;

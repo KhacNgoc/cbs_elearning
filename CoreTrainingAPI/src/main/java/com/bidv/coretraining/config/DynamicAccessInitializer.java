@@ -1,7 +1,16 @@
 package com.bidv.coretraining.config;
 
-import com.bidv.coretraining.entity.*;
-import com.bidv.coretraining.repository.*;
+import com.bidv.coretraining.access.entity.AccessRole;
+import com.bidv.coretraining.access.entity.AdminPage;
+import com.bidv.coretraining.access.repository.AccessRoleRepository;
+import com.bidv.coretraining.access.repository.AdminPageRepository;
+import com.bidv.coretraining.course.repository.CourseRepository;
+import com.bidv.coretraining.navigation.entity.NavigationItem;
+import com.bidv.coretraining.navigation.repository.NavigationItemRepository;
+import com.bidv.coretraining.training.entity.TrainingProgram;
+import com.bidv.coretraining.training.repository.TrainingProgramRepository;
+import com.bidv.coretraining.user.entity.User;
+import com.bidv.coretraining.user.repository.UserRepository;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;

@@ -12,7 +12,7 @@
 
 ## Verification
 
-Changed files: frontend `src/api/quizSummaryApi.ts`, `src/views/AdminExamList.vue`, `src/views/AdminOverview.vue`, `src/views/AdminPortal.vue`, `src/router/index.ts`, `tests/examListPerformance.test.mjs`; backend `dto/QuizSummaryDto.java`, `service/QuizSummaryService.java`, `repository/QuestionRepository.java`, `controller/AdminController.java`, `service/LearningQueryAuditTest.java` (test source).
+Changed files: frontend `src/api/quizSummaryApi.ts`, `src/views/AdminExamList.vue`, `src/views/AdminOverview.vue`, `src/views/AdminPortal.vue`, `src/router/index.ts`, `tests/examListPerformance.test.mjs`; backend `quiz/dto/QuizSummaryDto.java`, `quiz/service/QuizSummaryService.java`, `quiz/repository/QuestionRepository.java`, `controller/AdminController.java`, `learner/service/LearningQueryAuditTest.java` (test source).
 
 - Frontend: `node --experimental-strip-types --test tests/examListPerformance.test.mjs tests/learningPagesPerformance.test.mjs tests/lessonContent.test.mjs tests/notificationCenter.test.mjs`: 36 passed.
 - Backend: `LearningQueryAuditTest`: 20 passed, including two new summary checks. Used temporary POM pointing build output to target/exam-list-check to avoid concurrent IDE class writes; removed POM after verification.

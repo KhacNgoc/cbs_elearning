@@ -30,7 +30,9 @@ Quy mô so với `main`: 317 file thay đổi.
 
 ## Kiến trúc backend sau thay đổi
 
-Luồng chuẩn: `controller` → `service` (interface) → `service/impl` → `repository` (interface) → `repository/impl` → trả về `dto`.
+Code được chia theo domain trước, rồi đến tầng: `<domain>/controller`, `<domain>/service`, `<domain>/repository`, ... (ví dụ `course/service/impl`). Các phần dùng chung như `enums`, `mapper`, `policy`, `config`, `security` vẫn nằm ở gốc package.
+
+Luồng chuẩn trong mỗi domain: `controller` → `service` (interface) → `service/impl` → `repository` (interface) → `repository/impl` → trả về `dto`.
 
 | Tầng | Quy tắc |
 | --- | --- |
@@ -45,7 +47,7 @@ Luồng chuẩn: `controller` → `service` (interface) → `service/impl` → `
 - controller không truy cập tầng persistence;
 - service không chạy thao tác DB;
 - repository không phụ thuộc service hoặc controller;
-- class service cụ thể phải nằm trong `service/impl`.
+- class service cụ thể phải nằm trong `<domain>/service/impl`.
 
 Nhờ test này mà 3 vi phạm trong code mới của `main` đã bị phát hiện ngay khi merge.
 
@@ -56,11 +58,11 @@ Nhờ test này mà 3 vi phạm trong code mới của `main` đã bị phát hi
 | `enums` | `DocumentPurpose`, `DocumentStatus`, `DocumentType`, `EnrollmentStatus`, `NotificationType`, `QuestionType`, `VideoSource` | `entity` |
 | `mapper` | `CourseMapper`, `QuizMapper`, `UserMapper`, `LessonOutlineMapper` | `dto` |
 | `policy` | `LearningPolicy`, `LessonContentPolicy`, `QuestionValidation` | `service` |
-| `service/model` | `AuthorizedLesson` | `service` |
-| `repository/support` | `LearnerQueryScope`, `LearnerQueryScopeFactory`, `LearnerDashboardSqlRelations` | `repository`, `service/impl`, `repository/impl` |
-| `repository/projection` | `LessonAccessView`, `LessonOutlineView` | `repository` |
+| `learner/service/model` | `AuthorizedLesson` | `service` |
+| `learner/repository/support` | `LearnerQueryScope`, `LearnerQueryScopeFactory`, `LearnerDashboardSqlRelations` | `repository`, `service/impl`, `repository/impl` |
+| `lesson/repository/projection` | `LessonAccessView`, `LessonOutlineView` | `repository` |
 
-Số class Impl tăng từ 7 (trên `main`) lên 47. Thư mục `service/` giờ chỉ còn interface.
+Số class Impl tăng từ 7 (trên `main`) lên 47. Mỗi thư mục `<domain>/service/` chỉ chứa interface trực tiếp, class Impl nằm trong `<domain>/service/impl/`.
 
 ## Thay đổi backend chi tiết
 

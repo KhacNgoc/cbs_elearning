@@ -44,30 +44,30 @@ Verification for this follow-up: 14 frontend lesson-content/component tests pass
 - `CoreTraining/src/router/index.ts`
 - `CoreTraining/src/views/LessonReportDetail.vue` (new)
 - `CoreTraining/tests/lessonReportDetail.test.mjs` (new)
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/controller/LessonReportController.java`
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/service/LessonReportService.java`
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/lesson/controller/LessonReportController.java`
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/lesson/service/LessonReportService.java`
 - `CoreTrainingAPI/src/test/java/com/bidv/coretraining/security/ContentToolsIntegrationTest.java`
 
 ### Backend content model and progress
 
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/entity/DocumentPurpose.java` (new)
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/entity/LessonDocument.java`
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/dto/LessonDocumentDto.java`
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/repository/LessonDocumentRepository.java`
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/repository/LessonRepository.java`
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/repository/LessonOutlineView.java`
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/service/LessonContentPolicy.java` (new)
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/service/LessonProgressService.java`
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/service/LearningOutlineService.java`
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/service/LearnerWorkspaceService.java`
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/service/TrainingStructureService.java`
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/enums/DocumentPurpose.java` (new)
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/document/entity/LessonDocument.java`
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/document/dto/LessonDocumentDto.java`
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/document/repository/LessonDocumentRepository.java`
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/lesson/repository/LessonRepository.java`
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/lesson/repository/projection/LessonOutlineView.java`
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/policy/LessonContentPolicy.java` (new)
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/lesson/service/LessonProgressService.java`
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/learner/service/LearningOutlineService.java`
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/learner/service/LearnerWorkspaceService.java`
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/training/service/TrainingStructureService.java`
 - `CoreTrainingAPI/src/main/java/com/bidv/coretraining/service/impl/AdminServiceImpl.java`
-- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/service/impl/QuizServiceImpl.java`
+- `CoreTrainingAPI/src/main/java/com/bidv/coretraining/quiz/service/impl/QuizServiceImpl.java`
 - `CoreTrainingAPI/src/main/resources/migrations/20261027_lesson_slide_content.sql` (new)
-- `CoreTrainingAPI/src/test/java/com/bidv/coretraining/service/AdminLessonContentTest.java` (new)
-- `CoreTrainingAPI/src/test/java/com/bidv/coretraining/service/LessonProgressContentTest.java` (new)
-- `CoreTrainingAPI/src/test/java/com/bidv/coretraining/service/LearningQueryAuditTest.java`
-- `CoreTrainingAPI/src/test/java/com/bidv/coretraining/service/LearnerWorkspaceServiceTest.java`
+- `CoreTrainingAPI/src/test/java/com/bidv/coretraining/course/service/AdminLessonContentTest.java` (new)
+- `CoreTrainingAPI/src/test/java/com/bidv/coretraining/lesson/service/LessonProgressContentTest.java` (new)
+- `CoreTrainingAPI/src/test/java/com/bidv/coretraining/learner/service/LearningQueryAuditTest.java`
+- `CoreTrainingAPI/src/test/java/com/bidv/coretraining/learner/service/LearnerWorkspaceServiceTest.java`
 - `CoreTrainingAPI/src/test/java/com/bidv/coretraining/security/AccessSecurityIntegrationTest.java` (resume fixture now marks required learning slides explicitly)
 
 Planning records: `docs/designs/lesson-content-types.concepts.md`, `docs/superpowers/plans/2026-10-27-lesson-content-types.md`, this result document. Existing unrelated design files were retained.
