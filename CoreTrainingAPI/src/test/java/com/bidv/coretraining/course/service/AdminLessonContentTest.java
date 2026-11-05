@@ -45,6 +45,51 @@ class AdminLessonContentTest {
                 .fileUrl(path).build();
     }
 
+    @Test void savesRequirementChoiceForPresentContent() {
+        request.setTextBody("<p>Text</p>");
+        request.setVideoUrl("https://example.com/video.mp4");
+        request.setTextRequired(false);
+        request.setVideoRequired(true);
+        service.updateLesson("L1", request);
+        assertThat(lesson.getTextRequired()).isFalse();
+        assertThat(lesson.getVideoRequired()).isTrue();
+    }
+
+    @Test void clientThatOmitsRequirementsKeepsTheStoredChoice() {
+        lesson.setTextBody("<p>Text</p>");
+        lesson.getContent().setTextRequired(false);
+        request.setTextBody("<p>Text</p>");
+        service.updateLesson("L1", request);
+        assertThat(lesson.getTextRequired()).isFalse();
+    }
+
+    @Test void removingContentDiscardsItsRequirementChoice() {
+        lesson.setVideoUrl("https://example.com/video.mp4");
+        lesson.getContent().setVideoRequired(false);
+        request.setVideoRequired(false);
+        service.updateLesson("L1", request);
+        assertThat(lesson.getVideoRequired()).isTrue();
+    }
+
+    @Test void slideRequirementFollowsSlidePresence() {
+        var slide = document(null, "/uploads/documents/deck.pptx");
+        slide.setPurpose(DocumentPurpose.SLIDE);
+        request.setDocuments(List.of(slide));
+        request.setSlideRequired(false);
+        service.updateLesson("L1", request);
+        assertThat(lesson.getSlideRequired()).isFalse();
+        request.setDocuments(List.of());
+        service.updateLesson("L1", request);
+        assertThat(lesson.getSlideRequired()).isTrue();
+    }
+
+    @Test void publishedLessonMayHaveContentThatIsAllOptional() {
+        lesson.setStatus("PUBLISHED");
+        request.setTextBody("<p>Text</p>");
+        request.setTextRequired(false);
+        assertThatCode(() -> service.updateLesson("L1", request)).doesNotThrowAnyException();
+    }
+
     @Test void unrelatedSavePreservesExistingDocumentIdentity() {
         request.setDocuments(List.of(document(10L, original.getFileUrl())));
         service.updateLesson("L1", request);

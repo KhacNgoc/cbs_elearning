@@ -346,6 +346,21 @@ class LearningQueryAuditTest {
         }
     }
 
+    @Test void optionalContentIsExposedAndSkippedByRealQueries() {
+        var f = seed(2);
+        var lesson = em.find(Lesson.class, f.lesson());
+        lesson.getQuiz().setRequiredForProgress(false);
+        lesson.setVideoUrl("/video.mp4");
+        lesson.getContent().setVideoRequired(false);
+        em.flush(); reset();
+        var row = structure.outline(f.course(), f.user()).chapters().get(0).lessons().get(0);
+        assertThat(row.getId()).isEqualTo(f.lesson());
+        assertThat(row.getVideoRequired()).isFalse();
+        assertThat(row.getTextRequired()).isTrue();
+        var request = new LessonProgressRequest(); request.setContentType("TEXT"); request.setTextCompleted(true);
+        assertThat(progress.saveProgress(f.user(), f.lesson(), request).isLessonCompleted()).isTrue();
+    }
+
     @Test void automaticCompletionRequiresTextVideoAndEveryRequiredSlide() {
         var f = seed(2);
         var lesson = em.find(Lesson.class, f.lesson());

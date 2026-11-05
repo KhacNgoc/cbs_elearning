@@ -165,7 +165,7 @@ Nếu request hoàn thành khóa lesson trước, nó được đánh giá theo 
 Tách logic xét hoàn thành dùng chung, không để từng controller quyết định khác nhau:
 
 - Thành tích đã tồn tại → bảo lưu, không xét lại để thu hồi.
-- Chưa có thành tích → cần tất cả nội dung bắt buộc ở phiên bản hiện tại: văn bản nếu có; video nếu có đạt ít nhất 90% thời lượng hợp lệ; mọi tài liệu hiện tại có dấu hoàn thành trang cuối; quiz nếu thực sự có câu hỏi và bắt buộc thì có lần đạt thuộc phiên bản hiện tại.
+- Chưa có thành tích → cần tất cả nội dung được đánh dấu bắt buộc ở phiên bản hiện tại (xem `lesson-content-types.implementation.md`; đổi cờ bắt buộc không phải thay đổi nội dung nên không tăng `content_version`): văn bản nếu có; video nếu có đạt ít nhất 90% thời lượng hợp lệ; mọi tài liệu hiện tại có dấu hoàn thành trang cuối; quiz nếu thực sự có câu hỏi và bắt buộc thì có lần đạt thuộc phiên bản hiện tại.
 - Bài không có bất kỳ nội dung/quiz hợp lệ không tự hoàn thành vì các phép kiểm tra rỗng đều true.
 - Đạt quiz trước khi học đủ nội dung chỉ lưu lần thi; học nội dung sau đó đủ sẽ tự xét hoàn thành. Học đủ nội dung rồi đạt quiz cũng xét qua cùng hàm.
 - `complete-lesson` và `content-complete` phải mang phiên bản, không được bypass kiểm tra nội dung khi có quiz. API hoàn thành đối với người đã hoàn thành vẫn không cấp điểm lần nữa.

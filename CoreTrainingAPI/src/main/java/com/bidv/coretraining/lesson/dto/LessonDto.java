@@ -29,6 +29,10 @@ public class LessonDto {
     private Boolean hasQuiz;
     private Boolean hasVideo;
     private Boolean hasText;
+    /** On update, null keeps the stored value. */
+    private Boolean textRequired;
+    private Boolean videoRequired;
+    private Boolean slideRequired;
     private Integer quizPassingScore;
     private List<LessonDocumentDto> documents;
     private List<ProcedureSectionDto> procedureSteps;

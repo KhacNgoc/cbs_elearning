@@ -15,6 +15,7 @@
       :has-text="Boolean(lesson.textBody?.trim())"
       :has-video="Boolean(lesson.videoUrl?.trim())"
       :has-slides="lesson.documents.some(document => document.purpose === 'SLIDE')"
+      :optional-content="optionalLessonContent(lesson)"
       @select-content="showPrimaryContent"
       :completed-count="completedCount"
       :total-lessons="course?.lessons.length || 0"
@@ -124,6 +125,7 @@
         :lesson="lesson"
         :course-name="fullCourse?.name"
         :completed="isCompleted"
+        :completion-rule="completionRule"
       >
         <template #actions>
           <LessonReportForm
@@ -304,7 +306,7 @@ import LessonCourseSidebar from "../components/lesson/LessonCourseSidebar.vue";
 import LessonMediaStage from "../components/lesson/LessonMediaStage.vue";
 import LessonOverview from "../components/lesson/LessonOverview.vue";
 import LessonReportForm from "../components/lesson/LessonReportForm.vue";
-import { initialLessonContent } from "../utils/lessonContent";
+import { initialLessonContent, lessonCompletionRule, optionalLessonContent } from "../utils/lessonContent";
 import { createDocumentProgressJournal } from "../utils/documentProgressJournal";
 import { createVideoProgressJournal } from "../utils/videoProgressJournal";
 import LessonDiscussion from "../components/lesson/LessonDiscussion.vue";
@@ -474,6 +476,11 @@ const quizPromptLesson = computed(
 const isCompleted = computed(() =>
   lesson.value ? userStore.completedLessons.includes(lesson.value.id) : false,
 );
+const completionRule = computed(() => {
+  if (!lesson.value) return "";
+  const outlineLesson = course.value?.lessons.find((item) => item.id === lesson.value?.id);
+  return lessonCompletionRule(lesson.value, Boolean(outlineLesson?.hasQuiz && outlineLesson.quizRequired));
+});
 // Learners rarely scroll past the player after finishing, so point them at the deck.
 watch(
   () => [lesson.value?.id, isCompleted.value, userStore.progressLoaded] as const,
@@ -2719,6 +2726,12 @@ const deleteComment = async (commentId: number) => {
 .lesson-content-switch button > span {
   display: block;
   line-height: 1;
+}
+.content-optional-tag {
+  font-size: 0.68rem;
+  font-weight: 500;
+  line-height: 1;
+  opacity: 0.8;
 }
 .lesson-content-switch button:hover {
   background: rgba(255, 255, 255, 0.09);

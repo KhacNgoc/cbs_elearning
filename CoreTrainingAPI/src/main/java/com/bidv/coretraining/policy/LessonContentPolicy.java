@@ -33,20 +33,62 @@ public final class LessonContentPolicy {
         return hasText(lesson) || hasVideo(lesson) || !slides(lesson).isEmpty();
     }
 
-    public static boolean complete(Lesson lesson, LessonProgress progress) {
-        return complete(hasText(lesson), hasVideo(lesson), slides(lesson).stream().map(LessonDocument::getId).toList(), progress);
+    /** What a lesson asks of a learner: content that exists and is marked required. */
+    public record Requirements(boolean hasContent, boolean text, boolean video, List<Long> slideIds) {
+        public boolean anyRequired() {
+            return text || video || !slideIds.isEmpty();
+        }
     }
 
-    public static boolean complete(boolean hasText, boolean hasVideo, List<Long> slideIds, LessonProgress progress) {
-        if (progress == null || !(hasText || hasVideo || !slideIds.isEmpty())) return false;
-        return (!hasText || progress.isTextCompleted())
-                && (!hasVideo || progress.getDurationSeconds() != null
-                    && Double.isFinite(progress.getDurationSeconds()) && progress.getDurationSeconds() > 0
-                    && progress.getWatchedSeconds() != null && Double.isFinite(progress.getWatchedSeconds())
-                    && progress.getWatchedSeconds() >= progress.getDurationSeconds() * 0.9)
-                && slideIds.stream().allMatch(id -> id != null && progress.getDocumentPositions() != null
+    /** A missing flag counts as required: that is how a lesson without a saved choice behaves. */
+    public static boolean required(Boolean flag) {
+        return !Boolean.FALSE.equals(flag);
+    }
+
+    public static Requirements requirements(Lesson lesson) {
+        return requirements(hasText(lesson), lesson.getTextRequired(), hasVideo(lesson), lesson.getVideoRequired(),
+                slides(lesson).stream().map(LessonDocument::getId).toList(), lesson.getSlideRequired());
+    }
+
+    public static Requirements requirements(boolean hasText, Boolean textRequired, boolean hasVideo,
+            Boolean videoRequired, List<Long> slideIds, Boolean slideRequired) {
+        return new Requirements(hasText || hasVideo || !slideIds.isEmpty(), hasText && required(textRequired),
+                hasVideo && required(videoRequired), required(slideRequired) ? slideIds : List.of());
+    }
+
+    public static boolean complete(Lesson lesson, LessonProgress progress) {
+        return complete(requirements(lesson), progress);
+    }
+
+    /**
+     * True when no required content is left. With content but nothing required that holds without any progress, so
+     * callers deciding whether to award completion automatically must also check {@link Requirements#anyRequired()}.
+     */
+    public static boolean complete(Requirements requirements, LessonProgress progress) {
+        if (!requirements.hasContent()) return false;
+        if (!requirements.anyRequired()) return true;
+        if (progress == null) return false;
+        return (!requirements.text() || progress.isTextCompleted())
+                && (!requirements.video() || videoWatched(progress))
+                && requirements.slideIds().stream().allMatch(id -> id != null && progress.getDocumentPositions() != null
                     && progress.getDocumentPositions().get(id.toString()) != null
                     && Boolean.TRUE.equals(progress.getDocumentPositions().get(id.toString()).completed()));
+    }
+
+    public static boolean videoWatched(LessonProgress progress) {
+        return progress.getDurationSeconds() != null
+                && Double.isFinite(progress.getDurationSeconds()) && progress.getDurationSeconds() > 0
+                && progress.getWatchedSeconds() != null && Double.isFinite(progress.getWatchedSeconds())
+                && progress.getWatchedSeconds() >= progress.getDurationSeconds() * 0.9;
+    }
+
+    public static String incompleteMessage(Requirements requirements) {
+        List<String> steps = new java.util.ArrayList<>();
+        if (requirements.text()) steps.add("đọc hết văn bản");
+        if (requirements.video()) steps.add("xem ít nhất 90% video");
+        if (!requirements.slideIds().isEmpty()) steps.add("đến trang cuối của slide");
+        return steps.isEmpty() ? "Bài học chưa có nội dung để hoàn thành"
+                : "Hãy " + String.join(", ", steps) + " để hoàn thành nội dung bắt buộc của bài học";
     }
 
     public static void requirePublishable(Lesson lesson) {

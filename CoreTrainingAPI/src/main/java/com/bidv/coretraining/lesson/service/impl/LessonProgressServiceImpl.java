@@ -100,8 +100,11 @@ public class LessonProgressServiceImpl implements LessonProgressService {
         boolean contentWasComplete = progress.isContentCompleted();
         progress.setContentCompleted(currentContentComplete(authorized.lesson(), progress));
         if (!lessonCompleted) {
+            // A lesson with nothing required and no required quiz waits for the learner's own
+            // "mark complete": opening it must not award completion.
             if (progress.isContentCompleted()
-                    && (!lesson.isQuizRequired() || LearningPolicy.quizPassed(user, lesson))) {
+                    && (lesson.isQuizRequired() ? LearningPolicy.quizPassed(user, lesson)
+                            : requirements(authorized.lesson()).anyRequired())) {
                 recordCompletion(user, lesson);
                 lessonCompleted = true;
             }
@@ -130,8 +133,7 @@ public class LessonProgressServiceImpl implements LessonProgressService {
                 .orElseGet(() -> LessonProgress.builder().user(user).lesson(lesson).build());
         progress.setContentCompleted(currentContentComplete(authorized.lesson(), progress));
         if (!progress.isContentCompleted())
-            throw new BadRequestException(
-                    "Hãy đọc hết văn bản, xem ít nhất 90% video và đến trang cuối của các slide thuộc nội dung bài học");
+            throw new BadRequestException(LessonContentPolicy.incompleteMessage(requirements(authorized.lesson())));
         progress.setUpdatedAt(LocalDateTime.now());
         progressRepository.save(progress);
     }
@@ -148,9 +150,10 @@ public class LessonProgressServiceImpl implements LessonProgressService {
 
     @Transactional(readOnly = true)
     public boolean contentCompleted(User user, String lessonId) {
-        return progressRepository.findByUserIdAndLessonId(user.getId(), lessonId)
-                .map(p -> lessonRepository.findAccess(lessonId)
-                        .map(row -> currentContentComplete(row, p)).orElse(false)).orElse(false);
+        // No saved progress is not "incomplete" when the lesson requires no content.
+        var progress = progressRepository.findByUserIdAndLessonId(user.getId(), lessonId)
+                .orElseGet(() -> LessonProgress.builder().build());
+        return lessonRepository.findAccess(lessonId).map(row -> currentContentComplete(row, progress)).orElse(false);
     }
 
     @Transactional(readOnly = true)
@@ -168,8 +171,8 @@ public class LessonProgressServiceImpl implements LessonProgressService {
         for (LessonProgress progress : saved) {
             var dto = toDto(progress);
             var row = requirements.get(progress.getLesson().getId());
-            dto.setContentCompleted(row != null && LessonContentPolicy.complete(Boolean.TRUE.equals(row.getHasText()),
-                    Boolean.TRUE.equals(row.getHasVideo()), slides.getOrDefault(progress.getLesson().getId(), java.util.List.of()), progress));
+            dto.setContentCompleted(row != null && LessonContentPolicy.complete(requirements(row,
+                    slides.getOrDefault(progress.getLesson().getId(), java.util.List.of())), progress));
             result.put(progress.getLesson().getId(), dto);
         }
         return result;
@@ -203,13 +206,20 @@ public class LessonProgressServiceImpl implements LessonProgressService {
 
     private boolean currentContentComplete(LessonAccessView row,
             LessonProgress progress) {
-        boolean text = Boolean.TRUE.equals(row.getHasText());
-        boolean video = Boolean.TRUE.equals(row.getHasVideo());
-        if (text && !progress.isTextCompleted() || video && !(progress.getDurationSeconds() > 0
-                && progress.getWatchedSeconds() >= progress.getDurationSeconds() * 0.9)) return false;
-        var slides = documents.findAllByLessonIdAndPurpose(progress.getLesson().getId(),
-                DocumentPurpose.SLIDE);
-        return LessonContentPolicy.complete(text, video,
-                slides.stream().map(LessonDocumentRepository.IdOnly::getId).toList(), progress);
+        // Skips the slide query when required text or video already decides the answer.
+        boolean text = Boolean.TRUE.equals(row.getHasText()) && LessonContentPolicy.required(row.getTextRequired());
+        boolean video = Boolean.TRUE.equals(row.getHasVideo()) && LessonContentPolicy.required(row.getVideoRequired());
+        if (text && !progress.isTextCompleted() || video && !LessonContentPolicy.videoWatched(progress)) return false;
+        return LessonContentPolicy.complete(requirements(row), progress);
+    }
+
+    private LessonContentPolicy.Requirements requirements(LessonAccessView row) {
+        return requirements(row, documents.findAllByLessonIdAndPurpose(row.getId(), DocumentPurpose.SLIDE).stream()
+                .map(LessonDocumentRepository.IdOnly::getId).toList());
+    }
+
+    private LessonContentPolicy.Requirements requirements(LessonAccessView row, java.util.List<Long> slideIds) {
+        return LessonContentPolicy.requirements(Boolean.TRUE.equals(row.getHasText()), row.getTextRequired(),
+                Boolean.TRUE.equals(row.getHasVideo()), row.getVideoRequired(), slideIds, row.getSlideRequired());
     }
 }

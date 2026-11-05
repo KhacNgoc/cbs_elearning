@@ -121,6 +121,9 @@ public class LearningOutlineServiceImpl implements LearningOutlineService {
                 .hasQuiz(quiz).quizRequired(quiz && Boolean.TRUE.equals(row.getQuizRequired()))
                 .hasVideo(Boolean.TRUE.equals(row.getHasVideo()))
                 .hasText(Boolean.TRUE.equals(row.getHasText()))
+                .textRequired(LessonContentPolicy.required(row.getTextRequired()))
+                .videoRequired(LessonContentPolicy.required(row.getVideoRequired()))
+                .slideRequired(LessonContentPolicy.required(row.getSlideRequired()))
                 .quizPassingScore(row.getQuizPassingScore()).documents(List.of()).procedureSteps(List.of())
                 .comments(List.of()).build();
     }
@@ -143,9 +146,12 @@ public class LearningOutlineServiceImpl implements LearningOutlineService {
                 && Boolean.TRUE.equals(selected.getQuizRequired());
         var slideIds = documentMetadata.getOrDefault(selected.getId(), List.of()).stream()
                 .filter(d -> d.getPurpose() == DocumentPurpose.SLIDE).map(LessonDocumentDto::getId).toList();
-        boolean contentComplete = LessonContentPolicy.complete(Boolean.TRUE.equals(selected.getHasText()),
-                Boolean.TRUE.equals(selected.getHasVideo()), slideIds, saved);
-        if (contentComplete && requiredQuiz && !passed(user, selected))
+        var requirements = LessonContentPolicy.requirements(Boolean.TRUE.equals(selected.getHasText()),
+                selected.getTextRequired(), Boolean.TRUE.equals(selected.getHasVideo()), selected.getVideoRequired(),
+                slideIds, selected.getSlideRequired());
+        // Nothing required: resume at the content instead of skipping straight to the quiz.
+        if (requirements.anyRequired() && LessonContentPolicy.complete(requirements, saved) && requiredQuiz
+                && !passed(user, selected))
             type = "QUIZ";
         else if ("DOCUMENT".equals(type)
                 && (documentId == null || !slideIds.contains(documentId))) {

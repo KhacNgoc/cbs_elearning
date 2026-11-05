@@ -31,13 +31,17 @@ public interface LessonRepository extends JpaRepository<Lesson, String> {
         case when count(q.id) > 0 then true else false end as hasQuiz,
         coalesce(quiz.requiredForProgress, false) as quizRequired,
         coalesce(quiz.passingScore, 80) as quizPassingScore,
+        coalesce(content.textRequired, true) as textRequired,
+        coalesce(content.videoRequired, true) as videoRequired,
+        coalesce(content.slideRequired, true) as slideRequired,
         case when length(trim(content.videoUrl)) > 0 then true else false end as hasVideo,
         case when length(trim(content.textBody)) > 0 then true else false end as hasText
       from Lesson l join l.chapter ch left join l.content content left join l.quiz quiz
         left join quiz.questions q
       where l.course.id in :courseIds and (:includeDraft = true or (ch.status = 'PUBLISHED' and l.status = 'PUBLISHED'))
       group by ch.chapterOrder, l.id, l.title, l.course.id, ch.id, ch.status, l.status, l.version, l.lessonOrder,
-        quiz.requiredForProgress, quiz.passingScore, content.videoUrl, content.textBody
+        quiz.requiredForProgress, quiz.passingScore, content.videoUrl, content.textBody,
+        content.textRequired, content.videoRequired, content.slideRequired
       order by ch.chapterOrder, ch.id, l.lessonOrder, l.id
       """)
   List<LessonOutlineView> findOutlines(
@@ -55,6 +59,9 @@ public interface LessonRepository extends JpaRepository<Lesson, String> {
   @org.springframework.data.jpa.repository.Query("""
       select l.id as id, l.course.id as courseId, ch.id as chapterId, l.status as status, l.version as version,
         ch.status as chapterStatus, l.lessonOrder as lessonOrder, ch.chapterOrder as chapterOrder,
+        coalesce(content.textRequired, true) as textRequired,
+        coalesce(content.videoRequired, true) as videoRequired,
+        coalesce(content.slideRequired, true) as slideRequired,
         case when length(trim(content.textBody)) > 0 then true else false end as hasText,
         case when length(trim(content.videoUrl)) > 0 then true else false end as hasVideo
       from Lesson l join l.chapter ch left join l.content content where l.id = :id
@@ -63,6 +70,9 @@ public interface LessonRepository extends JpaRepository<Lesson, String> {
 
   @org.springframework.data.jpa.repository.Query("""
       select l.id as id,
+        coalesce(content.textRequired, true) as textRequired,
+        coalesce(content.videoRequired, true) as videoRequired,
+        coalesce(content.slideRequired, true) as slideRequired,
         case when length(trim(content.textBody)) > 0 then true else false end as hasText,
         case when length(trim(content.videoUrl)) > 0 then true else false end as hasVideo
       from Lesson l left join l.content content where l.id in :ids

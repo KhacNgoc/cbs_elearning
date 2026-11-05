@@ -26,6 +26,7 @@
             @click="$emit('select-content', 'TEXT')"
           >
             <FileText :size="17" /><span>Văn bản</span>
+            <small v-if="optionalContent?.includes('TEXT')" class="content-optional-tag">Tùy chọn</small>
           </button>
           <button
             v-if="hasVideo"
@@ -34,8 +35,9 @@
             @click="$emit('select-content', 'VIDEO')"
           >
             <PlayCircle :size="17" /><span>Video</span>
+            <small v-if="optionalContent?.includes('VIDEO')" class="content-optional-tag">Tùy chọn</small>
           </button>
-          <button v-if="hasSlides" type="button" :aria-pressed="activeContent === 'SLIDE'" @click="$emit('select-content', 'SLIDE')"><FileText :size="17" /><span>Slide</span></button>
+          <button v-if="hasSlides" type="button" :aria-pressed="activeContent === 'SLIDE'" @click="$emit('select-content', 'SLIDE')"><FileText :size="17" /><span>Slide</span><small v-if="optionalContent?.includes('SLIDE')" class="content-optional-tag">Tùy chọn</small></button>
         </div>
         <button
           v-if="flashcardsEnabled"
@@ -119,6 +121,7 @@ defineProps<{
   hasSlides: boolean;
   hasText: boolean;
   hasVideo: boolean;
+  optionalContent?: ("TEXT" | "VIDEO" | "SLIDE")[];
   courseName?: string;
   backTo?: string;
   lessonTitle: string;

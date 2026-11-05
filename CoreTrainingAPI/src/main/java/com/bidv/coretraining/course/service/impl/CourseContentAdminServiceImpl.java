@@ -147,6 +147,7 @@ public class CourseContentAdminServiceImpl implements CourseContentAdminService 
         lesson.setVideoSource(resolveVideoSource(lessonDto));
         lesson.setTextBody(LessonContentPolicy.normalizeText(lessonDto.getTextBody()));
         lesson.setDocuments(buildDocuments(lessonDto.getDocuments(), lesson));
+        applyContentRequirements(lesson, lessonDto);
 
         if (lessonDto.getProcedureSteps() != null) {
             List<ProcedureSection> sections = new ArrayList<>();
@@ -164,6 +165,22 @@ public class CourseContentAdminServiceImpl implements CourseContentAdminService 
 
         Lesson saved = lessonRepository.saveAndFlush(lesson);
         return courseMapper.toLessonDto(saved);
+    }
+
+    /** Absent content goes back to required, so ticking it again starts from the default. */
+    private void applyContentRequirements(Lesson lesson, LessonDto dto) {
+        lesson.ensureContent();
+        var content = lesson.getContent();
+        content.setTextRequired(requirement(LessonContentPolicy.hasText(lesson), dto.getTextRequired(),
+                content.isTextRequired()));
+        content.setVideoRequired(requirement(LessonContentPolicy.hasVideo(lesson), dto.getVideoRequired(),
+                content.isVideoRequired()));
+        content.setSlideRequired(requirement(!LessonContentPolicy.slides(lesson).isEmpty(), dto.getSlideRequired(),
+                content.isSlideRequired()));
+    }
+
+    private boolean requirement(boolean present, Boolean requested, boolean current) {
+        return !present || (requested == null ? current : requested);
     }
 
     @Override
@@ -194,6 +211,7 @@ public class CourseContentAdminServiceImpl implements CourseContentAdminService 
         for (var document : updatedDocuments)
             if (!lesson.getDocuments().contains(document)) lesson.getDocuments().add(document);
         lesson.getDocuments().sort(java.util.Comparator.comparing(LessonDocument::getDocumentOrder));
+        applyContentRequirements(lesson, lessonDto);
         if ("PUBLISHED".equals(lesson.getStatus()))
             LessonContentPolicy.requirePublishable(lesson);
 

@@ -153,7 +153,9 @@ public class LearnerWorkspaceServiceImpl implements LearnerWorkspaceService {
                 String type = saved == null ? null : saved.getContentType();
                 Long document = saved == null ? null : saved.getDocumentId();
                 var slides = LessonContentPolicy.slides(lesson);
-                if (LessonContentPolicy.complete(lesson, saved) && lesson.isQuizRequired()
+                var requirements = LessonContentPolicy.requirements(lesson);
+                if (requirements.anyRequired() && LessonContentPolicy.complete(requirements, saved)
+                                && lesson.isQuizRequired()
                                 && !LearningPolicy.quizPassed(user, lesson))
                         type = "QUIZ";
                 else if ("DOCUMENT".equals(type) && slides.stream()

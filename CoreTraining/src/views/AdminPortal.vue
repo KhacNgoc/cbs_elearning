@@ -1266,7 +1266,7 @@
           />
         </div>
 
-        <LessonContentSelection v-model="selectedContentTypes" v-model:documents="lessonForm.documents" :read-only="loading" />
+        <LessonContentSelection v-model="selectedContentTypes" v-model:documents="lessonForm.documents" v-model:requirements="contentRequirements" :read-only="loading" />
         <div v-if="selectedContentTypes.includes('VIDEO')" class="form-group video-source-group">
           <label id="video-source-label">Nguồn video bài học <span class="required-mark" aria-hidden="true">*</span></label>
           <div
@@ -1548,7 +1548,7 @@
 <script setup lang="ts">
 import '../assets/styles/lesson-authoring.css';
 import LessonContentSelection from '../components/lesson/LessonContentSelection.vue';
-import { lessonContentTypes, selectedLessonContent, validateSelectedLessonContent, type LessonContentType } from '../utils/lessonContent';
+import { lessonContentRequirements, lessonContentTypes, lessonRequirementFields, selectedLessonContent, validateSelectedLessonContent, type LessonContentType } from '../utils/lessonContent';
 const LessonTextEditor = defineAsyncComponent(() => import("../components/lesson/LessonTextEditor.vue"));
 import { scrollWithin } from "../utils/scrollWithin";
 import { showToast } from "../utils/toast";
@@ -1764,6 +1764,7 @@ const userForm = ref({
 
 const lessonModal = ref({ show: false, isEdit: false });
 const selectedContentTypes = ref<LessonContentType[]>([]);
+const contentRequirements = ref(lessonContentRequirements({}));
 type LessonDocumentForm = LessonDocument & { file?: File };
 const lessonForm = ref({
   id: "",
@@ -2991,6 +2992,7 @@ const handleDeleteUser = (user: AdminUser) => {
 // ==========================================
 const openLessonModal = (lesson?: Lesson) => {
   selectedContentTypes.value = lesson ? lessonContentTypes(lesson) : [];
+  contentRequirements.value = lessonContentRequirements(lesson ?? {});
   if (lesson) {
     lessonModal.value = { show: true, isEdit: true };
     lessonForm.value = {
@@ -3175,6 +3177,7 @@ const saveLesson = async () => {
       videoUrl,
       documents,
       procedureSteps: lessonForm.value.procedureSteps,
+      ...lessonRequirementFields(contentRequirements.value, selectedContentTypes.value),
     };
     delete (payload as Partial<typeof lessonForm.value>).videoFile;
 

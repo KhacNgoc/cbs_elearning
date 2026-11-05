@@ -43,18 +43,24 @@
           ><strong>{{ completed ? "Đã hoàn thành" : "Đang học" }}</strong></span
         >
       </div>
+      <div v-if="completionRule">
+        <ListChecks :size="18" /><span
+          ><small>Điều kiện hoàn thành</small><strong>{{ completionRule }}</strong></span
+        >
+      </div>
       <slot name="actions" />
     </aside>
   </div>
 </template>
 <script setup lang="ts">
-import { BookOpen, Layers3, Lightbulb, ShieldCheck } from "lucide-vue-next";
+import { BookOpen, Layers3, Lightbulb, ListChecks, ShieldCheck } from "lucide-vue-next";
 import type { Lesson } from "../../types";
 // The lesson text is shown in the main viewer (header switch), so it is not repeated here.
 defineProps<{
   lesson: Lesson;
   courseName?: string;
   completed: boolean;
+  completionRule?: string;
 }>();
 </script>
 <style scoped>

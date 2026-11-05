@@ -14,6 +14,7 @@ import com.bidv.coretraining.lesson.entity.LessonProgress;
 import com.bidv.coretraining.lesson.repository.LessonProgressRepository;
 import com.bidv.coretraining.lesson.repository.LessonRepository;
 import com.bidv.coretraining.lesson.service.impl.LessonProgressServiceImpl;
+import com.bidv.coretraining.policy.LessonContentPolicy;
 import com.bidv.coretraining.quiz.entity.Question;
 import com.bidv.coretraining.quiz.entity.UserQuizScore;
 import com.bidv.coretraining.user.entity.User;
@@ -42,6 +43,9 @@ class LessonProgressContentTest {
         when(row.getVersion()).thenReturn(1L);
         when(row.getHasText()).thenAnswer(i -> lesson.getTextBody() != null && !lesson.getTextBody().isBlank());
         when(row.getHasVideo()).thenAnswer(i -> lesson.getVideoUrl() != null && !lesson.getVideoUrl().isBlank());
+        when(row.getTextRequired()).thenAnswer(i -> lesson.getTextRequired());
+        when(row.getVideoRequired()).thenAnswer(i -> lesson.getVideoRequired());
+        when(row.getSlideRequired()).thenAnswer(i -> lesson.getSlideRequired());
         when(lessons.findAccess("L1")).thenReturn(Optional.of(row));
         when(lessons.findProgressRequirements(List.of("L1"))).thenReturn(List.of(row));
         when(access.requireLesson("learner", "L1")).thenReturn(new AuthorizedLesson(learner, null, row));
@@ -153,6 +157,144 @@ class LessonProgressContentTest {
         var result = service.saveProgress("learner", "L1", request);
         assertThat(result.isContentCompleted()).isTrue();
         assertThat(result.isLessonCompleted()).isFalse();
+        verify(service, never()).recordCompletion(learner, lesson);
+    }
+
+    private void requiredQuiz() {
+        lesson.ensureQuiz();
+        lesson.getQuiz().setRequiredForProgress(true);
+        lesson.getQuiz().getQuestions().add(Question.builder().build());
+    }
+
+    private void passedQuiz() {
+        learner.getQuizScores().add(UserQuizScore.builder().user(learner).lesson(lesson).score(1).total(1).build());
+    }
+
+    private LessonProgressRequest textRead() {
+        var request = new LessonProgressRequest();
+        request.setContentType("TEXT");
+        request.setTextCompleted(true);
+        return request;
+    }
+
+    private LessonProgressRequest videoWatched(double seconds) {
+        var request = new LessonProgressRequest();
+        request.setContentType("VIDEO");
+        request.setDurationSeconds(100D);
+        request.setWatchedSeconds(seconds);
+        return request;
+    }
+
+    private void addSlide() {
+        lesson.getDocuments().add(LessonDocument.builder().id(20L).documentType(DocumentType.POWERPOINT)
+                .purpose(DocumentPurpose.SLIDE).build());
+    }
+
+    @Test void optionalVideoDoesNotBlockRequiredText() {
+        lesson.setTextBody("Text"); lesson.setVideoUrl("/video.mp4");
+        lesson.getContent().setVideoRequired(false);
+        var result = service.saveProgress("learner", "L1", textRead());
+        assertThat(result.isContentCompleted()).isTrue();
+        assertThat(result.isLessonCompleted()).isTrue();
+        verify(service).recordCompletion(learner, lesson);
+    }
+
+    @Test void optionalTextDoesNotBlockRequiredVideo() {
+        lesson.setTextBody("Text"); lesson.setVideoUrl("/video.mp4");
+        lesson.getContent().setTextRequired(false);
+        assertThat(service.saveProgress("learner", "L1", videoWatched(89D)).isLessonCompleted()).isFalse();
+        assertThat(service.saveProgress("learner", "L1", videoWatched(90D)).isLessonCompleted()).isTrue();
+    }
+
+    @Test void optionalSlideDoesNotBlockRequiredText() {
+        lesson.setTextBody("Text"); addSlide();
+        lesson.getContent().setSlideRequired(false);
+        assertThat(service.saveProgress("learner", "L1", textRead()).isLessonCompleted()).isTrue();
+    }
+
+    @Test void requiredSlideStillBlocksWhenOtherContentIsOptional() {
+        lesson.setTextBody("Text"); addSlide();
+        lesson.getContent().setTextRequired(false);
+        assertThat(service.saveProgress("learner", "L1", textRead()).isContentCompleted()).isFalse();
+        when(documents.existsByIdAndLessonId(20L, "L1")).thenReturn(true);
+        var request = new LessonProgressRequest();
+        request.setContentType("DOCUMENT"); request.setDocumentId(20L); request.setDocumentCompleted(true);
+        assertThat(service.saveProgress("learner", "L1", request).isLessonCompleted()).isTrue();
+    }
+
+    @Test void lessonWithoutSavedChoiceRequiresAllContent() {
+        lesson.setTextBody("Text"); lesson.setVideoUrl("/video.mp4"); addSlide();
+        assertThat(LessonContentPolicy.requirements(lesson))
+                .isEqualTo(new LessonContentPolicy.Requirements(true, true, true, List.of(20L)));
+    }
+
+    @Test void nothingRequiredAndNoQuizWaitsForTheLearnersOwnAction() {
+        lesson.setTextBody("Text");
+        lesson.getContent().setTextRequired(false);
+        var result = service.saveProgress("learner", "L1", new LessonProgressRequest());
+        assertThat(result.isContentCompleted()).isTrue();
+        assertThat(result.isLessonCompleted()).isFalse();
+        verify(service, never()).recordCompletion(learner, lesson);
+        assertThatCode(() -> service.completeContent("learner", "L1")).doesNotThrowAnyException();
+    }
+
+    @Test void nothingRequiredWithRequiredQuizCompletesOnlyOncePassed() {
+        lesson.setTextBody("Text"); requiredQuiz();
+        lesson.getContent().setTextRequired(false);
+        assertThat(service.saveProgress("learner", "L1", new LessonProgressRequest()).isLessonCompleted()).isFalse();
+        passedQuiz();
+        assertThat(service.saveProgress("learner", "L1", new LessonProgressRequest()).isLessonCompleted()).isTrue();
+    }
+
+    @Test void nothingRequiredCountsAsContentDoneEvenWithoutSavedProgress() {
+        when(history.findByUserIdAndLessonId(1L, "L1")).thenReturn(Optional.empty());
+        lesson.setTextBody("Text");
+        assertThat(service.contentCompleted(learner, "L1")).isFalse();
+        lesson.getContent().setTextRequired(false);
+        assertThat(service.contentCompleted(learner, "L1")).isTrue();
+    }
+
+    @Test void lessonWithNoContentStaysUncompletable() {
+        assertThat(LessonContentPolicy.complete(lesson, null)).isFalse();
+        assertThatThrownBy(() -> service.completeContent("learner", "L1")).isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("chưa có nội dung");
+    }
+
+    @Test void completionErrorNamesOnlyRequiredContent() {
+        lesson.setTextBody("Text"); lesson.setVideoUrl("/video.mp4");
+        lesson.getContent().setVideoRequired(false);
+        assertThatThrownBy(() -> service.completeContent("learner", "L1")).isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("văn bản").hasMessageNotContaining("video");
+    }
+
+    @Test void relaxingRequirementCompletesInProgressLearnerOnNextSave() {
+        lesson.setTextBody("Text"); lesson.setVideoUrl("/video.mp4");
+        assertThat(service.saveProgress("learner", "L1", textRead()).isLessonCompleted()).isFalse();
+        lesson.getContent().setVideoRequired(false);
+        assertThat(service.saveProgress("learner", "L1", new LessonProgressRequest()).isLessonCompleted()).isTrue();
+    }
+
+    @Test void tighteningRequirementCreditsWorkDoneWhileOptional() {
+        lesson.setTextBody("Text"); lesson.setVideoUrl("/video.mp4");
+        lesson.getContent().setTextRequired(false);
+        when(users.hasCompletedLesson(1L, "L1")).thenReturn(false);
+        requiredQuiz();
+        assertThat(service.saveProgress("learner", "L1", textRead()).isContentCompleted()).isFalse();
+        assertThat(service.saveProgress("learner", "L1", videoWatched(90D)).isContentCompleted()).isTrue();
+        lesson.getContent().setTextRequired(true);
+        assertThat(service.saveProgress("learner", "L1", new LessonProgressRequest()).isContentCompleted()).isTrue();
+    }
+
+    @Test void tighteningRequirementReopensContentButKeepsExistingAward() {
+        lesson.setTextBody("Text"); lesson.setVideoUrl("/video.mp4");
+        lesson.getContent().setVideoRequired(false);
+        saved.setTextCompleted(true);
+        saved.setContentCompleted(true);
+        when(users.hasCompletedLesson(1L, "L1")).thenReturn(true);
+        lesson.getContent().setVideoRequired(true);
+        var result = service.saveProgress("learner", "L1", new LessonProgressRequest());
+        assertThat(result.isContentCompleted()).isFalse();
+        assertThat(result.isLessonCompleted()).isTrue();
         verify(service, never()).recordCompletion(learner, lesson);
     }
 

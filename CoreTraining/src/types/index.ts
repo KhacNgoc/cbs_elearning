@@ -66,6 +66,9 @@ export interface Lesson {
   hasQuiz?: boolean;
   hasVideo?: boolean;
   hasText?: boolean;
+  textRequired?: boolean;
+  videoRequired?: boolean;
+  slideRequired?: boolean;
   quizPassingScore?: number;
   procedureSteps: ProcedureSection[];
   comments: Comment[];

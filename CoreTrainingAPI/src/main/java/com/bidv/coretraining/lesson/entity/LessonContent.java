@@ -27,4 +27,17 @@ public class LessonContent {
     @Enumerated(EnumType.STRING)
     @Builder.Default
     private VideoSource videoSource = VideoSource.URL;
+    /** Whether finishing this content counts toward lesson completion; meaningless while it is absent. */
+    @Builder.Default
+    @Column(nullable = false)
+    @org.hibernate.annotations.ColumnDefault("true")
+    private boolean textRequired = true;
+    @Builder.Default
+    @Column(nullable = false)
+    @org.hibernate.annotations.ColumnDefault("true")
+    private boolean videoRequired = true;
+    @Builder.Default
+    @Column(nullable = false)
+    @org.hibernate.annotations.ColumnDefault("true")
+    private boolean slideRequired = true;
 }

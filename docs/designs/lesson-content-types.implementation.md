@@ -8,6 +8,16 @@ The latest user request supersedes the multiple-required-deck authoring behavior
 
 Verification for this follow-up: 14 frontend lesson-content/component tests passed; AdminLessonContentTest 12/12 and LessonProgressContentTest 10/10 passed; production frontend build passed with the existing Vite chunk/import warnings. Tests were first run failing for the new single-file restriction and upload behavior. No live database migration or application deployment was performed.
 
+## Follow-up: required flag per content type
+
+Date: 2026-11-05. This supersedes "Completion requires available text, at least 90% of available video, and completion of every required slide deck" below. Ticked content is always shown to learners; only content marked required counts toward completion.
+
+- Storage: `lesson_contents.text_required`, `video_required`, `slide_required`, all `NOT NULL DEFAULT true` (Flyway `V20261105_2`). Existing lessons therefore keep requiring all their content. The flags are exposed on `LessonDto`, including learner outline rows. On update a null flag keeps the stored value; content that is removed goes back to required, so ticking it again starts from the default.
+- Rules live in `LessonContentPolicy.Requirements`. A lesson with no content at all stays uncompletable and unpublishable.
+- Nothing required, required quiz: passing the quiz is the only condition, and either order of events completes the lesson. Resume opens the content rather than jumping to the quiz.
+- Nothing required, no required quiz: completion needs the learner to press "Đánh dấu hoàn thành". It is not awarded on opening the lesson, because that would give 100 points and unlock the next lesson for a page view. An optional quiz never completes a lesson.
+- Changing the flags never resets progress and never revokes an award. Completion already recorded stays. Requirements are evaluated when read, so a learner whose remaining work became optional is completed on their next progress save (opening the lesson is enough), not in a batch at save time. Progress on optional content is still recorded, so it counts if that content later becomes required. Tightening a requirement reopens `contentCompleted` for learners without an award.
+
 ## Delivered behavior
 
 - Create/edit forms offer a multiple-selection content dropdown: text, video, Slide PowerPoint. Only selected editors appear; deselected content is excluded when saving. Temporary values remain while toggling before save.

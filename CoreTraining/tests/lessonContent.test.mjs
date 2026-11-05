@@ -52,16 +52,16 @@ const dom = new JSDOM('<!doctype html><div id="app"></div>');
 for (const key of ['window', 'document', 'Document', 'Element', 'HTMLElement', 'SVGElement', 'Node']) globalThis[key] = dom.window[key];
 const vue = await import('vue');
 const icons = await import('lucide-vue-next');
-async function selectorFixture(selected = [], documents = [], readOnly = false) {
+async function selectorFixture(selected = [], documents = [], readOnly = false, requirements = { TEXT: true, VIDEO: true, SLIDE: true }) {
   const { descriptor } = parse(await readFile(new URL('../src/components/lesson/LessonContentSelection.vue', import.meta.url), 'utf8'));
   let code = ts.transpileModule(compileScript(descriptor, { id: 'content-selector', inlineTemplate: true }).content, {
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   code = code.replace(/import\s+([\s\S]*?)\s+from\s+["']([^"']+)["'];/g, (_, bindings, module) => `const ${bindings.replace(/\bas\b/g, ':')} = modules[${JSON.stringify(module)}];`).replace('export default', 'return');
   const messages = [];
-  const component = new Function('modules', code)({ vue, 'lucide-vue-next': icons, '../../utils/toast': { showToast: message => messages.push(message) } });
-  const state = vue.reactive({ selected, documents });
-  const app = vue.createApp({ render: () => vue.h(component, { readOnly, modelValue: state.selected, 'onUpdate:modelValue': value => state.selected = value, documents: state.documents, 'onUpdate:documents': value => state.documents = value }) });
+  const component = new Function('modules', code)({ vue, 'lucide-vue-next': icons, '../../utils/lessonContent': content, '../../utils/toast': { showToast: message => messages.push(message) } });
+  const state = vue.reactive({ selected, documents, requirements });
+  const app = vue.createApp({ render: () => vue.h(component, { readOnly, modelValue: state.selected, 'onUpdate:modelValue': value => state.selected = value, documents: state.documents, 'onUpdate:documents': value => state.documents = value, requirements: state.requirements, 'onUpdate:requirements': value => state.requirements = value }) });
   app.mount('#app');
   return { state, messages, close: () => app.unmount() };
 }
@@ -95,6 +95,55 @@ test('slide upload uses SLIDE purpose, rejects unsupported PPT and retains suppo
   } finally { f.close(); }
 });
 
+
+test('requirement choice appears only for ticked content and updates the model', async () => {
+  const f = await selectorFixture(['TEXT', 'VIDEO']);
+  try {
+    assert.ok(document.querySelector('[data-required-for="TEXT"]'));
+    assert.ok(document.querySelector('[data-required-for="VIDEO"]'));
+    assert.equal(document.querySelector('[data-required-for="SLIDE"]'), null);
+    const video = document.querySelector('[data-required-for="VIDEO"]');
+    assert.equal(video.checked, true);
+    video.checked = false; video.dispatchEvent(new dom.window.Event('change', { bubbles: true })); await vue.nextTick();
+    assert.equal(f.state.requirements.VIDEO, false);
+    assert.equal(f.state.requirements.TEXT, true);
+    assert.ok(document.querySelector('.content-selection-value').textContent.includes('Video (không bắt buộc)'));
+    assert.equal(document.querySelector('.content-selection-note'), null);
+    const tick = document.querySelector('input[value="VIDEO"]');
+    tick.checked = false; tick.dispatchEvent(new dom.window.Event('change', { bubbles: true })); await vue.nextTick();
+    assert.equal(document.querySelector('[data-required-for="VIDEO"]'), null);
+  } finally { f.close(); }
+});
+test('form warns when ticked content has nothing required', async () => {
+  const f = await selectorFixture(['TEXT'], [], false, { TEXT: false, VIDEO: true, SLIDE: true });
+  try { assert.match(document.querySelector('.content-selection-note').textContent, /Đánh dấu hoàn thành/); }
+  finally { f.close(); }
+});
+test('requirements default to required and unticked content does not keep a choice', () => {
+  assert.deepEqual(content.lessonContentRequirements({}), { TEXT: true, VIDEO: true, SLIDE: true });
+  assert.deepEqual(content.lessonContentRequirements({ videoRequired: false }), { TEXT: true, VIDEO: false, SLIDE: true });
+  assert.deepEqual(
+    content.lessonRequirementFields({ TEXT: false, VIDEO: false, SLIDE: false }, ['VIDEO']),
+    { textRequired: true, videoRequired: false, slideRequired: true },
+  );
+});
+test('only a changed choice on content that already existed counts as a requirement change', () => {
+  const saved = { ...lesson, videoRequired: false };
+  const current = { TEXT: true, VIDEO: false, SLIDE: true };
+  assert.deepEqual(content.changedLessonRequirements(saved, current, ['TEXT', 'VIDEO', 'SLIDE']), []);
+  assert.deepEqual(content.changedLessonRequirements(saved, { ...current, VIDEO: true }, ['TEXT', 'VIDEO']), ['VIDEO']);
+  assert.deepEqual(content.changedLessonRequirements({ documents: [] }, { ...current, TEXT: false }, ['TEXT']), []);
+});
+test('learner sees optional content and the completion rule it leaves', () => {
+  const mixed = { ...lesson, documents: [supporting, slide], videoRequired: false, slideRequired: false };
+  assert.deepEqual(content.optionalLessonContent(mixed), ['VIDEO', 'SLIDE']);
+  assert.deepEqual(content.optionalLessonContent({ textBody: '', textRequired: false }), []);
+  assert.equal(content.lessonCompletionRule(mixed, false), 'Học hết Văn bản');
+  assert.equal(content.lessonCompletionRule(mixed, true), 'Học hết Văn bản và đạt bài kiểm tra');
+  const none = { textBody: 'Text', textRequired: false };
+  assert.equal(content.lessonCompletionRule(none, true), 'Đạt bài kiểm tra bắt buộc');
+  assert.match(content.lessonCompletionRule(none, false), /Đánh dấu hoàn thành/);
+});
 
 test('metadata edits preserve fetched learning content, document identities and optimistic lock', () => {
   assert.equal(typeof content.lessonMetadataUpdate, 'function');

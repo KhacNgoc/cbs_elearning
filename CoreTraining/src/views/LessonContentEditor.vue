@@ -40,7 +40,7 @@
           />
         </div>
 
-        <LessonContentSelection v-model="selectedContentTypes" v-model:documents="lessonForm.documents" :read-only="readOnly || loading" />
+        <LessonContentSelection v-model="selectedContentTypes" v-model:documents="lessonForm.documents" v-model:requirements="contentRequirements" :read-only="readOnly || loading" />
         <div v-if="selectedContentTypes.includes('VIDEO')" class="form-group video-source-group">
           <label id="video-source-label">Nguồn video bài học <span class="required-mark" aria-hidden="true">*</span></label>
           <div
@@ -368,7 +368,7 @@
 <script setup lang="ts">
 import '../assets/styles/lesson-authoring.css';
 import LessonContentSelection from '../components/lesson/LessonContentSelection.vue';
-import { lessonContentTypes, selectedLessonContent, validateSelectedLessonContent, type LessonContentType } from '../utils/lessonContent';
+import { changedLessonRequirements, lessonContentLabels, lessonContentRequirements, lessonContentTypes, lessonRequirementFields, selectedLessonContent, validateSelectedLessonContent, type LessonContentType } from '../utils/lessonContent';
 import { scrollWithin } from "../utils/scrollWithin";
 import { ref, computed, nextTick, watch, defineAsyncComponent } from "vue";
 import { Upload, Link2, Plus, FileText, X, Trash2, CheckCheck, ShieldAlert, Loader2 } from "lucide-vue-next";
@@ -422,7 +422,9 @@ const lessonForm = ref({
   })),
 });
 const selectedContentTypes = ref<LessonContentType[]>(lessonContentTypes(props.lesson));
+const contentRequirements = ref(lessonContentRequirements(props.lesson));
 watch(selectedContentTypes, () => { emit("dirty", true); autoUpdateChangeSummary(); }, { deep: true });
+watch(contentRequirements, () => { emit("dirty", true); autoUpdateChangeSummary(); });
 watch(lessonForm, () => { emit("dirty", true); autoUpdateChangeSummary(); }, { deep: true });
 watch(() => lessonForm.value.title, (t) => emit("title-change", t));
 watch(
@@ -581,6 +583,12 @@ function computeDetectedChanges(): string {
     const activeNames = currentTypes.map((t) => typeLabels[t] || t).join(", ");
     diffs.push(`- Điều chỉnh định dạng bài học (${activeNames || "Chưa chọn"})`);
   }
+  const requirementChanges = changedLessonRequirements(original, contentRequirements.value, selectedContentTypes.value);
+  if (requirementChanges.length) {
+    const changes = requirementChanges.map((t) =>
+      `${lessonContentLabels[t]}: ${contentRequirements.value[t] ? "bắt buộc" : "không bắt buộc"}`).join(", ");
+    diffs.push(`- Điều chỉnh nội dung bắt buộc (${changes})`);
+  }
 
   // 4. Video bài giảng
   if (selectedContentTypes.value.includes("VIDEO")) {
@@ -654,6 +662,7 @@ function hasAnyRealChanges(): boolean {
   const origTypes = lessonContentTypes(original).sort();
   const currentTypes = [...selectedContentTypes.value].sort();
   if (JSON.stringify(origTypes) !== JSON.stringify(currentTypes)) return true;
+  if (changedLessonRequirements(original, contentRequirements.value, selectedContentTypes.value).length) return true;
   if (lessonForm.value.videoFile) return true;
   if ((lessonForm.value.videoUrl || "").trim() !== (original.videoUrl || "").trim()) return true;
   const origDocs = original.documents || [];
@@ -739,6 +748,7 @@ const saveLesson = async () => {
       videoUrl,
       documents,
       procedureSteps: lessonForm.value.procedureSteps,
+      ...lessonRequirementFields(contentRequirements.value, selectedContentTypes.value),
     };
     delete (payload as Partial<typeof lessonForm.value>).videoFile;
 

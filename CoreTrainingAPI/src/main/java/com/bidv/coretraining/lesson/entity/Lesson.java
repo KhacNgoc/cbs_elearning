@@ -63,6 +63,18 @@ public class Lesson {
         return content == null ? null : content.getTextBody();
     }
 
+    public Boolean getTextRequired() {
+        return content == null || content.isTextRequired();
+    }
+
+    public Boolean getVideoRequired() {
+        return content == null || content.isVideoRequired();
+    }
+
+    public Boolean getSlideRequired() {
+        return content == null || content.isSlideRequired();
+    }
+
     public Integer getQuizPassingScore() {
         return quiz == null ? 80 : quiz.getPassingScore();
     }
