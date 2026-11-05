@@ -58,7 +58,7 @@ async def retrieve_grounded_sources(
     await infrastructure.ensure_collection(config.OLLAMA_QUERY_EMBEDDING_TIMEOUT_SECONDS)
     retrieval_queries = quiz_retrieval_queries(request, rng)
     query_vectors = await infrastructure.embeddings(
-        retrieval_queries, "search_query: ", config.OLLAMA_QUERY_EMBEDDING_TIMEOUT_SECONDS
+        retrieval_queries, config.EMBEDDING_QUERY_PREFIX, config.OLLAMA_QUERY_EMBEDDING_TIMEOUT_SECONDS
     )
     query_filter = quiz_source_filter(request)
     candidate_limit = max(config.QUIZ_RETRIEVAL_CANDIDATE_LIMIT, target * 2)

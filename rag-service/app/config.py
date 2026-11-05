@@ -9,10 +9,16 @@ CHAT_MODEL = os.getenv("OLLAMA_CHAT_MODEL", "qwen3:4b")
 QUIZ_MODEL = os.getenv("OLLAMA_QUIZ_MODEL", "qwen3:4b")
 REWRITE_MODEL = os.getenv("OLLAMA_REWRITE_MODEL", CHAT_MODEL)
 SUMMARY_MODEL = os.getenv("OLLAMA_SUMMARY_MODEL", REWRITE_MODEL)
-EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
-COLLECTION = "course_documents"
+EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "bge-m3")
+# Vectors from different models cannot share a collection. Changing the model means a
+# new collection, filled with `python -m app.reindex` (see README).
+COLLECTION = os.getenv("RAG_COLLECTION", "course_documents_bge_m3")
+# Some models expect a task prefix: nomic-embed-text uses "search_query: " and
+# "search_document: ". bge-m3 uses none.
+EMBEDDING_QUERY_PREFIX = os.getenv("EMBEDDING_QUERY_PREFIX", "")
+EMBEDDING_DOCUMENT_PREFIX = os.getenv("EMBEDDING_DOCUMENT_PREFIX", "")
 EMBEDDING_BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "32"))
-RETRIEVAL_SCORE_THRESHOLD = float(os.getenv("RAG_SCORE_THRESHOLD", "0.55"))
+RETRIEVAL_SCORE_THRESHOLD = float(os.getenv("RAG_SCORE_THRESHOLD", "0.40"))
 EXCERPT_LENGTH = 500
 RETRIEVAL_LIMIT = int(os.getenv("RAG_TOP_K", "2"))
 RETRIEVAL_CANDIDATE_LIMIT = int(os.getenv("RAG_CANDIDATE_LIMIT", "25"))

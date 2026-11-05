@@ -24,6 +24,14 @@ trên loopback để debug; người dùng đi qua frontend.
 Cookie Secure vẫn tắt ở cấu hình cơ sở để hỗ trợ HTTP trên máy phát triển.
 Không áp dụng file override production khi thử bằng HTTP.
 
+**Máy có GPU NVIDIA:** thêm `-f docker-compose.yml -f docker-compose.gpu.yml` vào lệnh để Ollama trong
+Docker dùng GPU. Không có file này thì Ollama chạy bằng CPU. Xem mục "Ollama GPU on NVIDIA" trong
+`rag-service/README.md`.
+
+**Máy đã có dữ liệu chatbot từ trước khi đổi sang `bge-m3`:** phải tạo collection mới trước khi
+khởi động lại `rag-service`, nếu không chatbot sẽ không tìm thấy tài liệu nào. Xem mục "Changing the
+embedding model" trong `rag-service/README.md`.
+
 Khi bật profile chatbot, lần đầu Ollama tải model có thể mất lâu. Database mới không có dữ liệu mẫu
 vì `DATA_INITIALIZER_ENABLED=false`; cần tài khoản và bài học hợp lệ để thử
 luồng người học. Kiểm thử tự động dùng dữ liệu riêng, không sửa database thật.

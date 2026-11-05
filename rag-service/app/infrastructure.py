@@ -132,7 +132,7 @@ async def ensure_collection(probe_timeout: float = 120) -> None:
         if await qdrant.collection_exists(config.COLLECTION):
             return
         vector = (await embeddings(
-            ["dimension probe"], "search_document: ", probe_timeout
+            ["dimension probe"], config.EMBEDDING_DOCUMENT_PREFIX, probe_timeout
         ))[0]
         await qdrant.create_collection(
             config.COLLECTION,

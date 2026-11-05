@@ -71,7 +71,7 @@ async def ingest_document(
         chunk_batch = chunks[start:start + config.EMBEDDING_BATCH_SIZE]
         vectors = await infrastructure.embeddings(
             [f"{unit['heading'] or unit['section']}\n{full_text}" for unit, full_text, _, _ in chunk_batch],
-            "search_document: ",
+            config.EMBEDDING_DOCUMENT_PREFIX,
         )
         await infrastructure.qdrant.upsert(
             config.COLLECTION,

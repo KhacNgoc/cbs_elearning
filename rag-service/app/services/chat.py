@@ -216,7 +216,7 @@ async def answer_chat(request: ChatRequest) -> ChatResponse:
         await infrastructure.ensure_course_index()
     query = (await infrastructure.embeddings(
         [retrieval_question],
-        "search_query: ",
+        config.EMBEDDING_QUERY_PREFIX,
         config.OLLAMA_QUERY_EMBEDDING_TIMEOUT_SECONDS,
     ))[0]
     embedding_ms = int((asyncio.get_running_loop().time() - stage_started_at) * 1000)

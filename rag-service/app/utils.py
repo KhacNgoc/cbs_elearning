@@ -91,6 +91,40 @@ def find_mentioned_course(question: str, course_names: dict[str, str]) -> str | 
     return best_id
 
 
+# Words a learner may wrap around a course name when answering "which course?".
+COURSE_REPLY_FILLER_WORDS = {"a", "cho", "em", "hoc", "hoi", "khoa", "la", "minh", "nhe", "toi", "ve"}
+
+
+def find_replied_courses(reply: str, course_names: dict[str, str]) -> list[str]:
+    """Return the courses whose name contains the reply, so "CIF" finds "CIF cơ bản"."""
+    terms = [term for term in fold_vietnamese(reply).split() if term not in COURSE_REPLY_FILLER_WORDS]
+    if not terms:
+        return []
+    phrase = f" {' '.join(terms)} "
+    return [
+        course_id for course_id, name in course_names.items()
+        if phrase in f" {fold_vietnamese(name or '')} "
+    ]
+
+
+# Whole-section headings that mention every topic but explain none. Matched on folded text.
+NAVIGATION_TERMS = r"muc luc(?: noi dung)?|ket luan"
+NAVIGATION_SECTION_PATTERN = re.compile(rf"(?:\d+ )?(?:{NAVIGATION_TERMS})")
+NAVIGATION_QUESTION_PATTERN = re.compile(rf"\b(?:{NAVIGATION_TERMS})\b")
+
+
+def drop_navigation_results(results: list, question: str) -> list:
+    """Remove contents and conclusion chunks, unless the question asks for them."""
+    if NAVIGATION_QUESTION_PATTERN.search(fold_vietnamese(question)):
+        return results
+    return [
+        item for item in results
+        if not NAVIGATION_SECTION_PATTERN.fullmatch(
+            fold_vietnamese(str((item.payload or {}).get("section", "")))
+        )
+    ]
+
+
 def diversify_course_summary_results(results: list) -> list:
     """Prefer different document sections before another nearby chunk."""
     diversified = []

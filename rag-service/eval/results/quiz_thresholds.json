@@ -1,0 +1,86 @@
+{
+ "nomic-embed-text": [
+  {
+   "threshold": 0.45,
+   "lessons": 48,
+   "no_sources": 0,
+   "too_few": 0,
+   "median_pool": 20.0,
+   "on_chapter": 0.2421875
+  },
+  {
+   "threshold": 0.5,
+   "lessons": 48,
+   "no_sources": 0,
+   "too_few": 0,
+   "median_pool": 20.0,
+   "on_chapter": 0.2421875
+  },
+  {
+   "threshold": 0.55,
+   "lessons": 48,
+   "no_sources": 0,
+   "too_few": 0,
+   "median_pool": 20.0,
+   "on_chapter": 0.2421875
+  },
+  {
+   "threshold": 0.6,
+   "lessons": 48,
+   "no_sources": 0,
+   "too_few": 0,
+   "median_pool": 20.0,
+   "on_chapter": 0.2421875
+  }
+ ],
+ "bge-m3": [
+  {
+   "threshold": 0.3,
+   "lessons": 48,
+   "no_sources": 0,
+   "too_few": 0,
+   "median_pool": 20.0,
+   "on_chapter": 0.3046875
+  },
+  {
+   "threshold": 0.35,
+   "lessons": 48,
+   "no_sources": 0,
+   "too_few": 0,
+   "median_pool": 20.0,
+   "on_chapter": 0.3046875
+  },
+  {
+   "threshold": 0.4,
+   "lessons": 48,
+   "no_sources": 0,
+   "too_few": 0,
+   "median_pool": 20.0,
+   "on_chapter": 0.3046875
+  },
+  {
+   "threshold": 0.45,
+   "lessons": 48,
+   "no_sources": 0,
+   "too_few": 0,
+   "median_pool": 20.0,
+   "on_chapter": 0.3046875
+  },
+  {
+   "threshold": 0.5,
+   "lessons": 48,
+   "no_sources": 0,
+   "too_few": 0,
+   "median_pool": 20.0,
+   "on_chapter": 0.3046875
+  },
+  {
+   "threshold": 0.55,
+   "lessons": 48,
+   "no_sources": 0,
+   "too_few": 0,
+   "median_pool": 20.0,
+   "on_chapter": 0.3046875
+  }
+ ]
+}

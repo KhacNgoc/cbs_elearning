@@ -1,0 +1,111 @@
+{"id": "CIF-001", "question": "Khi nào phải KYC lại?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-20 › Câu 5"], "note": "Known failing case: the document says 'cập nhật định kỳ', not 'KYC lại'."}
+{"id": "CIF-002", "question": "Làm KYC xong một lần rồi thì sau này có cần làm nữa không?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-20 › Câu 5", "CIF-06 › 6.1"]}
+{"id": "CIF-003", "question": "Nhân viên nhập hồ sơ có tự duyệt luôn được không?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-20 › Câu 3", "CIF-14 › 14.1"]}
+{"id": "CIF-004", "question": "Thẻ căn cước của khách hết hạn thì có bỏ luôn hồ sơ khách đi không?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-20 › Câu 8"]}
+{"id": "CIF-005", "question": "Hai người trùng họ tên thì gộp hồ sơ được chứ?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-20 › Câu 4", "CIF-08 › 8.2"]}
+{"id": "CIF-006", "question": "Mã khách hàng với số tài khoản có phải là một không?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-20 › Câu 1", "CIF-01 › 1.1", "CIF-01 › 1.3"]}
+{"id": "CIF-007", "question": "Vì sao phải dò xem khách đã có hồ sơ chưa rồi mới mở mới?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-20 › Câu 2"]}
+{"id": "CIF-008", "question": "Bản ghi chuẩn duy nhất của khách sau khi hợp nhất gọi là gì?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-20 › Câu 9", "CIF-08 › 8.2", "CIF-21"]}
+{"id": "CIF-009", "question": "Sự kiện đến sai thứ tự làm dữ liệu cũ đè lên dữ liệu mới thì phòng bằng cách nào?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-20 › Câu 7", "CIF-16 › 16.2"]}
+{"id": "CIF-010", "question": "Thông tin gì của khách không được nạp thẳng vào kho vector?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-20 › Câu 10", "CIF-17 › 17.2"]}
+{"id": "CIF-011", "question": "Người thực sự đứng sau một công ty được gọi là gì?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-04 › 4.3"]}
+{"id": "CIF-012", "question": "Khách từng có hồ sơ mà giờ đổi số căn cước thì xử lý thế nào?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-19 › Tình huống 1"]}
+{"id": "CIF-013", "question": "Vợ chồng dùng chung một số di động thì có phải hồ sơ bị trùng không?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-19 › Tình huống 2"]}
+{"id": "CIF-014", "question": "Công ty đổi giám đốc đứng tên pháp lý thì ngân hàng phải làm gì?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-19 › Tình huống 3"]}
+{"id": "CIF-015", "question": "Giấy tờ của khách đã quá hạn mà khách vẫn chuyển tiền thì sao?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-19 › Tình huống 4"]}
+{"id": "CIF-016", "question": "Gộp sai hai khách khiến khách nhìn thấy sản phẩm của người khác thì khắc phục ra sao?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-19 › Tình huống 5"]}
+{"id": "CIF-017", "question": "Kế toán của công ty nghỉ làm thì quyền giao dịch của họ xử lý thế nào?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-19 › Tình huống 6"]}
+{"id": "CIF-018", "question": "Muốn chấm dứt hồ sơ khách hàng cần đáp ứng những gì?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-09 › 9.1"]}
+{"id": "CIF-019", "question": "Hồ sơ lâu không phát sinh hoạt động thì chuyển sang trạng thái gì?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-09", "CIF-21"]}
+{"id": "CIF-020", "question": "Những trường hợp nào ngân hàng không được mở hồ sơ khách mới?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-05 › 5.3"]}
+{"id": "CIF-021", "question": "Trước khi mở hồ sơ mới phải tra cứu theo những tiêu chí nào?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-05 › 5.2", "Phụ lục A", "Phụ lục B"]}
+{"id": "CIF-022", "question": "Vì sao một khách lại có nhiều hồ sơ trong hệ thống?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-08 › 8.1"]}
+{"id": "CIF-023", "question": "Khách rủi ro cao thì ngân hàng đối xử khác gì so với khách bình thường?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-13 › 13.3", "CIF-06 › 6.1"]}
+{"id": "CIF-024", "question": "Căn cứ vào đâu để chấm điểm mức độ nguy cơ của một khách?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-13 › 13.2"]}
+{"id": "CIF-025", "question": "Tên khách được so với danh sách cấm vận thế nào?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-13 › 13.1"]}
+{"id": "CIF-026", "question": "Mở tài khoản online bằng nhận diện khuôn mặt thì dữ liệu lưu vào đâu?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-06 › 6.2"]}
+{"id": "CIF-027", "question": "Thay đổi nào của khách cần người thứ hai kiểm duyệt?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-14 › 14.2", "CIF-07 › 7.2"]}
+{"id": "CIF-028", "question": "Mỗi lần sửa hồ sơ cần giữ lại những vết gì để kiểm toán?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-14 › 14.3", "CIF-07 › 7.2"]}
+{"id": "CIF-029", "question": "Đo độ sạch của dữ liệu khách hàng bằng những con số nào?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-15 › 15.1"]}
+{"id": "CIF-030", "question": "Dữ liệu khách hàng được đưa sang các hệ thống khác bằng những cách nào?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-16 › 16.1"]}
+{"id": "CIF-031", "question": "Gửi lại bản tin tạo khách làm sinh hồ sơ đúp là lỗi gì?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-16 › 16.3"]}
+{"id": "CIF-032", "question": "Màn hình nhân viên có cần che số giấy tờ của khách không?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-17 › 17.2"]}
+{"id": "CIF-033", "question": "Loại thông tin cá nhân nào phải bảo vệ đặc biệt?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-17 › 17.1"]}
+{"id": "CIF-034", "question": "Một đăng nhập app ngân hàng có gắn với đúng một khách không?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-12 › 12.1", "CIF-01 › 1.3"]}
+{"id": "CIF-035", "question": "Sai hồ sơ khách ảnh hưởng gì khi cho vay?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-11 › 11.2"]}
+{"id": "CIF-036", "question": "Cần kiểm tra gì trước khi bán sản phẩm cho khách?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-10 › 10.1"]}
+{"id": "CIF-037", "question": "Hồ sơ doanh nghiệp cần thêm giấy tờ gì so với cá nhân?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-04 › 4.2", "Phụ lục B"]}
+{"id": "CIF-038", "question": "Người giám hộ, người được ủy quyền nằm ở nhóm dữ liệu nào của hồ sơ?", "course": "CIF", "kind": "paraphrase", "expected": ["CIF-03 › 3.5"]}
+{"id": "CIF-039", "question": "CIF là gì?", "course": "CIF", "kind": "direct", "expected": ["CIF-01 › 1.1", "CIF-21"]}
+{"id": "CIF-040", "question": "Golden record là gì?", "course": "CIF", "kind": "direct", "expected": ["CIF-20 › Câu 9", "CIF-21", "CIF-08 › 8.2"]}
+{"id": "CIF-041", "question": "Quy trình tạo mới CIF gồm những bước nào?", "course": "CIF", "kind": "direct", "expected": ["CIF-05 › 5.1"]}
+{"id": "CIF-042", "question": "KYC status có những trạng thái nào?", "course": "CIF", "kind": "direct", "expected": ["CIF-06 › 6.3"]}
+{"id": "CIF-043", "question": "Quy trình xử lý CIF trùng như thế nào?", "course": "CIF", "kind": "direct", "expected": ["CIF-08 › 8.2"]}
+{"id": "CIF-044", "question": "Vai trò của Maker và Checker là gì?", "course": "CIF", "kind": "direct", "expected": ["CIF-14 › 14.1"]}
+{"id": "CIF-045", "question": "Customer 360 là gì?", "course": "CIF", "kind": "direct", "expected": ["CIF-18 › 18.1", "CIF-21"]}
+{"id": "CIF-046", "question": "khi nao phai kyc lai", "course": "CIF", "kind": "no_diacritics", "expected": ["CIF-20 › Câu 5"]}
+{"id": "CIF-047", "question": "gop nham cif thi xu ly sao", "course": "CIF", "kind": "no_diacritics", "expected": ["CIF-19 › Tình huống 5"]}
+{"id": "CIF-048", "question": "dieu kien dong cif la gi", "course": "CIF", "kind": "no_diacritics", "expected": ["CIF-09 › 9.1"]}
+{"id": "GL-001", "question": "Sổ cái khác sổ chi tiết chỗ nào?", "course": "GL", "kind": "paraphrase", "expected": ["Tổng quan về General Ledger trong ngân hàng › GL và Sub-Ledger"]}
+{"id": "GL-002", "question": "Cứ một khoản tiền thì phải ghi ở cả hai bên là nguyên tắc gì?", "course": "GL", "kind": "paraphrase", "expected": ["Nguyên tắc kế toán nền tảng › Ghi sổ kép"]}
+{"id": "GL-003", "question": "Tiền mặt của ngân hàng tăng lên thì ghi bên nào?", "course": "GL", "kind": "paraphrase", "expected": ["Nguyên tắc kế toán nền tảng › Nguyên tắc ghi Nợ và ghi Có", "Nguyên tắc kế toán nền tảng › Ghi sổ kép"]}
+{"id": "GL-004", "question": "Tài sản bằng gì cộng gì?", "course": "GL", "kind": "paraphrase", "expected": ["Nguyên tắc kế toán nền tảng › Phương trình kế toán"]}
+{"id": "GL-005", "question": "Lãi đã phát sinh nhưng chưa thu được tiền thì có ghi nhận không?", "course": "GL", "kind": "paraphrase", "expected": ["Nguyên tắc kế toán nền tảng › Cơ sở dồn tích và cơ sở tiền", "Bút toán điều chỉnh, đảo và dồn tích › Accrual và Deferral", "Ví dụ hạch toán nghiệp vụ cơ bản › Dự thu lãi cho vay 2 triệu"]}
+{"id": "GL-006", "question": "Danh mục tài khoản kế toán gồm những thông tin gì?", "course": "GL", "kind": "paraphrase", "expected": ["Cấu trúc hệ thống tài khoản GL › Chart of Accounts - COA"]}
+{"id": "GL-007", "question": "Có xem được số liệu theo chi nhánh, sản phẩm, kênh bán không?", "course": "GL", "kind": "paraphrase", "expected": ["Cấu trúc hệ thống tài khoản GL › Các chiều phân tích"]}
+{"id": "GL-008", "question": "Vì sao không ai được ghi tay vào tài khoản tổng của phân hệ?", "course": "GL", "kind": "paraphrase", "expected": ["Cấu trúc hệ thống tài khoản GL › Tài khoản kiểm soát", "Các lỗi thiết kế hệ thống GL cần tránh"]}
+{"id": "GL-009", "question": "Từ lúc phát sinh giao dịch đến khi lên báo cáo, bút toán đi qua những bước gì?", "course": "GL", "kind": "paraphrase", "expected": ["Vòng đời của một bút toán GL"]}
+{"id": "GL-010", "question": "Chứng từ đang chờ sếp duyệt có trạng thái gì?", "course": "GL", "kind": "paraphrase", "expected": ["Vòng đời của một bút toán GL › Các trạng thái thường gặp"]}
+{"id": "GL-011", "question": "Ngày dùng để tính lãi là ngày nào?", "course": "GL", "kind": "paraphrase", "expected": ["Vòng đời của một bút toán GL › Ngày giao dịch, ngày hiệu lực và ngày hạch toán", "Từ điển thuật ngữ"]}
+{"id": "GL-012", "question": "Cho khách vay 500 triệu, chuyển vào tài khoản của họ thì ghi sổ thế nào?", "course": "GL", "kind": "paraphrase", "expected": ["Ví dụ hạch toán nghiệp vụ cơ bản › Ngân hàng giải ngân khoản vay 500 triệu"]}
+{"id": "GL-013", "question": "Khách trả bớt tiền gốc vay thì định khoản thế nào?", "course": "GL", "kind": "paraphrase", "expected": ["Ví dụ hạch toán nghiệp vụ cơ bản › Thu nợ gốc 50 triệu"]}
+{"id": "GL-014", "question": "Lãi tiền gửi chưa trả cho khách thì ghi nhận kiểu gì?", "course": "GL", "kind": "paraphrase", "expected": ["Ví dụ hạch toán nghiệp vụ cơ bản › Dự chi lãi tiền gửi 1,5 triệu", "Nguyên tắc kế toán nền tảng › Cơ sở dồn tích và cơ sở tiền"]}
+{"id": "GL-015", "question": "Phí có thuế giá trị gia tăng thì tách dòng thế nào?", "course": "GL", "kind": "paraphrase", "expected": ["Ví dụ hạch toán nghiệp vụ cơ bản › Thu phí dịch vụ 110.000 VND"]}
+{"id": "GL-016", "question": "Hệ thống tự sinh định khoản dựa trên cái gì?", "course": "GL", "kind": "paraphrase", "expected": ["Posting và Accounting Engine › Accounting Rule"]}
+{"id": "GL-017", "question": "Ghi sổ ngay và ghi sổ theo lô khác nhau thế nào?", "course": "GL", "kind": "paraphrase", "expected": ["Posting và Accounting Engine › Online Posting và Batch Posting"]}
+{"id": "GL-018", "question": "Gộp nhiều giao dịch thành một dòng thì có mất khả năng lần vết không?", "course": "GL", "kind": "paraphrase", "expected": ["Posting và Accounting Engine › Posting theo giao dịch và posting tổng hợp", "Các lỗi thiết kế hệ thống GL cần tránh"]}
+{"id": "GL-019", "question": "Số dư đô la cuối tháng được quy đổi lại thế nào?", "course": "GL", "kind": "paraphrase", "expected": ["Đa tiền tệ và tỷ giá › Đánh giá lại ngoại tệ", "Đa tiền tệ và tỷ giá › Ví dụ đánh giá lại", "End of Day, End of Month và khóa sổ › End of Month - EOM"]}
+{"id": "GL-020", "question": "Chưa biết ghi vào tài khoản nào thì tạm để ở đâu?", "course": "GL", "kind": "paraphrase", "expected": ["Tài khoản nội bộ, tài khoản treo và tài khoản trung gian › Suspense Account", "Từ điển thuật ngữ"]}
+{"id": "GL-021", "question": "Tiền đang trên đường thanh toán giữa hai ngân hàng nằm ở tài khoản nào?", "course": "GL", "kind": "paraphrase", "expected": ["Tài khoản nội bộ, tài khoản treo và tài khoản trung gian › Clearing Account"]}
+{"id": "GL-022", "question": "Tài khoản của mình mở ở ngân hàng nước ngoài gọi là gì?", "course": "GL", "kind": "paraphrase", "expected": ["Tài khoản nội bộ, tài khoản treo và tài khoản trung gian › Nostro và Vostro"]}
+{"id": "GL-023", "question": "Nguyên nhân khiến sổ chi tiết không khớp sổ cái?", "course": "GL", "kind": "paraphrase", "expected": ["Đối soát GL › Ngoại lệ thường gặp", "Tình huống nghiệp vụ thực hành › Sub-Ledger tiền gửi lệch Control Account"]}
+{"id": "GL-024", "question": "Cuối ngày hệ thống chạy những việc gì?", "course": "GL", "kind": "paraphrase", "expected": ["End of Day, End of Month và khóa sổ › End of Day - EOD"]}
+{"id": "GL-025", "question": "Hết tháng kế toán phải làm những gì?", "course": "GL", "kind": "paraphrase", "expected": ["End of Day, End of Month và khóa sổ › End of Month - EOM"]}
+{"id": "GL-026", "question": "Kỳ đã chốt rồi thì còn sửa được không?", "course": "GL", "kind": "paraphrase", "expected": ["End of Day, End of Month và khóa sổ › Hard Close và Soft Close", "Tình huống nghiệp vụ thực hành › Cần ghi nhận giao dịch vào kỳ đã khóa"]}
+{"id": "GL-027", "question": "Lỡ ghi sai thì có được xóa bút toán không?", "course": "GL", "kind": "paraphrase", "expected": ["Bút toán điều chỉnh, đảo và dồn tích › Reversal", "Kiểm soát nội bộ và phân quyền", "Tình huống nghiệp vụ thực hành › Người dùng hạch toán sai", "Các lỗi thiết kế hệ thống GL cần tránh"]}
+{"id": "GL-028", "question": "Ghi nhầm chi nhánh thì sửa bằng bút toán gì?", "course": "GL", "kind": "paraphrase", "expected": ["Bút toán điều chỉnh, đảo và dồn tích › Reclassification", "Đối soát GL › Ngoại lệ thường gặp", "Tình huống nghiệp vụ thực hành › Người dùng hạch toán sai"]}
+{"id": "GL-029", "question": "Bảo lãnh chưa phát sinh tiền thì theo dõi ở đâu?", "course": "GL", "kind": "paraphrase", "expected": ["Ngoại bảng và cam kết"]}
+{"id": "GL-030", "question": "Bảng liệt kê số dư đầu kỳ, phát sinh, cuối kỳ của từng tài khoản tên là gì?", "course": "GL", "kind": "paraphrase", "expected": ["Báo cáo từ GL › Trial Balance"]}
+{"id": "GL-031", "question": "Từ số liệu báo cáo có lần ngược về giao dịch gốc được không?", "course": "GL", "kind": "paraphrase", "expected": ["Báo cáo từ GL › Drill-down và Audit Trail", "Tổng quan về General Ledger trong ngân hàng › Vai trò của GL"]}
+{"id": "GL-032", "question": "Làm sao để một giao dịch không bị ghi sổ hai lần?", "course": "GL", "kind": "paraphrase", "expected": ["Mô hình dữ liệu GL tham khảo › Khóa định danh và chống posting trùng"]}
+{"id": "GL-033", "question": "Giao dịch báo thành công mà sổ cái không thấy đâu thì kiểm tra gì?", "course": "GL", "kind": "paraphrase", "expected": ["Tình huống nghiệp vụ thực hành › Giao dịch nguồn thành công"]}
+{"id": "GL-034", "question": "Dùng nhầm tỷ giá thì sửa thế nào?", "course": "GL", "kind": "paraphrase", "expected": ["Tình huống nghiệp vụ thực hành › Giao dịch ngoại tệ sai tỷ giá"]}
+{"id": "GL-035", "question": "Tiền treo quá hạn xử lý chưa xong thì làm gì?", "course": "GL", "kind": "paraphrase", "expected": ["Tình huống nghiệp vụ thực hành › Tài khoản treo tồn tại hơn SLA"]}
+{"id": "GL-036", "question": "Làm hệ thống sổ cái dễ mắc sai lầm gì?", "course": "GL", "kind": "paraphrase", "expected": ["Các lỗi thiết kế hệ thống GL cần tránh"]}
+{"id": "GL-037", "question": "Hệ thống phải đáp ứng yêu cầu gì về tốc độ và khả năng khôi phục?", "course": "GL", "kind": "paraphrase", "expected": ["Yêu cầu chức năng cho hệ thống GL › Yêu cầu phi chức năng"]}
+{"id": "GL-038", "question": "Ai được nhập, ai được duyệt bút toán?", "course": "GL", "kind": "paraphrase", "expected": ["Kiểm soát nội bộ và phân quyền", "Vòng đời của một bút toán GL › Các trạng thái thường gặp"]}
+{"id": "GL-039", "question": "General Ledger là gì?", "course": "GL", "kind": "direct", "expected": ["Tổng quan về General Ledger trong ngân hàng › GL là gì?", "Từ điển thuật ngữ"]}
+{"id": "GL-040", "question": "Chart of Accounts là gì?", "course": "GL", "kind": "direct", "expected": ["Cấu trúc hệ thống tài khoản GL › Chart of Accounts - COA", "Từ điển thuật ngữ"]}
+{"id": "GL-041", "question": "Reversal là gì?", "course": "GL", "kind": "direct", "expected": ["Bút toán điều chỉnh, đảo và dồn tích › Reversal", "Từ điển thuật ngữ"]}
+{"id": "GL-042", "question": "Soft Close và Hard Close khác gì nhau?", "course": "GL", "kind": "direct", "expected": ["End of Day, End of Month và khóa sổ › Hard Close và Soft Close"]}
+{"id": "GL-043", "question": "Khách hàng rút tiền mặt 20 triệu VND thì hạch toán thế nào?", "course": "GL", "kind": "direct", "expected": ["Ví dụ hạch toán nghiệp vụ cơ bản › Khách hàng rút tiền mặt 20 triệu VND"]}
+{"id": "GL-044", "question": "Quy trình End of Day gồm những bước nào?", "course": "GL", "kind": "direct", "expected": ["End of Day, End of Month và khóa sổ › End of Day - EOD"]}
+{"id": "GL-045", "question": "so cai la gi", "course": "GL", "kind": "no_diacritics", "expected": ["Tổng quan về General Ledger trong ngân hàng › GL là gì?", "Từ điển thuật ngữ"]}
+{"id": "GL-046", "question": "tai khoan treo dung de lam gi", "course": "GL", "kind": "no_diacritics", "expected": ["Tài khoản nội bộ, tài khoản treo và tài khoản trung gian › Suspense Account", "Từ điển thuật ngữ"]}
+{"id": "GL-047", "question": "nostro va vostro khac nhau the nao", "course": "GL", "kind": "no_diacritics", "expected": ["Tài khoản nội bộ, tài khoản treo và tài khoản trung gian › Nostro và Vostro"]}
+{"id": "OOS-001", "question": "Lãi suất tiết kiệm kỳ hạn 12 tháng hiện nay là bao nhiêu?", "course": "CIF", "kind": "out_of_scope", "expected": []}
+{"id": "OOS-002", "question": "Rút tiền gửi trước hạn bị phạt bao nhiêu?", "course": "GL", "kind": "out_of_scope", "expected": []}
+{"id": "OOS-003", "question": "Vay mua ô tô cần chuẩn bị những giấy tờ gì?", "course": "CIF", "kind": "out_of_scope", "expected": []}
+{"id": "OOS-004", "question": "Hạn mức tối đa của thẻ tín dụng là bao nhiêu?", "course": "CIF", "kind": "out_of_scope", "expected": []}
+{"id": "OOS-005", "question": "Làm sao đổi mật khẩu đăng nhập Mobile Banking?", "course": "CIF", "kind": "out_of_scope", "expected": []}
+{"id": "OOS-006", "question": "Basel III yêu cầu tỷ lệ an toàn vốn tối thiểu bao nhiêu?", "course": "GL", "kind": "out_of_scope", "expected": []}
+{"id": "OOS-007", "question": "Thông tư nào của Ngân hàng Nhà nước quy định về eKYC?", "course": "CIF", "kind": "out_of_scope", "expected": []}
+{"id": "OOS-008", "question": "Phí chuyển tiền SWIFT quốc tế là bao nhiêu?", "course": "GL", "kind": "out_of_scope", "expected": []}
+{"id": "OOS-009", "question": "Thuế thu nhập doanh nghiệp năm nay là bao nhiêu phần trăm?", "course": "GL", "kind": "out_of_scope", "expected": []}
+{"id": "OOS-010", "question": "Không làm KYC thì bị xử phạt bao nhiêu tiền?", "course": "CIF", "kind": "out_of_scope", "expected": []}
+{"id": "OOS-011", "question": "Tỷ giá USD hôm nay là bao nhiêu?", "course": "GL", "kind": "out_of_scope", "expected": []}
+{"id": "OOS-012", "question": "Ngân hàng đóng cửa lúc mấy giờ?", "course": "CIF", "kind": "out_of_scope", "expected": []}
+{"id": "OOS-013", "question": "Công thức nấu phở bò như thế nào?", "course": "GL", "kind": "out_of_scope", "expected": []}
+{"id": "OOS-014", "question": "Thời tiết Hà Nội ngày mai ra sao?", "course": "CIF", "kind": "out_of_scope", "expected": []}
+{"id": "OOS-015", "question": "Viết code Python đọc file CSV như thế nào?", "course": "GL", "kind": "out_of_scope", "expected": []}
+{"id": "OOS-016", "question": "Lương của kế toán ngân hàng khoảng bao nhiêu?", "course": "GL", "kind": "out_of_scope", "expected": []}
