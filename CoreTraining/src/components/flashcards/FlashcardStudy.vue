@@ -3,6 +3,7 @@
     <template v-if="current">
       <div class="study-toolbar">
         <span class="study-count">Thẻ {{ position + 1 }}/{{ queue.length }}</span>
+        <span class="study-seen">Đã lướt qua {{ seen.size }}/{{ queue.length }} thẻ</span>
         <span v-if="showLesson" class="study-lesson" :title="current.lessonTitle">{{ current.lessonTitle }}</span>
         <div class="study-actions">
           <button
@@ -11,25 +12,24 @@
             class="study-shuffle"
             :class="{ active: shuffled }"
             :aria-pressed="shuffled"
-            :disabled="saving || position >= queue.length - 1"
-            title="Trộn ngẫu nhiên các thẻ chưa học trong phiên này"
+            :disabled="position >= queue.length - 1"
+            title="Trộn ngẫu nhiên các thẻ phía sau"
             @keydown.enter.stop
             @keydown.space.stop
             @click="toggleShuffle"
           >
             <Shuffle :size="15" /> {{ shuffled ? "Đang trộn thẻ" : "Trộn thẻ" }}
           </button>
-          <button type="button" class="study-exit" @click="$emit('exit')">
-            <X :size="15" /> Kết thúc
-          </button>
         </div>
       </div>
-      <div class="study-progress" role="progressbar" aria-label="Tiến độ phiên ôn"
-        aria-valuemin="0" :aria-valuemax="queue.length" :aria-valuenow="position">
-        <span :style="{ width: `${(position / queue.length) * 100}%` }" />
+      <div class="study-progress" role="progressbar" aria-label="Số thẻ đã lướt qua"
+        aria-valuemin="0" :aria-valuemax="queue.length" :aria-valuenow="seen.size">
+        <span :style="{ width: `${(seen.size / queue.length) * 100}%` }" />
       </div>
 
+      <!-- Keyed by card so moving on never animates the next card's answer into view. -->
       <button
+        :key="current.id"
         type="button"
         class="flip-card"
         :class="{ flipped }"
@@ -74,35 +74,34 @@
         </span>
       </button>
 
-      <div v-if="flipped" class="flashcard-review-row" role="group" aria-label="Mức độ ghi nhớ">
+      <div class="study-nav">
         <button
-          v-for="(rating, index) in RATINGS"
-          :key="rating"
           type="button"
-          class="rating-button"
-          :class="rating.toLowerCase()"
-          :disabled="saving"
-          @click="rate(rating)"
+          class="btn btn-secondary"
+          :disabled="position === 0"
+          @keydown.enter.stop
+          @keydown.space.stop
+          @click="move(-1)"
         >
-          <strong>{{ RATING_LABELS[rating] }}</strong>
-          <small>{{ RATING_HINTS[rating] }} · phím {{ index + 1 }}</small>
+          <ChevronLeft :size="17" /> Thẻ trước
         </button>
-      </div>
-      <div v-else class="flashcard-review-row single">
-        <button type="button" class="btn btn-primary reveal-button" @click="flipped = true">
-          Xem đáp án
+        <button
+          type="button"
+          class="btn btn-primary"
+          @keydown.enter.stop
+          @keydown.space.stop
+          @click="move(1)"
+        >
+          {{ position < queue.length - 1 ? "Thẻ tiếp" : "Hoàn thành" }} <ChevronRight :size="17" />
         </button>
       </div>
     </template>
 
     <div v-else class="study-finished" role="status">
       <CheckCircle2 :size="30" />
-      <strong>Hoàn thành phiên ôn tập</strong>
-      <span>{{ reviewedCount }} thẻ đã ôn · {{ counts.AGAIN }} thẻ chưa nhớ</span>
+      <strong>Bạn đã lướt qua hết {{ queue.length }} thẻ</strong>
       <div class="finished-actions">
-        <button v-if="forgotten.length" type="button" class="btn btn-secondary" @click="restart(forgotten)">
-          Ôn lại {{ forgotten.length }} thẻ chưa nhớ
-        </button>
+        <button type="button" class="btn btn-secondary" @click="restart(cards)">Xem lại từ đầu</button>
         <button type="button" class="btn btn-primary" @click="$emit('exit')">Đóng</button>
       </div>
     </div>
@@ -110,95 +109,74 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
-import { BookOpen, CheckCircle2, FileText, PencilLine, RotateCcw, Shuffle, X } from "lucide-vue-next";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import {
-  flashcardApi,
-  apiErrorMessage,
-  RATING_LABELS,
-  TYPE_LABELS,
-  type Flashcard,
-  type FlashcardRating,
-} from "../../api/flashcardApi";
-import { showToast } from "../../utils/toast";
+  BookOpen,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  PencilLine,
+  RotateCcw,
+  Shuffle,
+} from "lucide-vue-next";
+import { TYPE_LABELS, type Flashcard } from "../../api/flashcardApi";
 import { frontParts as splitFront, shuffleCards, sourceLabel } from "../../utils/flashcards";
 
 const props = defineProps<{ cards: Flashcard[]; showLesson?: boolean }>();
-const emit = defineEmits<{ reviewed: [card: Flashcard]; exit: []; finished: [] }>();
+defineEmits<{ exit: [] }>();
 // A parent may bind this to keep the choice across study sessions.
 const shuffled = defineModel<boolean>("shuffled", { default: false });
 
-const RATINGS: FlashcardRating[] = ["AGAIN", "HARD", "GOOD", "EASY"];
-const RATING_HINTS: Record<FlashcardRating, string> = {
-  AGAIN: "Ôn lại ngay",
-  HARD: "Nhớ lờ mờ",
-  GOOD: "Nhớ được",
-  EASY: "Rất chắc",
-};
-
 const root = ref<HTMLElement | null>(null);
 const queue = ref<Flashcard[]>([]);
+// Runs one past the last card to show the finished screen.
 const position = ref(0);
 const flipped = ref(false);
-const saving = ref(false);
-const reviewedCount = ref(0);
-const counts = reactive<Record<FlashcardRating, number>>({ AGAIN: 0, HARD: 0, GOOD: 0, EASY: 0 });
-const forgotten = ref<Flashcard[]>([]);
-// The scheduled order, restored when the learner turns shuffling off.
-let scheduledOrder: Flashcard[] = [];
+const seen = ref(new Set<number>());
+// The deck order, restored when the learner turns shuffling off.
+let deckOrder: Flashcard[] = [];
 
 const current = computed(() => queue.value[position.value] ?? null);
 const frontParts = computed(() => splitFront(current.value));
 
 function restart(cards: Flashcard[]) {
-  scheduledOrder = [...cards];
+  deckOrder = [...cards];
   queue.value = shuffled.value ? shuffleCards(cards) : [...cards];
   position.value = 0;
   flipped.value = false;
-  reviewedCount.value = 0;
-  forgotten.value = [];
-  (Object.keys(counts) as FlashcardRating[]).forEach((key) => (counts[key] = 0));
+  seen.value = new Set(current.value ? [current.value.id] : []);
   void nextTick(() => root.value?.focus());
 }
 
 watch(() => props.cards, (cards) => restart(cards), { immediate: true });
+// Counts each card once, however many times the learner comes back to it.
+watch(current, (card) => { if (card) seen.value.add(card.id); }, { immediate: true });
 onMounted(() => root.value?.focus());
 
-/** Reorders only the cards still ahead, so reviewed cards are never asked again. */
+/** Reorders only the cards still ahead, so the ones behind stay where the learner left them. */
 function toggleShuffle() {
   // A bound model only reads back its new value after the parent re-renders.
   const shuffle = !shuffled.value;
   shuffled.value = shuffle;
-  const done = queue.value.slice(0, position.value);
+  const behind = queue.value.slice(0, position.value);
   const ahead = queue.value.slice(position.value);
   const aheadIds = new Set(ahead.map((card) => card.id));
   queue.value = [
-    ...done,
-    ...(shuffle ? shuffleCards(ahead) : scheduledOrder.filter((card) => aheadIds.has(card.id))),
+    ...behind,
+    ...(shuffle ? shuffleCards(ahead) : deckOrder.filter((card) => aheadIds.has(card.id))),
   ];
   flipped.value = false;
   // Hands keyboard focus back so Space flips the new card instead of pressing this button again.
   root.value?.focus();
 }
 
-async function rate(rating: FlashcardRating) {
-  const card = current.value;
-  if (!card || saving.value) return;
-  saving.value = true;
-  try {
-    const updated = await flashcardApi.review(card.id, rating);
-    counts[rating] += 1;
-    reviewedCount.value += 1;
-    if (rating === "AGAIN") forgotten.value.push(updated);
-    emit("reviewed", updated);
-    flipped.value = false;
-    position.value += 1;
-    if (position.value >= queue.value.length) emit("finished");
-  } catch (error) {
-    showToast(apiErrorMessage(error, "Không lưu được kết quả ôn tập. Vui lòng thử lại."), "error");
-  } finally {
-    saving.value = false;
-  }
+function move(step: 1 | -1) {
+  const next = position.value + step;
+  if (next < 0 || next > queue.value.length) return;
+  position.value = next;
+  flipped.value = false;
+  root.value?.focus();
 }
 
 function onKey(event: KeyboardEvent) {
@@ -206,9 +184,12 @@ function onKey(event: KeyboardEvent) {
   if (event.key === " " || event.key === "Enter") {
     event.preventDefault();
     flipped.value = !flipped.value;
-  } else if (flipped.value && ["1", "2", "3", "4"].includes(event.key)) {
+  } else if (event.key === "ArrowRight") {
     event.preventDefault();
-    void rate(RATINGS[Number(event.key) - 1]);
+    move(1);
+  } else if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    move(-1);
   }
 }
 </script>
@@ -233,6 +214,12 @@ function onKey(event: KeyboardEvent) {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.study-seen {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .study-lesson {
   min-width: 0;
   overflow: hidden;
@@ -251,8 +238,7 @@ function onKey(event: KeyboardEvent) {
   gap: 0.4rem;
   margin-left: auto;
 }
-.study-shuffle,
-.study-exit {
+.study-shuffle {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
@@ -265,8 +251,7 @@ function onKey(event: KeyboardEvent) {
   font-weight: 600;
   cursor: pointer;
 }
-.study-shuffle:not(:disabled):hover,
-.study-exit:hover {
+.study-shuffle:not(:disabled):hover {
   color: var(--primary-ink);
   border-color: var(--primary-color);
 }
@@ -405,65 +390,19 @@ function onKey(event: KeyboardEvent) {
   color: var(--text-muted);
   font-size: 0.76rem;
 }
-.flashcard-review-row {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.study-nav {
+  display: flex;
+  justify-content: space-between;
   gap: 0.55rem;
 }
-.flashcard-review-row.single {
-  display: flex;
-  justify-content: center;
-}
-.reveal-button {
-  min-width: 200px;
-}
-.rating-button {
-  display: flex;
-  flex-direction: column;
+.study-nav .btn {
+  display: inline-flex;
   align-items: center;
-  gap: 0.15rem;
-  padding: 0.6rem 0.4rem;
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  background: var(--surface-ffffff);
-  color: var(--text-color);
-  font: inherit;
-  cursor: pointer;
+  gap: 0.3rem;
 }
-.rating-button strong {
-  font-size: 0.88rem;
-}
-.rating-button small {
-  color: var(--text-muted);
-  font-size: 0.72rem;
-}
-.rating-button:disabled {
+.study-nav .btn:disabled {
   opacity: 0.55;
-  cursor: wait;
-}
-.rating-button.again {
-  border-color: var(--danger-border);
-  background: var(--danger-surface);
-  color: var(--danger-ink);
-}
-.rating-button.hard {
-  border-color: var(--warning-border);
-  background: var(--warning-surface);
-  color: var(--warning-ink);
-}
-.rating-button.good {
-  border-color: var(--primary-color);
-  background: var(--primary-light);
-  color: var(--primary-ink);
-}
-.rating-button.easy {
-  border-color: var(--success-border);
-  background: var(--success-surface);
-  color: var(--success-ink);
-}
-.rating-button:not(:disabled):hover {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
+  cursor: not-allowed;
 }
 .study-finished {
   display: flex;
@@ -476,10 +415,6 @@ function onKey(event: KeyboardEvent) {
   background: var(--success-surface);
   color: var(--success-ink);
   text-align: center;
-}
-.study-finished span {
-  color: var(--text-muted);
-  font-size: 0.85rem;
 }
 .finished-actions {
   display: flex;
@@ -498,12 +433,6 @@ function onKey(event: KeyboardEvent) {
   }
   .card-text {
     font-size: 1.02rem;
-  }
-  .flashcard-review-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .rating-button small {
-    display: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {

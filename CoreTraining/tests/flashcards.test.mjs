@@ -2,21 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as flashcards from '../src/utils/flashcards.ts';
 
-const NOW = Date.parse('2026-11-03T09:00:00Z');
-const at = (offsetHours) => new Date(NOW + offsetHours * 3_600_000).toISOString();
-const deck = [
-  { id: 1, type: 'TERM', front: 'CIF', progress: null },
-  { id: 2, type: 'TERM', front: 'CASA', progress: { dueAt: at(-1), mastered: false } },
-  { id: 3, type: 'CLOZE', front: 'Duyệt trong ____.', progress: { dueAt: at(-48), mastered: true } },
-  { id: 4, type: 'TERM', front: 'KYC', progress: { dueAt: at(24 * 30), mastered: true } },
-  { id: 5, type: 'TERM', front: 'SWIFT', progress: { dueAt: at(5), mastered: false } },
-  { id: 6, type: 'TERM', front: 'POS', progress: null },
-];
-
-test('due sessions review the most overdue cards first, then new cards in deck order', () => {
-  assert.deepEqual(flashcards.studyQueue(deck, 'due', NOW).map((card) => card.id), [3, 2, 1, 6]);
-  assert.deepEqual(flashcards.studyQueue(deck, 'all', NOW).map((card) => card.id), [1, 2, 3, 4, 5, 6]);
-});
+const deck = [1, 2, 3, 4, 5, 6].map((id) => ({ id, type: 'TERM', front: `Thẻ ${id}` }));
 
 test('shuffling keeps every card, moves the first card away and leaves the input alone', () => {
   const ids = deck.map((card) => card.id);
@@ -29,11 +15,6 @@ test('shuffling keeps every card, moves the first card away and leaves the input
   assert.deepEqual(deck.map((card) => card.id), ids);
   assert.deepEqual(flashcards.shuffleCards([deck[0]]), [deck[0]]);
   assert.deepEqual(flashcards.shuffleCards([]), []);
-});
-
-test('deck stats separate new, due, learning and mastered cards', () => {
-  assert.deepEqual(flashcards.deckStats(deck, NOW),
-    { total: 6, newCount: 2, dueCount: 2, learningCount: 1, masteredCount: 1 });
 });
 
 test('cloze fronts split around the blank and other cards stay whole', () => {

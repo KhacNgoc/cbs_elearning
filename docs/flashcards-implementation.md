@@ -9,8 +9,7 @@ Triển khai ngày 03/11/2026 trên nhánh `hieuvm_performance`. Flashcard là c
 |---|---|
 | Quản trị | Tab **Flashcard** trong trình soạn bài: thêm/sửa/xóa thẻ, lọc, tìm, phát hành hoặc chuyển về nháp hàng loạt |
 | AI | Panel **Tạo bằng AI** dùng nguồn kiến thức đã lưu của bài, sinh thẻ *Thuật ngữ* và *Điền khuyết*, kiểm định bằng LLM, giảng viên duyệt rồi mới lưu |
-| Học viên | Nút **Flashcard** kèm số thẻ cần ôn trên thanh tiêu đề bài học mở modal ôn ngay tại chỗ: lật thẻ, tự đánh giá Chưa nhớ/Khó/Nhớ/Dễ, phím tắt Space và 1–4. Trang bài học không có mục flashcard riêng; khi đánh dấu hoàn thành bài có lời nhắc **Củng cố bài vừa học** |
-| Ôn tập | Lặp lại ngắt quãng kiểu SM-2; banner **Ôn tập hôm nay** trên Dashboard; trang `/flashcards/review?courseId=` ôn thẻ đến hạn theo khóa |
+| Học viên | Nút **Flashcard** kèm tổng số thẻ trên thanh tiêu đề bài học mở modal: lật thẻ, chuyển thẻ trước/tiếp, trộn thẻ, xem vị trí **Thẻ x/n** và **Đã lướt qua y/n thẻ**. Phím tắt Space, ←, →. Trang bài học không có mục flashcard riêng; khi đánh dấu hoàn thành bài có lời nhắc **Củng cố bài vừa học** |
 
 Thẻ AI không tự đến tay học viên: chỉ thẻ `PUBLISHED` thuộc bài, chương và khóa đã xuất bản mới hiển thị.
 
@@ -20,13 +19,17 @@ Thẻ AI không tự đến tay học viên: chỉ thẻ `PUBLISHED` thuộc bà
 - Quản trị dùng quyền trang `courses` (đường dẫn `/api/admin/lessons/{id}/flashcards`). Khóa lưu trữ hoặc đã xóa thì không sửa được thẻ.
 - Thẻ điền khuyết phải có đúng chỗ trống `____` (từ 3 dấu gạch dưới) và đáp án không được lộ ở mặt trước.
 - Nguồn tài liệu lưu dạng tham chiếu (không FK). Xóa tài liệu khóa học không xóa thẻ đã duyệt; tên tài liệu lấy từ DB, không tin client.
-- Xóa thẻ sẽ xóa luôn lịch ôn của học viên với thẻ đó.
+- Không lưu kết quả ghi nhớ: số thẻ đã lướt qua chỉ tồn tại trong phiên đang mở, đóng modal là bắt đầu lại.
 
-## Lịch ôn (SM-2)
+## Gỡ lịch ôn SM-2 (04/11/2026)
 
-`FlashcardSchedulingPolicy`: *Chưa nhớ* → ôn lại sau 10 phút, giảm hệ số dễ; *Khó/Nhớ/Dễ* → 1, 3 ngày rồi nhân theo hệ số dễ, tối đa 365 ngày.
-Đánh giá tốt hơn không bao giờ cho lịch sớm hơn. Thẻ có khoảng ôn từ 21 ngày được tính là **Đã thuộc**.
-`dueAt` trả về dạng instant (có `Z`) để trình duyệt ở múi giờ khác máy chủ so sánh đúng.
+Tự đánh giá Chưa nhớ/Khó/Nhớ/Dễ không phản ánh được học viên có thật sự nhớ hay không, nên flashcard chỉ còn để lật và
+xem nhanh. Đã gỡ `FlashcardSchedulingPolicy`, `FlashcardReview`, API ôn, banner **Ôn tập hôm nay** trên Dashboard và trang
+`/flashcards/review`.
+
+Migration **bắt buộc ở mọi môi trường**, kể cả khi dùng `ddl-auto=update`:
+`CoreTrainingAPI/src/main/resources/migrations/20261104_remove_flashcard_reviews.sql`. Hibernate không tự xóa bảng cũ, mà
+bảng này có FK tới `flashcards`, nên thiếu script thì xóa thẻ đã từng được ôn sẽ lỗi. Script xóa vĩnh viễn lịch sử ôn.
 
 ## AI và tải hệ thống
 
@@ -41,25 +44,22 @@ Thẻ AI không tự đến tay học viên: chỉ thẻ `PUBLISHED` thuộc bà
 
 | API | Chức năng |
 |---|---|
-| GET `/api/lessons/{id}/flashcards` | Bộ thẻ đã phát hành của bài kèm lịch ôn và thống kê của học viên |
-| POST `/api/flashcards/{id}/reviews` | Ghi nhận đánh giá `{rating}` và trả lịch ôn mới |
-| GET `/api/users/me/flashcards/summary` | Số thẻ đến hạn theo khóa (cho Dashboard) |
-| GET `/api/users/me/flashcards/due?courseId=&limit=` | Hàng đợi thẻ đến hạn của một khóa (tối đa 50) |
+| GET `/api/lessons/{id}/flashcards` | Bộ thẻ đã phát hành của bài và thẻ của học viên |
 | GET/POST `/api/admin/lessons/{id}/flashcards`, POST `.../batch` | Danh sách, tạo một thẻ, tạo nhiều thẻ từ bản nháp AI |
 | PUT/DELETE `.../flashcards/{cardId}`, PUT `.../flashcards/status` | Sửa (khóa lạc quan theo `version`), xóa, đổi trạng thái hàng loạt |
 | POST `.../flashcards/generate/jobs`, GET `.../generate/jobs/{jobId}` | Sinh bản nháp AI có tiến độ |
 
 ## Schema
 
-Hibernate `ddl-auto=update` tự tạo bảng `flashcards` và `flashcard_reviews`. Môi trường quản lý schema thủ công dùng
+Hibernate `ddl-auto=update` tự tạo bảng `flashcards`. Môi trường quản lý schema thủ công dùng
 `CoreTrainingAPI/src/main/resources/migrations/20261103_flashcards.sql` (idempotent). Cần deploy đồng thời backend, frontend và RAG service.
 
 ## Kiểm chứng
 
-- Backend: toàn bộ 285 test qua (71 test chỉ chạy với Postgres vẫn bỏ qua như trước); thêm `FlashcardSchedulingPolicyTest`, `FlashcardControllerContractTest`.
+- Backend: toàn bộ 285 test qua (71 test chỉ chạy với Postgres vẫn bỏ qua như trước); thêm `FlashcardControllerContractTest`.
 - RAG: 67 test qua, thêm `tests/test_flashcards.py`.
 - Frontend: `vue-tsc`, `vite build`, 174 test node qua, thêm `tests/flashcards.test.mjs`.
-- Chạy thật trên Docker local: sinh thẻ AI, duyệt và phát hành, thêm thẻ thủ công, ôn thẻ trong bài học, banner Dashboard và trang ôn theo khóa.
+- Chạy thật trên Docker local: sinh thẻ AI, duyệt và phát hành, thêm thẻ thủ công, học thẻ trong bài học.
 
 ## Thẻ cá nhân của học viên (04/11/2026)
 
@@ -68,16 +68,16 @@ Học viên tự viết thẻ cho từng bài: nút **Flashcard** trên thanh ti
 
 - Modal không chia tab: thẻ bài học và thẻ của học viên học chung một phiên, mỗi thẻ có nhãn **Thẻ bài học** hoặc
   **Thẻ của tôi** trên cả hai mặt.
-- Nút **Trộn thẻ** chỉ đảo các thẻ chưa học của phiên, tắt thì trở lại thứ tự lịch ôn. Thứ tự chỉ nằm ở frontend, không
-  ảnh hưởng lịch SM-2. Lựa chọn được giữ trong modal đến khi rời trang bài học; trang ôn theo khóa cũng có nút này.
+- Nút **Trộn thẻ** chỉ đảo các thẻ phía sau thẻ đang xem, tắt thì trở lại thứ tự của bộ thẻ. Thứ tự chỉ nằm ở frontend.
+  Lựa chọn được giữ trong modal đến khi rời trang bài học.
 
 - Dữ liệu: dùng chung bảng `flashcards`, thêm cột `owner_user_id` (NULL = thẻ của bài) và origin `PERSONAL`. Thẻ cá nhân
-  luôn `PUBLISHED`, không cần duyệt, nên dùng luôn lịch ôn SM-2, hàng đợi theo khóa và banner Dashboard.
+  luôn `PUBLISHED`, không cần duyệt.
 - Mọi truy vấn phía quản trị lọc `owner IS NULL`; admin không thấy, không sửa và không phát hành được thẻ của học viên,
   `maxCardOrder` không bị ảnh hưởng. Admin gửi origin `PERSONAL` bị từ chối.
 - Bộ thẻ của bài = thẻ của bài theo thứ tự soạn, sau đó là thẻ của học viên theo thứ tự tạo. `Card` có thêm `mine`
   và `version` (chỉ có trên thẻ của mình).
-- Thẻ của người khác trả 404 khi sửa, xóa hoặc ôn. Tối đa 200 thẻ cá nhân mỗi bài. Xóa thẻ không cần còn quyền vào bài.
+- Thẻ của người khác trả 404 khi sửa hoặc xóa. Tối đa 200 thẻ cá nhân mỗi bài. Xóa thẻ không cần còn quyền vào bài.
 - API: `POST /api/lessons/{id}/flashcards/mine`, `PUT`/`DELETE /api/flashcards/mine/{cardId}` (sửa có khóa lạc quan theo `version`).
 - Migration **bắt buộc ở mọi môi trường**, kể cả khi dùng `ddl-auto=update`:
   `CoreTrainingAPI/src/main/resources/migrations/20261104_personal_flashcards.sql` (idempotent). Hibernate tự thêm cột
@@ -87,4 +87,4 @@ Học viên tự viết thẻ cho từng bài: nút **Flashcard** trên thanh ti
 ## Chưa làm (giai đoạn sau)
 
 Thẻ từ câu làm sai, thẻ quy trình từ `ProcedureSection`, tạo thẻ cá nhân từ ghi chú video, bôi đen văn bản, chatbot,
-đánh dấu thẻ lỗi thời khi tài liệu đổi, báo lỗi thẻ, thống kê thẻ khó, nhắc ôn qua thông báo, chuyển sang FSRS.
+đánh dấu thẻ lỗi thời khi tài liệu đổi, báo lỗi thẻ, thống kê thẻ khó, nhắc học qua email.

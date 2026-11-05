@@ -1,16 +1,14 @@
 package com.bidv.coretraining.dto;
 
 import com.bidv.coretraining.enums.FlashcardOrigin;
-import com.bidv.coretraining.enums.FlashcardRating;
 import com.bidv.coretraining.enums.FlashcardType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/** Data contracts for lesson flashcards and their spaced-repetition reviews. */
+/** Data contracts for lesson flashcards. */
 public final class FlashcardDto {
     private FlashcardDto() {
     }
@@ -18,26 +16,12 @@ public final class FlashcardDto {
     public record Source(String documentId, String documentName, Integer page, String section) {
     }
 
-    /**
-     * The learner's schedule for a card; null on cards the learner has never reviewed.
-     * dueAt is an instant so browsers in another time zone than the server compare it correctly.
-     */
-    public record Progress(Instant dueAt, int intervalDays, int repetitions, int lapses,
-            FlashcardRating lastRating, boolean due, boolean mastered) {
-    }
-
     /** mine is true on the learner's own personal cards, which they may edit using version. */
     public record Card(Long id, String courseId, String lessonId, String lessonTitle, FlashcardType type,
-            String front, String back, Source source, Progress progress, boolean mine, Long version) {
+            String front, String back, Source source, boolean mine, Long version) {
     }
 
-    public record Stats(int total, int newCount, int dueCount, int learningCount, int masteredCount) {
-    }
-
-    public record Deck(String lessonId, List<Card> cards, Stats stats) {
-    }
-
-    public record ReviewRequest(@NotNull FlashcardRating rating) {
+    public record Deck(String lessonId, List<Card> cards) {
     }
 
     public record PersonalCardRequest(
@@ -45,15 +29,6 @@ public final class FlashcardDto {
             @NotBlank @Size(max = 1000) String front,
             @NotBlank @Size(max = 4000) String back,
             Long version) {
-    }
-
-    public record CourseDue(String courseId, String courseName, int due) {
-    }
-
-    public record Summary(int dueTotal, List<CourseDue> courses) {
-    }
-
-    public record ReviewQueue(String courseId, String courseName, int dueTotal, List<Card> cards) {
     }
 
     public record AdminCard(Long id, String lessonId, FlashcardType type, String front, String back,

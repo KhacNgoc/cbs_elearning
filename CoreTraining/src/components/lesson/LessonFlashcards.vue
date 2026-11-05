@@ -1,12 +1,11 @@
 <template>
   <!-- The page has no inline deck: learners open it from the lesson header or the completion reminder. -->
-  <AdminModal :open="!!view" :title="studyTitle" :width="680" @close="view = null">
+  <AdminModal :open="!!view" :title="studyTitle" :width="680" fixed-height @close="view = null">
     <FlashcardStudy
       v-if="view === 'study'"
       :key="sessionKey"
       v-model:shuffled="shuffled"
       :cards="session"
-      @reviewed="applyReview"
       @exit="view = null"
     />
     <PersonalFlashcards
@@ -19,7 +18,7 @@
 
     <template #footer>
       <span v-if="view === 'study'" class="study-shortcuts">
-        <kbd>Space</kbd> lật thẻ · <kbd>1</kbd>–<kbd>4</kbd> đánh giá · <kbd>Esc</kbd> đóng
+        <kbd>Space</kbd> lật thẻ · <kbd>←</kbd> <kbd>→</kbd> chuyển thẻ · <kbd>Esc</kbd> đóng
       </span>
       <button v-if="view === 'study'" type="button" class="btn btn-secondary footer-action" @click="view = 'manage'">
         <PencilLine :size="16" /> Thêm / sửa thẻ của tôi
@@ -43,17 +42,12 @@ import { Layers3, PencilLine } from "lucide-vue-next";
 import AdminModal from "../AdminModal.vue";
 import FlashcardStudy from "../flashcards/FlashcardStudy.vue";
 import PersonalFlashcards from "../flashcards/PersonalFlashcards.vue";
-import {
-  flashcardApi,
-  type Flashcard,
-  type FlashcardDeck,
-  type FlashcardStats,
-} from "../../api/flashcardApi";
-import { deckStats, studyQueue, upsertCard } from "../../utils/flashcards";
+import { flashcardApi, type Flashcard, type FlashcardDeck } from "../../api/flashcardApi";
+import { upsertCard } from "../../utils/flashcards";
 
 const props = defineProps<{ lessonId: string; lessonTitle?: string }>();
-// The lesson page shows its own shortcuts to this deck, so it needs the counts.
-const emit = defineEmits<{ stats: [stats: FlashcardStats | null] }>();
+// The lesson page shows its own shortcuts to this deck, so it needs the count; null when it failed to load.
+const emit = defineEmits<{ total: [total: number | null] }>();
 
 const deck = ref<FlashcardDeck | null>(null);
 // One deck mixes lesson cards and the learner's own; writing their own cards is a secondary view.
@@ -77,21 +71,16 @@ async function load() {
     // Flashcards are optional support content; the lesson stays usable without them.
     if (current === requestId) deck.value = null;
   }
-  // Stats are emitted even for an empty deck so the lesson keeps a way in to write cards.
-  if (current === requestId) emit("stats", deck.value?.stats ?? null);
+  // Emitted even for an empty deck so the lesson keeps a way in to write cards.
+  if (current === requestId) emit("total", deck.value?.cards.length ?? null);
 }
 
 watch(() => props.lessonId, load, { immediate: true });
 
 function replaceCards(cards: Flashcard[]) {
   if (!deck.value) return;
-  deck.value = { ...deck.value, cards, stats: deckStats(cards) };
-  emit("stats", deck.value.stats);
-}
-
-function applyReview(updated: Flashcard) {
-  if (!deck.value) return;
-  replaceCards(deck.value.cards.map((card) => (card.id === updated.id ? updated : card)));
+  deck.value = { ...deck.value, cards };
+  emit("total", cards.length);
 }
 
 function applySaved(saved: Flashcard) {
@@ -104,11 +93,8 @@ function applyRemoved(id: number) {
   replaceCards(deck.value.cards.filter((card) => card.id !== id));
 }
 
-/** Starts with cards that are due or new; once caught up, lets the learner run through the whole set. */
 function startStudy() {
-  const cards = deck.value?.cards ?? [];
-  const stats = deckStats(cards);
-  session.value = studyQueue(cards, stats.dueCount + stats.newCount > 0 ? "due" : "all");
+  session.value = [...(deck.value?.cards ?? [])];
   sessionKey.value++;
   view.value = "study";
 }
@@ -128,10 +114,6 @@ const studyTitle = computed(() =>
 </script>
 
 <style scoped>
-/* The dialog already has its own close controls. */
-:global(.admin-modal-body .flashcard-study .study-exit) {
-  display: none;
-}
 .footer-action {
   display: inline-flex;
   align-items: center;

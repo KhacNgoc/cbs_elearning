@@ -1,35 +1,5 @@
 // Pure helpers for learner flashcard sessions; kept framework-free for node tests.
 
-export interface StudyCard {
-  id: number;
-  type: "TERM" | "CLOZE";
-  front: string;
-  progress: { dueAt: string; mastered: boolean } | null;
-}
-
-export interface DeckStats {
-  total: number;
-  newCount: number;
-  dueCount: number;
-  learningCount: number;
-  masteredCount: number;
-}
-
-const isDue = (card: StudyCard, now: number) =>
-  !!card.progress && new Date(card.progress.dueAt).getTime() <= now;
-
-/**
- * "due" studies overdue cards first (oldest first), then cards never seen, in deck
- * order. "all" keeps the deck order for browsing every card.
- */
-export function studyQueue<T extends StudyCard>(cards: readonly T[], mode: "due" | "all", now = Date.now()): T[] {
-  if (mode === "all") return [...cards];
-  const due = cards
-    .filter((card) => isDue(card, now))
-    .sort((a, b) => new Date(a.progress!.dueAt).getTime() - new Date(b.progress!.dueAt).getTime());
-  return [...due, ...cards.filter((card) => !card.progress)];
-}
-
 /** Random order that never keeps the first card, so asking for a shuffle always shows a different card. */
 export function shuffleCards<T>(cards: readonly T[], random: () => number = Math.random): T[] {
   const shuffled = [...cards];
@@ -44,17 +14,6 @@ export function shuffleCards<T>(cards: readonly T[], random: () => number = Math
   return shuffled;
 }
 
-export function deckStats(cards: readonly StudyCard[], now = Date.now()): DeckStats {
-  const stats: DeckStats = { total: cards.length, newCount: 0, dueCount: 0, learningCount: 0, masteredCount: 0 };
-  for (const card of cards) {
-    if (!card.progress) stats.newCount++;
-    else if (isDue(card, now)) stats.dueCount++;
-    else if (card.progress.mastered) stats.masteredCount++;
-    else stats.learningCount++;
-  }
-  return stats;
-}
-
 /** Replaces a saved card in place, or appends it when it is new (the deck lists own cards last). */
 export function upsertCard<T extends { id: number }>(cards: readonly T[], saved: T): T[] {
   return cards.some((card) => card.id === saved.id)
@@ -63,7 +22,7 @@ export function upsertCard<T extends { id: number }>(cards: readonly T[], saved:
 }
 
 /** Splits a cloze front into text and blank parts; other cards are one text part. */
-export function frontParts(card: Pick<StudyCard, "type" | "front"> | null): { text: string; blank: boolean }[] {
+export function frontParts(card: { type: "TERM" | "CLOZE"; front: string } | null): { text: string; blank: boolean }[] {
   const text = card?.front ?? "";
   if (card?.type !== "CLOZE") return [{ text, blank: false }];
   return text

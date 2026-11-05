@@ -12,7 +12,6 @@ import com.bidv.coretraining.exception.BadRequestException;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
 import com.bidv.coretraining.repository.CourseDocumentRepository;
 import com.bidv.coretraining.repository.FlashcardRepository;
-import com.bidv.coretraining.repository.FlashcardReviewRepository;
 import com.bidv.coretraining.repository.LessonRepository;
 import com.bidv.coretraining.service.AuthorizationService;
 import com.bidv.coretraining.service.FlashcardAdminService;
@@ -41,7 +40,6 @@ public class FlashcardAdminServiceImpl implements FlashcardAdminService {
     private final AuthorizationService authorization;
     private final LessonRepository lessons;
     private final FlashcardRepository flashcards;
-    private final FlashcardReviewRepository reviews;
     private final CourseDocumentRepository documents;
     private final FlashcardGenerationService generation;
     private final PlatformTransactionManager transactionManager;
@@ -93,7 +91,6 @@ public class FlashcardAdminServiceImpl implements FlashcardAdminService {
     public void delete(String lessonId, Long id) {
         writableLesson(lessonId);
         Flashcard card = card(lessonId, id);
-        reviews.deleteByFlashcardId(card.getId());
         flashcards.delete(card);
     }
 

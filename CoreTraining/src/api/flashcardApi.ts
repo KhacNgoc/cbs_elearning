@@ -6,7 +6,6 @@ import {
 } from "../utils/quizGenerationJob";
 
 export type FlashcardType = "TERM" | "CLOZE";
-export type FlashcardRating = "AGAIN" | "HARD" | "GOOD" | "EASY";
 export type FlashcardStatus = "DRAFT" | "PUBLISHED";
 
 export interface FlashcardSource {
@@ -14,16 +13,6 @@ export interface FlashcardSource {
   documentName: string;
   page?: number | null;
   section?: string | null;
-}
-
-export interface FlashcardProgress {
-  dueAt: string;
-  intervalDays: number;
-  repetitions: number;
-  lapses: number;
-  lastRating: FlashcardRating;
-  due: boolean;
-  mastered: boolean;
 }
 
 export interface Flashcard {
@@ -35,7 +24,6 @@ export interface Flashcard {
   front: string;
   back: string;
   source: FlashcardSource | null;
-  progress: FlashcardProgress | null;
   /** The learner's own personal card; only these carry a version for editing. */
   mine: boolean;
   version: number | null;
@@ -48,29 +36,8 @@ export interface PersonalFlashcardRequest {
   version?: number;
 }
 
-export interface FlashcardStats {
-  total: number;
-  newCount: number;
-  dueCount: number;
-  learningCount: number;
-  masteredCount: number;
-}
-
 export interface FlashcardDeck {
   lessonId: string;
-  cards: Flashcard[];
-  stats: FlashcardStats;
-}
-
-export interface FlashcardSummary {
-  dueTotal: number;
-  courses: { courseId: string; courseName: string; due: number }[];
-}
-
-export interface FlashcardReviewQueue {
-  courseId: string;
-  courseName: string;
-  dueTotal: number;
   cards: Flashcard[];
 }
 
@@ -127,13 +94,6 @@ export interface FlashcardGenerationRequest {
 /** Blank marker of a cloze card; the server accepts any run of 3+ underscores. */
 export const CLOZE_BLANK = "____";
 
-export const RATING_LABELS: Record<FlashcardRating, string> = {
-  AGAIN: "Chưa nhớ",
-  HARD: "Khó",
-  GOOD: "Nhớ",
-  EASY: "Dễ",
-};
-
 export const TYPE_LABELS: Record<FlashcardType, string> = {
   TERM: "Thuật ngữ",
   CLOZE: "Điền khuyết",
@@ -158,14 +118,6 @@ export const flashcardApi = {
     return response.data;
   },
 
-  async review(id: number, rating: FlashcardRating): Promise<Flashcard> {
-    const response = await axiosClient.post<Flashcard>(
-      `/api/flashcards/${id}/reviews`,
-      { rating },
-    );
-    return response.data;
-  },
-
   async createMine(lessonId: string, card: PersonalFlashcardRequest): Promise<Flashcard> {
     const response = await axiosClient.post<Flashcard>(
       `/api/lessons/${encodeURIComponent(lessonId)}/flashcards/mine`,
@@ -181,21 +133,6 @@ export const flashcardApi = {
 
   async removeMine(id: number): Promise<void> {
     await axiosClient.delete(`/api/flashcards/mine/${id}`);
-  },
-
-  async summary(): Promise<FlashcardSummary> {
-    const response = await axiosClient.get<FlashcardSummary>(
-      "/api/users/me/flashcards/summary",
-    );
-    return response.data;
-  },
-
-  async dueQueue(courseId: string, limit = 20): Promise<FlashcardReviewQueue> {
-    const response = await axiosClient.get<FlashcardReviewQueue>(
-      "/api/users/me/flashcards/due",
-      { params: { courseId, limit } },
-    );
-    return response.data;
   },
 };
 
@@ -266,14 +203,3 @@ export const apiErrorMessage = (error: unknown, fallback: string): string =>
   (error instanceof Error && error.message) ||
   fallback;
 
-/** Short Vietnamese description of when a card comes back. */
-export function formatDue(progress: FlashcardProgress | null, now = Date.now()): string {
-  if (!progress) return "Thẻ mới";
-  const diffMs = new Date(progress.dueAt).getTime() - now;
-  if (diffMs <= 0) return "Đến hạn ôn";
-  const minutes = Math.round(diffMs / 60_000);
-  if (minutes < 60) return `Ôn lại sau ${Math.max(1, minutes)} phút`;
-  const days = Math.round(diffMs / 86_400_000);
-  if (days < 1) return "Ôn lại trong hôm nay";
-  return `Ôn lại sau ${days} ngày`;
-}

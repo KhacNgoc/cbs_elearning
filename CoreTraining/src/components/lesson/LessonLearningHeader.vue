@@ -41,11 +41,11 @@
           v-if="flashcardsEnabled"
           type="button"
           class="flashcard-shortcut"
-          :title="flashcardPending ? `${flashcardPending} thẻ cần ôn` : flashcardTotal ? `${flashcardTotal} flashcard` : 'Tạo flashcard của bạn'"
+          :title="flashcardTotal ? `${flashcardTotal} flashcard` : 'Tạo flashcard của bạn'"
           @click="$emit('open-flashcards')"
         >
           <Layers3 :size="17" /><span>Flashcard</span>
-          <strong v-if="flashcardTotal" :class="{ pending: flashcardPending }">{{ flashcardPending || flashcardTotal }}</strong>
+          <strong v-if="flashcardTotal">{{ flashcardTotal }}</strong>
         </button>
       </div>
       <div
@@ -129,7 +129,6 @@ defineProps<{
   flashcardTotal?: number;
   /** Shown even with no cards so learners can write their own. */
   flashcardsEnabled?: boolean;
-  flashcardPending?: number;
 }>();
 defineEmits<{
   complete: [];

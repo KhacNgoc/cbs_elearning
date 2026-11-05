@@ -22,9 +22,8 @@
       :can-complete="userStore.canLearn"
       @complete="markAsCompleted"
       @open-content="sidebarOpen = true"
-      :flashcard-total="flashcardStats?.total || 0"
-      :flashcards-enabled="!!flashcardStats"
-      :flashcard-pending="flashcardPending"
+      :flashcard-total="flashcardTotal || 0"
+      :flashcards-enabled="flashcardTotal !== null"
       @open-flashcards="openFlashcards"
     />
         <!-- BANNER NỘI DUNG CẬP NHẬT MỚI -->
@@ -138,7 +137,7 @@
           ref="flashcardsPanel"
           :lesson-id="lesson.id"
           :lesson-title="lesson.title"
-          @stats="flashcardStats = $event"
+          @total="flashcardTotal = $event"
         />
         <LessonVideoNotes
           ref="videoNotesPanel"
@@ -187,21 +186,21 @@
     </footer>
     <Transition name="flashcard-nudge">
       <aside
-        v-if="flashcardNudgeOpen && flashcardPending && !quizGateOpen"
+        v-if="flashcardNudgeOpen && flashcardTotal && !quizGateOpen"
         class="flashcard-nudge"
         role="status"
       >
         <span class="flashcard-nudge-icon"><Layers3 :size="20" /></span>
         <div class="flashcard-nudge-copy">
           <strong>Củng cố bài vừa học</strong>
-          <span>Bài này có {{ flashcardPending }} flashcard chờ bạn ôn.</span>
+          <span>Bài này có {{ flashcardTotal }} flashcard để bạn ghi nhớ nhanh.</span>
         </div>
         <div class="flashcard-nudge-actions">
           <button type="button" class="btn btn-secondary" @click="flashcardNudgeOpen = false">
             Để sau
           </button>
           <button type="button" class="btn btn-primary" @click="openFlashcards">
-            Ôn ngay
+            Xem thẻ
           </button>
         </div>
       </aside>
@@ -311,7 +310,6 @@ import { createVideoProgressJournal } from "../utils/videoProgressJournal";
 import LessonDiscussion from "../components/lesson/LessonDiscussion.vue";
 import LessonVideoNotes from "../components/lesson/LessonVideoNotes.vue";
 import LessonFlashcards from "../components/lesson/LessonFlashcards.vue";
-import type { FlashcardStats } from "../api/flashcardApi";
 
 const props = defineProps<{ id: string }>();
 const latestChangelog = ref<{ changeSummary: string; createdAt: string } | null>(null);
@@ -398,11 +396,8 @@ const mediaStage = ref<InstanceType<typeof LessonMediaStage> | null>(null);
 const learningPage = ref<HTMLElement | null>(null);
 const videoNotesPanel = ref<InstanceType<typeof LessonVideoNotes> | null>(null);
 const flashcardsPanel = ref<InstanceType<typeof LessonFlashcards> | null>(null);
-const flashcardStats = ref<FlashcardStats | null>(null);
+const flashcardTotal = ref<number | null>(null);
 const flashcardNudgeOpen = ref(false);
-const flashcardPending = computed(() =>
-  flashcardStats.value ? flashcardStats.value.dueCount + flashcardStats.value.newCount : 0,
-);
 const openFlashcards = () => {
   flashcardNudgeOpen.value = false;
   flashcardsPanel.value?.open();
@@ -481,10 +476,11 @@ const isCompleted = computed(() =>
 );
 // Learners rarely scroll past the player after finishing, so point them at the deck.
 watch(
-  () => [lesson.value?.id, isCompleted.value] as const,
-  ([id, done], [previousId, wasDone]) => {
+  () => [lesson.value?.id, isCompleted.value, userStore.progressLoaded] as const,
+  ([id, done], [previousId, wasDone, wasLoaded]) => {
     if (id !== previousId) flashcardNudgeOpen.value = false;
-    else if (done && !wasDone) flashcardNudgeOpen.value = true;
+    // Progress arriving after the lesson opens is not the learner finishing it just now.
+    else if (done && !wasDone && wasLoaded) flashcardNudgeOpen.value = true;
   },
 );
 const completedCount = computed(
@@ -2781,11 +2777,6 @@ const deleteComment = async (commentId: number) => {
   line-height: 1;
   text-align: center;
   font-variant-numeric: tabular-nums;
-}
-/* Cards waiting for review get the same amber as the dashboard reminder. */
-.flashcard-shortcut strong.pending {
-  background: var(--warning-ink);
-  color: var(--surface-ffffff);
 }
 
 /* Reminder shown once a lesson is marked complete. */

@@ -6,7 +6,6 @@ import com.bidv.coretraining.entity.Flashcard;
 import com.bidv.coretraining.entity.Lesson;
 import com.bidv.coretraining.entity.User;
 import com.bidv.coretraining.enums.FlashcardOrigin;
-import com.bidv.coretraining.enums.FlashcardRating;
 import com.bidv.coretraining.enums.FlashcardType;
 import com.bidv.coretraining.exception.BadRequestException;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
@@ -27,14 +26,11 @@ import static org.mockito.Mockito.*;
 
 class PersonalFlashcardTest {
     final FlashcardRepository flashcards = mock(FlashcardRepository.class);
-    final FlashcardReviewRepository reviews = mock(FlashcardReviewRepository.class);
     final UserRepository users = mock(UserRepository.class);
     final LessonRepository lessons = mock(LessonRepository.class);
     final LearningAccessService access = mock(LearningAccessService.class);
-    final FlashcardLearningService service = new FlashcardLearningServiceImpl(flashcards, reviews, users,
-            mock(CourseRepository.class), lessons, access);
+    final FlashcardLearningService service = new FlashcardLearningServiceImpl(flashcards, users, lessons, access);
     final User learner = User.builder().id(1L).username("learner").build();
-    final User other = User.builder().id(2L).username("other").build();
     final Course course = Course.builder().id("C1").build();
     final Lesson lesson = Lesson.builder().id("L1").title("Bài 1").course(course).build();
 
@@ -60,7 +56,6 @@ class PersonalFlashcardTest {
                 && card.getOrigin() == FlashcardOrigin.PERSONAL && "PUBLISHED".equals(card.getStatus())
                 && "GL".equals(card.getFront()) && card.getCourse() == course));
         assertThat(result.mine()).isTrue();
-        assertThat(result.progress()).isNull();
     }
 
     @Test void clozeRulesApplyToPersonalCards() {
@@ -96,13 +91,11 @@ class PersonalFlashcardTest {
                 .isInstanceOf(ResponseStatusException.class);
     }
 
-    @Test void deleteRemovesReviewsFirst() {
+    @Test void deleteRemovesTheLearnersCard() {
         var mine = card(7L, learner);
         when(flashcards.findByIdAndOwnerId(7L, 1L)).thenReturn(Optional.of(mine));
         service.deletePersonal(7L, "learner");
-        var order = inOrder(reviews, flashcards);
-        order.verify(reviews).deleteByFlashcardId(7L);
-        order.verify(flashcards).delete(mine);
+        verify(flashcards).delete(mine);
     }
 
     @Test void deckAppendsOwnCardsAfterLessonCards() {
@@ -114,13 +107,5 @@ class PersonalFlashcardTest {
         assertThat(deck.cards()).extracting(FlashcardDto.Card::id).containsExactly(1L, 2L);
         assertThat(deck.cards()).extracting(FlashcardDto.Card::mine).containsExactly(false, true);
         assertThat(deck.cards().get(0).version()).isNull();
-        assertThat(deck.stats().total()).isEqualTo(2);
-    }
-
-    @Test void learnerCannotReviewAnotherLearnersCard() {
-        when(flashcards.findById(7L)).thenReturn(Optional.of(card(7L, other)));
-        assertThatThrownBy(() -> service.review(7L, FlashcardRating.GOOD, "learner"))
-                .isInstanceOf(ResourceNotFoundException.class);
-        verify(reviews, never()).save(any());
     }
 }

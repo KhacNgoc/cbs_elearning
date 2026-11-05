@@ -23,12 +23,6 @@ public class FlashcardController {
         return service.lessonDeck(id, userDetails.getUsername());
     }
 
-    @PostMapping("/flashcards/{id}/reviews")
-    public FlashcardDto.Card review(@PathVariable Long id, @Valid @RequestBody FlashcardDto.ReviewRequest request,
-            @AuthenticationPrincipal CustomUserDetails userDetails) {
-        return service.review(id, request.rating(), userDetails.getUsername());
-    }
-
     @PostMapping("/lessons/{id}/flashcards/mine")
     public FlashcardDto.Card createPersonal(@PathVariable String id,
             @Valid @RequestBody FlashcardDto.PersonalCardRequest request,
@@ -48,17 +42,5 @@ public class FlashcardController {
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         service.deletePersonal(id, userDetails.getUsername());
         return ResponseEntity.noContent().build();
-    }
-
-    @GetMapping("/users/me/flashcards/summary")
-    public FlashcardDto.Summary dueSummary(@AuthenticationPrincipal CustomUserDetails userDetails) {
-        return service.dueSummary(userDetails.getUsername());
-    }
-
-    @GetMapping("/users/me/flashcards/due")
-    public FlashcardDto.ReviewQueue dueQueue(@RequestParam String courseId,
-            @RequestParam(defaultValue = "20") int limit,
-            @AuthenticationPrincipal CustomUserDetails userDetails) {
-        return service.dueQueue(courseId, limit, userDetails.getUsername());
     }
 }
