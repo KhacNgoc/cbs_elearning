@@ -34,7 +34,7 @@ public class NotificationNativeRepositoryImpl implements NotificationNativeRepos
                 :message,
                 :targetUrl,
                 false,
-                NOW()
+                NOW() AT TIME ZONE 'UTC'
             FROM user_completed_lessons ucl
             WHERE ucl.lesson_id = :lessonId
             """;

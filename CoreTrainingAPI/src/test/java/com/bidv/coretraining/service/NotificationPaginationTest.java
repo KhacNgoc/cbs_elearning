@@ -60,6 +60,23 @@ class NotificationPaginationTest {
         assertThat(repository.countByRecipientUsernameAndReadFalse(other.getUsername())).isEqualTo(1);
         assertThat(service.getPageForUser(u.getUsername(), null, 1000).content()).hasSize(50).allMatch(n -> n.isRead());
     }
+    @Test void createdAtIsUtcWhateverTheJvmTimezoneAndSerializesWithAnOffset() throws Exception {
+        var previous = TimeZone.getDefault();
+        TimeZone.setDefault(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
+        try {
+            var u = user(); var before = java.time.Instant.now();
+            var created = service.create(u.getUsername(), NotificationType.COMMENT_REPLY, "Title", "Message", null);
+            assertThat(created.getCreatedAt()).isBetween(before, java.time.Instant.now());
+            em.flush(); em.clear();
+            assertThat(repository.findById(created.getId()).orElseThrow().getCreatedAt().toInstant(java.time.ZoneOffset.UTC))
+                .isBetween(before.minusSeconds(1), java.time.Instant.now());
+            var stored = add(u, LocalDateTime.of(2026, 11, 4, 16, 58, 12)); em.flush(); em.clear();
+            var dto = service.getPageForUser(u.getUsername(), null, 6).content().stream()
+                .filter(n -> n.getId().equals(stored.getId())).findFirst().orElseThrow();
+            var json = org.springframework.http.converter.json.Jackson2ObjectMapperBuilder.json().build().writeValueAsString(dto);
+            assertThat(json).contains("\"createdAt\":\"2026-11-04T16:58:12Z\"");
+        } finally { TimeZone.setDefault(previous); }
+    }
     @Test void emptyAndForeignCursorAreHandled() {
         var u = user(); var foreign = add(user(), LocalDateTime.now()); em.flush();
         assertThat(service.getPageForUser(u.getUsername(), null, 6).content()).isEmpty();

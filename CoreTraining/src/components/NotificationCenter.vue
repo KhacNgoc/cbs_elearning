@@ -195,6 +195,7 @@ const formatTime = (value: string) =>
   new Intl.DateTimeFormat("vi-VN", {
     dateStyle: "short",
     timeStyle: "short",
+    timeZone: "Asia/Ho_Chi_Minh",
   }).format(new Date(value));
 const closeOnOutside = (event: MouseEvent) => {
   if (root.value && !root.value.contains(event.target as Node))

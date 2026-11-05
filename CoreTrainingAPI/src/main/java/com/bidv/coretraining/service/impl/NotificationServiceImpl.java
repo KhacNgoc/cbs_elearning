@@ -12,7 +12,9 @@ import com.bidv.coretraining.repository.NotificationNativeRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 
@@ -42,7 +44,7 @@ public class NotificationServiceImpl implements NotificationService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
         Notification saved = repository.save(Notification.builder()
                 .recipient(user).type(type).title(title).message(message)
-                .targetUrl(targetUrl).createdAt(LocalDateTime.now()).build());
+                .targetUrl(targetUrl).createdAt(LocalDateTime.now(ZoneOffset.UTC)).build());
         NotificationDto dto = toDto(saved);
         if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
             org.springframework.transaction.support.TransactionSynchronizationManager
@@ -99,7 +101,7 @@ public class NotificationServiceImpl implements NotificationService {
                 .message(message)
                 .targetUrl(targetUrl)
                 .read(false)
-                .createdAt(LocalDateTime.now())
+                .createdAt(Instant.now())
                 .build();
 
         if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -162,6 +164,6 @@ public class NotificationServiceImpl implements NotificationService {
                 .id(notification.getId()).type(notification.getType())
                 .title(notification.getTitle()).message(notification.getMessage())
                 .targetUrl(notification.getTargetUrl()).read(notification.isRead())
-                .createdAt(notification.getCreatedAt()).build();
+                .createdAt(notification.getCreatedAt().toInstant(ZoneOffset.UTC)).build();
     }
 }

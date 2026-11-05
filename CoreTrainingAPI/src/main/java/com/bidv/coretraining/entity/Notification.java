@@ -41,6 +41,7 @@ public class Notification {
     @Builder.Default
     private boolean read = false;
 
+    /** UTC wall clock: the column has no timezone, so the JVM default must not decide its meaning. */
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 }

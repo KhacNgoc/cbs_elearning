@@ -146,3 +146,15 @@ năng thời gian thực. Tránh log query string của URL stream vì có token
 Nginx frontend đã bỏ query string trong access log. Thay các secret mẫu
 trước khi triển khai. Khi giữ API cùng origin, không cần mở CORS cho nhiều
 domain; nếu tách domain cần cấu hình lại origin/cookie và kiểm thử riêng.
+
+## Múi giờ backend
+
+Backend cố định múi giờ `Asia/Ho_Chi_Minh` khi khởi động. Các cột thời gian không có múi giờ lưu giờ Việt Nam, riêng `notifications.created_at` lưu UTC.
+
+Khi lần đầu triển khai thay đổi này trên môi trường có backend từng chạy UTC:
+
+1. Sao lưu cơ sở dữ liệu và dừng backend.
+2. Chạy `CoreTrainingAPI/src/main/resources/migrations/20261105_timestamps_to_vietnam_time.sql` (chạy lại không có tác dụng).
+3. Khởi động phiên bản backend mới.
+
+Không chạy script này trên môi trường có backend vốn đã chạy giờ Việt Nam.
