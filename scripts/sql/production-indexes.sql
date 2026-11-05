@@ -1,4 +1,4 @@
--- PostgreSQL 15+: consolidated inventory of the 21 explicit application indexes.
+-- PostgreSQL 15+: consolidated inventory of the 19 explicit application indexes.
 -- Sources: CoreTrainingAPI entity @Index, resources/schema.sql and migrations/.
 -- Apply table/column migrations FIRST. This script does not create tables,
 -- migrate data, or recreate indexes supplied by PRIMARY KEY / UNIQUE constraints.
@@ -32,10 +32,8 @@ TRUNCATE pg_temp.cbs_production_index_inventory;
 INSERT INTO pg_temp.cbs_production_index_inventory VALUES
     ('idx_users_unit', 'users', ARRAY['unit_id']),
     ('idx_courses_owner_unit', 'courses', ARRAY['owner_unit_id']),
-    ('idx_groups_unit', 'user_groups', ARRAY['unit_id']),
     ('idx_course_grants_unit', 'course_unit_grants', ARRAY['unit_id']),
     ('idx_instructor_user', 'course_instructors', ARRAY['user_id']),
-    ('idx_group_memberships_group', 'user_group_memberships', ARRAY['group_id']),
     ('idx_bank_questions_course', 'bank_questions', ARRAY['course_id']),
     ('idx_lesson_reports_lesson', 'lesson_reports', ARRAY['lesson_id']),
     ('idx_lesson_reports_created', 'lesson_reports', ARRAY['created_at']),
@@ -110,12 +108,9 @@ $preflight$;
 -- Organization/access: migrations/20261012_access_control.sql
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_users_unit ON public.users (unit_id);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_courses_owner_unit ON public.courses (owner_unit_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_groups_unit ON public.user_groups (unit_id);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_course_grants_unit ON public.course_unit_grants (unit_id);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_instructor_user ON public.course_instructors (user_id);
 
--- Group membership: migrations/20261016_group_memberships.sql, entity User
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_group_memberships_group ON public.user_group_memberships (group_id);
 
 -- Question bank/reports: migrations/20261014_content_reports_question_bank.sql
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_bank_questions_course ON public.bank_questions (course_id);
@@ -147,7 +142,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_flashcards_owner_lesson ON public.fl
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_flashcard_plans_user ON public.flashcard_study_plans (user_id);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_flashcard_plans_next_reminder ON public.flashcard_study_plans (next_reminder_at);
 
--- Deployment report: expect 21 rows, all status=OK. Preserve indexdef in the
+-- Deployment report: expect 19 rows, all status=OK. Preserve indexdef in the
 -- deployment log; a future definition change needs a new migration, not just IF NOT EXISTS.
 SELECT e.table_name, e.index_name,
        CASE WHEN i.indisvalid AND i.indisready THEN 'OK' ELSE 'MISSING / INVALID' END AS status,

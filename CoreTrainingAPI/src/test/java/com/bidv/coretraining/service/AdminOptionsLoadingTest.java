@@ -16,11 +16,10 @@ class AdminOptionsLoadingTest {
         var programs = mock(TrainingProgramRepository.class);
         var courses = mock(CourseRepository.class);
         var domains = mock(TrainingDomainRepository.class);
-        var groups = mock(UserGroupRepository.class);
-        var service = new AdminOptionsServiceImpl(auth, units, programs, courses, domains, groups);
+        var service = new AdminOptionsServiceImpl(auth, units, programs, courses, domains);
         assertThatThrownBy(() -> service.options("invalid"))
                 .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
-        verifyNoInteractions(auth, units, programs, courses, domains, groups);
+        verifyNoInteractions(auth, units, programs, courses, domains);
     }
 
     @Test void rejectsMissingReadPermissionBeforeLoadingOptions() {
@@ -29,38 +28,35 @@ class AdminOptionsLoadingTest {
         var programs = mock(TrainingProgramRepository.class);
         var courses = mock(CourseRepository.class);
         var domains = mock(TrainingDomainRepository.class);
-        var groups = mock(UserGroupRepository.class);
         doThrow(new org.springframework.security.access.AccessDeniedException("denied"))
                 .when(auth).requireOperation("courses", "read");
-        var service = new AdminOptionsServiceImpl(auth, units, programs, courses, domains, groups);
+        var service = new AdminOptionsServiceImpl(auth, units, programs, courses, domains);
         assertThatThrownBy(() -> service.options("courses"))
                 .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
-        verifyNoInteractions(units, programs, courses, domains, groups);
+        verifyNoInteractions(units, programs, courses, domains);
         verify(auth, never()).current();
     }
 
-    @Test void roleOptionsDoNotReadGroupsOrTrainingCollections() {
+    @Test void roleOptionsDoNotReadTrainingCollections() {
         var auth = mock(AuthorizationService.class);
         var units = mock(OrganizationUnitRepository.class);
         var programs = mock(TrainingProgramRepository.class);
         var courses = mock(CourseRepository.class);
         var domains = mock(TrainingDomainRepository.class);
-        var groups = mock(UserGroupRepository.class);
         when(auth.current()).thenReturn(User.builder().role("ROLE_ADMIN").build());
-        var controller = new AdminOptionsController(new AdminOptionsServiceImpl(auth, units, programs, courses, domains, groups));
+        var controller = new AdminOptionsController(new AdminOptionsServiceImpl(auth, units, programs, courses, domains));
         assertThat(controller.options("roles").units()).isEqualTo(List.of());
-        verifyNoInteractions(groups, programs, courses, domains);
+        verifyNoInteractions(programs, courses, domains);
     }
-    @Test void userOptionsDoNotReadTrainingCollectionsOrGroups() {
+    @Test void userOptionsDoNotReadTrainingCollections() {
         var auth = mock(AuthorizationService.class);
         var units = mock(OrganizationUnitRepository.class);
         var programs = mock(TrainingProgramRepository.class);
         var courses = mock(CourseRepository.class);
         var domains = mock(TrainingDomainRepository.class);
-        var groups = mock(UserGroupRepository.class);
         when(auth.current()).thenReturn(User.builder().role("ROLE_ADMIN").build());
-        var controller = new AdminOptionsController(new AdminOptionsServiceImpl(auth, units, programs, courses, domains, groups));
+        var controller = new AdminOptionsController(new AdminOptionsServiceImpl(auth, units, programs, courses, domains));
         controller.options("users");
-        verifyNoInteractions(groups, programs, courses, domains);
+        verifyNoInteractions(programs, courses, domains);
     }
 }

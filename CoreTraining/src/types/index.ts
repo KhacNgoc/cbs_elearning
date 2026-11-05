@@ -179,8 +179,6 @@ export interface UserProgress {
   lessonProgress?: Record<string, LessonProgress>;
   points: number; // Experience points
   unlockedBadges: Badge[];
-  groupIds?: string[];
-  groupName?: string;
   mandatoryCourses: string[];
   registeredCourses: string[];
   mustChangePassword?: boolean;
@@ -288,8 +286,6 @@ export interface UserProfile {
   status?: string;
   learnerType?: string;
   points: number;
-  groupIds?: string[];
-  groupName?: string;
 }
 
 export interface LeaderboardUser {

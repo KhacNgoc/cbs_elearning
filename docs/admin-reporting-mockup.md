@@ -10,7 +10,7 @@ Dashboard cần trả lời nhanh: phạm vi nào đang xem, tình hình chung, 
 4. Kết quả & năng lực: đạt lần đầu/đã từng đạt, chưa đạt/chưa thi; mức bao phủ đánh giá và khu vực kiến thức/mục tiêu chưa đủ dữ liệu.
 5. Danh sách cần chú ý: đơn vị có quá hạn; khóa học có nhiều quá hạn/chưa đạt; học viên quá hạn, sắp đến hạn chưa bắt đầu, đã thi chưa đạt, chưa thi.
 
-Nhóm sidebar `Thống kê & báo cáo` xổ 8 màn hình bằng query `report`: `learners`, `courses`, `programs`, `groups`, `units`, `completion`, `scores`, `domains`. Quyền dùng nhóm menu dựa vào quyền trang `admin.overview` hiện có; không thay đổi phân quyền backend. Query `tab` của các màn hình quản trị cũ vẫn được giữ cho đường dẫn cũ. Bản duyệt độc lập development `/mockups/reports` hiển thị cùng sidebar và nội dung, không cần đăng nhập; không có đường dẫn công khai này trong production.
+Nhóm sidebar `Thống kê & báo cáo` xổ 7 màn hình bằng query `report`: `learners`, `courses`, `programs`, `units`, `completion`, `scores`, `domains`. Quyền dùng nhóm menu dựa vào quyền trang `admin.overview` hiện có; không thay đổi phân quyền backend. Query `tab` của các màn hình quản trị cũ vẫn được giữ cho đường dẫn cũ. Bản duyệt độc lập development `/mockups/reports` hiển thị cùng sidebar và nội dung, không cần đăng nhập; không có đường dẫn công khai này trong production.
 
 ## Các màn hình chuyên sâu
 

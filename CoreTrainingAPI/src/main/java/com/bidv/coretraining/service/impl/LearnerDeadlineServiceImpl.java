@@ -30,8 +30,7 @@ public class LearnerDeadlineServiceImpl implements LearnerDeadlineService {
 
         private boolean enrolled(User user, Course c) {
                 return AccessPolicy.visible(user, c) && (AccessPolicy.mandatory(user, c)
-                                || user.getRegisteredCourses().stream().anyMatch(x -> x.getId().equals(c.getId()))
-                                || user.hasGroupMandatoryCourse(c.getId()));
+                                || user.getRegisteredCourses().stream().anyMatch(x -> x.getId().equals(c.getId())));
         }
 
         @Transactional(readOnly = true)

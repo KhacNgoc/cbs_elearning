@@ -80,8 +80,7 @@ public final class LearningPolicy {
                 .require(com.bidv.coretraining.security.AccessPolicy.permissions(user).contains("LEARN")
                         && com.bidv.coretraining.security.AccessPolicy.visible(user, course));
         boolean enrolled = com.bidv.coretraining.security.AccessPolicy.mandatory(user, course)
-                || user.getRegisteredCourses().stream().anyMatch(c -> c.getId().equals(course.getId()))
-                || user.hasGroupMandatoryCourse(course.getId());
+                || user.getRegisteredCourses().stream().anyMatch(c -> c.getId().equals(course.getId()));
         if (!isLearnableStatus(course.getStatus()) || !enrolled)
             throw new AccessDeniedException("Bạn chưa được cấp quyền học khóa này");
     }
@@ -116,7 +115,7 @@ public final class LearningPolicy {
     }
     public static boolean ratingEligible(User user,Course course) {
         boolean enrolled=user.getRegisteredCourses().stream().anyMatch(c->c.getId().equals(course.getId()))
-                || AccessPolicy.mandatory(user,course) || user.hasGroupMandatoryCourse(course.getId());
+                || AccessPolicy.mandatory(user,course);
         return AccessPolicy.has(user,"LEARN") && "PUBLISHED".equals(course.getStatus()) && enrolled
                 && LearningPolicy.courseCompleted(user,course);
     }

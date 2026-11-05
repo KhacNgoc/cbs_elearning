@@ -46,8 +46,7 @@ is detached by the time a controller or service handles the request. Adding
 
 `DetachedPrincipalIntegrationTest` deliberately runs without a test transaction
 and with `spring.jpa.open-in-view=false`. It covers detached user reload, PDF
-access, registration revocation, sequential lesson gates, mandatory group
-courses, account locking, dynamic/legacy authentication metadata, admin options,
+access, registration revocation, sequential lesson gates, account locking, dynamic/legacy authentication metadata, admin options,
 video streaming, and chat authorization before the external HTTP call.
 
 Run backend checks with JDK 17: `mvn test` from `CoreTrainingAPI`.

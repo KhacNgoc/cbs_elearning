@@ -961,17 +961,6 @@
         </div>
       </Transition>
     </Teleport>
-
-    <!-- FULLSCREEN LOADING OVERLAY KHI ĐANG TẠO BÀI HỌC -->
-    <Teleport to="body">
-      <div v-if="isCreatingLessonDirectly" class="fullscreen-loading-overlay">
-        <div class="loading-modal-card">
-          <Loader2 :size="42" class="spin-icon loading-spinner" />
-          <h4>Đang khởi tạo bài học mới...</h4>
-          <p>Hệ thống đang chuẩn bị cấu trúc và chuyển hướng tới trang soạn thảo.</p>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>
 
@@ -2056,6 +2045,8 @@ function extractUnitsFromObject(obj: any): { mandatory: string[]; optional: stri
 const isCreatingLessonDirectly = ref(false);
 
 async function createLessonDirectly(chapter: any, course?: any) {
+  // Chặn bấm liên tiếp tạo trùng bài học
+  if (isCreatingLessonDirectly.value) return;
   try {
     const courseId =
       course?.id ||
@@ -2103,11 +2094,13 @@ async function createLessonDirectly(chapter: any, course?: any) {
     saveTreeStateToStorage();
 
     emit("refresh");
+    showToast("Tạo bài học mới thành công.");
     await router.push(`/admin/lessons/${encodeURIComponent(saved.id)}/edit`);
   } catch (err: any) {
-    isCreatingLessonDirectly.value = false;
     const msg = err.response?.data?.message || "Lỗi khi tạo bài học!";
     showToast(msg, "error");
+  } finally {
+    isCreatingLessonDirectly.value = false;
   }
 }
 
@@ -4635,42 +4628,5 @@ watch(
 
 .impeccable-desc-popover .popover-footer-meta strong {
   color: var(--text-main);
-}
-
-.fullscreen-loading-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 999999;
-  background: rgba(10, 16, 26, 0.78);
-  backdrop-filter: blur(5px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.loading-modal-card {
-  background: var(--bg-surface, #1e293b);
-  border: 1px solid var(--border-color, #334155);
-  border-radius: 16px;
-  padding: 2.2rem 3rem;
-  text-align: center;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.65);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.9rem;
-}
-.loading-modal-card h4 {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #fff;
-}
-.loading-modal-card p {
-  margin: 0;
-  font-size: 0.9rem;
-  color: #94a3b8;
-}
-.loading-spinner {
-  color: #10b981;
 }
 </style>

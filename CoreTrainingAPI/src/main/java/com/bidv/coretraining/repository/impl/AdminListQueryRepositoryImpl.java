@@ -161,16 +161,6 @@ public class AdminListQueryRepositoryImpl implements AdminListQueryRepository {
         }, "fullName");
         return result;
     }
-    public NumberedPage<UserGroup> groups(String pattern, String unitId, int page, int size, Scope scope) {
-        var cb = em.getCriteriaBuilder();
-        var result = numbered(UserGroup.class, page, size, (g, cq) -> {
-            var unit = g.join("organizationUnit", JoinType.LEFT);
-            return cb.and(unitScope(cb, unit, scope),
-                    text(cb, pattern, g.get("id"), g.get("name")),
-                    unitId == null || unitId.isBlank() ? cb.conjunction() : cb.equal(unit.get("id"), unitId));
-        }, "name");
-        return result;
-    }
     public NumberedPage<AccessRole> roles(String pattern, String status, int page, int size, boolean managementOnly, List<String> allowed) {
         var cb = em.getCriteriaBuilder();
         var result = numbered(AccessRole.class, page, size, (r, cq) -> cb.and(in(cb, r.get("id"), allowed),
@@ -188,14 +178,6 @@ public class AdminListQueryRepositoryImpl implements AdminListQueryRepository {
                 unitScope(cb, u.join("organizationUnit", JoinType.LEFT), scope),
                 scope.system() ? cb.conjunction() : nonSystem(cb, u, cq),
                 text(cb, pattern, u.get("fullName"), u.get("username"))), "fullName");
-        return result;
-    }
-    public NumberedPage<Course> groupCourses(String pattern, int page, int size, Scope scope) {
-        var cb = em.getCriteriaBuilder();
-        var result = numbered(Course.class, page, size,
-                (c, cq) -> cb.and(courseScope(cb, c, scope),
-                        text(cb, pattern, c.get("id"), c.get("code"), c.get("name"))),
-                "name");
         return result;
     }
     public Rows<CourseEnrollmentRequest> enrollments(String pattern, String status, Boundary boundary, int size, Scope scope) {
@@ -269,7 +251,6 @@ public class AdminListQueryRepositoryImpl implements AdminListQueryRepository {
     public List<AccessRole> allRoles() { return em.createQuery("select r from AccessRole r",AccessRole.class).getResultList(); }
     public AccessRole role(String id) { return em.find(AccessRole.class,id); }
     public LessonReport report(Long id) { return em.find(LessonReport.class,id); }
-    public Map<String,Long> groupCounts(List<String> ids) { return counts("select g.id, count(u) from User u join u.userGroups g where g.id in :ids group by g.id",ids); }
     public Map<String,Long> roleCounts(List<String> ids) { return counts("select r.id, count(u) from User u join u.assignedRoles r where r.id in :ids group by r.id",ids); }
     private Map<String,Long> counts(String query,List<String> ids) {
         Map<String,Long> counts=new HashMap<>();

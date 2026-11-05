@@ -33,7 +33,6 @@ public class NavigationDataInitializer implements ApplicationRunner {
                                 "ROLE_ADMIN");
                 seed("admin.users", "Tài khoản", "/admin/users", "Users", "ADMIN", 110, true, "ROLE_ADMIN");
                 seed("admin.units", "Đơn vị / phòng", "/admin/units", "Building2", "ADMIN", 111, true, "ROLE_ADMIN");
-                seed("admin.groups", "Nhóm học viên", "/admin/groups", "UsersRound", "ADMIN", 112, true, "ROLE_ADMIN");
                 seed("admin.permissions", "Phân quyền", "/admin/permissions", "ShieldCheck", "ADMIN", 114, true,
                                 "ROLE_ADMIN");
                 seed("admin.enrollments", "Duyệt đăng ký", "/admin?tab=enrollments", "ClipboardCheck", "ADMIN", 120,
@@ -64,7 +63,7 @@ public class NavigationDataInitializer implements ApplicationRunner {
         private void seed(String id, String label, String route, String icon, String area,
                         int order, boolean visible, String... roles) {
                 if (repository.existsById(id)) {
-                        if (Set.of("admin.access", "admin.users", "admin.units", "admin.groups", "admin.permissions")
+                        if (Set.of("admin.access", "admin.users", "admin.units", "admin.permissions")
                                         .contains(id)) {
                                 var item = repository.findById(id).orElseThrow();
                                 item.setLabel(label);

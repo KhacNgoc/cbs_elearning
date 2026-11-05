@@ -168,28 +168,8 @@ public class AdminListQueryServiceImpl implements AdminListQueryService {
                         .collect(Collectors.toSet()))
                 .unitId(user.getOrganizationUnit() == null ? null : user.getOrganizationUnit().getId())
                 .scopeUnitIds(user.getScopeUnitIds()).status(user.getStatus()).learnerType(user.getLearnerType())
-                .points(user.getPoints()).userGroupIds(user.groupIds()).groupNames(user.groupNames())
+                .points(user.getPoints())
                 .employeeId(user.getEmployeeId()).email(user.getEmail()).build();
-    }
-
-    public NumberedPage<AccessManagementDto.GroupDto> groups(String query, String unitId, int page, int size) {
-        auth.permission("GROUP_MANAGE");
-        var actor = auth.current();
-        var hierarchy = units.findAll();
-        String pattern = search(query);
-        page(page,size);
-        var result = repository.groups(pattern, unitId, page, size, authorizedScope(actor,"groups:read",hierarchy));
-        var counts=repository.groupCounts(result.items().stream().map(UserGroup::getId).toList());
-        var items = result.items().stream()
-                .map(g -> new AccessManagementDto.GroupDto(g.getId(), g.getName(),
-                        g.getOrganizationUnit() == null ? null : g.getOrganizationUnit().getId(),
-                        g.getMandatoryCourses().stream().map(Course::getId).collect(Collectors.toSet()),
-                        java.util.stream.Stream.of("create", "read", "update", "delete")
-                                .filter(a -> AccessPolicy.allows(actor, "groups:" + a, g.getOrganizationUnit()))
-                                .collect(Collectors.toSet()),
-                        counts.getOrDefault(g.getId(), 0L)))
-                .toList();
-        return new NumberedPage<>(items, result.total(), result.page(), result.pageCount());
     }
 
     public NumberedPage<RoleSummary> roles(String query, String status, int page, int size, boolean managementOnly) {
@@ -263,18 +243,6 @@ public class AdminListQueryServiceImpl implements AdminListQueryService {
                         u.getOrganizationUnit() == null ? null : u.getOrganizationUnit().getId(), u.effectiveRoles(),
                         u.getAssignedRoles().stream().anyMatch(r -> r.getId().equals(roleId)),
                         AccessPolicy.system(actor) || !Objects.equals(actor.getId(), u.getId()))).toList(),
-                result.total(), result.page(), result.pageCount());
-    }
-
-    public NumberedPage<CourseChoice> groupCourses(String query, int page, int size) {
-        auth.requireOperation("groups", "read");
-        var actor = auth.current();
-        var hierarchy = units.findAll();
-        String pattern = search(query);
-        page(page,size);
-        var result = repository.groupCourses(pattern, page, size, authorizedScope(actor,"groups:read",hierarchy));
-        return new NumberedPage<>(
-                result.items().stream().map(c -> new CourseChoice(c.getId(), c.getCode(), c.getName())).toList(),
                 result.total(), result.page(), result.pageCount());
     }
 

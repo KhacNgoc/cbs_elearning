@@ -1,7 +1,6 @@
 package com.bidv.coretraining.controller;
 
 import com.bidv.coretraining.dto.UserDto;
-import com.bidv.coretraining.dto.UserGroupDto;
 import com.bidv.coretraining.service.UserAdminService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -52,10 +51,5 @@ public class AdminUserController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=user_import_template.xlsx")
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(service.generateExcelTemplate());
-    }
-
-    @GetMapping("/groups")
-    public ResponseEntity<List<UserGroupDto>> getAllUserGroups() {
-        return ResponseEntity.ok(service.getAllUserGroups());
     }
 }

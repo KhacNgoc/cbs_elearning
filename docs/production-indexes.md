@@ -2,7 +2,7 @@
 
 Script: [`scripts/sql/production-indexes.sql`](../scripts/sql/production-indexes.sql).
 
-Rà soát ngày 23/10/2026: tổng hợp **21 index được khai báo tường minh** trong entity `@Index`, `schema.sql` và các migration hiện có. Không đề xuất thêm index mới dựa trên suy đoán hiệu năng, không bao gồm index PostgreSQL tự tạo cho PRIMARY KEY/UNIQUE. Các migration tiến độ ngày 23/10 chỉ bổ sung cột, không bổ sung index.
+Rà soát ngày 23/10/2026: tổng hợp **19 index được khai báo tường minh** trong entity `@Index`, `schema.sql` và các migration hiện có. Không đề xuất thêm index mới dựa trên suy đoán hiệu năng, không bao gồm index PostgreSQL tự tạo cho PRIMARY KEY/UNIQUE. Các migration tiến độ ngày 23/10 chỉ bổ sung cột, không bổ sung index.
 
 ## Danh sách
 
@@ -10,10 +10,8 @@ Rà soát ngày 23/10/2026: tổng hợp **21 index được khai báo tường 
 |---|---|---|
 | users | idx_users_unit | unit_id |
 | courses | idx_courses_owner_unit | owner_unit_id |
-| user_groups | idx_groups_unit | unit_id |
 | course_unit_grants | idx_course_grants_unit | unit_id |
 | course_instructors | idx_instructor_user | user_id |
-| user_group_memberships | idx_group_memberships_group | group_id |
 | bank_questions | idx_bank_questions_course | course_id |
 | lesson_reports | idx_lesson_reports_lesson | lesson_id |
 | lesson_reports | idx_lesson_reports_created | created_at |

@@ -1,7 +1,7 @@
 import { axiosClient } from './axiosClient';
 import type { ReportingRecord } from '../utils/reportingMetrics';
 export interface ReportRow extends ReportingRecord {
-  id:string; name:string; unit:string; group:string; courseId:string; courseName:string;
+  id:string; name:string; unit:string; courseId:string; courseName:string;
   program:string; domain:string; completedAt:string|null; date:string;
   status:string; score:number|null; passed:boolean;
   attemptCount?:number;
@@ -16,7 +16,7 @@ export interface ReportMetrics {
   overduePeople:number;peopleWithDeadline:number;mandatory:number;mandatoryComplete:number;
 }
 export interface ReportFact {
-  learnerId:number;name:string;unit:string;groupName:string;courseId:string;courseName:string;program:string;domain:string;
+  learnerId:number;name:string;unit:string;courseId:string;courseName:string;program:string;domain:string;
   mandatory:number;dueDate:string|null;completedAt:string|null;completed:number;status:string;attemptCount:number;
   average:number|null;everPassed:number;requiredPassed:number;passingScore:number;progress:number;
 }

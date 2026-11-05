@@ -288,9 +288,8 @@
                 <col style="width: 17%" />
                 <col style="width: 13%" />
                 <col style="width: 10%" />
-                <col style="width: 18%" />
-                <col style="width: 13%" />
-                <col style="width: 9%" />
+                <col style="width: 24%" />
+                <col style="width: 16%" />
                 <col style="width: 8%" />
                 <col style="width: 12%" />
               </colgroup>
@@ -300,7 +299,6 @@
                   <th>Tên đăng nhập</th>
                   <th>Mã NV</th>
                   <th>Email</th>
-                  <th>Nhóm nghiệp vụ</th>
                   <th>Vai trò</th>
                   <th>Điểm số tích lũy</th>
                   <th class="actions-col">Thao tác</th>
@@ -326,7 +324,6 @@
                   </td>
                   <td>{{ u.employeeId || "-" }}</td>
                   <td>{{ u.email || "-" }}</td>
-                  <td>{{ u.groupNames || "-" }}</td>
                   <td>
                     <span
                       class="role-tag"
@@ -359,7 +356,7 @@
                   </td>
                 </tr>
                 <tr v-if="filteredUsers.length === 0">
-                  <td colspan="8" class="empty-row">
+                  <td colspan="7" class="empty-row">
                     Không tìm thấy thành viên phù hợp.
                   </td>
                 </tr>
@@ -1200,7 +1197,6 @@
           required
         />
       </div>
-      <p class="admin-modal-help">Quản lý nhóm của tài khoản tại menu Nhóm học viên → Thành viên.</p>
       <div class="form-group">
         <label>Vai trò hệ thống</label>
         <select v-model="userForm.role" class="form-control">

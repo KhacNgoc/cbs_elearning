@@ -16,8 +16,7 @@
             <h1>{{ profile.fullName || profile.username }}</h1>
             <p>
               {{ profile.username }} ·
-              {{ roleLabel(profile.roles || [profile.role])
-              }}<span v-if="profile.groupName"> · {{ profile.groupName }}</span>
+              {{ roleLabel(profile.roles || [profile.role]) }}
             </p>
           </div>
         </header>
@@ -67,10 +66,6 @@
               ><label
                 >Đơn vị công tác<input
                   :value="profile.unitName || 'Chưa gán đơn vị'"
-                  readonly /></label
-              ><label
-                >Nhóm nghiệp vụ<input
-                  :value="profile.groupName || 'Chưa phân nhóm'"
                   readonly /></label
               ><label
                 >Vai trò<input

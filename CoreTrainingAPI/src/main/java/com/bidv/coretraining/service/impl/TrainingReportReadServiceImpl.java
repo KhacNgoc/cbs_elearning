@@ -26,7 +26,7 @@ public class TrainingReportReadServiceImpl implements TrainingReportReadService 
     private final QuestionRepository questions;
     public TrainingReportReadServiceImpl(AuthorizationService auth, TrainingReportQueryRepository repository, UserQuizScoreRepository scores, QuizAttemptRepository quizAttempts, QuestionRepository questions) {this.auth=auth;this.repository=repository;this.scores=scores;this.quizAttempts=quizAttempts;this.questions=questions;}
     private Filter filter(Map<String,String> p) {
-        try { return new Filter(p.get("from"),p.get("to"),p.get("unit"),p.get("group"),p.get("program"),p.get("course"),p.get("status"),p.getOrDefault("view","completion"),p.get("action"),p.get("search"),Integer.parseInt(p.getOrDefault("page","0")),Integer.parseInt(p.getOrDefault("size","20")),p.get("dimension"),p.get("key")); }
+        try { return new Filter(p.get("from"),p.get("to"),p.get("unit"),p.get("program"),p.get("course"),p.get("status"),p.getOrDefault("view","completion"),p.get("action"),p.get("search"),Integer.parseInt(p.getOrDefault("page","0")),Integer.parseInt(p.getOrDefault("size","20")),p.get("dimension"),p.get("key")); }
         catch(NumberFormatException e) { throw new BadRequestException("Tham số phân trang không hợp lệ"); }
     }
     private void validate(Filter f) {
@@ -89,10 +89,10 @@ public class TrainingReportReadServiceImpl implements TrainingReportReadService 
         if ("courses".equals(view))
             return List.of("Khóa học", "Ghi danh", "Hoàn thành", "Tỷ lệ hoàn thành", "Đạt kiểm tra / đã thi",
                     "Điểm TB /100", "Bỏ dở");
-        if ("groups".equals(view) || "units".equals(view))
-            return List.of("Đối tượng", "Học viên", "Lượt học", "Tỷ lệ hoàn thành", "Tỷ lệ đạt kiểm tra",
+        if ("units".equals(view))
+            return List.of("Đơn vị", "Học viên", "Lượt học", "Tỷ lệ hoàn thành", "Tỷ lệ đạt kiểm tra",
                     "Học viên quá hạn / có hạn");
-        return List.of("Học viên", "Đơn vị / nhóm", "Khóa học", "Trạng thái", "Hạn hoàn thành", "Kết quả kiểm tra");
+        return List.of("Học viên", "Đơn vị", "Khóa học", "Trạng thái", "Hạn hoàn thành", "Kết quả kiểm tra");
     }
 
     private static long number(Map<String, Object> r, String name) {
@@ -117,8 +117,7 @@ public class TrainingReportReadServiceImpl implements TrainingReportReadService 
             case "programs" -> List.of(label, number(r, "people"), mandatory, mandatoryComplete,
                     ratio(mandatoryComplete, mandatory), pass);
             case "courses" -> List.of(label, total, complete, ratio(complete, total), pass, avg, "Chưa có dữ liệu");
-            case "groups",
-                    "units" ->
+            case "units" ->
                 List.of(label, number(r, "people"), total, ratio(complete, total), pass,
                         number(r, "overduePeople") + " / " + number(r, "peopleWithDeadline") + " ("
                                 + ratio(number(r, "overduePeople"), number(r, "peopleWithDeadline")) + ")");
@@ -127,7 +126,7 @@ public class TrainingReportReadServiceImpl implements TrainingReportReadService 
                         number(r, "attemptCount") == 0 ? "Chưa kiểm tra"
                                 : number(r, "everPassed") == 1 && number(r, "requiredPassed") == 1 ? "Đã từng đạt"
                                         : "Chưa từng đạt");
-            default -> List.of(label + " · " + r.get("learnerId"), r.get("unit") + " / " + r.get("groupName"),
+            default -> List.of(label + " · " + r.get("learnerId"), r.get("unit"),
                     r.get("courseName"), r.get("status"), Objects.toString(r.get("dueDate"), "Chưa quy định"), avg);
         };
     }

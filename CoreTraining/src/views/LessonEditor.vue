@@ -309,7 +309,6 @@ watch(
 );
 async function savedContent() {
   dirty.value = false;
-  showToast("Đã lưu nội dung bài học. Đang chuyển tới màn hình xem trước...", "success");
   const courseId = chapter.value?.courseId;
   if (courseId) {
     ensureTreeBranchSavedInSession();

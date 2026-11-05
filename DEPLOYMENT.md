@@ -147,6 +147,17 @@ Nginx frontend đã bỏ query string trong access log. Thay các secret mẫu
 trước khi triển khai. Khi giữ API cùng origin, không cần mở CORS cho nhiều
 domain; nếu tách domain cần cấu hình lại origin/cookie và kiểm thử riêng.
 
+## Gỡ tính năng nhóm học viên
+
+Tính năng nhóm học viên đã bị loại bỏ. Mọi môi trường đang có dữ liệu cũ cần thực hiện **một lần**:
+
+1. Sao lưu cơ sở dữ liệu.
+2. Triển khai backend và frontend mới.
+3. Chạy `CoreTrainingAPI/src/main/resources/migrations/20261105_remove_user_groups.sql` (chạy lại không có tác dụng).
+4. Khởi động lại backend.
+
+Script xóa vĩnh viễn nhóm, thành viên, quyền `groups:*` và menu. Học viên mất quyền học các khóa chỉ được giao qua nhóm; lịch sử học vẫn được giữ và quyền học trở lại nếu khóa được giao theo đơn vị hoặc học viên đăng ký. Nếu chưa chạy script, không xóa được tài khoản, khóa học hoặc đơn vị từng gắn với nhóm vì khóa ngoại của các bảng cũ.
+
 ## Múi giờ backend
 
 Backend cố định múi giờ `Asia/Ho_Chi_Minh` khi khởi động. Các cột thời gian không có múi giờ lưu giờ Việt Nam, riêng `notifications.created_at` lưu UTC.

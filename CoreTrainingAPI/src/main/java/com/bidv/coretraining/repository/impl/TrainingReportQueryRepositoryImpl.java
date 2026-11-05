@@ -23,7 +23,7 @@ public class TrainingReportQueryRepositoryImpl implements TrainingReportQueryRep
     }
 
     private static final Map<String, String> DIMENSIONS = Map.of("learners", "learner_id", "courses", "course_name",
-            "programs", "program", "groups", "group_name", "units", "unit", "domains", "domain");
+            "programs", "program", "units", "unit", "domains", "domain");
 
     private static String published(String a) {
         return "(" + a + ".status is null or upper(" + a + ".status) in ('ACTIVE','PUBLISHED'))";
@@ -48,11 +48,11 @@ public class TrainingReportQueryRepositoryImpl implements TrainingReportQueryRep
         }
         String scope=authorized.system() ? "1=1" : allowed.isEmpty() ? "1=0" : "("+String.join(" or ",allowed)+")";
         String ancestors = "with recursive active_units(id,parent_id) as (select id,parent_id from organization_units where parent_id is null and active=true union all select n.id,n.parent_id from organization_units n join active_units p on p.id=n.parent_id where n.active=true), ancestors(child_id,ancestor_id,parent_id) as (select id,id,parent_id from active_units union all select a.child_id,p.id,p.parent_id from ancestors a join active_units p on p.id=a.parent_id)";
-        String mandatory = "(case when exists(select 1 from course_unit_grants g join ancestors a on a.ancestor_id=g.unit_id where a.child_id=u.unit_id and g.course_id=c.id) then case when exists(select 1 from course_unit_grants g join ancestors a on a.ancestor_id=g.unit_id where a.child_id=u.unit_id and g.course_id=c.id and upper(g.grant_type)='MANDATORY') then 1 else 0 end when exists(select 1 from program_unit_grants g join ancestors a on a.ancestor_id=g.unit_id where a.child_id=u.unit_id and g.program_id=c.program_id) then case when exists(select 1 from program_unit_grants g join ancestors a on a.ancestor_id=g.unit_id where a.child_id=u.unit_id and g.program_id=c.program_id and upper(g.grant_type)='MANDATORY') then 1 else 0 end when exists(select 1 from domain_unit_grants g join ancestors a on a.ancestor_id=g.unit_id where a.child_id=u.unit_id and g.domain_id=p.domain_id) then case when exists(select 1 from domain_unit_grants g join ancestors a on a.ancestor_id=g.unit_id where a.child_id=u.unit_id and g.domain_id=p.domain_id and upper(g.grant_type)='MANDATORY') then 1 else 0 end else 0 end=1 or exists(select 1 from user_group_memberships gm join group_mandatory_courses gc on gc.group_id=gm.group_id where gm.user_id=u.id and gc.course_id=c.id))";
+        String mandatory = "(case when exists(select 1 from course_unit_grants g join ancestors a on a.ancestor_id=g.unit_id where a.child_id=u.unit_id and g.course_id=c.id) then case when exists(select 1 from course_unit_grants g join ancestors a on a.ancestor_id=g.unit_id where a.child_id=u.unit_id and g.course_id=c.id and upper(g.grant_type)='MANDATORY') then 1 else 0 end when exists(select 1 from program_unit_grants g join ancestors a on a.ancestor_id=g.unit_id where a.child_id=u.unit_id and g.program_id=c.program_id) then case when exists(select 1 from program_unit_grants g join ancestors a on a.ancestor_id=g.unit_id where a.child_id=u.unit_id and g.program_id=c.program_id and upper(g.grant_type)='MANDATORY') then 1 else 0 end when exists(select 1 from domain_unit_grants g join ancestors a on a.ancestor_id=g.unit_id where a.child_id=u.unit_id and g.domain_id=p.domain_id) then case when exists(select 1 from domain_unit_grants g join ancestors a on a.ancestor_id=g.unit_id where a.child_id=u.unit_id and g.domain_id=p.domain_id and upper(g.grant_type)='MANDATORY') then 1 else 0 end else 0 end=1)";
         String sql = ancestors
                 + ", visible_lessons as (select l.id,l.course_id,l.chapter_id from lessons l join chapters ch on ch.id=l.chapter_id where "
                 + published("l") + " and " + published("ch")
-                + "), assigned as (select u.id learner_id,u.full_name name,c.id course_id,c.name course_name,c.quiz_passing_score passing_score,p.name program,d.name domain,coalesce(ou.name,'Chưa có đơn vị') unit,coalesce((select string_agg(g.name, ', ' order by g.id) from user_group_memberships gm join user_groups g on g.id=gm.group_id where gm.user_id=u.id),'Chưa có nhóm') group_name,case when "
+                + "), assigned as (select u.id learner_id,u.full_name name,c.id course_id,c.name course_name,c.quiz_passing_score passing_score,p.name program,d.name domain,coalesce(ou.name,'Chưa có đơn vị') unit,case when "
                 + mandatory
                 + " then 1 else 0 end mandatory,case when exists(select 1 from user_course_deadlines dd where dd.user_id=u.id and dd.course_id=c.id) then (select dd.due_date from user_course_deadlines dd where dd.user_id=u.id and dd.course_id=c.id) else c.completion_deadline end due_date,(select cc.completed_at from user_completed_courses cc where cc.user_id=u.id and cc.course_id=c.id) completion_date from users u cross join courses c join training_programs p on p.id=c.program_id join training_domains d on d.id=p.domain_id left join organization_units ou on ou.id=u.unit_id where c.status='PUBLISHED' and "
                 + scope + " and (" + mandatory
@@ -70,7 +70,7 @@ public class TrainingReportQueryRepositoryImpl implements TrainingReportQueryRep
 
     private String filtered(Filter f, Map<String, Object> p) {
         String where = " where 1=1";
-        String[][] values = { { "unit", f.unit() }, { "group_name", f.group() }, { "program", f.program() },
+        String[][] values = { { "unit", f.unit() }, { "program", f.program() },
                 { "course_name", f.course() } };
         for (int i = 0; i < values.length; i++)
             if (values[i][1] != null && !values[i][1].isBlank()) {
@@ -150,7 +150,7 @@ public class TrainingReportQueryRepositoryImpl implements TrainingReportQueryRep
         Map<String, Object> choices = new LinkedHashMap<>();
         if (metadata)
             for (var entry : Map
-                    .of("units", "unit", "groups", "group_name", "programs", "program", "courses", "course_name")
+                    .of("units", "unit", "programs", "program", "courses", "course_name")
                     .entrySet())
                 choices.put(entry.getKey(), jdbc.query(
                         c.sql() + " select distinct " + entry.getValue() + " from facts order by " + entry.getValue(),
@@ -162,13 +162,13 @@ public class TrainingReportQueryRepositoryImpl implements TrainingReportQueryRep
         String search = "";
         if (f.search() != null && !f.search().isBlank()) {
             p.put("search", like(f.search()));
-            search = " and lower(coalesce(name,'')||' '||course_name||' '||unit||' '||group_name||' '||cast(learner_id as varchar(255))) like :search escape '!'";
+            search = " and lower(coalesce(name,'')||' '||course_name||' '||unit||' '||cast(learner_id as varchar(255))) like :search escape '!'";
         }
         if (dimension == null) {
             String selection = " where " + ("overview".equals(f.view()) ? action(f.action()) : "1=1") + search;
             result.put("total", jdbc.queryForObject(base + "select count(*) from selected" + selection, p, Long.class));
             result.put("items", maps(base
-                    + "select learner_id,name,unit,group_name,course_id,course_name,program,domain,mandatory,due_date,completed_at,completed,status,attempt_count,average,ever_passed,required_passed,passing_score,case when total_lessons=0 then 0 else floor(done_lessons*100.0/total_lessons+0.5) end progress from selected"
+                    + "select learner_id,name,unit,course_id,course_name,program,domain,mandatory,due_date,completed_at,completed,status,attempt_count,average,ever_passed,required_passed,passing_score,case when total_lessons=0 then 0 else floor(done_lessons*100.0/total_lessons+0.5) end progress from selected"
                     + selection + " order by learner_id,course_id" + bounds, p));
         } else {
             String grouped = base + ", grouped as (select cast(" + dimension
@@ -189,7 +189,7 @@ public class TrainingReportQueryRepositoryImpl implements TrainingReportQueryRep
                     jdbc.queryForObject(base + "select count(*) from selected where " + action(a), p, Long.class))));
         result.put("actions", actions);
         Map<String, Object> charts = new LinkedHashMap<>();
-        for (String d : List.of("groups", "units", "courses", "programs", "domains")) {
+        for (String d : List.of("units", "courses", "programs", "domains")) {
             String col = DIMENSIONS.get(d);
             charts.put(d, maps(base + "select " + col + " name," + summaryColumns() + " from selected group by " + col
                     + " order by count(*) desc," + col + " limit 20", p));
@@ -226,7 +226,7 @@ public class TrainingReportQueryRepositoryImpl implements TrainingReportQueryRep
             sql = base + "select * from selected where " + ("overview".equals(f.view()) ? action(f.action()) : "1=1");
             if (f.search() != null && !f.search().isBlank()) {
                 p.put("search", like(f.search()));
-                sql += " and lower(coalesce(name,'')||' '||course_name||' '||unit||' '||group_name||' '||cast(learner_id as varchar(255))) like :search escape '!'";
+                sql += " and lower(coalesce(name,'')||' '||course_name||' '||unit||' '||cast(learner_id as varchar(255))) like :search escape '!'";
             }
             sql += " order by learner_id,course_id";
         }

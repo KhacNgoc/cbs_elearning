@@ -169,7 +169,7 @@ const groupDefinitions = [
     id: "learners",
     label: "Học viên & tổ chức",
     icon: Users,
-    ids: ["admin.users", "admin.units", "admin.groups", "admin.enrollments"],
+    ids: ["admin.users", "admin.units", "admin.enrollments"],
   },
   {
     id: "management",
@@ -233,9 +233,7 @@ const activeSection = computed(() =>
         ? "admin.users"
         : route.path.startsWith("/admin/units")
           ? "admin.units"
-          : route.path.startsWith("/admin/groups")
-            ? "admin.groups"
-            : route.path.startsWith("/admin/roles")
+          : route.path.startsWith("/admin/roles")
               ? "admin.roles"
               : route.path.startsWith("/admin/permissions")
                 ? "admin.permissions"

@@ -32,8 +32,7 @@ public class LearningAccessServiceImpl implements LearningAccessService {
         if (editor) return true;
         AccessPolicy.require(AccessPolicy.permissions(user).contains("LEARN") && AccessPolicy.visible(user, course));
         boolean enrolled = AccessPolicy.mandatory(user, course)
-            || users.hasRegisteredCourse(user.getUsername(), course.getId())
-            || users.hasMandatoryCourse(user.getUsername(), course.getId());
+            || users.hasRegisteredCourse(user.getUsername(), course.getId());
         if (!"PUBLISHED".equals(course.getStatus()) || !enrolled)
             throw new AccessDeniedException("Bạn chưa được cấp quyền học khóa này");
         return false;

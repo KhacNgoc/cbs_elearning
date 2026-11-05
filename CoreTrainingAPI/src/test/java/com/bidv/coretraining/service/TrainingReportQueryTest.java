@@ -60,7 +60,7 @@ class TrainingReportQueryTest extends TrainingReportServiceTest {
     }
     @Test void groupedCsvUsesSameDomainSearchAndMetricsAsDisplayedTable() throws Exception {
         em.flush();
-        var f=new Filter("","","","","","","","domains","","Domain",0,1,"","");
+        var f=new Filter("","","","","","","domains","","Domain",0,1,"","");
         var result=query.read(f);
         assertThat(((Number)result.get("total")).longValue()).isEqualTo(1);
         var csv=new java.io.StringWriter();query.export(f,csv);

@@ -62,8 +62,6 @@ export interface AdminUser {
   status?: string;
   learnerType?: string;
   points: number;
-  userGroupIds?: string[];
-  groupNames?: string;
   employeeId?: string;
   email?: string;
 }

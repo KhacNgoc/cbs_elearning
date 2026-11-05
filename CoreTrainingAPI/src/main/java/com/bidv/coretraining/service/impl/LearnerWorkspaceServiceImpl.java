@@ -72,8 +72,7 @@ public class LearnerWorkspaceServiceImpl implements LearnerWorkspaceService {
                 List<LearnerCourse> list = courses.findAll().stream()
                                 .filter(c -> LearningPolicy.isLearnableStatus(c.getStatus()) && AccessPolicy.visible(user, c))
                                 .map(c -> {
-                                        boolean mandatory = AccessPolicy.mandatory(user, c)
-                                                        || user.hasGroupMandatoryCourse(c.getId());
+                                        boolean mandatory = AccessPolicy.mandatory(user, c);
                                         boolean registered = user.getRegisteredCourses().stream()
                                                         .anyMatch(x -> x.getId().equals(c.getId()));
                                         boolean enrolled = mandatory || registered;

@@ -15,7 +15,6 @@ public interface UserAdminService {
 
     void importUsersFromExcel(org.springframework.web.multipart.MultipartFile file);
 
-    List<UserGroupDto> getAllUserGroups();
 
     byte[] generateExcelTemplate();
 }

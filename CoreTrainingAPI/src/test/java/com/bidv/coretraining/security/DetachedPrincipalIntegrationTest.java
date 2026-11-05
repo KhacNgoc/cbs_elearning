@@ -52,7 +52,6 @@ class DetachedPrincipalIntegrationTest {
     @MockBean RagConversationSummaryService summaries;
     @Autowired MockMvc mvc;
     @Autowired UserRepository users;
-    @Autowired UserGroupRepository groups;
     @Autowired OrganizationUnitRepository units;
     @Autowired TrainingDomainRepository domains;
     @Autowired TrainingProgramRepository programs;
@@ -137,16 +136,6 @@ class DetachedPrincipalIntegrationTest {
         mvc.perform(get(first)).andExpect(status().isUnauthorized());
     }
 
-    @Test void groupMandatoryCoursesAreResolvedInResourceTransaction() throws Exception {
-        tx().executeWithoutResult(s->{
-            User user=users.findById(learnerId).orElseThrow();user.getRegisteredCourses().clear();
-            var group=UserGroup.builder().id(id("G")).name("Mandatory group").organizationUnit(user.getOrganizationUnit()).build();
-            group.getMandatoryCourses().add(courses.findById(id("C")).orElseThrow());
-            user.getUserGroups().add(groups.save(group));
-        });
-        mvc.perform(get("/uploads/documents/"+id("file0.pdf")).cookie(cookie(id("learner")))).andExpect(status().isOk());
-    }
-
     @Test void learningMetadataAndDiscussionKeepAccessChecksWithoutOpenSessionInView() throws Exception {
         var jwt = cookie(id("learner"));
         mvc.perform(get("/api/courses/" + id("C") + "/outline").cookie(jwt))
@@ -164,9 +153,7 @@ class DetachedPrincipalIntegrationTest {
         mvc.perform(get("/api/lessons/" + id("L0") + "/comments").cookie(jwt)).andExpect(status().isForbidden());
         tx().executeWithoutResult(s -> {
             User user = users.findById(learnerId).orElseThrow();
-            var group = UserGroup.builder().id(id("G")).name("Mandatory group").organizationUnit(user.getOrganizationUnit()).build();
-            group.getMandatoryCourses().add(courses.findById(id("C")).orElseThrow());
-            user.getUserGroups().add(groups.save(group));
+            user.getRegisteredCourses().add(courses.findById(id("C")).orElseThrow());
         });
         mvc.perform(get("/api/courses/" + id("C") + "/outline").cookie(jwt)).andExpect(status().isOk());
         mvc.perform(get("/api/lessons/" + id("L0")).cookie(jwt)).andExpect(status().isOk());
@@ -185,8 +172,6 @@ class DetachedPrincipalIntegrationTest {
             User user=users.findById(learnerId).orElseThrow();
             var role=roles.save(AccessRole.builder().code(id("ROLE")).name("Scoped instructor").permissions(new HashSet<>(Set.of("courses:read"))).unitIds(new HashSet<>(Set.of(id("U")))).build());
             user.setDynamicAccessInitialized(true);user.getAssignedRoles().add(role);
-            var group=UserGroup.builder().id(id("G")).name("Group").organizationUnit(user.getOrganizationUnit()).build();
-            group.getMandatoryCourses().add(courses.findById(id("C")).orElseThrow());groups.save(group);
         });
         var principal=principal(id("learner"));
         assertThat(Hibernate.isInitialized(principal.getUser().getRegisteredCourses())).isFalse();

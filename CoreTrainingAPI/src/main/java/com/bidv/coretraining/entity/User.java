@@ -114,27 +114,6 @@ public class User {
     private Integer points = 0;
 
     @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(name = "user_group_memberships", joinColumns = @JoinColumn(name = "user_id"),
-            inverseJoinColumns = @JoinColumn(name = "group_id"),
-            indexes = @Index(name = "idx_group_memberships_group", columnList = "group_id"))
-    @Builder.Default
-    private Set<UserGroup> userGroups = new HashSet<>();
-
-    public boolean hasGroupMandatoryCourse(String courseId) {
-        return userGroups.stream().flatMap(group -> group.getMandatoryCourses().stream())
-                .anyMatch(course -> course.getId().equals(courseId));
-    }
-
-    public java.util.List<String> groupIds() {
-        return userGroups.stream().map(UserGroup::getId).sorted().toList();
-    }
-
-    public String groupNames() {
-        return userGroups.stream().sorted(java.util.Comparator.comparing(UserGroup::getId))
-                .map(UserGroup::getName).collect(java.util.stream.Collectors.joining(", "));
-    }
-
-    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(name = "user_registered_courses", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "course_id"))
     @Builder.Default
     private Set<Course> registeredCourses = new HashSet<>();

@@ -83,10 +83,9 @@ const routes: Array<RouteRecordRaw> = [
       {path:'content-reports',name:'ContentReports',component:()=>import('../views/ContentReports.vue'),meta:{pageKey:'admin.content-reports'}},
       {path:'users',name:'AdminUsers',component:()=>import('../views/AccessAdmin.vue'),meta:{pageKey:'admin.users',accessSection:'users'}},
       {path:'units',name:'AdminUnits',component:()=>import('../views/AccessAdmin.vue'),meta:{pageKey:'admin.units',accessSection:'units'}},
-      {path:'groups',name:'AdminGroups',component:()=>import('../views/AccessAdmin.vue'),meta:{pageKey:'admin.groups',accessSection:'groups'}},
       {path:'permissions',name:'AdminPermissions',component:()=>import('../views/PermissionAdmin.vue'),meta:{pageKey:'admin.permissions'}},
       {path:'roles',name:'AdminRoles',component:()=>import('../views/RoleAdmin.vue'),meta:{pageKey:'admin.roles'}},
-      {path:'access',redirect:to=>to.query.tab==='users'?'/admin/users':to.query.tab==='units'?'/admin/units':to.query.tab==='groups'?'/admin/groups':'/admin/permissions'},
+      {path:'access',redirect:to=>to.query.tab==='users'?'/admin/users':to.query.tab==='units'?'/admin/units':'/admin/permissions'},
       {path:'unit-allocation',name:'UnitAllocationAdmin',component:()=>import('../views/UnitAllocationAdmin.vue'),meta:{pageKey:'admin.unit-allocation'}},
       {path:'curriculum',name:'TrainingCurriculum',component:TrainingAdmin,meta:{pageKey:'admin.curriculum'}},
       {path:'catalog',name:'TrainingCatalog',component:TrainingAdmin,meta:{pageKey:'admin.catalog'}},
@@ -222,7 +221,7 @@ router.beforeEach(async (to, from, next) => {
   } else if (to.name === 'Login' && isAuthenticated) {
     next(mustChangePassword ? '/change-password' : '/');
   } else {
-    if(to.path==='/admin' && typeof to.query.tab==='string' && ['users','units','groups','roles','permissions','courses','lessons'].includes(to.query.tab)) {next(`/admin/${to.query.tab==='lessons'?'courses':to.query.tab}`);return;}
+    if(to.path==='/admin' && typeof to.query.tab==='string' && ['users','units','roles','permissions','courses','lessons'].includes(to.query.tab)) {next(`/admin/${to.query.tab==='lessons'?'courses':to.query.tab}`);return;}
     if (requiresAuth) {
       try {
         const navigationStore = useNavigationStore();

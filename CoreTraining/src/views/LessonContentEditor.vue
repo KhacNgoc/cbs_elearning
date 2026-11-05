@@ -329,7 +329,7 @@
           </small>
         </div>
         <footer v-if="!readOnly" class="modal-buttons lesson-modal-footer">
-        <button type="button" class="btn btn-secondary" @click="emit('cancel')">
+        <button type="button" class="btn btn-secondary" :disabled="loading" @click="emit('cancel')">
           Hủy
         </button>
         <button type="submit" class="btn btn-primary" :disabled="loading">
@@ -338,19 +338,16 @@
       </footer>
     </form>
 
-    <!-- FULLSCREEN LOADING OVERLAY KHI ĐANG LƯU BÀI HỌC HOẶC TẢI LÊN TÁC VỤ LÂU -->
+    <!-- CHỈ HIỆN KHI TẢI TỆP LÊN (TÁC VỤ LÂU); LƯU THÔNG THƯỜNG CHỈ DÙNG TOAST -->
     <Teleport to="body">
-      <div v-if="loading" class="fullscreen-loading-overlay">
+      <div v-if="videoUploadProgress !== null || uploadingDocs" class="fullscreen-loading-overlay">
         <div class="loading-modal-card">
           <Loader2 :size="42" class="spin-icon text-primary loading-spinner" />
           <h4 v-if="videoUploadProgress !== null">
             Đang tải lên video ({{ videoUploadProgress }}%)...
           </h4>
-          <h4 v-else-if="uploadingDocs">
-            Đang tải lên và xử lý tài liệu đính kèm...
-          </h4>
           <h4 v-else>
-            Đang lưu trữ nội dung bài học...
+            Đang tải lên và xử lý tài liệu đính kèm...
           </h4>
 
           <div v-if="videoUploadProgress !== null" class="upload-progress-track">
@@ -735,6 +732,7 @@ const saveLesson = async () => {
         } satisfies LessonDocument;
       }),
     );
+    uploadingDocs.value = false;
 
     const payload = {
       ...activeContent,
@@ -773,25 +771,27 @@ const saveLesson = async () => {
       })),
     };
     await nextTick();
+    let notifiedCount = 0;
         if (lessonModal.value.isEdit && isPreviouslyComposed.value && (notifyLearners.value || changeSummary.value.trim() || hasAnyRealChanges())) {
       try {
         const notifyRes = await axiosClient.post(`/api/admin/lessons/${lessonForm.value.id}/changelog-notify`, {
           changeSummary: changeSummary.value.trim() || computeDetectedChanges(),
           notifyLearners: notifyLearners.value,
         });
-        if (notifyLearners.value && (notifyRes.data?.notifiedCount || 0) > 0) {
-          showToast(`Đã gửi thông báo cập nhật kiến thức tới ${notifyRes.data.notifiedCount} cán bộ đã hoàn thành bài!`, "success");
-        }
+        if (notifyLearners.value) notifiedCount = notifyRes.data?.notifiedCount || 0;
       } catch (notifyErr) {
         console.warn("Could not send lesson change notification:", notifyErr);
       }
     }
     emit("saved");
     emit("dirty", false);
+    const savedMessage = lessonModal.value.isEdit
+      ? "Cập nhật bài học thành công."
+      : "Tạo bài học thành công.";
     showToast(
-      lessonModal.value.isEdit
-        ? "Cập nhật bài học thành công."
-        : "Tạo bài học thành công.",
+      notifiedCount > 0
+        ? `${savedMessage} Đã gửi thông báo cập nhật kiến thức tới ${notifiedCount} cán bộ đã hoàn thành bài.`
+        : savedMessage,
     );
     await courseStore.fetchCourses(true);
   } catch (err) {
@@ -808,6 +808,7 @@ const saveLesson = async () => {
     console.error(err);
   } finally {
     videoUploadProgress.value = null;
+    uploadingDocs.value = false;
     loading.value = false;
   }
 };

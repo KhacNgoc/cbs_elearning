@@ -13,21 +13,6 @@ public final class AccessManagementDto {
         }
     }
 
-    public record GroupDto(String id, String name, String unitId, Set<String> mandatoryCourseIds,
-            Set<String> allowedActions, long memberCount) {
-        public GroupDto(String id, String name, String unitId, Set<String> courses) {
-            this(id, name, unitId, courses, Set.of(), 0);
-        }
-    }
-
-    public record GroupMemberDto(Long id, String username, String fullName, String employeeId,
-            String unitName, String status, boolean member, boolean selectable) {}
-
-    public record GroupMembersPage(List<GroupMemberDto> items, long total, int page, int pageCount,
-            long memberCount) {}
-
-    public record MembershipChanges(Set<Long> addUserIds, Set<Long> removeUserIds) {}
-
     public record CourseAccessDto(String ownerUnitId, Map<String, String> unitGrants, Set<Long> instructorIds) {
     }
 }

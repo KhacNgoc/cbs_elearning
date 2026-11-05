@@ -19,23 +19,20 @@ public class AdminOptionsServiceImpl implements AdminOptionsService {
     private final TrainingProgramRepository programs;
     private final CourseRepository courses;
     private final TrainingDomainRepository domains;
-    private final UserGroupRepository groups;
 
     public AdminOptionsServiceImpl(AuthorizationService auth, OrganizationUnitRepository units,
-            TrainingProgramRepository programs, CourseRepository courses, TrainingDomainRepository domains,
-            UserGroupRepository groups) {
+            TrainingProgramRepository programs, CourseRepository courses, TrainingDomainRepository domains) {
         this.auth = auth;
         this.units = units;
         this.programs = programs;
         this.courses = courses;
         this.domains = domains;
-        this.groups = groups;
     }
 
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public AdminOptionsDto options(String page) {
         AccessPolicy
-                .require(Set.of("users", "groups", "roles", "catalog", "courses", "exams", "documents").contains(page));
+                .require(Set.of("users", "roles", "catalog", "courses", "exams", "documents").contains(page));
         auth.requireOperation(page, "read");
         var u = auth.current();
         String permission = page + ":read";
@@ -47,17 +44,10 @@ public class AdminOptionsServiceImpl implements AdminOptionsService {
                 .toList();
         // These pages need the organization tree only. Modal course choices use
         // their own bounded read; training/document option contracts stay below.
-        if (Set.of("users", "groups", "roles").contains(page)) {
-            return new AdminOptionsDto(canManageDomains, unitOptions, List.of(), List.of(), List.of(), List.of());
+        if (Set.of("users", "roles").contains(page)) {
+            return new AdminOptionsDto(canManageDomains, unitOptions, List.of(), List.of(), List.of());
         }
 
-        var groupOptions = groups.findAll().stream()
-                .filter(g -> AccessPolicy.allows(u, permission, g.getOrganizationUnit()))
-                .map(g -> new AccessManagementDto.GroupDto(g.getId(), g.getName(),
-                        g.getOrganizationUnit() == null ? null : g.getOrganizationUnit().getId(),
-                        g.getMandatoryCourses().stream().map(com.bidv.coretraining.entity.Course::getId)
-                                .collect(Collectors.toSet())))
-                .toList();
         var courseOptions = courses.findAll().stream().filter(c -> AccessPolicy.allowsCourse(u, permission, c))
                 .map(c -> {
                     UnitGrants grants = UnitGrants.of(c.getUnitGrants(), Set.of());
@@ -86,7 +76,7 @@ public class AdminOptionsServiceImpl implements AdminOptionsService {
                             p.getSeqNumber());
                 })
                 .toList();
-        return new AdminOptionsDto(canManageDomains, unitOptions, groupOptions, courseOptions, domainOptions,
+        return new AdminOptionsDto(canManageDomains, unitOptions, courseOptions, domainOptions,
                 programOptions);
     }
 

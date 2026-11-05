@@ -24,7 +24,7 @@ Không sửa các trang quản trị thuộc **Đào tạo & tài liệu**, `Adm
 | --- | --- |
 | Dashboard | `/api/users/me/learning/dashboard/summary`, `/courses`, `/courses/{id}/resume`, `/choices` |
 | Hồ sơ | `/api/users/me/assessments`, `/assessments/history`, `/assessment-statistics`, `/awards` |
-| Quản trị | `/api/admin/question-bank/page`, `/users/page`, `/access/groups/page`, các endpoint `/rbac/.../page`, `/enrollment-requests/page`, `/content-reports/page` |
+| Quản trị | `/api/admin/question-bank/page`, `/users/page`, các endpoint `/rbac/.../page`, `/enrollment-requests/page`, `/content-reports/page` |
 | Báo cáo | `/api/admin/reports/training/read`, `/attempts`, `/export` |
 | Chat | `/api/rag/chat/history/page` |
 

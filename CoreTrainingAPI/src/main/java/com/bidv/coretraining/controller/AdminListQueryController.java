@@ -23,15 +23,6 @@ public class AdminListQueryController {
             @RequestParam(defaultValue="1") int page, @RequestParam(defaultValue="10") int size) {
         return reads.users(query, unitId, status, page, size);
     }
-    @GetMapping("/access/groups/page")
-    public NumberedPage<AccessManagementDto.GroupDto> groups(@RequestParam(defaultValue="") String query,
-            @RequestParam(defaultValue="") String unitId, @RequestParam(defaultValue="1") int page,
-            @RequestParam(defaultValue="10") int size) { return reads.groups(query, unitId, page, size); }
-    @GetMapping("/access/groups/course-options")
-    public NumberedPage<CourseChoice> groupCourses(@RequestParam(defaultValue="") String query,
-            @RequestParam(defaultValue="1") int page, @RequestParam(defaultValue="5") int size) {
-        return reads.groupCourses(query, page, size);
-    }
     @GetMapping("/rbac/roles/page")
     public NumberedPage<RoleSummary> roles(@RequestParam(defaultValue="") String query, @RequestParam(defaultValue="") String status,
             @RequestParam(defaultValue="1") int page, @RequestParam(defaultValue="10") int size) { return reads.roles(query, status, page, size, false); }

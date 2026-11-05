@@ -21,8 +21,6 @@ public class UserProgressDto {
     private Map<String, LessonProgressDto> lessonProgress;
     private Integer points;
     private List<UserBadgeDto> unlockedBadges;
-    private java.util.List<String> groupIds;
-    private String groupName;
     private List<String> mandatoryCourses;
     private List<String> registeredCourses;
     private List<String> pendingCourses;

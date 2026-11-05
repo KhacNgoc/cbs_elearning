@@ -27,16 +27,14 @@ public class UserAdminServiceImpl implements UserAdminService {
     private final AuthorizationService authorization;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final UserGroupRepository userGroupRepository;
     private final PermissionCache permissionCache;
 
     public UserAdminServiceImpl(AuthorizationService authorization, UserRepository userRepository,
-            PasswordEncoder passwordEncoder, UserGroupRepository userGroupRepository,
+            PasswordEncoder passwordEncoder,
             PermissionCache permissionCache) {
         this.authorization = authorization;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
-        this.userGroupRepository = userGroupRepository;
         this.permissionCache = permissionCache;
     }
 
@@ -56,7 +54,6 @@ public class UserAdminServiceImpl implements UserAdminService {
                 .unitId(user.getOrganizationUnit() == null ? null : user.getOrganizationUnit().getId())
                 .scopeUnitIds(user.getScopeUnitIds()).status(user.getStatus()).learnerType(user.getLearnerType())
                 .points(user.getPoints())
-                .userGroupIds(user.groupIds()).groupNames(user.groupNames())
                 .employeeId(user.getEmployeeId())
                 .email(user.getEmail())
                 .build();
@@ -200,12 +197,6 @@ public class UserAdminServiceImpl implements UserAdminService {
                 : dto.getLearnerType();
         if (!java.util.Set.of("NEW_STAFF", "TRANSFERRED_STAFF", "CURRENT_STAFF", "EXTERNAL").contains(learnerType))
             throw new BadRequestException("Đối tượng học viên không hợp lệ");
-        for (UserGroup group : user.getUserGroups()) {
-            if (group.getOrganizationUnit() != null
-                    && !AccessPolicy.ancestors(unit)
-                            .contains(group.getOrganizationUnit().getId()))
-                throw new BadRequestException("Hãy bỏ học viên khỏi nhóm không phù hợp trước khi đổi đơn vị");
-        }
         if (user.getId() != null)
             user.setTokenVersion(user.getTokenVersion() + 1);
         if (!user.isDynamicAccessInitialized()) {
@@ -251,16 +242,5 @@ public class UserAdminServiceImpl implements UserAdminService {
         } catch (Exception exception) {
             throw new RuntimeException("Lỗi khi tạo file Excel mẫu: " + exception.getMessage(), exception);
         }
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<UserGroupDto> getAllUserGroups() {
-        authorization.permission("GROUP_MANAGE");
-        return userGroupRepository.findAll().stream().filter(g -> authorization.allowedScope(g.getOrganizationUnit()))
-                .map(g -> new UserGroupDto(g.getId(), g.getName(),
-                        g.getOrganizationUnit() == null ? null : g.getOrganizationUnit().getId(),
-                        g.getOrganizationUnit() == null ? null : g.getOrganizationUnit().getName()))
-                .toList();
     }
 }

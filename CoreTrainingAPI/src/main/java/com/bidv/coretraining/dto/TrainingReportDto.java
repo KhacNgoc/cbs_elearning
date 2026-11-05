@@ -15,7 +15,7 @@ public final class TrainingReportDto {
     public record AttemptAnalysis(long attemptId, boolean available, String source, String unavailableReason,
                                   int correct, int incorrect, int unanswered, List<AttemptQuestion> questions) {}
 
-    public record Row(String id, String learnerId, String name, String unit, String group,
+    public record Row(String id, String learnerId, String name, String unit,
                       String courseId, String courseName, String program, String domain,
                       int progress, boolean mandatory, LocalDate dueDate, LocalDate completedAt,
                       boolean completed, boolean started, List<Attempt> attempts,

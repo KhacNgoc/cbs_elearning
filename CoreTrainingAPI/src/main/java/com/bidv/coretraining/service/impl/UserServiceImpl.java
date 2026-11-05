@@ -109,8 +109,6 @@ public class UserServiceImpl implements UserService {
                                 .unitName(user.getOrganizationUnit() == null ? null
                                                 : user.getOrganizationUnit().getName())
                                 .points(user.getPoints())
-                                .groupIds(user.groupIds())
-                                .groupName(user.groupNames())
                                 .build();
         }
 
@@ -204,8 +202,7 @@ public class UserServiceImpl implements UserService {
                 com.bidv.coretraining.entity.Course course = courseRepository.findById(courseId)
                                 .orElseThrow(() -> new ResourceNotFoundException("Course", "id", courseId));
 
-                if (user.getRegisteredCourses().contains(course)
-                                || user.hasGroupMandatoryCourse(course.getId())) {
+                if (user.getRegisteredCourses().contains(course)) {
                         return buildUserProgressDto(user);
                 }
                 if (enrollmentRequestRepository.existsByUserIdAndCourseIdAndStatus(
@@ -251,15 +248,11 @@ public class UserServiceImpl implements UserService {
                         }
                 }
 
-                java.util.List<String> mandatoryCourses = user.getUserGroups().stream()
-                                .flatMap(group -> group.getMandatoryCourses().stream())
-                                .map(Course::getId).distinct().collect(Collectors.toCollection(ArrayList::new));
-
-                courseRepository.findAll().stream()
+                java.util.List<String> mandatoryCourses = courseRepository.findAll().stream()
                                 .filter(c -> LearningPolicy.isLearnableStatus(c.getStatus())
                                                 && com.bidv.coretraining.security.AccessPolicy.visible(user, c)
                                                 && com.bidv.coretraining.security.AccessPolicy.mandatory(user, c))
-                                .map(Course::getId).forEach(mandatoryCourses::add);
+                                .map(Course::getId).toList();
                 java.util.List<String> registeredCourses = user.getRegisteredCourses().stream()
                                 .map(com.bidv.coretraining.entity.Course::getId)
                                 .collect(Collectors.toList());
@@ -279,9 +272,7 @@ public class UserServiceImpl implements UserService {
                                 .points(user.getPoints())
                                 .unlockedBadges(userMapper
                                                 .toUserBadgeDtoList(new ArrayList<>(user.getUnlockedBadges())))
-                                .groupIds(user.groupIds())
-                                .groupName(user.groupNames())
-                                .mandatoryCourses(mandatoryCourses.stream().distinct().toList())
+                                .mandatoryCourses(mandatoryCourses)
                                 .registeredCourses(registeredCourses)
                                 .pendingCourses(pendingCourses)
                                 .mustChangePassword(user.isMustChangePassword())

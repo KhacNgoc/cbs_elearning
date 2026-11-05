@@ -143,7 +143,7 @@ public class LearnerDashboardSqlRelations {
                 + programGrant
                 + " and upper(pg.grant_type)='MANDATORY') then 1 else 0 end when exists(select 1 from domain_unit_grants dg where dg.domain_id=c.domain_id and "
                 + domainGrant
-                + " and upper(dg.grant_type)='MANDATORY') then 1 else 0 end=1 or exists(select 1 from user_group_memberships gm join group_mandatory_courses gc on gc.group_id=gm.group_id where gm.user_id=:uid and gc.course_id=c.id))";
+                + " and upper(dg.grant_type)='MANDATORY') then 1 else 0 end=1)";
     }
 
     public Context facts(LearnerQueryScope u) {

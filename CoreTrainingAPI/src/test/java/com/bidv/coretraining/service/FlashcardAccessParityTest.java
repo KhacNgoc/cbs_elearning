@@ -131,23 +131,16 @@ class FlashcardAccessParityTest {
         optionalOverride.getUnitGrants().put(child.getId(), "OPTIONAL");
         var byProgram = course("byProgram", grantedProgram, other, "PUBLISHED");
         var byDomain = course("byDomain", inGrantedDomain, other, "PUBLISHED");
-        var byGroup = course("byGroup", plain, child, "PUBLISHED");
-        var groupHidden = course("groupHidden", plain, other, "PUBLISHED");
         var owned = course("owned", ownedProgram, child, "PUBLISHED");
         var draft = course("draft", plain, other, "DRAFT");
         var taught = course("taught", plain, other, "PUBLISHED");
         var noOwner = course("noOwner", plain, null, "PUBLISHED");
         var noOwnerRegistered = course("noOwnerReg", plain, null, "PUBLISHED");
-        var all = List.of(registered, mandatory, optional, optionalOverride, byProgram, byDomain, byGroup, groupHidden,
+        var all = List.of(registered, mandatory, optional, optionalOverride, byProgram, byDomain,
                 owned, draft, taught, noOwner, noOwnerRegistered);
-
-        var group = UserGroup.builder().id(run + "g").name("G").build();
-        group.getMandatoryCourses().addAll(List.of(byGroup, groupHidden));
-        em.persist(group);
 
         var learner = user("learner", child, "ROLE_USER");
         learner.getRegisteredCourses().addAll(List.of(registered, draft));
-        learner.getUserGroups().add(group);
         var noUnit = user("noUnit", null, "ROLE_USER");
         noUnit.getRegisteredCourses().add(noOwnerRegistered);
         var inClosedUnit = user("inClosed", closed, "ROLE_USER");
@@ -178,7 +171,7 @@ class FlashcardAccessParityTest {
         }
         // Guards the comparison itself: these users really do reach different courses.
         assertThat(byLearnableCourses(learner).keySet()).containsExactlyInAnyOrder(registered.getId(), mandatory.getId(),
-                byProgram.getId(), byDomain.getId(), byGroup.getId());
+                byProgram.getId(), byDomain.getId());
         assertThat(byLearnableCourses(noUnit).keySet()).containsExactly(noOwnerRegistered.getId());
         assertThat(byLearnableCourses(locked)).isEmpty();
         assertThat(byLearnableCourses(ownerReader).keySet()).contains(registered.getId()).doesNotContain(noOwner.getId());
