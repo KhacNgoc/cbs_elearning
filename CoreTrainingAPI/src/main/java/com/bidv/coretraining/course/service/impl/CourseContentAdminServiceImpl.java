@@ -269,7 +269,7 @@ public class CourseContentAdminServiceImpl implements CourseContentAdminService 
                 || lessonIds.size() != lessons.size()
                 || Set.copyOf(lessonIds).size() != lessonIds.size()
                 || !existingIds.equals(Set.copyOf(lessonIds))) {
-            throw new IllegalArgumentException(
+            throw new com.bidv.coretraining.exception.BadRequestException(
                     "Danh sách sắp xếp phải chứa đầy đủ và duy nhất các bài học của khóa học");
         }
 
