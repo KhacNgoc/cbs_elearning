@@ -48,18 +48,28 @@ public class TrainingReportQueryRepositoryImpl implements TrainingReportQueryRep
         }
         String scope=authorized.system() ? "1=1" : allowed.isEmpty() ? "1=0" : "("+String.join(" or ",allowed)+")";
         String ancestors = "with recursive active_units(id,parent_id) as (select id,parent_id from organization_units where parent_id is null and active=true union all select n.id,n.parent_id from organization_units n join active_units p on p.id=n.parent_id where n.active=true), ancestors(child_id,ancestor_id,parent_id) as (select id,id,parent_id from active_units union all select a.child_id,p.id,p.parent_id from ancestors a join active_units p on p.id=a.parent_id)";
-        String mandatory = "exists(select 1 from course_unit_grants g join ancestors a on a.ancestor_id=g.unit_id where a.child_id=u.unit_id and g.course_id=c.id and upper(g.grant_type)='MANDATORY')";
+        // Every fact is aggregated once and joined by key: a correlated subquery here would run per learner-course pair.
         String sql = ancestors
                 + ", visible_lessons as (select l.id,l.course_id,l.chapter_id from lessons l join chapters ch on ch.id=l.chapter_id where "
                 + published("l") + " and " + published("ch")
-                + "), assigned as (select u.id learner_id,u.full_name name,c.id course_id,c.name course_name,c.quiz_passing_score passing_score,p.name program,d.name domain,coalesce(ou.name,'Chưa có đơn vị') unit,case when "
-                + mandatory
-                + " then 1 else 0 end mandatory,case when exists(select 1 from user_course_deadlines dd where dd.user_id=u.id and dd.course_id=c.id) then (select dd.due_date from user_course_deadlines dd where dd.user_id=u.id and dd.course_id=c.id) else c.completion_deadline end due_date,(select cc.completed_at from user_completed_courses cc where cc.user_id=u.id and cc.course_id=c.id) completion_date from users u cross join courses c join training_programs p on p.id=c.program_id join training_domains d on d.id=p.domain_id left join organization_units ou on ou.id=u.unit_id where c.status='PUBLISHED' and "
-                + scope + " and (" + mandatory
-                + " or exists(select 1 from user_registered_courses rc where rc.user_id=u.id and rc.course_id=c.id))), scored as (select s.id,s.user_id,s.course_id,s.lesson_id,s.score*100.0/s.total score,s.taken_at,case when s.lesson_id is null then c.quiz_passing_score else coalesce(q.passing_score,80) end passing_score,coalesce(l.title,c.name) assessment,row_number() over(partition by s.user_id,s.course_id,s.lesson_id order by s.taken_at desc,s.id desc) latest,row_number() over(partition by s.user_id,s.course_id,s.lesson_id order by s.taken_at,s.id) first_attempt from user_quiz_scores s join courses c on c.id=s.course_id left join lessons l on l.id=s.lesson_id left join quizzes q on q.lesson_id=l.id where s.total>0 and (s.lesson_id is null or exists(select 1 from visible_lessons vl where vl.id=s.lesson_id)) and exists(select 1 from assigned a where a.learner_id=s.user_id and a.course_id=s.course_id)), assessments as (select user_id,course_id,lesson_id,count(*) attempt_count,max(case when latest=1 then score else null end) latest_score,max(case when floor(score+0.5)>=passing_score then 1 else 0 end) ever_passed,max(case when first_attempt=1 and floor(score+0.5)>=passing_score then 1 else 0 end) first_passed from scored group by user_id,course_id,lesson_id), assessment_stats as (select user_id,course_id,sum(attempt_count) attempt_count,avg(latest_score) average,min(ever_passed) ever_passed,min(first_passed) first_passed from assessments group by user_id,course_id), progress_facts as (select a.*,coalesce(ast.attempt_count,0) attempt_count,ast.average,coalesce(ast.ever_passed,0) ever_passed,coalesce(ast.first_passed,0) first_passed,(select count(*) from visible_lessons l where l.course_id=a.course_id) total_lessons,(select count(*) from visible_lessons l join user_completed_lessons cl on cl.lesson_id=l.id where l.course_id=a.course_id and cl.user_id=a.learner_id) done_lessons,case when exists(select 1 from visible_lessons l join quizzes q on q.lesson_id=l.id where l.course_id=a.course_id and q.required_for_progress=true and exists(select 1 from questions qu where qu.quiz_id=q.id) and not exists(select 1 from user_quiz_scores qs where qs.user_id=a.learner_id and qs.lesson_id=l.id and qs.total>0 and floor(qs.score*100.0/qs.total+0.5)>=q.passing_score)) then 0 else 1 end required_passed,case when exists(select 1 from chapters ch where ch.course_id=a.course_id and "
-                + published("ch") + ") and not exists(select 1 from chapters ch where ch.course_id=a.course_id and "
+                + "), mandatory_units as (select distinct g.course_id,a.child_id unit_id from course_unit_grants g join ancestors a on a.ancestor_id=g.unit_id where upper(g.grant_type)='MANDATORY')"
+                + ", assigned_pairs as (select u.id learner_id,mu.course_id from users u join mandatory_units mu on mu.unit_id=u.unit_id union select rc.user_id,rc.course_id from user_registered_courses rc)"
+                + ", assigned as (select u.id learner_id,u.full_name name,c.id course_id,c.name course_name,c.quiz_passing_score passing_score,p.name program,d.name domain,coalesce(ou.name,'Chưa có đơn vị') unit,case when mu.course_id is null then 0 else 1 end mandatory,case when dd.user_id is null then c.completion_deadline else dd.due_date end due_date,cc.completed_at completion_date from assigned_pairs ap join users u on u.id=ap.learner_id join courses c on c.id=ap.course_id join training_programs p on p.id=c.program_id join training_domains d on d.id=p.domain_id left join organization_units ou on ou.id=u.unit_id left join mandatory_units mu on mu.unit_id=u.unit_id and mu.course_id=c.id left join user_course_deadlines dd on dd.user_id=u.id and dd.course_id=c.id left join user_completed_courses cc on cc.user_id=u.id and cc.course_id=c.id where c.status='PUBLISHED' and "
+                + scope
+                + "), scored as (select s.id,s.user_id,s.course_id,s.lesson_id,s.score*100.0/s.total score,s.taken_at,case when s.lesson_id is null then c.quiz_passing_score else coalesce(q.passing_score,80) end passing_score,coalesce(l.title,c.name) assessment,row_number() over(partition by s.user_id,s.course_id,s.lesson_id order by s.taken_at desc,s.id desc) latest,row_number() over(partition by s.user_id,s.course_id,s.lesson_id order by s.taken_at,s.id) first_attempt from user_quiz_scores s join assigned ga on ga.learner_id=s.user_id and ga.course_id=s.course_id join courses c on c.id=s.course_id left join lessons l on l.id=s.lesson_id left join quizzes q on q.lesson_id=l.id left join visible_lessons vs on vs.id=s.lesson_id where s.total>0 and (s.lesson_id is null or vs.id is not null))"
+                + ", assessments as (select user_id,course_id,lesson_id,count(*) attempt_count,max(case when latest=1 then score else null end) latest_score,max(case when floor(score+0.5)>=passing_score then 1 else 0 end) ever_passed,max(case when first_attempt=1 and floor(score+0.5)>=passing_score then 1 else 0 end) first_passed from scored group by user_id,course_id,lesson_id)"
+                + ", assessment_stats as (select user_id,course_id,sum(attempt_count) attempt_count,avg(latest_score) average,min(ever_passed) ever_passed,min(first_passed) first_passed from assessments group by user_id,course_id)"
+                + ", course_totals as (select course_id,count(*) total_lessons from visible_lessons group by course_id)"
+                + ", learner_done as (select l.course_id,cl.user_id,count(*) done_lessons from visible_lessons l join user_completed_lessons cl on cl.lesson_id=l.id group by l.course_id,cl.user_id)"
+                + ", required_quizzes as (select l.id lesson_id,l.course_id,q.passing_score from visible_lessons l join quizzes q on q.lesson_id=l.id where q.required_for_progress=true and exists(select 1 from questions qu where qu.quiz_id=q.id))"
+                + ", required_totals as (select course_id,count(*) required_count from required_quizzes group by course_id)"
+                + ", required_met as (select rq.course_id,qs.user_id,count(distinct rq.lesson_id) met from required_quizzes rq join user_quiz_scores qs on qs.lesson_id=rq.lesson_id and qs.total>0 and floor(qs.score*100.0/qs.total+0.5)>=rq.passing_score group by rq.course_id,qs.user_id)"
+                + ", course_shape as (select c.id course_id,case when exists(select 1 from chapters ch where ch.course_id=c.id and "
+                + published("ch") + ") and not exists(select 1 from chapters ch where ch.course_id=c.id and "
                 + published("ch")
-                + " and not exists(select 1 from visible_lessons l where l.chapter_id=ch.id)) then 1 else 0 end nonempty,case when exists(select 1 from lesson_progress lp join visible_lessons l on l.id=lp.lesson_id where lp.user_id=a.learner_id and l.course_id=a.course_id) then 1 else 0 end accessed from assigned a left join assessment_stats ast on ast.user_id=a.learner_id and ast.course_id=a.course_id), facts as (select pf.*,case when nonempty=1 and total_lessons=done_lessons and required_passed=1 then 1 else 0 end completed,case when nonempty=1 and total_lessons=done_lessons and required_passed=1 then cast(completion_date as date) else null end completed_at,case when nonempty=1 and total_lessons=done_lessons and required_passed=1 then 'Hoàn thành' when done_lessons=0 and attempt_count=0 and accessed=0 then 'Chưa bắt đầu' else 'Đang học' end status from progress_facts pf) ";
+                + " and not exists(select 1 from visible_lessons l where l.chapter_id=ch.id)) then 1 else 0 end nonempty from courses c where c.status='PUBLISHED')"
+                + ", learner_access as (select distinct l.course_id,lp.user_id from lesson_progress lp join visible_lessons l on l.id=lp.lesson_id)"
+                + ", progress_facts as (select a.*,coalesce(ast.attempt_count,0) attempt_count,ast.average,coalesce(ast.ever_passed,0) ever_passed,coalesce(ast.first_passed,0) first_passed,coalesce(ct.total_lessons,0) total_lessons,coalesce(ld.done_lessons,0) done_lessons,case when coalesce(rt.required_count,0)=coalesce(rm.met,0) then 1 else 0 end required_passed,coalesce(cs.nonempty,0) nonempty,case when la.user_id is null then 0 else 1 end accessed from assigned a left join assessment_stats ast on ast.user_id=a.learner_id and ast.course_id=a.course_id left join course_totals ct on ct.course_id=a.course_id left join learner_done ld on ld.course_id=a.course_id and ld.user_id=a.learner_id left join required_totals rt on rt.course_id=a.course_id left join required_met rm on rm.course_id=a.course_id and rm.user_id=a.learner_id left join course_shape cs on cs.course_id=a.course_id left join learner_access la on la.course_id=a.course_id and la.user_id=a.learner_id), facts as (select pf.*,case when nonempty=1 and total_lessons=done_lessons and required_passed=1 then 1 else 0 end completed,case when nonempty=1 and total_lessons=done_lessons and required_passed=1 then cast(completion_date as date) else null end completed_at,case when nonempty=1 and total_lessons=done_lessons and required_passed=1 then 'Hoàn thành' when done_lessons=0 and attempt_count=0 and accessed=0 then 'Chưa bắt đầu' else 'Đang học' end status from progress_facts pf) ";
         return new Context(sql, p);
     }
 
@@ -145,16 +155,36 @@ public class TrainingReportQueryRepositoryImpl implements TrainingReportQueryRep
         String base = c.sql() + ", selected as (select * from facts" + where + ") ";
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("asOf", LocalDate.now());
-        if (metadata)
-            result.put("summary", maps(base + "select " + summaryColumns() + " from selected", p).get(0));
+        List<String> actionIds = List.of("overdue", "dueSoon", "failed", "untested", "incomplete");
+        List<Map<String, Object>> actions = new ArrayList<>();
+        if (metadata) {
+            // Each metadata statement recomputes the facts, so all of it is read in as few statements as possible.
+            String actionColumns = "";
+            for (String a : actionIds)
+                actionColumns += ",coalesce(sum(case when " + action(a) + " then 1 else 0 end),0) \"action_" + a + "\"";
+            Map<String, Object> summary = new LinkedHashMap<>(
+                    jdbc.queryForMap(base + "select " + summaryColumns() + actionColumns + " from selected", p));
+            for (String a : actionIds) {
+                Object count = summary.remove("action_" + a);
+                if (count == null)
+                    count = summary.remove(("action_" + a).toUpperCase(Locale.ROOT));
+                actions.add(Map.of("id", a, "count", ((Number) count).longValue()));
+            }
+            result.put("summary", camel(summary));
+        }
         Map<String, Object> choices = new LinkedHashMap<>();
-        if (metadata)
-            for (var entry : Map
-                    .of("units", "unit", "programs", "program", "courses", "course_name")
-                    .entrySet())
-                choices.put(entry.getKey(), jdbc.query(
-                        c.sql() + " select distinct " + entry.getValue() + " from facts order by " + entry.getValue(),
-                        p, (r, i) -> r.getString(1)));
+        if (metadata) {
+            for (String key : List.of("courses", "programs", "units"))
+                choices.put(key, new ArrayList<String>());
+            jdbc.query(c.sql() + " select * from (select 'units' choice,unit item from facts group by unit"
+                    + " union all select 'programs',program from facts group by program"
+                    + " union all select 'courses',course_name from facts group by course_name) c order by choice,item", p,
+                    rs -> {
+                        @SuppressWarnings("unchecked")
+                        List<String> list = (List<String>) choices.get(rs.getString(1));
+                        list.add(rs.getString(2));
+                    });
+        }
         result.put("choices", choices);
         String dimension = DIMENSIONS.get(f.view());
         int size = Math.max(1, Math.min(f.size(), 100)), page = Math.max(0, Math.min(f.page(), 1000000));
@@ -183,16 +213,23 @@ public class TrainingReportQueryRepositoryImpl implements TrainingReportQueryRep
         result.put("size", size);
         if (!metadata)
             return result;
-        List<Map<String, Object>> actions = new ArrayList<>();
-        for (String a : List.of("overdue", "dueSoon", "failed", "untested", "incomplete"))
-            actions.add(Map.of("id", a, "count", Objects.requireNonNull(
-                    jdbc.queryForObject(base + "select count(*) from selected where " + action(a), p, Long.class))));
         result.put("actions", actions);
         Map<String, Object> charts = new LinkedHashMap<>();
-        for (String d : List.of("units", "courses", "programs", "domains")) {
+        List<String> dimensions = List.of("units", "courses", "programs", "domains");
+        for (String d : dimensions)
+            charts.put(d, new ArrayList<Map<String, Object>>());
+        String chartRows = "";
+        for (String d : dimensions) {
             String col = DIMENSIONS.get(d);
-            charts.put(d, maps(base + "select " + col + " name," + summaryColumns() + " from selected group by " + col
-                    + " order by count(*) desc," + col + " limit 20", p));
+            chartRows += (chartRows.isEmpty() ? "" : " union all ") + "select '" + d + "' dimension,cast(" + col
+                    + " as varchar(255)) name," + summaryColumns() + " from selected group by " + col;
+        }
+        for (var row : maps(base + "select * from (" + chartRows + ") r order by dimension,total desc,name", p)) {
+            var values = new LinkedHashMap<>(row);
+            @SuppressWarnings("unchecked")
+            var list = (List<Map<String, Object>>) charts.get(values.remove("dimension"));
+            if (list.size() < 20)
+                list.add(values);
         }
         result.put("charts", charts);
         result.put("months", maps(base
