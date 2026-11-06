@@ -87,7 +87,7 @@
 
         <div class="controls-row">
           <div class="left-ctrls">
-            <button class="ctrl-btn" @click="togglePlay">
+            <button aria-label="Phát hoặc tạm dừng" class="ctrl-btn" @click="togglePlay">
               <svg
                 v-if="isPlaying"
                 xmlns="http://www.w3.org/2000/svg"
@@ -179,7 +179,7 @@
               />
               <span class="volume-value">{{ Math.round(volume * 100) }}%</span>
             </div>
-            <button class="ctrl-btn" @click="toggleFullscreen">
+            <button aria-label="Toàn màn hình" class="ctrl-btn" @click="toggleFullscreen">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 24 24"

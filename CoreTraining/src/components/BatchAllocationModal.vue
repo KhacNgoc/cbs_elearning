@@ -31,7 +31,7 @@
             placeholder="Tìm nhanh Lĩnh vực, Chương trình, Khóa học theo tên hoặc mã..."
             class="search-input"
           />
-          <button v-if="searchQuery" type="button" class="btn-clear-search" @click="searchQuery = ''">
+          <button aria-label="Xóa tìm kiếm" v-if="searchQuery" type="button" class="btn-clear-search" @click="searchQuery = ''">
             <X :size="14" />
           </button>
         </div>
@@ -80,7 +80,7 @@
                   </div>
                 </button>
 
-                <button type="button" class="btn-expand" @click.stop="toggleDomainExpand(d.id)">
+                <button aria-label="Mở rộng hoặc thu gọn" type="button" class="btn-expand" @click.stop="toggleDomainExpand(d.id)">
                   <Loader2 v-if="loadingProgramsByDomain.has(d.id)" :size="14" class="spin-icon" />
                   <ChevronDown v-else-if="expandedDomainIds.has(d.id)" :size="16" />
                   <ChevronRight v-else :size="16" />
@@ -139,7 +139,7 @@
                         </div>
                       </button>
 
-                      <button type="button" class="btn-expand" @click.stop="toggleProgramExpand(p.id)">
+                      <button aria-label="Mở rộng hoặc thu gọn" type="button" class="btn-expand" @click.stop="toggleProgramExpand(p.id)">
                         <Loader2 v-if="loadingCoursesByProgram.has(p.id)" :size="14" class="spin-icon" />
                         <ChevronDown v-else-if="expandedProgramIds.has(p.id)" :size="15" />
                         <ChevronRight v-else :size="15" />
@@ -252,7 +252,7 @@
           / {{ totalDomainElements }}
         </span>
         <div class="pagination-buttons">
-          <button type="button" class="page-nav-btn" :disabled="page === 1" @click="changePage(page - 1)">
+          <button aria-label="Trang trước" type="button" class="page-nav-btn" :disabled="page === 1" @click="changePage(page - 1)">
             <ChevronLeft :size="14" />
           </button>
           <span class="page-current">{{ page }} / {{ totalPages }}</span>

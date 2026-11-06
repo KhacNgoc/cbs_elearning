@@ -83,7 +83,7 @@
             placeholder="Tìm kiếm theo tên đơn vị, chi nhánh, phòng ban..."
             class="directory-search-input"
           />
-          <button
+          <button aria-label="Xóa tìm kiếm"
             v-if="unitDirectoryQuery"
             type="button"
             class="btn-clear-search"
@@ -302,7 +302,7 @@
               placeholder="Tìm kiếm nội dung đã phân bổ theo tên, mã hoặc loại..."
               class="toolbar-search-input"
             />
-            <button
+            <button aria-label="Xóa tìm kiếm"
               v-if="detailFilterQuery"
               type="button"
               class="btn-clear-search"

@@ -49,7 +49,7 @@
         placeholder="Tìm kiếm lĩnh vực, chương trình, khóa học hoặc bài giảng..."
         class="tree-search-input"
       />
-      <button
+      <button aria-label="Xóa tìm kiếm"
         v-if="searchQuery"
         type="button"
         class="clear-search-btn"
@@ -81,7 +81,7 @@
             :class="{ active: selectedId === domain.id, expanded: isExpanded(domain.id) }"
             @click="selectNode('domain', domain)"
           >
-            <button
+            <button aria-label="Mở rộng hoặc thu gọn"
               type="button"
               class="toggle-chevron"
               @click.stop="toggleNode(domain.id)"
@@ -158,7 +158,7 @@
                 :class="{ active: selectedId === program.id, expanded: isExpanded(program.id) }"
                 @click="selectNode('program', program)"
               >
-                <button
+                <button aria-label="Mở rộng hoặc thu gọn"
                   type="button"
                   class="toggle-chevron"
                   @click.stop="toggleNode(program.id)"
@@ -246,7 +246,7 @@
                     :class="{ active: selectedId === course.id, expanded: isExpanded(course.id) }"
                     @click="selectNode('course', course, program)"
                   >
-                    <button
+                    <button aria-label="Mở rộng hoặc thu gọn"
                       type="button"
                       class="toggle-chevron"
                       @click.stop="toggleNode(course.id)"
@@ -345,7 +345,7 @@
                         :class="{ active: selectedId === chapter.id, expanded: isExpanded(chapter.id) }"
                         @click="selectNode('chapter', chapter, course)"
                       >
-                        <button
+                        <button aria-label="Mở rộng hoặc thu gọn"
                           type="button"
                           class="toggle-chevron"
                           @click.stop="toggleNode(chapter.id)"
@@ -415,7 +415,7 @@
                             :class="{ active: selectedId === lesson.id, expanded: isExpanded(lesson.id) }"
                             @click="selectNode('lesson', lesson, chapter, course)"
                           >
-                            <button
+                            <button aria-label="Mở rộng hoặc thu gọn"
                               type="button"
                               class="toggle-chevron"
                               @click.stop="toggleNode(lesson.id)"
@@ -642,7 +642,7 @@
           <div class="modal-title-box">
             <h4>{{ deleteConfirm.title }}</h4>
           </div>
-          <button type="button" class="close-btn" @click="closeDeleteModal">
+          <button aria-label="Đóng" type="button" class="close-btn" @click="closeDeleteModal">
             <X :size="16" />
           </button>
         </div>
@@ -690,7 +690,7 @@
             <span class="modal-level-badge">{{ levelSubtitle }}</span>
             <h4>{{ modalTitle }}</h4>
           </div>
-          <button type="button" class="close-btn" @click="closeAddModal">
+          <button aria-label="Đóng" type="button" class="close-btn" @click="closeAddModal">
             <X :size="16" />
           </button>
         </div>
