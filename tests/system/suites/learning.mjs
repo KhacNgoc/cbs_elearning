@@ -1,12 +1,20 @@
 // 4.5 Lesson content, bookmarks, progress (F-L01..L12) plus NF-S04 video/document protection.
 import { readFileSync } from 'node:fs'
-import { Client, tc, assert, expectStatus, expectRejected, sqlNum, sqlOne, multipart, gap, na, BASE } from '../lib.mjs'
+import { Client, tc, assert, expectStatus, expectRejected, sqlNum, sqlOne, multipart, gap, na, BASE, sql } from '../lib.mjs'
 import { freshCourse, learner, readAndComplete, answersFor, ok, createCourse, createChapter, createLesson, publish, allocate, setStatus } from '../seed.mjs'
 
 const fixture = (name) => readFileSync(new URL(`../fixtures/${name}`, import.meta.url))
 const points = (client) => sqlNum(`select points from users where id=${client.user.id}`)
 const completions = (client, lessonId) => sqlNum(`select count(*) from user_completed_lessons where user_id=${client.user.id} and lesson_id='${lessonId}'`)
-const save = (c, lessonId, body) => c.post(`/api/users/me/lessons/${lessonId}/progress`, body)
+// Watched time may only grow as fast as playback, so legitimate saves first move the last save back in time.
+const save = async (c, lessonId, body) => {
+  if (body?.watchedSeconds > 0 && !body.instant) {
+    await c.post(`/api/users/me/lessons/${lessonId}/progress`, { contentType: 'VIDEO', lastPositionSeconds: 0 })
+    sql(`update lesson_progress set updated_at = updated_at - interval '1 day' where user_id=${c.user.id} and lesson_id='${lessonId}'`)
+  }
+  const { instant, ...rest } = body ?? {}
+  return c.post(`/api/users/me/lessons/${lessonId}/progress`, rest)
+}
 const complete = (c, lessonId) => c.post(`/api/users/me/complete-lesson/${lessonId}`)
 const contentComplete = (c, lessonId) => c.post(`/api/users/me/lessons/${lessonId}/content-complete`)
 
@@ -45,7 +53,8 @@ export async function run(ctx) {
 
   // ---- F-L02 content-complete boundaries, video duration 100s from the fixture.
   const videoLesson = () => freshCourse(ctx, { lessons: [{ textBody: null, videoUrl, videoSource: 'UPLOAD' }] })
-  for (const [watched, pass] of [[0, false], [89.9, false], [90, true], [100, true]]) {
+  // The fixture really lasts 100.096 seconds, so its 90% mark is 90.09.
+  for (const [watched, pass] of [[0, false], [89.9, false], [90.1, true], [100, true]]) {
     await tc('F-L02', `video ${watched}%`, async () => {
       const f = await videoLesson(); const s = await learner(ctx)
       expectStatus(await save(s, f.lesson.id, { contentType: 'VIDEO', lastPositionSeconds: watched, watchedSeconds: watched, durationSeconds: 100 }), 200)
@@ -56,9 +65,15 @@ export async function run(ctx) {
   }
   await tc('F-L02', 'client tự khai durationSeconds nhỏ để lách 90%', async () => {
     const f = await videoLesson(); const s = await learner(ctx)
-    const res = await save(s, f.lesson.id, { contentType: 'VIDEO', lastPositionSeconds: 1, watchedSeconds: 1, durationSeconds: 1 })
+    const res = await save(s, f.lesson.id, { contentType: 'VIDEO', lastPositionSeconds: 1, watchedSeconds: 1, durationSeconds: 1, instant: true })
     const done = await complete(s, f.lesson.id)
     assert.ok(done.status >= 400, `1-second watch completed a 100s video via client-supplied duration (save=${res.status}, complete=${done.status})`)
+  })
+  await tc('F-L02', 'khai đã xem 100 giây ngay khi mở bài không được tính', async () => {
+    const f = await videoLesson(); const s = await learner(ctx)
+    const res = expectStatus(await save(s, f.lesson.id, { contentType: 'VIDEO', lastPositionSeconds: 100, watchedSeconds: 100, durationSeconds: 100, instant: true }), 200).json
+    assert.ok(res.watchedSeconds <= 30, `watched=${res.watchedSeconds}`)
+    assert.ok((await complete(s, f.lesson.id)).status >= 400, 'completed without watching')
   })
   await tc('F-L02', 'văn bản chưa đọc chặn, đọc rồi đạt', async () => {
     const f = await freshCourse(ctx); const s = await learner(ctx)
@@ -149,7 +164,7 @@ export async function run(ctx) {
   await tc('F-L05', 'watchedSeconds vượt duration không tự hoàn thành sai', async () => {
     const f = await videoLesson(); const s = await learner(ctx)
     const res = await save(s, f.lesson.id, { contentType: 'VIDEO', watchedSeconds: 1e9, durationSeconds: 100, lastPositionSeconds: 1 })
-    if (res.status === 200) assert.ok(res.json.watchedSeconds <= 100, `stored watchedSeconds=${res.json.watchedSeconds} beyond duration 100`)
+    if (res.status === 200) assert.ok(res.json.watchedSeconds <= res.json.durationSeconds && res.json.durationSeconds < 101, `stored watchedSeconds=${res.json.watchedSeconds} beyond duration ${res.json.durationSeconds}`)
   })
   await tc('F-L05', 'dữ liệu bẩn không ghi vào DB', async () => {
     const row = sqlOne(`select document_positions::text from lesson_progress where user_id=${dirtyUser.user.id} and lesson_id='${dirty.lesson.id}'`)

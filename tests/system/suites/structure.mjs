@@ -191,7 +191,7 @@ export async function run(ctx) {
   })
   for (const [name, size, accept] of [['M-1', 20 * MB - 1024, true], ['M', 20 * MB, true], ['M+1', 20 * MB + 1024, false]]) {
     await tc('F-C07', `tài liệu ${name}`, async () => {
-      const res = await upload('/api/admin/documents/upload', 'big.pdf', Buffer.alloc(size, 0x25))
+      const res = await upload('/api/admin/documents/upload', 'big.pdf', Buffer.concat([Buffer.from('%PDF-'), Buffer.alloc(Math.max(0, size - 5), 0x25)]))
       if (accept) expectStatus(res, 200)
       else assert.ok(res.status === 413 || res.status === 400, `oversize returned ${res.status}: ${res.text.slice(0, 120)}`)
     })

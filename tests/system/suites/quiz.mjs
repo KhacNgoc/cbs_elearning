@@ -221,7 +221,7 @@ export async function run(ctx) {
     const p1 = points(s)
     await submit(s, f.lesson.id, { selectedAnswers: answersFor(f.lesson.qs, 4) })
     assert.equal(points(s), p1, 'points changed on resubmit')
-    assert.equal(p1, 100)
+    assert.equal(p1, 400, 'expected 100 for the lesson and 300 for the gold badge')
   })
 
   // F-Q12 badges. Badge rule per scenarios: 100% gold +300, >90% silver +200, 80-90% bronze +100.

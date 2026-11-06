@@ -8,7 +8,15 @@ import { parseCsv } from './reports.mjs'
 const fixture = (name) => readFileSync(new URL(`../fixtures/${name}`, import.meta.url))
 const pendingId = (userId, courseId) => sqlOne(`select id from course_enrollment_requests where user_id=${userId} and course_id='${courseId}' order by id desc limit 1`)
 const pts = (id) => sqlNum(`select points from users where id=${id}`)
-const save = (c, l, b) => c.post(`/api/users/me/lessons/${l}/progress`, b)
+// Watched time may only grow as fast as playback, so legitimate saves first move the last save back in time.
+const save = async (c, lessonId, body) => {
+  if (body?.watchedSeconds > 0 && !body.instant) {
+    await c.post(`/api/users/me/lessons/${lessonId}/progress`, { contentType: 'VIDEO', lastPositionSeconds: 0 })
+    sql(`update lesson_progress set updated_at = updated_at - interval '1 day' where user_id=${c.user?.id ?? (await c.get('/api/users/me')).json.id} and lesson_id='${lessonId}'`)
+  }
+  const { instant, ...rest } = body ?? {}
+  return c.post(`/api/users/me/lessons/${lessonId}/progress`, rest)
+}
 const APP_NOW = "(now() at time zone 'Asia/Ho_Chi_Minh')"
 
 export async function run(ctx) {
@@ -89,18 +97,18 @@ export async function run(ctx) {
     expectRejected(await s.post(`/api/users/me/complete-lesson/${flow.L1.id}`), 'complete before pass')
     assert.equal(expectStatus(await s.post(`/api/quizzes/lessons/${flow.L1.id}/submit`, { selectedAnswers: answersFor(flow.qs, 9) }), 200).json.passed, true)
     await s.post(`/api/users/me/complete-lesson/${flow.L1.id}`)
-    assert.equal(pts(id), 100)
+    assert.equal(pts(id), 200, 'expected 100 for the lesson and 100 for the bronze badge')
     expectStatus(await readAndComplete(s, flow.L2.id), 200)
     expectStatus(await save(s, flow.L3.id, { contentType: 'VIDEO', lastPositionSeconds: 100, watchedSeconds: 100, durationSeconds: 100 }), 200)
     expectStatus(await s.post(`/api/users/me/complete-lesson/${flow.L3.id}`), 200)
-    assert.equal(pts(id), 300)
+    assert.equal(pts(id), 400)
     assert.equal(sqlNum(`select count(*) from user_completed_courses where user_id=${id} and course_id='${flow.course.id}'`), 1)
   })
   await tc('E2E-01', '9 đánh giá, hồ sơ, dashboard, BXH, báo cáo, CSV nhất quán', async () => {
     const { s, m } = flow; const id = flow.learnerUser.id
     expectStatus(await s.put(`/api/courses/${flow.course.id}/rating`, { stars: 5, content: 'Tốt' }), 200)
     const me = expectStatus(await s.get('/api/users/me'), 200).json
-    assert.equal(me.points, 300)
+    assert.equal(me.points, 400)
     const row = expectStatus(await s.get('/api/users/me/learning/dashboard/courses?tab=mine&page=1&size=50'), 200).json.items.find((c) => c.course.id === flow.course.id)
     assert.equal(row.percent, 100); assert.equal(row.learningStatus && row.completedCount, 3)
     const board = expectStatus(await s.get('/api/leaderboard/page?page=0&size=100'), 200).text
@@ -111,14 +119,14 @@ export async function run(ctx) {
     assert.equal(rep.json.summary.complete, 1, `summary ${JSON.stringify(rep.json.summary).slice(0, 160)}`)
     const file = expectStatus(await m.get(`/api/admin/reports/training/export?view=completion&course=${encodeURIComponent(flow.course.name)}`, { headers: { Accept: 'text/csv' } }), 200)
     assert.ok(parseCsv(file.text).flat().some((c) => c.includes(flow.learnerUser.fullName)))
-    const attempt = sqlOne(`select id from user_quiz_scores where user_id=${id} order by id desc limit 1`)
+    const attempt = sqlOne(`select id from quiz_attempts where user_id=${id} order by taken_at desc limit 1`)
     expectStatus(await m.get(`/api/admin/reports/training/attempts/${attempt}/analysis`), 200)
   })
   await tc('E2E-01', '10 đăng xuất, đăng nhập lại: tiến độ và quyền giữ nguyên', async () => {
     expectStatus(await flow.s.post('/api/auth/logout'), 204)
     const again = await loginAs(flow.learnerUser.username, ACTIVE_PASSWORD)
     const me = expectStatus(await again.get('/api/users/me'), 200).json
-    assert.equal(me.points, 300)
+    assert.equal(me.points, 400)
     expectStatus(await again.get(`/api/lessons/${flow.L3.id}`), 200)
     assert.ok([403].includes((await again.get('/api/admin/users')).status))
   })
@@ -167,6 +175,7 @@ export async function run(ctx) {
   const [slideE3, auxE3] = sqlOne(`select string_agg(id::text, ',' order by document_order) from lesson_documents where lesson_id='${e3.lesson.id}'`).split(',').map(Number)
   const dev1 = await learner(ctx)
   const dev2 = await loginAs(dev1.user.username, ACTIVE_PASSWORD)
+  dev2.user = dev1.user
   await tc('E2E-03', 'lưu mốc từng tài liệu, không gán nhầm', async () => {
     await save(dev1, e3.lesson.id, { contentType: 'DOCUMENT', documentId: slideE3, documentPage: 4 })
     await save(dev1, e3.lesson.id, { contentType: 'DOCUMENT', documentId: auxE3, documentPage: 2 })
@@ -218,7 +227,7 @@ export async function run(ctx) {
     const out = await Promise.all([s.post(`/api/quizzes/lessons/${f.lesson.id}/submit`, body), s.post(`/api/quizzes/lessons/${f.lesson.id}/submit`, body)])
     assert.equal(out.filter((r) => r.status === 200).length, 1, `statuses ${out.map((r) => r.status)}`)
     expectRejected(await s.post(`/api/quizzes/lessons/${f.lesson.id}/submit`, body), 'resend')
-    assert.equal(pts(s.user.id), 100, 'points paid twice')
+    assert.equal(pts(s.user.id), 400, 'points paid twice: expected 100 for the lesson and 300 for the gold badge')
     assert.equal(expectStatus(await s.get(`/api/quizzes/lessons/${f.lesson.id}/review`), 200).json.score, 20)
     assert.equal(sqlNum(`select count(*) from quiz_attempts where user_id=${s.user.id}`), 1)
   })

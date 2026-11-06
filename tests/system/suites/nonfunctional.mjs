@@ -99,9 +99,10 @@ export async function run(ctx) {
   })
 
   // ---------- NF-D01 reconciliation of everything created so far.
-  await tc('NF-D01', 'điểm = 100 × bài hoàn thành cho mọi học viên test', async () => {
+  await tc('NF-D01', 'điểm = 100 × bài hoàn thành + điểm huy hiệu cho mọi học viên test', async () => {
     const bad = sql(`select u.username, u.points, (select count(*) from user_completed_lessons c where c.user_id=u.id) n from users u
-      where u.points <> 100 * (select count(*) from user_completed_lessons c where c.user_id=u.id) limit 5`)
+      where u.points <> 100 * (select count(*) from user_completed_lessons c where c.user_id=u.id)
+        + (select coalesce(sum(case b.type when 'gold' then 300 when 'silver' then 200 else 100 end),0) from user_badges ub join badges b on b.id=ub.badge_id where ub.user_id=u.id) limit 5`)
     assert.equal(bad, '', `mismatch: ${bad}`)
   })
   await tc('NF-D01', 'không dữ liệu mồ côi/trùng', async () => {

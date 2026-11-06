@@ -26,7 +26,7 @@ export async function run(ctx) {
     assert.match(res.json.fileUrl, /^\/uploads\/documents\/[0-9a-f-]+\.pdf$/)
   })
   await tc('NF-S05', 'tài liệu phục vụ không chạy trong origin (Content-Disposition/nosniff)', async () => {
-    const up = expectStatus(await admin.post('/api/admin/documents/upload', undefined, { form: multipart({}, [{ name: 'a.pdf', data: `<html>${XSS}</html>` }]) }), 200).json
+    const up = expectStatus(await admin.post('/api/admin/documents/upload', undefined, { form: multipart({}, [{ name: 'a.pdf', data: `%PDF-<html>${XSS}</html>` }]) }), 200).json
     const res = expectStatus(await admin.get(up.fileUrl), 200)
     assert.equal(res.headers.get('x-content-type-options'), 'nosniff')
     assert.ok(!/text\/html/.test(res.headers.get('content-type') ?? ''), 'served as HTML')
