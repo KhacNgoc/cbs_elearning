@@ -578,8 +578,8 @@
           :units="units"
           :disabled="busy"
         /><small
-          >Có thể chọn nhiều đơn vị. Khóa học kế thừa phạm vi của chương
-          trình.</small
+          >Có thể chọn nhiều đơn vị. Các đơn vị này được quản lý nội dung của chương
+          trình; học viên chỉ học được khóa đã phân bổ cho đơn vị.</small
         >
       </div>
       <label class="admin-form-field"

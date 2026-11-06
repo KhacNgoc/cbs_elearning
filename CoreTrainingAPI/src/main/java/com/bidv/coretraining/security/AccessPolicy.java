@@ -69,9 +69,10 @@ public final class AccessPolicy {
             return canEdit(u, c);
         return policies(u).stream().anyMatch(r -> r.active() && !r.learnerRole() && r.permissions().contains(permission) &&
                 (r.assignedCoursesOnly() ? c.getInstructorIds().contains(u.getId())
-                        : r.legacyOwnerScope() ? roleScope(r, c.getOwnerUnit())
-                                : c.getProgram() != null
-                                        && c.getProgram().getUnits().stream().anyMatch(n -> roleScope(r, n))));
+                        : c.getGrantedUnits().stream().anyMatch(n -> roleScope(r, n))
+                                || (r.legacyOwnerScope() ? roleScope(r, c.getOwnerUnit())
+                                        : c.getProgram() != null
+                                                && c.getProgram().getUnits().stream().anyMatch(n -> roleScope(r, n)))));
     }
 
     public static Set<String> courseActions(User u, Course c) {
@@ -193,66 +194,25 @@ public final class AccessPolicy {
     public static boolean visible(User u, Course c) {
         if (canReadCourse(u, c) || canEdit(u, c))
             return true;
-        if (u.getOrganizationUnit() == null || !activeUnit(u.getOrganizationUnit()))
-            return c.getOwnerUnit() == null && u.getOrganizationUnit() == null;
-
-        Set<String> units = ancestors(u.getOrganizationUnit());
+        // Learners reach a course only through its allocation or their own enrollment, never through its owner unit.
+        OrganizationUnit unit = u.getOrganizationUnit();
+        if (unit != null && !activeUnit(unit))
+            return false;
         if (u.getRegisteredCourses() != null
                 && u.getRegisteredCourses().stream().anyMatch(rc -> rc.getId().equals(c.getId())))
             return true;
-        if (c.getUnitGrants() != null && c.getUnitGrants().keySet().stream().anyMatch(units::contains))
-            return true;
-        if (c.getProgram() != null) {
-            if (c.getProgram().getUnitGrants() != null
-                    && c.getProgram().getUnitGrants().keySet().stream().anyMatch(units::contains))
-                return true;
-            if (c.getProgram().getUnits() != null && !c.getProgram().getUnits().isEmpty()
-                    && c.getProgram().getUnits().stream()
-                            .anyMatch(n -> activeUnit(n) && units.contains(n.getId())))
-                return true;
-            if (c.getProgram().getDomain() != null) {
-                if (c.getProgram().getDomain().getUnitGrants() != null
-                        && c.getProgram().getDomain().getUnitGrants().keySet().stream().anyMatch(units::contains))
-                    return true;
-                if (c.getProgram().getDomain().getUnits() != null
-                        && c.getProgram().getDomain().getUnits().stream()
-                                .anyMatch(n -> activeUnit(n) && units.contains(n.getId())))
-                    return true;
-            }
-        }
-        if (c.getOwnerUnit() != null && activeUnit(c.getOwnerUnit()) && units.contains(c.getOwnerUnit().getId()))
-            return true;
-        return false;
+        if (unit == null)
+            return false;
+        Set<String> units = ancestors(unit);
+        return c.getUnitGrants() != null && c.getUnitGrants().keySet().stream().anyMatch(units::contains);
     }
 
     public static boolean mandatory(User u, Course c) {
         if (u.getOrganizationUnit() == null || !activeUnit(u.getOrganizationUnit()))
             return false;
         Set<String> units = ancestors(u.getOrganizationUnit());
-        // 1. Ưu tiên cấu hình trực tiếp trên Khóa học (Course-level grant)
-        if (c.getUnitGrants() != null && !c.getUnitGrants().isEmpty()) {
-            boolean hasCourseGrant = c.getUnitGrants().keySet().stream().anyMatch(units::contains);
-            if (hasCourseGrant) {
-                return c.getUnitGrants().entrySet().stream()
-                        .anyMatch(e -> units.contains(e.getKey()) && "MANDATORY".equalsIgnoreCase(e.getValue()));
-            }
-        }
-        // 2. Kế thừa từ Chương trình đào tạo (Program-level grant)
-        if (c.getProgram() != null && c.getProgram().getUnitGrants() != null
-                && !c.getProgram().getUnitGrants().isEmpty()) {
-            boolean hasProgramGrant = c.getProgram().getUnitGrants().keySet().stream().anyMatch(units::contains);
-            if (hasProgramGrant) {
-                return c.getProgram().getUnitGrants().entrySet().stream()
-                        .anyMatch(e -> units.contains(e.getKey()) && "MANDATORY".equalsIgnoreCase(e.getValue()));
-            }
-        }
-        // 3. Kế thừa từ Lĩnh vực đào tạo (Domain-level grant)
-        if (c.getProgram() != null && c.getProgram().getDomain() != null
-                && c.getProgram().getDomain().getUnitGrants() != null) {
-            return c.getProgram().getDomain().getUnitGrants().entrySet().stream()
-                    .anyMatch(e -> units.contains(e.getKey()) && "MANDATORY".equalsIgnoreCase(e.getValue()));
-        }
-        return false;
+        return c.getUnitGrants() != null && c.getUnitGrants().entrySet().stream()
+                .anyMatch(e -> units.contains(e.getKey()) && "MANDATORY".equalsIgnoreCase(e.getValue()));
     }
 
     public static void require(boolean allowed) {

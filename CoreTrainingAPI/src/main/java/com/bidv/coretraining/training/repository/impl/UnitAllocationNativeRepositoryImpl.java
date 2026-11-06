@@ -270,13 +270,9 @@ public class UnitAllocationNativeRepositoryImpl implements UnitAllocationNativeR
             whereClause.append(" AND u.type <> 'DEPARTMENT' ");
         }
         if ("ALLOCATED".equals(statusFilter)) {
-            whereClause.append(" AND (EXISTS (SELECT 1 FROM domain_unit_grants dug WHERE dug.unit_id = u.id) OR " +
-                               "      EXISTS (SELECT 1 FROM program_unit_grants pug WHERE pug.unit_id = u.id) OR " +
-                               "      EXISTS (SELECT 1 FROM course_unit_grants cug WHERE cug.unit_id = u.id)) ");
+            whereClause.append(" AND EXISTS (SELECT 1 FROM course_unit_grants cug WHERE cug.unit_id = u.id) ");
         } else if ("UNALLOCATED".equals(statusFilter)) {
-            whereClause.append(" AND NOT (EXISTS (SELECT 1 FROM domain_unit_grants dug WHERE dug.unit_id = u.id) OR " +
-                               "          EXISTS (SELECT 1 FROM program_unit_grants pug WHERE pug.unit_id = u.id) OR " +
-                               "          EXISTS (SELECT 1 FROM course_unit_grants cug WHERE cug.unit_id = u.id)) ");
+            whereClause.append(" AND NOT EXISTS (SELECT 1 FROM course_unit_grants cug WHERE cug.unit_id = u.id) ");
         }
 
         String countSql = "SELECT COUNT(*) FROM organization_units u " + whereClause;
@@ -285,8 +281,10 @@ public class UnitAllocationNativeRepositoryImpl implements UnitAllocationNativeR
         int totalPages = (int) Math.ceil((double) totalElements / pageSize);
 
         String dataSql = "SELECT u.id, u.name, u.type, u.active, u.parent_id, " +
-                "(SELECT COUNT(DISTINCT dug.domain_id) FROM domain_unit_grants dug WHERE dug.unit_id = u.id) AS domain_count, " +
-                "(SELECT COUNT(DISTINCT pug.program_id) FROM program_unit_grants pug WHERE pug.unit_id = u.id) AS program_count, " +
+                "(SELECT COUNT(DISTINCT p.domain_id) FROM course_unit_grants cug JOIN courses c ON c.id = cug.course_id " +
+                " JOIN training_programs p ON p.id = c.program_id WHERE cug.unit_id = u.id) AS domain_count, " +
+                "(SELECT COUNT(DISTINCT c.program_id) FROM course_unit_grants cug JOIN courses c ON c.id = cug.course_id " +
+                " WHERE cug.unit_id = u.id) AS program_count, " +
                 "(SELECT COUNT(DISTINCT cug.course_id) FROM course_unit_grants cug WHERE cug.unit_id = u.id) AS course_count " +
                 "FROM organization_units u " + whereClause + " ORDER BY u.name ASC LIMIT :limit OFFSET :offset";
 
@@ -304,9 +302,7 @@ public class UnitAllocationNativeRepositoryImpl implements UnitAllocationNativeR
                 "COUNT(*) AS total_count, " +
                 "COUNT(CASE WHEN u.type = 'DEPARTMENT' THEN 1 END) AS department_count, " +
                 "COUNT(CASE WHEN u.type <> 'DEPARTMENT' THEN 1 END) AS branch_count, " +
-                "COUNT(CASE WHEN EXISTS (SELECT 1 FROM domain_unit_grants dug WHERE dug.unit_id = u.id) " +
-                "             OR EXISTS (SELECT 1 FROM program_unit_grants pug WHERE pug.unit_id = u.id) " +
-                "             OR EXISTS (SELECT 1 FROM course_unit_grants cug WHERE cug.unit_id = u.id) THEN 1 END) AS allocated_count " +
+                "COUNT(CASE WHEN EXISTS (SELECT 1 FROM course_unit_grants cug WHERE cug.unit_id = u.id) THEN 1 END) AS allocated_count " +
                 "FROM organization_units u";
 
         Map<String, Object> stats = jdbc.queryForMap(statsSql, Collections.emptyMap());
@@ -323,16 +319,6 @@ public class UnitAllocationNativeRepositoryImpl implements UnitAllocationNativeR
     @Override
     public List<Map<String, Object>> getUnitAllocatedItems(String unitId) {
         String sql = """
-            SELECT 'domain' AS category_type, dug.domain_id AS target_id, dug.grant_type, d.code, d.name, NULL AS parent_id
-            FROM domain_unit_grants dug
-            JOIN training_domains d ON d.id = dug.domain_id
-            WHERE dug.unit_id = :unitId AND d.status <> 'DELETED'
-            UNION ALL
-            SELECT 'program' AS category_type, pug.program_id AS target_id, pug.grant_type, p.code, p.name, p.domain_id AS parent_id
-            FROM program_unit_grants pug
-            JOIN training_programs p ON p.id = pug.program_id
-            WHERE pug.unit_id = :unitId AND p.status <> 'DELETED'
-            UNION ALL
             SELECT 'course' AS category_type, cug.course_id AS target_id, cug.grant_type, c.code, c.name, c.program_id AS parent_id
             FROM course_unit_grants cug
             JOIN courses c ON c.id = cug.course_id
@@ -367,21 +353,9 @@ public class UnitAllocationNativeRepositoryImpl implements UnitAllocationNativeR
                                  "                 AND (p.name ILIKE CONCAT('%', :search, '%') OR p.code ILIKE CONCAT('%', :search, '%') " +
                                  "                      OR EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED' " +
                                  "                                 AND (c.name ILIKE CONCAT('%', :search, '%') OR c.code ILIKE CONCAT('%', :search, '%')))))) " : "") +
-                " AND ( " +
-                "   EXISTS ( " +
-                "     SELECT 1 FROM training_programs p WHERE p.domain_id = d.id AND p.status <> 'DELETED' " +
-                "     AND ( " +
-                "       EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED' " +
-                "               AND NOT EXISTS (SELECT 1 FROM course_unit_grants g WHERE g.course_id = c.id AND g.unit_id = :unitId)) " +
-                "       OR (NOT EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED') " +
-                "           AND NOT EXISTS (SELECT 1 FROM program_unit_grants g WHERE g.program_id = p.id AND g.unit_id = :unitId)) " +
-                "     ) " +
-                "   ) " +
-                "   OR ( " +
-                "     NOT EXISTS (SELECT 1 FROM training_programs p WHERE p.domain_id = d.id AND p.status <> 'DELETED') " +
-                "     AND NOT EXISTS (SELECT 1 FROM domain_unit_grants g WHERE g.domain_id = d.id AND g.unit_id = :unitId) " +
-                "   ) " +
-                " ) ";
+                " AND EXISTS (SELECT 1 FROM training_programs p JOIN courses c ON c.program_id = p.id " +
+                "             WHERE p.domain_id = d.id AND p.status <> 'DELETED' AND c.status <> 'DELETED' " +
+                "             AND NOT EXISTS (SELECT 1 FROM course_unit_grants g WHERE g.course_id = c.id AND g.unit_id = :unitId)) ";
 
         String countSql = "SELECT COUNT(*) FROM training_domains d " + whereClause;
         Integer totalCount = jdbc.queryForObject(countSql, params, Integer.class);
@@ -390,12 +364,8 @@ public class UnitAllocationNativeRepositoryImpl implements UnitAllocationNativeR
 
         String dataSql = "SELECT d.id, d.code, d.name, d.description, d.status, d.business_module, d.seq_number, " +
                 "  (SELECT COUNT(*) FROM training_programs p WHERE p.domain_id = d.id AND p.status <> 'DELETED' " +
-                "   AND ( " +
-                "     EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED' " +
-                "             AND NOT EXISTS (SELECT 1 FROM course_unit_grants g WHERE g.course_id = c.id AND g.unit_id = :unitId)) " +
-                "     OR (NOT EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED') " +
-                "         AND NOT EXISTS (SELECT 1 FROM program_unit_grants g WHERE g.program_id = p.id AND g.unit_id = :unitId)) " +
-                "   )) AS programs_count " +
+                "   AND EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED' " +
+                "               AND NOT EXISTS (SELECT 1 FROM course_unit_grants g WHERE g.course_id = c.id AND g.unit_id = :unitId))) AS programs_count " +
                 "FROM training_domains d " + whereClause +
                 "ORDER BY d.code ASC, d.name ASC LIMIT :limit OFFSET :offset";
 
@@ -436,12 +406,8 @@ public class UnitAllocationNativeRepositoryImpl implements UnitAllocationNativeR
                 (query != null ? " AND (p.name ILIKE CONCAT('%', :search, '%') OR p.code ILIKE CONCAT('%', :search, '%') " +
                                  "      OR EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED' " +
                                  "                 AND (c.name ILIKE CONCAT('%', :search, '%') OR c.code ILIKE CONCAT('%', :search, '%')))) " : "") +
-                " AND ( " +
-                "   EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED' " +
-                "           AND NOT EXISTS (SELECT 1 FROM course_unit_grants g WHERE g.course_id = c.id AND g.unit_id = :unitId)) " +
-                "   OR (NOT EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED') " +
-                "       AND NOT EXISTS (SELECT 1 FROM program_unit_grants g WHERE g.program_id = p.id AND g.unit_id = :unitId)) " +
-                " ) ";
+                " AND EXISTS (SELECT 1 FROM courses c WHERE c.program_id = p.id AND c.status <> 'DELETED' " +
+                "             AND NOT EXISTS (SELECT 1 FROM course_unit_grants g WHERE g.course_id = c.id AND g.unit_id = :unitId)) ";
 
         String countSql = "SELECT COUNT(*) FROM training_programs p " + whereClause;
         Integer totalCount = jdbc.queryForObject(countSql, params, Integer.class);

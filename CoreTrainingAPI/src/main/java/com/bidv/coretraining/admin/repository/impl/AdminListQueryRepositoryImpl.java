@@ -81,7 +81,10 @@ public class AdminListQueryRepositoryImpl implements AdminListQueryRepository {
                     and ap.permission in ('courses:read','courses:update') and (
                 """ + "(ar.assigned_courses_only=true and " + assigned + ") or "
                 + """
-                            (ar.assigned_courses_only=false and ((ar.legacy_owner_scope=true and
+                            (ar.assigned_courses_only=false and (exists(select 1 from course_unit_grants acg
+                                join unit_ancestors ut on ut.unit_id=acg.unit_id join access_role_units ru on ru.unit_id=ut.ancestor_id
+                                where acg.course_id=c.id and ru.role_id=ar.id)
+                              or (ar.legacy_owner_scope=true and
                               exists(select 1 from unit_ancestors ut join access_role_units ru on ru.unit_id=ut.ancestor_id
                                 where ru.role_id=ar.id and ut.unit_id=c.owner_unit_id))
                               or (ar.legacy_owner_scope=false and exists(select 1 from training_program_units pu
@@ -93,17 +96,11 @@ public class AdminListQueryRepositoryImpl implements AdminListQueryRepository {
                 + ") or (u.dynamic_access_initialized=false and " + activeOwner +
                 " and ((" + legacyRole("ROLE_UNIT_ADMIN") + " and " + legacyScope + ") or ("
                 + legacyRole("ROLE_INSTRUCTOR") + " and " + assigned + ")))))";
-        String grants = """
-                (exists(select 1 from user_registered_courses rc where rc.user_id=u.id and rc.course_id=c.id)
-                  or exists(select 1 from course_unit_grants cg join unit_ancestors ut on ut.ancestor_id=cg.unit_id where cg.course_id=c.id and ut.unit_id=u.unit_id)
-                  or exists(select 1 from program_unit_grants pg join unit_ancestors ut on ut.ancestor_id=pg.unit_id where pg.program_id=c.program_id and ut.unit_id=u.unit_id)
-                  or exists(select 1 from domain_unit_grants dg join unit_ancestors ut on ut.ancestor_id=dg.unit_id where dg.domain_id=p.domain_id and ut.unit_id=u.unit_id)
-                  or exists(select 1 from training_program_units pu join unit_ancestors ut on ut.ancestor_id=pu.unit_id where pu.program_id=c.program_id and ut.unit_id=u.unit_id)
-                  or exists(select 1 from training_domain_units du join unit_ancestors ut on ut.ancestor_id=du.unit_id where du.domain_id=p.domain_id and ut.unit_id=u.unit_id)
-                  or exists(select 1 from unit_ancestors ut where ut.unit_id=u.unit_id and ut.ancestor_id=c.owner_unit_id))
-                """;
+        String registered = "exists(select 1 from user_registered_courses rc where rc.user_id=u.id and rc.course_id=c.id)";
+        String grants = "(" + registered + " or exists(select 1 from course_unit_grants cg join unit_ancestors ut"
+                + " on ut.ancestor_id=cg.unit_id where cg.course_id=c.id and ut.unit_id=u.unit_id))";
         return "(" + administrative
-                + " or (u.unit_id is null and c.owner_unit_id is null) or (u.unit_id is not null and " + activeUnit
+                + " or (u.unit_id is null and " + registered + ") or (u.unit_id is not null and " + activeUnit
                 + " and " + grants + "))";
     }
     private Predicate unitScope(CriteriaBuilder cb, Path<?> unit, Scope scope) {

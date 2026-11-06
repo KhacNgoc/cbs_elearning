@@ -796,11 +796,11 @@
           <div v-if="addModal.type === 'domain' || addModal.type === 'program' || addModal.type === 'course'" class="form-section units-section">
             <h5 class="section-sub-title">
               <Building2 :size="14" />
-              <span>Phân bổ Đơn vị áp dụng</span>
+              <span>{{ addModal.type === 'course' ? 'Phân bổ Đơn vị áp dụng' : 'Đơn vị quản lý' }}</span>
             </h5>
 
             <!-- 1. ĐƠN VỊ BẮT BUỘC -->
-            <div class="form-group unit-picker-box mandatory-box">
+            <div v-if="addModal.type === 'course'" class="form-group unit-picker-box mandatory-box">
               <div class="unit-box-header">
                 <label class="mandatory-label">
                   <ShieldCheck :size="14" />
@@ -849,16 +849,16 @@
               <div class="unit-box-header">
                 <label class="optional-label">
                   <Globe :size="14" />
-                  <span>Đơn vị áp dụng TÙY CHỌN (Không bắt buộc):</span>
+                  <span>{{ addModal.type === 'course' ? 'Đơn vị áp dụng TÙY CHỌN (Không bắt buộc):' : 'Đơn vị được quản lý nội dung:' }}</span>
                 </label>
-                <span class="badge-optional">Tự nguyện học tập</span>
+                <span v-if="addModal.type === 'course'" class="badge-optional">Tự nguyện học tập</span>
               </div>
 
               <select
                 class="form-control unit-select"
                 @change="handleSelectUnit($event, 'optional')"
               >
-                <option value="">+ Chọn đơn vị tùy chọn...</option>
+                <option value="">{{ addModal.type === 'course' ? '+ Chọn đơn vị tùy chọn...' : '+ Chọn đơn vị quản lý...' }}</option>
                 <option
                   v-for="u in availableUnitsForOptional"
                   :key="u.id"
@@ -2133,7 +2133,7 @@ function openAddModal(
   let inheritedOptionalUnits: string[] = [];
 
   // Tự động kế thừa phân bổ đơn vị cho cả Chương trình (từ Lĩnh vực) và Khóa học (từ Chương trình / Lĩnh vực)
-  if ((type === "program" || type === "course") && resolvedParent) {
+  if (type === "program" && resolvedParent) {
     const parentUnits = extractUnitsFromObject(resolvedParent);
     if (parentUnits.mandatory.length > 0 || parentUnits.optional.length > 0) {
       inheritedMandatoryUnits = [...parentUnits.mandatory];

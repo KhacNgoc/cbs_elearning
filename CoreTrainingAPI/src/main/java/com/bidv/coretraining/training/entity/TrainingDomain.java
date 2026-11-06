@@ -33,13 +33,6 @@ public class TrainingDomain {
     @Column(name = "seq_number")
     private Integer seqNumber;
 
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "domain_unit_grants", joinColumns = @JoinColumn(name = "domain_id"))
-    @MapKeyColumn(name = "unit_id")
-    @Column(name = "grant_type", nullable = false)
-    @Builder.Default
-    private java.util.Map<String, String> unitGrants = new java.util.HashMap<>();
-
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "training_domain_units", joinColumns = @JoinColumn(name = "domain_id"), inverseJoinColumns = @JoinColumn(name = "unit_id"))
     @Builder.Default

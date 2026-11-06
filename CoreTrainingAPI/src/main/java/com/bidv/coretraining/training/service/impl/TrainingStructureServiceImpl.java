@@ -32,7 +32,6 @@ import com.bidv.coretraining.training.repository.UnitAllocationNativeRepository;
 import com.bidv.coretraining.training.service.TrainingStructureService;
 import com.bidv.coretraining.user.entity.OrganizationUnit;
 import com.bidv.coretraining.user.entity.User;
-import com.bidv.coretraining.user.repository.OrganizationUnitRepository;
 import com.bidv.coretraining.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,7 +47,6 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
     private final CourseImageService courseImages;
 
     private final AuthorizationService authorization;
-    private final OrganizationUnitRepository organizationUnits;
     private final UnitAllocationNativeRepository catalogNative;
     private final TrainingDomainRepository domains;
     private final TrainingProgramRepository programs;
@@ -63,7 +61,7 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
             CourseRepository courses, ChapterRepository chapters, LessonRepository lessons, UserRepository users,
             CourseMapper mapper,
             LearningOutlineService learningOutline, LearningAccessService learningAccess, CourseImageService courseImages,
-            AuthorizationService authorization, OrganizationUnitRepository organizationUnits,
+            AuthorizationService authorization,
             LessonProgressRepository progress, UnitAllocationNativeRepository catalogNative) {
         this.domains = domains;
         this.programs = programs;
@@ -76,7 +74,6 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
         this.learningAccess = learningAccess;
         this.courseImages = courseImages;
         this.authorization = authorization;
-        this.organizationUnits = organizationUnits;
         this.progress = progress;
         this.catalogNative = catalogNative;
     }
@@ -117,20 +114,10 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
 
     public ProgramDto programDto(TrainingProgram p) {
         var u = authorization.current();
-        Set<String> mandatoryUnits = new HashSet<>();
-        Set<String> optionalUnits = new HashSet<>();
-        if (p.getUnitGrants() != null) {
-            for (var entry : p.getUnitGrants().entrySet()) {
-                if ("MANDATORY".equalsIgnoreCase(entry.getValue())) {
-                    mandatoryUnits.add(entry.getKey());
-                } else {
-                    optionalUnits.add(entry.getKey());
-                }
-            }
-        }
+        // Units manage a program; learners get courses only through course allocation.
         Set<String> allUnits = new HashSet<>(p.getUnits().stream().map(OrganizationUnit::getId).toList());
-        allUnits.addAll(mandatoryUnits);
-        allUnits.addAll(optionalUnits);
+        Set<String> mandatoryUnits = Set.of();
+        Set<String> optionalUnits = allUnits;
 
         return new ProgramDto(
                 p.getId(),
@@ -170,20 +157,9 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
         if (canUpdateDomain(d))
             actions.add("update");
 
-        Set<String> mandatoryUnits = new HashSet<>();
-        Set<String> optionalUnits = new HashSet<>();
-        if (d.getUnitGrants() != null) {
-            for (var entry : d.getUnitGrants().entrySet()) {
-                if ("MANDATORY".equalsIgnoreCase(entry.getValue())) {
-                    mandatoryUnits.add(entry.getKey());
-                } else {
-                    optionalUnits.add(entry.getKey());
-                }
-            }
-        }
         Set<String> allUnits = new HashSet<>(d.getUnits().stream().map(OrganizationUnit::getId).toList());
-        allUnits.addAll(mandatoryUnits);
-        allUnits.addAll(optionalUnits);
+        Set<String> mandatoryUnits = Set.of();
+        Set<String> optionalUnits = allUnits;
 
         return new DomainDto(d.getId(), d.getCode(), d.getName(), d.getDescription(), d.getStatus(), actions,
                 d.getBusinessModule(), d.getSeqNumber(), allUnits, mandatoryUnits, optionalUnits);
@@ -226,28 +202,9 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
             }
         }
 
-        Set<OrganizationUnit> assigned = new HashSet<>();
-        Map<String, String> grants = new HashMap<>();
-
-        for (String mId : mandatoryIds) {
-            OrganizationUnit n = authorization.unit(mId);
-            authorization.scope(n);
-            if (!AccessPolicy.activeUnit(n))
-                throw new BadRequestException("Đơn vị " + n.getName() + " đã ngừng hoạt động");
-            assigned.add(n);
-            grants.put(mId, "MANDATORY");
-        }
-        for (String optId : optionalIds) {
-            OrganizationUnit n = authorization.unit(optId);
-            authorization.scope(n);
-            if (!AccessPolicy.activeUnit(n))
-                throw new BadRequestException("Đơn vị " + n.getName() + " đã ngừng hoạt động");
-            assigned.add(n);
-            grants.put(optId, "OPTIONAL");
-        }
-
-        d.setUnits(assigned);
-        d.setUnitGrants(grants);
+        Set<String> unitIds = new HashSet<>(mandatoryIds);
+        unitIds.addAll(optionalIds);
+        d.setUnits(managedUnits(unitIds));
 
         String mod = clean(request.businessModule());
         d.setBusinessModule(mod);
@@ -306,33 +263,10 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
             }
         }
 
-        // Fallback if no units specified but organization units exist
-        if (mandatoryIds.isEmpty() && optionalIds.isEmpty() && organizationUnits != null && organizationUnits.count() > 0) {
-            if (authorization.current().getOrganizationUnit() != null) {
-                optionalIds.add(authorization.current().getOrganizationUnit().getId());
-            } else {
-                organizationUnits.findAll().stream().findFirst().ifPresent(u -> optionalIds.add(u.getId()));
-            }
-        }
-
-        Set<OrganizationUnit> assigned = new HashSet<>();
-        Map<String, String> grants = new HashMap<>();
-
-        for (String mId : mandatoryIds) {
-            OrganizationUnit n = authorization.unit(mId);
-            authorization.scope(n);
-            if (!AccessPolicy.activeUnit(n))
-                throw new BadRequestException("Đơn vị " + n.getName() + " đã ngừng hoạt động");
-            assigned.add(n);
-            grants.put(mId, "MANDATORY");
-        }
-        for (String optId : optionalIds) {
-            OrganizationUnit n = authorization.unit(optId);
-            authorization.scope(n);
-            if (!AccessPolicy.activeUnit(n))
-                throw new BadRequestException("Đơn vị " + n.getName() + " đã ngừng hoạt động");
-            assigned.add(n);
-            grants.put(optId, "OPTIONAL");
+        // A unit-scoped actor keeps its own unit so it can still manage the program; nobody else gets an implicit grant.
+        OrganizationUnit actorUnit = authorization.current().getOrganizationUnit();
+        if (mandatoryIds.isEmpty() && optionalIds.isEmpty() && actorUnit != null) {
+            optionalIds.add(actorUnit.getId());
         }
 
         if (id != null) {
@@ -341,8 +275,9 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
             }
         }
 
-        p.setUnits(assigned);
-        p.setUnitGrants(grants);
+        Set<String> unitIds = new HashSet<>(mandatoryIds);
+        unitIds.addAll(optionalIds);
+        p.setUnits(managedUnits(unitIds));
         p.setDomain(domains.findById(required(request.domainId(), "Lĩnh vực"))
                 .orElseThrow(() -> new BadRequestException("Lĩnh vực không tồn tại")));
 
@@ -377,27 +312,19 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
         }
         programs.save(p);
 
-        // Auto-enroll all staff from mandatory units into courses of this program
-        if (!mandatoryIds.isEmpty() && !Boolean.FALSE.equals(request.autoEnrollStaff())) {
-            enrollStaffForMandatoryUnits(p, mandatoryIds);
-        }
-
         return programDto(p);
     }
 
-    private void enrollStaffForMandatoryUnits(TrainingProgram p, Set<String> mandatoryUnitIds) {
-        List<Course> programCourses = courses.findByProgramIdAndStatusNot(p.getId(), "DELETED");
-
-        for (Course c : programCourses) {
-            for (String uId : mandatoryUnitIds) {
-                c.getUnitGrants().put(uId, "MANDATORY");
-            }
-            courses.save(c);
+    private Set<OrganizationUnit> managedUnits(Set<String> unitIds) {
+        Set<OrganizationUnit> result = new HashSet<>();
+        for (String unitId : unitIds) {
+            OrganizationUnit n = authorization.unit(unitId);
+            authorization.scope(n);
+            if (!AccessPolicy.activeUnit(n))
+                throw new BadRequestException("Đơn vị " + n.getName() + " đã ngừng hoạt động");
+            result.add(n);
         }
-        if (!programCourses.isEmpty()) {
-            List<String> cIds = programCourses.stream().map(Course::getId).toList();
-            catalogNative.enrollStaffForCourses(cIds, mandatoryUnitIds);
-        }
+        return result;
     }
 
     private void enrollStaffForCourse(Course course, Set<String> mandatoryUnitIds) {
@@ -500,20 +427,8 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
             for (String oId : optionalIds) {
                 grants.put(oId, "OPTIONAL");
             }
-            if (grants.isEmpty() && id == null && p.getUnitGrants() != null && !p.getUnitGrants().isEmpty()) {
-                grants.putAll(p.getUnitGrants());
-            }
             c.getUnitGrants().clear();
             c.getUnitGrants().putAll(grants);
-        } else {
-            // Auto-inherit unit grants from parent program if new course
-            if (p.getUnitGrants() != null && !p.getUnitGrants().isEmpty()) {
-                for (var entry : p.getUnitGrants().entrySet()) {
-                    if (!c.getUnitGrants().containsKey(entry.getKey())) {
-                        c.getUnitGrants().put(entry.getKey(), entry.getValue());
-                    }
-                }
-            }
         }
 
         Course saved = courses.saveAndFlush(c);
@@ -650,6 +565,16 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
         assignUnitAllocation(unitId, "course", grantType, null, programId, allInProgram, courseIds);
     }
 
+    private List<Course> domainCourses(String domainId) {
+        List<Course> result = new ArrayList<>();
+        for (TrainingProgram p : programs.findByDomainId(domainId)) {
+            if (!"DELETED".equals(p.getStatus())) {
+                result.addAll(courses.findByProgramIdAndStatusNot(p.getId(), "DELETED"));
+            }
+        }
+        return result;
+    }
+
     public UnitAllocationResultDto assignUnitAllocation(
             String unitId,
             String categoryType,
@@ -669,42 +594,21 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
         String type = categoryType == null ? "program" : categoryType.trim().toLowerCase();
         List<Course> targetCourses = new ArrayList<>();
 
+        // Choosing a domain or program is a shortcut for its current courses: only course grants are stored.
         if ("domain".equals(type)) {
             TrainingDomain d = domains.findById(required(domainId, "Lĩnh vực đào tạo"))
                     .orElseThrow(() -> new ResourceNotFoundException("Domain", "id", domainId));
-            d.getUnits().add(unit);
-            if (d.getUnitGrants() == null) d.setUnitGrants(new HashMap<>());
-            d.getUnitGrants().put(unit.getId(), normalizedGrant);
-            domains.save(d);
-
-            List<TrainingProgram> domainPrograms = programs.findByDomainId(d.getId()).stream()
-                    .filter(p -> !"DELETED".equals(p.getStatus()))
-                    .toList();
-            for (TrainingProgram p : domainPrograms) {
-                p.getUnits().add(unit);
-                if (p.getUnitGrants() == null) p.setUnitGrants(new HashMap<>());
-                p.getUnitGrants().put(unit.getId(), normalizedGrant);
-                programs.save(p);
-                targetCourses.addAll(courses.findByProgramIdAndStatusNot(p.getId(), "DELETED"));
-            }
+            targetCourses.addAll(domainCourses(d.getId()));
         } else if ("program".equals(type)) {
             TrainingProgram p = programs.findById(required(programId, "Chương trình đào tạo"))
                     .orElseThrow(() -> new ResourceNotFoundException("Program", "id", programId));
-            p.getUnits().add(unit);
-            if (p.getUnitGrants() == null) p.setUnitGrants(new HashMap<>());
-            p.getUnitGrants().put(unit.getId(), normalizedGrant);
-            programs.save(p);
             targetCourses.addAll(courses.findByProgramIdAndStatusNot(p.getId(), "DELETED"));
         } else if ("course".equals(type)) {
             if (allInProgram) {
                 String pId = required(programId, "Chương trình đào tạo");
                 TrainingProgram p = programs.findById(pId)
                         .orElseThrow(() -> new ResourceNotFoundException("Program", "id", pId));
-                p.getUnits().add(unit);
-                if (p.getUnitGrants() == null) p.setUnitGrants(new HashMap<>());
-                p.getUnitGrants().put(unit.getId(), normalizedGrant);
-                programs.save(p);
-                targetCourses.addAll(courses.findByProgramIdAndStatusNot(pId, "DELETED"));
+                targetCourses.addAll(courses.findByProgramIdAndStatusNot(p.getId(), "DELETED"));
             } else {
                 if (courseIds == null || courseIds.isEmpty()) {
                     throw new BadRequestException("Vui lòng chọn ít nhất 1 khóa học để phân bổ");
@@ -765,8 +669,6 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
         Set<String> mandatoryCourseIds = new HashSet<>();
         Set<String> optionalCourseIds = new HashSet<>();
         Map<String, Course> coursesToSave = new HashMap<>();
-        Map<String, TrainingProgram> programsToSave = new HashMap<>();
-        Map<String, TrainingDomain> domainsToSave = new HashMap<>();
 
         int domainsCount = 0;
         int programsCount = 0;
@@ -790,94 +692,38 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
             String targetId = item.targetId();
 
 
+            Set<String> excluded = item.excludeIds() == null ? Set.of() : new HashSet<>(item.excludeIds());
+            List<Course> selected;
             if ("domain".equals(type)) {
-                TrainingDomain d = domainsToSave.computeIfAbsent(targetId, id ->
-                        domains.findById(id).orElseThrow(() -> new ResourceNotFoundException("Domain", "id", id)));
-                d.getUnits().add(unit);
-                if (d.getUnitGrants() == null) d.setUnitGrants(new HashMap<>());
-                d.getUnitGrants().put(unit.getId(), grant);
+                domains.findById(targetId).orElseThrow(() -> new ResourceNotFoundException("Domain", "id", targetId));
+                selected = domainCourses(targetId);
                 domainsCount++;
-
-                List<TrainingProgram> domainPrograms = programs.findByDomainId(d.getId()).stream()
-                        .filter(p -> !"DELETED".equals(p.getStatus()))
-                        .toList();
-                for (TrainingProgram p : domainPrograms) {
-                    TrainingProgram pToSave = programsToSave.computeIfAbsent(p.getId(), pid -> p);
-                    pToSave.getUnits().add(unit);
-                    if (pToSave.getUnitGrants() == null) pToSave.setUnitGrants(new HashMap<>());
-                    pToSave.getUnitGrants().put(unit.getId(), grant);
-
-                    List<Course> pCourses = courses.findByProgramIdAndStatusNot(p.getId(), "DELETED");
-                    for (Course c : pCourses) {
-                    if (item.excludeIds() != null && item.excludeIds().contains(c.getId())) continue;
-                        if (item.excludeIds() != null && item.excludeIds().contains(c.getId())) continue;
-                        Course cToSave = coursesToSave.computeIfAbsent(c.getId(), cid -> c);
-                        if (cToSave.getUnitGrants() == null) cToSave.setUnitGrants(new HashMap<>());
-                        cToSave.getUnitGrants().put(unit.getId(), grant);
-                        if ("MANDATORY".equals(grant)) {
-                            mandatoryCourseIds.add(cToSave.getId());
-                            optionalCourseIds.remove(cToSave.getId());
-                        } else {
-                            optionalCourseIds.add(cToSave.getId());
-                            mandatoryCourseIds.remove(cToSave.getId());
-                        }
-                    }
-                }
             } else if ("program".equals(type)) {
-                TrainingProgram p = programsToSave.computeIfAbsent(targetId, id ->
-                        programs.findById(id).orElseThrow(() -> new ResourceNotFoundException("Program", "id", id)));
-                p.getUnits().add(unit);
-                if (p.getUnitGrants() == null) p.setUnitGrants(new HashMap<>());
-                p.getUnitGrants().put(unit.getId(), grant);
-                if (p.getDomain() != null) {
-                    TrainingDomain d = domainsToSave.computeIfAbsent(p.getDomain().getId(), did -> p.getDomain());
-                    d.getUnits().add(unit);
-                }
+                programs.findById(targetId).orElseThrow(() -> new ResourceNotFoundException("Program", "id", targetId));
+                selected = courses.findByProgramIdAndStatusNot(targetId, "DELETED");
                 programsCount++;
-
-                List<Course> pCourses = courses.findByProgramIdAndStatusNot(p.getId(), "DELETED");
-                for (Course c : pCourses) {
-                    if (item.excludeIds() != null && item.excludeIds().contains(c.getId())) continue;
-                    Course cToSave = coursesToSave.computeIfAbsent(c.getId(), cid -> c);
-                    if (cToSave.getUnitGrants() == null) cToSave.setUnitGrants(new HashMap<>());
-                    cToSave.getUnitGrants().put(unit.getId(), grant);
-                    if ("MANDATORY".equals(grant)) {
-                        mandatoryCourseIds.add(cToSave.getId());
-                        optionalCourseIds.remove(cToSave.getId());
-                    } else {
-                        optionalCourseIds.add(cToSave.getId());
-                        mandatoryCourseIds.remove(cToSave.getId());
-                    }
-                }
             } else if ("course".equals(type)) {
-                if (item.excludeIds() != null && item.excludeIds().contains(targetId)) continue;
-                Course c = coursesToSave.computeIfAbsent(targetId, id ->
-                        courses.findById(id).orElseThrow(() -> new ResourceNotFoundException("Course", "id", id)));
-                if (!"DELETED".equals(c.getStatus())) {
-                    if (c.getUnitGrants() == null) c.setUnitGrants(new HashMap<>());
-                    c.getUnitGrants().put(unit.getId(), grant);
-                    if (c.getProgram() != null) {
-                        TrainingProgram p = programsToSave.computeIfAbsent(c.getProgram().getId(), pid -> c.getProgram());
-                        p.getUnits().add(unit);
-                        if (p.getDomain() != null) {
-                            TrainingDomain d = domainsToSave.computeIfAbsent(p.getDomain().getId(), did -> p.getDomain());
-                            d.getUnits().add(unit);
-                        }
-                    }
-                    coursesCount++;
-                    if ("MANDATORY".equals(grant)) {
-                        mandatoryCourseIds.add(c.getId());
-                        optionalCourseIds.remove(c.getId());
-                    } else {
-                        optionalCourseIds.add(c.getId());
-                        mandatoryCourseIds.remove(c.getId());
-                    }
+                Course c = courses.findById(targetId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Course", "id", targetId));
+                selected = "DELETED".equals(c.getStatus()) ? List.of() : List.of(c);
+                coursesCount += selected.size();
+            } else {
+                continue;
+            }
+            for (Course c : selected) {
+                if (excluded.contains(c.getId())) continue;
+                Course cToSave = coursesToSave.computeIfAbsent(c.getId(), cid -> c);
+                cToSave.getUnitGrants().put(unit.getId(), grant);
+                if ("MANDATORY".equals(grant)) {
+                    mandatoryCourseIds.add(cToSave.getId());
+                    optionalCourseIds.remove(cToSave.getId());
+                } else {
+                    optionalCourseIds.add(cToSave.getId());
+                    mandatoryCourseIds.remove(cToSave.getId());
                 }
             }
         }
 
-        domains.saveAll(domainsToSave.values());
-        programs.saveAll(programsToSave.values());
         for (Course c : coursesToSave.values()) {
             ensureCourseLearnableWhenAllocated(c);
         }
@@ -966,23 +812,10 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
         if ("domain".equals(type)) {
             TrainingDomain d = domains.findById(required(targetId, "Lĩnh vực"))
                     .orElseThrow(() -> new ResourceNotFoundException("Domain", "id", targetId));
-            d.getUnits().removeIf(u -> u.getId().equals(unitId));
-            if (d.getUnitGrants() != null) d.getUnitGrants().remove(unitId);
-            domains.save(d);
-
-            List<TrainingProgram> domainPrograms = programs.findByDomainId(d.getId());
-            for (TrainingProgram p : domainPrograms) {
-                p.getUnits().removeIf(u -> u.getId().equals(unitId));
-                if (p.getUnitGrants() != null) p.getUnitGrants().remove(unitId);
-                programs.save(p);
-                affectedCourses.addAll(courses.findByProgramIdAndStatusNot(p.getId(), "DELETED"));
-            }
+            affectedCourses.addAll(domainCourses(d.getId()));
         } else if ("program".equals(type)) {
             TrainingProgram p = programs.findById(required(targetId, "Chương trình"))
                     .orElseThrow(() -> new ResourceNotFoundException("Program", "id", targetId));
-            p.getUnits().removeIf(u -> u.getId().equals(unitId));
-            if (p.getUnitGrants() != null) p.getUnitGrants().remove(unitId);
-            programs.save(p);
             affectedCourses.addAll(courses.findByProgramIdAndStatusNot(p.getId(), "DELETED"));
         } else {
             Course c = course(required(targetId, "Khóa học"));
@@ -1004,27 +837,7 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
     }
 
     public List<CourseDto> adminCoursesByUnit(String unitId) {
-        // Collect courses explicitly assigned to unit OR whose program/domain is assigned to unit
-        Set<String> courseIds = new HashSet<>();
-        for (Course c : courses.findByUnitGrant(unitId)) {
-            courseIds.add(c.getId());
-        }
-        for (Course c : courses.findAll()) {
-            if ("DELETED".equals(c.getStatus())) continue;
-            boolean hasCourseGrant = c.getUnitGrants() != null && c.getUnitGrants().containsKey(unitId);
-            boolean hasProgramGrant = c.getProgram() != null && (
-                    (c.getProgram().getUnitGrants() != null && c.getProgram().getUnitGrants().containsKey(unitId)) ||
-                    (c.getProgram().getUnits() != null && c.getProgram().getUnits().stream().anyMatch(u -> unitId.equals(u.getId())))
-            );
-            boolean hasDomainGrant = c.getProgram() != null && c.getProgram().getDomain() != null && (
-                    (c.getProgram().getDomain().getUnitGrants() != null && c.getProgram().getDomain().getUnitGrants().containsKey(unitId)) ||
-                    (c.getProgram().getDomain().getUnits() != null && c.getProgram().getDomain().getUnits().stream().anyMatch(u -> unitId.equals(u.getId())))
-            );
-            if (hasCourseGrant || hasProgramGrant || hasDomainGrant) {
-                courseIds.add(c.getId());
-            }
-        }
-        return courses.findAllById(courseIds).stream()
+        return courses.findByUnitGrant(unitId).stream()
                 .filter(c -> !"DELETED".equals(c.getStatus()))
                 .map(this::mapToAdminCourseDto)
                 .toList();
@@ -1052,47 +865,6 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
                     mandatory.add(entry.getKey());
                 } else {
                     optional.add(entry.getKey());
-                }
-            }
-        }
-        if (c.getProgram() != null) {
-            if (c.getProgram().getUnitGrants() != null) {
-                for (var entry : c.getProgram().getUnitGrants().entrySet()) {
-                    if (!mandatory.contains(entry.getKey()) && !optional.contains(entry.getKey())) {
-                        if ("MANDATORY".equalsIgnoreCase(entry.getValue())) {
-                            mandatory.add(entry.getKey());
-                        } else {
-                            optional.add(entry.getKey());
-                        }
-                    }
-                }
-            }
-            if (c.getProgram().getUnits() != null) {
-                for (OrganizationUnit u : c.getProgram().getUnits()) {
-                    if (!mandatory.contains(u.getId()) && !optional.contains(u.getId())) {
-                        optional.add(u.getId());
-                    }
-                }
-            }
-            if (c.getProgram().getDomain() != null) {
-                TrainingDomain d = c.getProgram().getDomain();
-                if (d.getUnitGrants() != null) {
-                    for (var entry : d.getUnitGrants().entrySet()) {
-                        if (!mandatory.contains(entry.getKey()) && !optional.contains(entry.getKey())) {
-                            if ("MANDATORY".equalsIgnoreCase(entry.getValue())) {
-                                mandatory.add(entry.getKey());
-                            } else {
-                                optional.add(entry.getKey());
-                            }
-                        }
-                    }
-                }
-                if (d.getUnits() != null) {
-                    for (OrganizationUnit u : d.getUnits()) {
-                        if (!mandatory.contains(u.getId()) && !optional.contains(u.getId())) {
-                            optional.add(u.getId());
-                        }
-                    }
                 }
             }
         }
