@@ -2233,6 +2233,9 @@ const deleteComment = async (commentId: number) => {
     z-index: 102;
     box-shadow: -12px 0 30px rgba(0, 0, 0, 0.2);
   }
+  .course-sidebar:not(.open) {
+    display: none;
+  }
   .course-sidebar.open {
     transform: translateX(0);
   }
