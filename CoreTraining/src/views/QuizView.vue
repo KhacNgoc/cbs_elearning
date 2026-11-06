@@ -23,8 +23,11 @@
     </div>
 
     <!-- Active Quiz Card -->
-    <div v-if="quizStore.isLoading" class="quiz-main-card card" role="status">
-      Đang tải bài kiểm tra...
+    <div v-if="quizStore.isLoading" class="quiz-main-card card">
+      <SkeletonLoader label="Đang tải bài kiểm tra">
+        <SkeletonBlock width="80%" height="1.25rem" />
+        <SkeletonLoader plain variant="list" :rows="4" />
+      </SkeletonLoader>
     </div>
     <div
       v-else-if="!isReviewMode && !totalQuestions"
@@ -351,10 +354,16 @@
   <div v-else-if="contextError" class="loading-state" role="alert">
     {{ contextError }} <button class="btn btn-primary" @click="loadEntry">Thử lại</button>
   </div>
-  <div v-else class="loading-state">Đang tải thông tin bài thi...</div>
+  <SkeletonLoader v-else class="quiz-entry-skeleton" label="Đang tải thông tin bài thi">
+    <SkeletonBlock width="50%" height="2rem" />
+    <SkeletonBlock height="0.5rem" radius="var(--radius-full)" />
+    <SkeletonLoader plain class="card" variant="list" :rows="4" />
+  </SkeletonLoader>
 </template>
 
 <script setup lang="ts">
+import SkeletonLoader from "../components/SkeletonLoader.vue";
+import SkeletonBlock from "../components/SkeletonBlock.vue";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { getLearnerQuizContext, type LearnerQuizContext } from "../api/learnerQuizApi";
@@ -1139,5 +1148,10 @@ const getBadgeIcon = (icon: string) => {
   .review-passed-badge {
     align-self: flex-start;
   }
+}
+.quiz-entry-skeleton {
+  width: min(100%, 960px);
+  margin-inline: auto;
+  padding: 1.5rem;
 }
 </style>

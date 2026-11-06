@@ -4,7 +4,7 @@
     <p class="deadline-help">
       Hạn riêng ưu tiên hơn hạn mặc định của khóa học.
     </p>
-    <p v-if="loading" role="status">Đang tải khóa học...</p>
+    <SkeletonLoader v-if="loading" variant="list" :rows="3" label="Đang tải khóa học" />
     <p v-else-if="error" role="alert">
       {{ error }}
       <button type="button" class="btn btn-secondary" @click="load">
@@ -50,6 +50,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import SkeletonLoader from "./SkeletonLoader.vue";
 import { ref, watch } from "vue";
 import { axiosClient } from "../api/axiosClient";
 import { formatLearningDate } from "../utils/learning";

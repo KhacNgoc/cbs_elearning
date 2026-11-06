@@ -153,13 +153,14 @@
         </section>
       </fieldset>
     </template>
-    <p v-else-if="loading">Đang tải bài học...</p>
+    <SkeletonLoader v-else-if="loading" :rows="8" label="Đang tải bài học" />
     <div v-else class="empty-quiz">
       <button class="btn btn-secondary" @click="load">Tải lại bài học</button>
     </div>
   </main>
 </template>
 <script setup lang="ts">
+import SkeletonLoader from "../components/SkeletonLoader.vue";
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
 import { useRoute, useRouter, onBeforeRouteLeave } from "vue-router";
 import { useUserStore } from "../stores/userStore";

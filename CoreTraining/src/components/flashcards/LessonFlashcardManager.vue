@@ -141,7 +141,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-if="loading"><td colspan="7" class="admin-empty">Đang tải flashcard...</td></tr>
+            <SkeletonTableRows v-if="loading" :columns="7" label="Đang tải flashcard" />
             <template v-else>
             <tr v-for="(card, index) in paginated" :key="card.id">
               <td><input v-if="canUpdate" v-model="selectedIds" type="checkbox" :value="card.id" :aria-label="`Chọn thẻ ${card.front}`" /></td>
@@ -249,6 +249,7 @@
 </template>
 
 <script setup lang="ts">
+import SkeletonTableRows from "../SkeletonTableRows.vue";
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { Edit, Layers3, LoaderCircle, Plus, Search, Sparkles, X } from "lucide-vue-next";
 import AdminModal from "../AdminModal.vue";

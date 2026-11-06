@@ -60,9 +60,7 @@
             </div>
             <button v-else-if="historyBeforeId && olderFailed" class="btn btn-secondary" @click="loadOlderHistory">Tải lại trao đổi trước</button>
             <div class="chat-date">Hôm nay</div>
-            <div v-if="loadingHistory" class="chat-loading">
-              Đang tải lịch sử trao đổi...
-            </div>
+            <SkeletonLoader v-if="loadingHistory" variant="list" :rows="4" label="Đang tải lịch sử trao đổi" />
             <div v-else-if="messages.length === 0" class="assistant-message">
               <span class="message-avatar"><Bot :size="17" /></span>
               <div>
@@ -205,6 +203,7 @@
 </template>
 
 <script setup lang="ts">
+import SkeletonLoader from "./SkeletonLoader.vue";
 import {
   computed,
   nextTick,
@@ -813,7 +812,6 @@ onBeforeUnmount(() => {
   animation: chat-spin 0.9s linear infinite;
 }
 
-.chat-loading,
 .chat-loading-older,
 .chat-error {
   margin: 12px 0;

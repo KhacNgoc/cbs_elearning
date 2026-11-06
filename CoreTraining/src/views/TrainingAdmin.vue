@@ -302,7 +302,7 @@
           }}
         </button>
       </div>
-      <div v-if="loading" class="empty">Đang tải dữ liệu...</div>
+      <SkeletonLoader v-if="loading" variant="table" :rows="8" :columns="5" label="Đang tải dữ liệu" />
       <ChapterTreeTable
         v-else-if="course && !chapter"
         :key="course.id"
@@ -613,6 +613,7 @@
 </template>
 
 <script setup lang="ts">
+import SkeletonLoader from "../components/SkeletonLoader.vue";
 import { useUserStore } from "../stores/userStore";
 const accessUser = useUserStore();
 const managesCourses = computed(
@@ -632,6 +633,8 @@ import {
   Eye,
   ArrowUp,
   ArrowDown,
+  Layers,
+  Table,
 } from "lucide-vue-next";
 import { trainingApi } from "../api/trainingApi";
 import { adminApi } from "../api/adminApi";

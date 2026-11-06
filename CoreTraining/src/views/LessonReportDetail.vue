@@ -10,7 +10,7 @@
         <button class="btn btn-secondary" :disabled="loading" @click="load">Tải lại</button>
       </div>
     </header>
-    <p v-if="loading" class="state-card" role="status">Đang tải báo cáo…</p>
+    <SkeletonLoader v-if="loading" class="state-card" :rows="6" label="Đang tải báo cáo" />
     <div v-if="error" class="state-card report-error" role="alert">
       <strong>Không tải được báo cáo</strong>
       <p>{{ error }}</p>
@@ -76,6 +76,7 @@
 </template>
 
 <script setup lang="ts">
+import SkeletonLoader from "../components/SkeletonLoader.vue";
 import { ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { contentToolsApi, contentToolsError, reportStatus, type LessonReport } from '../api/contentToolsApi';

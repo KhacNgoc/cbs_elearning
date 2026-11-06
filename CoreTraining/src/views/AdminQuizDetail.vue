@@ -12,9 +12,8 @@
       </div>
     </header>
 
-    <section v-if="initialLoading" class="editor-card quiz-detail-loading" role="status" aria-live="polite">
-      <LoaderCircle class="spin" :size="28" aria-hidden="true" />
-      <p>Đang tải bài kiểm tra...</p>
+    <section v-if="initialLoading" class="editor-card quiz-detail-loading">
+      <SkeletonLoader :rows="7" label="Đang tải bài kiểm tra" />
     </section>
     <section v-else-if="loadError" class="editor-card quiz-detail-error" role="alert">
       <p>{{ loadError }}</p>
@@ -272,6 +271,7 @@
 </template>
 
 <script setup lang="ts">
+import SkeletonLoader from "../components/SkeletonLoader.vue";
 import {getQuizCourses, getQuizContext, type QuizCourseContext} from "../api/quizContextApi";
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -862,10 +862,8 @@ const importCsv = async (event: Event) => {
 </script>
 
 <style scoped>
-.quiz-detail-loading, .quiz-detail-error { min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; text-align: center; }
-.quiz-detail-loading { color: var(--primary-color); }
-.quiz-detail-loading p, .quiz-detail-error p { margin: 0; color: var(--text-main); }
-@media (prefers-reduced-motion: reduce) { .quiz-detail-loading .spin { animation: none; } }
+.quiz-detail-error { min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; text-align: center; }
+.quiz-detail-error p { margin: 0; color: var(--text-main); }
 .modal-question-editor{display:grid;gap:1.5rem;margin:0!important;padding:0!important;border:0!important;background:transparent!important}
 .modal-question-editor>.question-text-field,.modal-question-editor>.question-type-field{display:grid;gap:.5rem;margin:0;min-width:0}
 .modal-question-editor>.question-text-field>span,.modal-question-editor>.question-type-field>span{margin:0;line-height:1.5}

@@ -130,10 +130,13 @@
                 </div>
               </td>
             </tr>
-            <tr v-if="!filtered.length">
-              <td colspan="5" class="admin-empty">
-                {{ loading ? "Đang tải role…" : "Không có role phù hợp." }}
-              </td>
+            <SkeletonTableRows
+              v-if="loading && !filtered.length"
+              :columns="5"
+              label="Đang tải role"
+            />
+            <tr v-else-if="!filtered.length">
+              <td colspan="5" class="admin-empty">Không có role phù hợp.</td>
             </tr>
           </tbody>
         </table>
@@ -215,7 +218,6 @@
         được giữ nguyên.
       </p>
       <p v-if="memberError" role="alert">{{ memberError }} <button type="button" @click="loadMembers">Thử lại</button></p>
-      <p v-if="memberLoading" role="status">Đang tải tài khoản…</p>
       <div class="admin-search-box">
         <Search :size="16" /><input
           v-model="memberQuery"
@@ -255,6 +257,8 @@
             </tr>
           </thead>
           <tbody>
+            <SkeletonTableRows v-if="memberLoading" :columns="4" label="Đang tải tài khoản" />
+            <template v-else>
             <tr v-for="m in memberRows" :key="m.id">
               <td>
                 <input
@@ -286,6 +290,7 @@
                 }}
               </td>
             </tr>
+            </template>
           </tbody>
         </table>
       </div>
@@ -310,6 +315,7 @@
   </main>
 </template>
 <script setup lang="ts">
+import SkeletonTableRows from "../components/SkeletonTableRows.vue";
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { adminListApi } from "../api/adminListApi";
 import { useRouter } from "vue-router";

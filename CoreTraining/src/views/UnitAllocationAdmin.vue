@@ -126,10 +126,13 @@
 
       <!-- DIRECTORY TABLE -->
       <div class="table-responsive">
-        <div v-if="loading && directoryUnits.length === 0" class="table-loading-state">
-          <Loader2 :size="32" class="spin-icon" />
-          <p>Đang tải danh sách đơn vị và phân bổ đào tạo...</p>
-        </div>
+        <SkeletonLoader
+          v-if="loading && directoryUnits.length === 0"
+          variant="table"
+          :rows="8"
+          :columns="7"
+          label="Đang tải danh sách đơn vị và phân bổ đào tạo"
+        />
 
         <div v-else-if="directoryUnits.length === 0" class="table-empty-state">
           <Building2 :size="36" class="empty-icon" />
@@ -381,10 +384,12 @@
 
         <!-- MODAL BODY -->
         <div class="detail-modal-body">
-          <div v-if="loadingUnitCourses" class="modal-loading-state">
-            <Loader2 :size="32" class="spin-icon" />
-            <p>Đang tải dữ liệu phân bổ của đơn vị...</p>
-          </div>
+          <SkeletonLoader
+            v-if="loadingUnitCourses"
+            variant="tree"
+            :rows="8"
+            label="Đang tải dữ liệu phân bổ của đơn vị"
+          />
 
           <div v-else-if="filteredStagedAllocations.length === 0" class="modal-empty-state">
             <Inbox :size="38" class="empty-icon" />
@@ -778,6 +783,7 @@
 </template>
 
 <script setup lang="ts">
+import SkeletonLoader from "../components/SkeletonLoader.vue";
 import { ref, computed, onMounted, watch } from "vue";
 import {
   Search,
@@ -2404,7 +2410,6 @@ async function handleExecuteBatchSync() {
   background: #f8fafc;
 }
 
-.modal-loading-state,
 .modal-empty-state {
   display: flex;
   flex-direction: column;
@@ -3394,7 +3399,6 @@ async function handleExecuteBatchSync() {
   background: var(--bg-main);
 }
 
-:root[data-theme="dark"] .modal-loading-state,
 :root[data-theme="dark"] .modal-empty-state {
   color: var(--text-muted);
 }

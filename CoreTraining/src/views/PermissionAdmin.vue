@@ -70,8 +70,14 @@
                 ><small>{{ r.memberCount ?? 0 }} tài khoản</small></span
               ><ChevronRight :size="16" />
             </button>
-            <p v-if="!filteredRoles.length" class="admin-empty">
-              {{ loading ? "Đang tải…" : "Không có role quản trị phù hợp." }}
+            <SkeletonLoader
+              v-if="loading && !filteredRoles.length"
+              variant="list"
+              :rows="6"
+              label="Đang tải danh sách role"
+            />
+            <p v-else-if="!filteredRoles.length" class="admin-empty">
+              Không có role quản trị phù hợp.
             </p>
           </div>
           <TablePagination v-model:page="rolePage" v-model:page-size="roleSize" :total="roleTotal" :page-count="rolePageCount" unit="role" unit-label="Role" compact />
@@ -264,6 +270,7 @@
   </main>
 </template>
 <script setup lang="ts">
+import SkeletonLoader from "../components/SkeletonLoader.vue";
 import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { adminListApi } from "../api/adminListApi";
 import TablePagination from "../components/TablePagination.vue";
@@ -520,6 +527,10 @@ onMounted(load);
 .panel-tools {
   padding: 16px 16px 0;
   flex-shrink: 0;
+}
+.role-panel > .table-pagination {
+  margin-top: 0;
+  padding: 12px 16px 16px;
 }
 .unit-panel .panel-body {
   display: flex;

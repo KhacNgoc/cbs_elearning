@@ -78,9 +78,10 @@
           Thử lại
         </button>
       </div>
-      <div v-else class="loading-state" role="status">
-        <span></span>Đang tải bài học...
-      </div>
+      <SkeletonLoader v-else class="lesson-skeleton" label="Đang tải bài học">
+        <SkeletonBlock height="min(56vh, 30rem)" radius="var(--radius-md)" />
+        <SkeletonLoader plain :rows="3" />
+      </SkeletonLoader>
       <LessonCourseSidebar
         :course="course"
         :chapters="outline?.chapters || []"
@@ -275,10 +276,15 @@
       Thử lại
     </button>
   </div>
-  <div v-else class="loading-state"><span></span>Đang tải bài học...</div>
+  <SkeletonLoader v-else class="lesson-skeleton" label="Đang tải bài học">
+    <SkeletonBlock height="min(56vh, 30rem)" radius="var(--radius-md)" />
+    <SkeletonLoader plain :rows="3" />
+  </SkeletonLoader>
 </template>
 
 <script setup lang="ts">
+import SkeletonBlock from "../components/SkeletonBlock.vue";
+import SkeletonLoader from "../components/SkeletonLoader.vue";
 import { scrollWithin } from "../utils/scrollWithin";
 import {
   ref,
@@ -2162,14 +2168,10 @@ const deleteComment = async (commentId: number) => {
   color: var(--text-muted);
   text-align: center;
 }
-.loading-state span {
-  width: 30px;
-  height: 30px;
-  margin: auto;
-  border: 3px solid var(--border-color);
-  border-top-color: var(--primary-color);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+.lesson-skeleton {
+  min-height: 60vh;
+  align-content: start;
+  padding: 1.5rem;
 }
 @keyframes spin {
   to {

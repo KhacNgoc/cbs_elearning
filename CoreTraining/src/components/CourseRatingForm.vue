@@ -1,7 +1,7 @@
 <template>
   <section class="course-rating-form" aria-label="Đánh giá khóa học">
     <header><div><span class="eyebrow">TRẢI NGHIỆM SAU KHÓA HỌC</span><h2>{{ state?.mine?'Đánh giá của bạn':'Bạn thấy khóa học này thế nào?' }}</h2><p>Chia sẻ mức độ hài lòng để chúng tôi cải thiện khóa học.</p></div><Star :size="24"/></header>
-    <p v-if="loading" role="status">Đang tải đánh giá...</p>
+    <SkeletonLoader v-if="loading" :rows="3" label="Đang tải đánh giá" />
     <div v-if="error" role="alert" class="rating-error">{{ error }} <button type="button" :disabled="saving||loading" @click="load">{{ state?'Tải lại đánh giá':'Thử lại' }}</button></div>
     <template v-if="state&&!loading">
       <p class="rating-total">{{ state.summary.average===null?'Chưa có đánh giá':`${state.summary.average.toFixed(1)}/5 sao · ${state.summary.count} đánh giá` }} · Từ học viên đã hoàn thành khóa</p>
@@ -17,6 +17,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import SkeletonLoader from "./SkeletonLoader.vue";
 import { ref,watch,onBeforeUnmount } from 'vue';
 import { Star } from 'lucide-vue-next';
 import { courseRatingApi } from '../api/courseRatingApi';

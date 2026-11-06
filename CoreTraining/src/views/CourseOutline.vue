@@ -212,10 +212,15 @@
         </div>
       </section>
     </template>
-    <p v-else-if="!error">Đang tải khóa học...</p>
+    <SkeletonLoader v-else-if="!error" label="Đang tải khóa học">
+      <SkeletonBlock height="10rem" radius="var(--radius-md)" />
+      <SkeletonLoader plain variant="list" :rows="6" />
+    </SkeletonLoader>
   </main>
 </template>
 <script setup lang="ts">
+import SkeletonBlock from "../components/SkeletonBlock.vue";
+import SkeletonLoader from "../components/SkeletonLoader.vue";
 import { ref, computed, watch, onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {

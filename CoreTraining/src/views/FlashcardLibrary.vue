@@ -5,7 +5,7 @@
       <p>Chọn thẻ từ nhiều bài, nhiều khóa để học chung. Chỉ hiện các bài bạn đã mở khóa.</p>
     </header>
 
-    <PageLoading v-if="loading" label="Đang tải flashcard..." />
+    <SkeletonLoader v-if="loading" class="card" variant="list" :rows="6" label="Đang tải flashcard" />
     <div v-else-if="error" class="card library-state" role="alert">
       <p>{{ error }}</p>
       <button class="btn btn-primary" @click="load">Thử lại</button>
@@ -90,7 +90,7 @@
                 {{ deckErrors[lesson.id] }}
                 <button type="button" class="btn btn-secondary" @click="toggleLesson(lesson.id, true)">Thử lại</button>
               </p>
-              <p v-else-if="!decks[lesson.id]" class="picker-note">Đang tải thẻ...</p>
+              <SkeletonLoader v-else-if="!decks[lesson.id]" class="picker-note" :rows="3" label="Đang tải thẻ" />
               <label v-for="card in decks[lesson.id] ?? []" v-else :key="card.id" class="card-option">
                 <input
                   type="checkbox"
@@ -159,7 +159,7 @@
         @removed="applyRemoved"
       />
       <p v-else-if="managing && deckErrors[managing.id]" class="picker-note" role="alert">{{ deckErrors[managing.id] }}</p>
-      <p v-else class="picker-note">Đang tải thẻ...</p>
+      <SkeletonLoader v-else class="picker-note" :rows="5" label="Đang tải thẻ" />
       <template #footer>
         <button type="button" class="btn btn-secondary" @click="managing = null">Đóng</button>
       </template>
@@ -172,7 +172,7 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { CalendarClock, ChevronDown, ChevronRight, Layers3, PencilLine } from "lucide-vue-next";
 import AdminModal from "../components/AdminModal.vue";
-import PageLoading from "../components/PageLoading.vue";
+import SkeletonLoader from "../components/SkeletonLoader.vue";
 import FlashcardPlanForm from "../components/flashcards/FlashcardPlanForm.vue";
 import FlashcardPlanList from "../components/flashcards/FlashcardPlanList.vue";
 import FlashcardStudy from "../components/flashcards/FlashcardStudy.vue";

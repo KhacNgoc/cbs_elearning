@@ -61,10 +61,7 @@
 
     <!-- Tree Body -->
     <div class="tree-scroll-container">
-      <div v-if="loading" class="tree-empty-state">
-        <Loader2 :size="24" class="spin-icon" />
-        <p>Đang tải cấu trúc chương trình...</p>
-      </div>
+      <SkeletonLoader v-if="loading" variant="tree" :rows="10" label="Đang tải cấu trúc chương trình" />
 
       <div v-else-if="!domains.length" class="tree-empty-state">
         <FolderTree :size="36" class="empty-icon" />
@@ -231,13 +228,13 @@
 
               <!-- LEVEL 3: COURSE (KHÓA HỌC - LAZY FETCHED) -->
               <div v-if="isExpanded(program.id)" class="tree-sub-tree">
-                <div
+                <SkeletonLoader
                   v-if="loadingProgramCoursesMap[program.id] && !getCoursesForProgram(program.id).length"
                   class="tree-inline-loading"
-                >
-                  <Loader2 :size="13" class="spin-icon" />
-                  <span>Đang tải danh sách khóa học...</span>
-                </div>
+                  variant="tree"
+                  :rows="2"
+                  label="Đang tải danh sách khóa học"
+                />
 
                 <div
                   v-for="course in getVisibleCoursesForProgram(program.id)"
@@ -331,13 +328,13 @@
 
                   <!-- LEVEL 4: CHAPTER (CHƯƠNG HỌC - LAZY FETCHED) -->
                   <div v-if="isExpanded(course.id)" class="tree-sub-tree">
-                    <div
+                    <SkeletonLoader
                       v-if="loadingCourseChaptersMap[course.id] && !getChaptersForCourse(course.id).length"
                       class="tree-inline-loading"
-                    >
-                      <Loader2 :size="12" class="spin-icon" />
-                      <span>Đang tải danh sách chương...</span>
-                    </div>
+                      variant="tree"
+                      :rows="2"
+                      label="Đang tải danh sách chương"
+                    />
                     <div
                       v-for="(chapter, cIdx) in getChaptersForCourse(course.id)"
                       :key="chapter.id"
@@ -965,6 +962,7 @@
 </template>
 
 <script setup lang="ts">
+import SkeletonLoader from "./SkeletonLoader.vue";
 import { ref, computed, watch, onMounted, nextTick } from "vue";
 import { useRouter } from "vue-router";
 import {
@@ -4480,14 +4478,8 @@ watch(
 }
 
 .tree-inline-loading {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.48rem 0.85rem;
+  width: auto;
   margin-left: 1.5rem;
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  font-style: italic;
 }
 </style>
 

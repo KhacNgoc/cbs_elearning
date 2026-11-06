@@ -3,11 +3,7 @@
     <DocumentZoomControls v-if="!loading && !error" v-model="zoom" />
     <DocumentPageNavigation v-if="pageCount && !loading && !error" :page="page" :total="pageCount" :disabled="loading" @go="go" />
     <div ref="scrollContainer" class="word-preview" @scroll="savePosition">
-      <div v-if="loading" class="word-preview-state">
-        <LoaderCircle class="word-preview-spinner" :size="32" /><span
-          >Đang tải tài liệu Word...</span
-        >
-      </div>
+      <SkeletonLoader v-if="loading" variant="document" :rows="12" label="Đang tải tài liệu Word" />
       <div v-else-if="error" class="word-preview-state word-preview-error">
         <FileWarning :size="38" /><strong>Không thể preview tài liệu</strong>
         <p>{{ error }}</p>
@@ -23,8 +19,9 @@
 </template>
 
 <script setup lang="ts">
+import SkeletonLoader from "../SkeletonLoader.vue";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { FileWarning, LoaderCircle } from "lucide-vue-next";
+import { FileWarning } from "lucide-vue-next";
 import DocumentZoomControls from "./DocumentZoomControls.vue";
 import DocumentPageNavigation from "./DocumentPageNavigation.vue";
 import { axiosClient } from "../../api/axiosClient";
@@ -223,15 +220,6 @@ watch(() => props.url, renderDocument);
 }
 .word-preview-error p {
   max-width: 460px;
-}
-.word-preview-spinner {
-  color: var(--primary-ink);
-  animation: word-spin 0.8s linear infinite;
-}
-@keyframes word-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 @media (max-width: 600px) {
   .word-preview {
