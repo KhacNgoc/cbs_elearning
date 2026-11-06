@@ -12,4 +12,6 @@ public interface DocumentStorageService {
     public LessonDocumentDto store(MultipartFile file);
 
     public Path getStorageDirectory();
+
+    public boolean exists(String fileUrl);
 }

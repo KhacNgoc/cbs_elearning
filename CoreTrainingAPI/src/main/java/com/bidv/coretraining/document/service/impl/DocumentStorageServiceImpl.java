@@ -49,6 +49,8 @@ public class DocumentStorageServiceImpl implements DocumentStorageService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chỉ hỗ trợ file PDF, DOC, DOCX, PPT hoặc PPTX");
         }
 
+        requireMatchingSignature(file, extension);
+
         String storedName = UUID.randomUUID() + "." + extension;
         Path destination = storageDirectory.resolve(storedName).normalize();
         if (!destination.startsWith(storageDirectory)) {
@@ -69,6 +71,32 @@ public class DocumentStorageServiceImpl implements DocumentStorageService {
                 .originalFileName(originalName)
                 .fileSize(file.getSize())
                 .build();
+    }
+
+    private void requireMatchingSignature(MultipartFile file, String extension) {
+        byte[] head;
+        try (var input = file.getInputStream()) {
+            head = input.readNBytes(8);
+        } catch (IOException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không đọc được file tài liệu", exception);
+        }
+        byte[] expected = switch (extension) {
+            case "pdf" -> new byte[] { '%', 'P', 'D', 'F', '-' };
+            case "docx", "pptx" -> new byte[] { 'P', 'K', 3, 4 };
+            default -> new byte[] { (byte) 0xD0, (byte) 0xCF, 0x11, (byte) 0xE0, (byte) 0xA1, (byte) 0xB1, 0x1A, (byte) 0xE1 };
+        };
+        if (head.length < expected.length || !java.util.Arrays.equals(head, 0, expected.length, expected, 0, expected.length)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Nội dung file không đúng định dạng " + extension.toUpperCase(Locale.ROOT));
+        }
+    }
+
+    public boolean exists(String fileUrl) {
+        String prefix = "/uploads/documents/";
+        if (fileUrl == null || !fileUrl.startsWith(prefix))
+            return false;
+        Path file = storageDirectory.resolve(fileUrl.substring(prefix.length())).normalize();
+        return file.startsWith(storageDirectory) && Files.isRegularFile(file);
     }
 
     public Path getStorageDirectory() {
