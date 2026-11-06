@@ -306,7 +306,10 @@ export const adminApi = {
   // ==========================================
   // Lesson Management
   // ==========================================
-  async uploadDocument(file: File): Promise<LessonDocument> {
+  async uploadDocument(
+    file: File,
+    onProgress?: (percent: number) => void,
+  ): Promise<LessonDocument> {
 
     const formData = new FormData();
     formData.append("file", file);
@@ -316,6 +319,10 @@ export const adminApi = {
       {
         headers: { "Content-Type": "multipart/form-data" },
         timeout: 120_000,
+        onUploadProgress: (event) => {
+          const total = event.total || file.size;
+          onProgress?.(Math.min(100, Math.round((event.loaded / total) * 100)));
+        },
       },
     );
     return {
