@@ -82,3 +82,28 @@ __pycache__/
 vendor/
 .gemini/
 .agent/
+
+# ==========================================
+# Unit tests: kept on developer machines only
+# ==========================================
+CoreTrainingAPI/src/test/
+CoreTraining/tests/
+rag-service/tests/
+
+# ==========================================
+# Generated test results and runtime output
+# ==========================================
+tests/system/results/
+rag-service/eval/results/*
+!rag-service/eval/results/REPORT.md
+LOG_PATH_IS_UNDEFINED/
+*.log.gz
+output/
+
+# ==========================================
+# Working notes: only the documents below are shared
+# ==========================================
+docs/*
+!docs/functional-non-functional-test-scenarios.vi.md
+!docs/test-execution-report.vi.md
+!docs/production-indexes.md
