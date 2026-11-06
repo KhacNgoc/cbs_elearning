@@ -31,7 +31,7 @@ import { useTablePagination } from '../composables/useTablePagination';
 import { readReportAttemptAnalysis } from '../api/trainingReportApi';
 import type { ReportAttemptAnalysis, ReportAttemptQuestion } from '../api/trainingReportApi';
 
-const props = defineProps<{ attemptId: number }>();
+const props = defineProps<{ attemptId: string }>();
 const analysis = ref<ReportAttemptAnalysis|null>(null);
 const loading = ref(false);
 const error = ref('');

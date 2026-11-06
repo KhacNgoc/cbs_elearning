@@ -247,6 +247,14 @@ public class TrainingReportQueryRepositoryImpl implements TrainingReportQueryRep
         });
     }
 
+    /** Every recorded attempt, plus scores from before attempts were recorded, within the actor's report scope. */
+    private static final String ATTEMPT_ROWS = " select * from (select cast(a.id as varchar) id,a.user_id,l.course_id,a.score*100.0/a.total score,a.taken_at,a.passing_score,l.title assessment"
+            + " from quiz_attempts a join quizzes q on q.id=a.quiz_id join lessons l on l.id=q.lesson_id"
+            + " where a.total>0 and exists(select 1 from visible_lessons vl where vl.id=l.id)"
+            + " and exists(select 1 from assigned x where x.learner_id=a.user_id and x.course_id=l.course_id)"
+            + " union all select cast(s.id as varchar) id,s.user_id,s.course_id,s.score,s.taken_at,s.passing_score,s.assessment from scored s"
+            + " where not exists(select 1 from quiz_attempts a2 join quizzes q2 on q2.id=a2.quiz_id where a2.user_id=s.user_id and q2.lesson_id=s.lesson_id)) attempt_rows ";
+
     public List<Map<String,Object>> attempts(Scope scope, long learner, String course, AttemptBoundary before, int limit) {
         var c=facts(scope); var p=new HashMap<>(c.params());
         p.put("learner",learner); p.put("course",course);
@@ -255,12 +263,12 @@ public class TrainingReportQueryRepositoryImpl implements TrainingReportQueryRep
             p.put("time",before.time()); p.put("id",before.id());
             boundary=" and (taken_at<:time or (taken_at=:time and id<:id))";
         }
-        return maps(c.sql()+" select id,score,taken_at,passing_score,assessment from scored where user_id=:learner and course_id=:course"+boundary+" order by taken_at desc,id desc limit "+(limit+1),p);
+        return maps(c.sql()+ATTEMPT_ROWS+"where user_id=:learner and course_id=:course"+boundary+" order by taken_at desc,id desc limit "+(limit+1),p);
     }
 
-    public boolean attemptVisible(Scope scope, long attemptId) {
+    public boolean attemptVisible(Scope scope, String attemptId) {
         var c=facts(scope); var p=new HashMap<>(c.params());
         p.put("attempt",attemptId);
-        return !maps(c.sql()+" select id from scored where id=:attempt limit 1",p).isEmpty();
+        return !maps(c.sql()+ATTEMPT_ROWS+"where id=:attempt limit 1",p).isEmpty();
     }
 }

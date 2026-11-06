@@ -35,7 +35,12 @@ final class AttemptAnalysisAssembler {
     private AttemptAnalysisAssembler() {}
 
     /** Empty when the snapshot is unreadable or does not reproduce the recorded score. */
-    static Optional<AttemptAnalysis> fromSnapshot(long attemptId, int score, int total, String questionsJson,
+    static AttemptAnalysis fromAttempt(com.bidv.coretraining.quiz.entity.QuizAttempt attempt) {
+        return fromSnapshot(attempt.getId(), attempt.getScore(), attempt.getTotal(), attempt.getQuestionsJson(), attempt.getAnswersJson())
+                .orElseGet(() -> unavailable(attempt.getId(), REASON_QUIZ_CHANGED));
+    }
+
+    static Optional<AttemptAnalysis> fromSnapshot(String attemptId, int score, int total, String questionsJson,
             String answersJson) {
         if (questionsJson == null || answersJson == null)
             return Optional.empty();
@@ -59,7 +64,7 @@ final class AttemptAnalysisAssembler {
         Map<Long, String> sets = score.getSelectedAnswerSets() == null ? Map.of() : score.getSelectedAnswerSets();
         Map<Long, Integer> legacy = score.getSelectedAnswers() == null ? Map.of() : score.getSelectedAnswers();
         if (sets.isEmpty() && legacy.isEmpty())
-            return unavailable(score.getId(), REASON_NO_ANSWERS);
+            return unavailable(String.valueOf(score.getId()), REASON_NO_ANSWERS);
         List<AttemptQuestion> rows = questions.stream()
                 .map(q -> question(q.getId(), q.getText(), q.getOptions(), stored(sets, legacy, q.getId()),
                         correctAnswers(q)))
@@ -67,8 +72,8 @@ final class AttemptAnalysisAssembler {
         var knownIds = questions.stream().map(Question::getId).collect(java.util.stream.Collectors.toSet());
         boolean sameQuestions = knownIds.containsAll(sets.keySet()) && knownIds.containsAll(legacy.keySet());
         return sameQuestions && reproduces(rows, score.getScore(), score.getTotal())
-                ? analysis(score.getId(), SOURCE_CURRENT, rows)
-                : unavailable(score.getId(), REASON_QUIZ_CHANGED);
+                ? analysis(String.valueOf(score.getId()), SOURCE_CURRENT, rows)
+                : unavailable(String.valueOf(score.getId()), REASON_QUIZ_CHANGED);
     }
 
     private static boolean reproduces(List<AttemptQuestion> rows, int score, int total) {
@@ -83,14 +88,14 @@ final class AttemptAnalysisAssembler {
                 !chosen.isEmpty(), !expected.isEmpty() && chosen.equals(expected));
     }
 
-    private static AttemptAnalysis analysis(long attemptId, String source, List<AttemptQuestion> rows) {
+    private static AttemptAnalysis analysis(String attemptId, String source, List<AttemptQuestion> rows) {
         int correct = (int) rows.stream().filter(AttemptQuestion::correct).count();
         int unanswered = (int) rows.stream().filter(q -> !q.answered()).count();
         return new AttemptAnalysis(attemptId, true, source, null, correct, rows.size() - correct - unanswered,
                 unanswered, rows);
     }
 
-    private static AttemptAnalysis unavailable(long attemptId, String reason) {
+    private static AttemptAnalysis unavailable(String attemptId, String reason) {
         return new AttemptAnalysis(attemptId, false, null, reason, 0, 0, 0, List.of());
     }
 
