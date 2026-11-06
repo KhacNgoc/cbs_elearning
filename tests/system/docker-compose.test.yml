@@ -1,0 +1,155 @@
+# Isolated stack for docs/functional-non-functional-test-scenarios.vi.md.
+# Always run with: docker compose -p cbstest -f tests/system/docker-compose.test.yml ...
+# Nothing here shares a container, volume, network or port with the dev stack; the
+# database and uploads live on tmpfs/throwaway volumes and vanish on `down -v`.
+name: cbstest
+
+x-backend-env: &backend-env
+  SERVER_PORT: "8080"
+  SERVER_SERVLET_CONTEXT_PATH: /
+  SERVER_FORWARD_HEADERS_STRATEGY: none
+  SPRING_APPLICATION_NAME: coretraining-test
+  SPRING_PROFILES_ACTIVE: postgres
+  SPRING_DATASOURCE_URL: jdbc:postgresql://test-postgres:5432/coretraining_test
+  SPRING_DATASOURCE_USERNAME: test
+  SPRING_DATASOURCE_PASSWORD: test-only-password
+  JPA_DDL_AUTO: validate
+  MAX_UPLOAD_SIZE: 20MB
+  MAX_UPLOAD_REQUEST_SIZE: 25MB
+  DOCUMENT_STORAGE_PATH: /app/uploads/documents
+  VIDEO_STORAGE_PATH: /app/uploads/videos
+  APP_UPLOAD_DIRECTORY: /app/uploads
+  VIDEO_ACCESS_SECRET: test-only-video-secret-0123456789abcdef0123456789abcdef
+  VIDEO_ACCESS_DURATION_SECONDS: "3600"
+  JWT_SECRET: test-only-jwt-secret-0123456789abcdef0123456789abcdef0123456789abcdef
+  JWT_EXPIRATION_MS: "86400000"
+  JWT_COOKIE_SECURE: "false"
+  JWT_COOKIE_SAME_SITE: Lax
+  CORS_ALLOWED_ORIGINS: http://localhost:15173
+  SMTP_HOST: test-mail
+  SMTP_PORT: "1025"
+  SMTP_USERNAME: ""
+  SMTP_PASSWORD: ""
+  SMTP_FROM: no-reply@test.local
+  SMTP_AUTH: "false"
+  SMTP_STARTTLS: "false"
+  DATA_INITIALIZER_ENABLED: "true"
+  INITIAL_ADMIN_PASSWORD: Test-Admin-Pass-1
+  APP_RAG_URL: http://test-rag:8001
+  RAG_RECENT_MESSAGE_LIMIT: "8"
+  RAG_RECENT_CHARACTER_LIMIT: "12000"
+  RAG_SUMMARY_MESSAGE_THRESHOLD: "12"
+  RAG_SUMMARY_CHARACTER_THRESHOLD: "24000"
+  RAG_CONNECT_TIMEOUT_MS: "5000"
+  RAG_READ_TIMEOUT_MS: "90000"
+  RAG_QUIZ_READ_TIMEOUT_MS: "300000"
+  QUIZ_MAX_QUESTIONS: "10"
+  RAG_SUMMARY_TIMEOUT_MS: "20000"
+  LOG_PATH: logs
+  LOG_LEVEL: INFO
+
+services:
+  test-postgres:
+    image: postgres:15-alpine
+    container_name: cbstest-db
+    ports:
+      - "127.0.0.1:15432:5432"
+    environment:
+      POSTGRES_DB: coretraining_test
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test-only-password
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d coretraining_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  test-mail:
+    image: node:22-alpine
+    command: ["node", "/sink/smtp-sink.mjs"]
+    volumes:
+      - ./smtp-sink.mjs:/sink/smtp-sink.mjs:ro
+    container_name: cbstest-mail
+    ports:
+      - "127.0.0.1:18025:8025"
+
+  test-qdrant:
+    image: qdrant/qdrant:v1.12.5
+    container_name: cbstest-qdrant
+    tmpfs:
+      - /qdrant/storage
+
+  # Ollama only serves models, so the host instance is reused read-only.
+  test-rag:
+    build: ../../rag-service
+    image: cbstest-rag:latest
+    container_name: cbstest-rag
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:18001:8001"
+    environment:
+      QDRANT_URL: http://test-qdrant:6333
+      OLLAMA_URL: http://host.docker.internal:11434
+      OLLAMA_CHAT_MODEL: qwen3:4b
+      OLLAMA_QUIZ_MODEL: qwen3:4b
+      OLLAMA_REWRITE_MODEL: qwen3:4b
+      OLLAMA_SUMMARY_MODEL: qwen3:4b
+      OLLAMA_EMBEDDING_MODEL: bge-m3
+      RAG_COLLECTION: test_course_documents
+      EMBEDDING_BATCH_SIZE: "32"
+      RAG_SCORE_THRESHOLD: "0.40"
+      RAG_TOP_K: "2"
+      RAG_CANDIDATE_LIMIT: "25"
+      RAG_CONTEXT_MAX_CHARS: "2400"
+      OLLAMA_CHAT_TIMEOUT_SECONDS: "50"
+      OLLAMA_REWRITE_TIMEOUT_SECONDS: "10"
+      OLLAMA_QUERY_EMBEDDING_TIMEOUT_SECONDS: "10"
+      OLLAMA_SUMMARY_TIMEOUT_SECONDS: "20"
+    depends_on:
+      - test-qdrant
+
+  test-backend:
+    build:
+      context: ../../CoreTrainingAPI
+    image: cbstest-backend:latest
+    container_name: cbstest-backend
+    ports:
+      - "127.0.0.1:19000:8080"
+    environment: *backend-env
+    networks:
+      default:
+        aliases:
+          - backend
+    volumes:
+      - test_uploads:/app/uploads
+    depends_on:
+      test-postgres:
+        condition: service_healthy
+      test-mail:
+        condition: service_started
+
+  test-frontend:
+    build:
+      context: ../../CoreTraining
+      args:
+        VITE_API_URL: ""
+        VITE_USE_MOCK_API: "false"
+        VITE_RAG_CHAT_TIMEOUT_MS: "100000"
+        VITE_QUIZ_GENERATION_TIMEOUT_MS: "420000"
+        VITE_QUIZ_MAX_QUESTIONS: "10"
+        VITE_VIDEO_UPLOAD_TIMEOUT_MS: "1800000"
+        VITE_VIDEO_MAX_UPLOAD_BYTES: "524288000"
+    image: cbstest-frontend:latest
+    container_name: cbstest-frontend
+    ports:
+      - "127.0.0.1:15173:80"
+    volumes:
+      - test_uploads:/srv/uploads:ro
+    depends_on:
+      - test-backend
+
+volumes:
+  test_uploads:
