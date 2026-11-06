@@ -51,9 +51,10 @@ public class EnrollmentAdminServiceImpl implements EnrollmentAdminService {
     @Transactional
     public EnrollmentRequestDto reviewEnrollmentRequest(
             Long id, boolean approve, String rejectionReason, String reviewedBy) {
-        CourseEnrollmentRequest request = enrollmentRequestRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Enrollment request", "id", id));
         authorization.permission("ENROLLMENT_MANAGE");
+        // Concurrent reviews wait here, then see the status the first one committed.
+        CourseEnrollmentRequest request = enrollmentRequestRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Enrollment request", "id", id));
         authorization.scope(request.getUser().getOrganizationUnit());
         AccessPolicy
                 .require(AccessPolicy.visible(request.getUser(), request.getCourse()));

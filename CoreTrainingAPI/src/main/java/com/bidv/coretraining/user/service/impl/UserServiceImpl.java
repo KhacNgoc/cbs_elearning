@@ -197,7 +197,8 @@ public class UserServiceImpl implements UserService {
                 if (!LearningPolicy.isLearnableStatus(target.getStatus()))
                         throw new org.springframework.security.access.AccessDeniedException(
                                         "Khóa học chưa được xuất bản hoặc đã ngừng sử dụng nên không thể đăng ký.");
-                User user = userRepository.findByUsername(username)
+                // Concurrent submits by one learner wait here, so the pending check below sees the first request.
+                User user = userRepository.findByUsernameForUpdate(username)
                                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
                 com.bidv.coretraining.course.entity.Course course = courseRepository.findById(courseId)
                                 .orElseThrow(() -> new ResourceNotFoundException("Course", "id", courseId));
