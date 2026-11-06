@@ -28,6 +28,28 @@ public class VideoMediaValidator {
         this.timeoutSeconds = Math.max(1, timeoutSeconds);
     }
 
+    /** Empty when the file cannot be probed, for example on a machine without ffprobe. */
+    public java.util.OptionalDouble probeDuration(Path path) {
+        Process process = null;
+        try {
+            process = new ProcessBuilder(command, "-v", "error", "-protocol_whitelist", "file",
+                    "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", path.toString())
+                    .redirectError(ProcessBuilder.Redirect.DISCARD).start();
+            if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS) || process.exitValue() != 0)
+                return java.util.OptionalDouble.empty();
+            double seconds = Double.parseDouble(new String(process.getInputStream().readNBytes(64)).trim());
+            return Double.isFinite(seconds) && seconds > 0 ? java.util.OptionalDouble.of(seconds)
+                    : java.util.OptionalDouble.empty();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            return java.util.OptionalDouble.empty();
+        } catch (IOException | NumberFormatException exception) {
+            return java.util.OptionalDouble.empty();
+        } finally {
+            if (process != null) process.destroyForcibly();
+        }
+    }
+
     public void validate(Path path, String extension) {
         Process process;
         try {

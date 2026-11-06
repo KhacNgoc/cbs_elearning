@@ -10,6 +10,9 @@ import java.util.List;
 
 @Repository
 public interface LessonRepository extends JpaRepository<Lesson, String> {
+    @org.springframework.data.jpa.repository.Query("select c.videoUrl from LessonContent c where c.lesson.id = :id")
+    String findVideoUrl(@org.springframework.data.repository.query.Param("id") String id);
+
   @org.springframework.data.jpa.repository.Query("select l.course.id from Lesson l where l.id = :id")
   java.util.Optional<String> findQuizCourseId(@org.springframework.data.repository.query.Param("id") String id);
 
