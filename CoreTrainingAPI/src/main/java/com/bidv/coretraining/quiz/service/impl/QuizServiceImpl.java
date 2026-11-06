@@ -177,6 +177,7 @@ public class QuizServiceImpl implements QuizService {
                 && progress.contentCompleted(user, lessonId)) {
             progress.recordCompletion(user, lesson);
         }
+        awardCourseBadge(user, lesson.getCourse());
         return QuizResultDto.builder().score(score).total(total).percent(percent)
                 .passingScore(passingScore).passed(total > 0 && percent >= passingScore).build();
     }
@@ -328,24 +329,40 @@ public class QuizServiceImpl implements QuizService {
         return legacy == null ? List.of() : List.of(legacy);
     }
 
+    // A course badge needs every lesson quiz attempted, and is graded on the best score of each.
+    private void awardCourseBadge(User user, Course course) {
+        var quizLessons = course.getLessons().stream()
+                .filter(l -> l.getQuiz() != null && "PUBLISHED".equals(l.getStatus())
+                        && questionRepository.existsByLessonId(l.getId()))
+                .map(Lesson::getId).collect(java.util.stream.Collectors.toSet());
+        var best = userQuizScoreRepository.findByUserId(user.getId()).stream()
+                .filter(s -> s.getLesson() != null && quizLessons.contains(s.getLesson().getId())
+                        && s.getTotal() != null && s.getTotal() > 0)
+                .toList();
+        if (quizLessons.isEmpty() || best.size() != quizLessons.size())
+            return;
+        checkAndUnlockBadges(user, course, best.stream().mapToInt(UserQuizScore::getScore).sum(),
+                best.stream().mapToInt(UserQuizScore::getTotal).sum());
+    }
+
     private void checkAndUnlockBadges(User user, Course course, int score, int total) {
-        float ratio = (float) score / total;
+        double ratio = (double) score / total;
         String badgeType = null;
         String badgeTitle = "";
         String badgeIcon = "";
         int badgePoints = 0;
 
-        if (ratio >= 1.0f) {
+        if (ratio >= 1.0) {
             badgeType = "gold";
             badgeTitle = "Huy hiệu Vàng " + course.getName();
             badgeIcon = "Award";
             badgePoints = 300;
-        } else if (ratio > 0.9f) {
+        } else if (ratio > 0.9) {
             badgeType = "silver";
             badgeTitle = "Huy hiệu Bạc " + course.getName();
             badgeIcon = "Medal";
             badgePoints = 200;
-        } else if (ratio >= 0.8f) {
+        } else if (ratio >= 0.8) {
             badgeType = "bronze";
             badgeTitle = "Huy hiệu Đồng " + course.getName();
             badgeIcon = "Shield";
