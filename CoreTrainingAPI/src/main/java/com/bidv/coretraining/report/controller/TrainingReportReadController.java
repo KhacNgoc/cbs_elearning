@@ -15,6 +15,6 @@ public class TrainingReportReadController {
     public com.bidv.coretraining.report.dto.TrainingReportDto.AttemptAnalysis attemptAnalysis(@PathVariable long attemptId) {return reports.attemptAnalysis(attemptId);}
     @GetMapping(value="/export",produces="text/csv;charset=UTF-8")
     public void export(@RequestParam Map<String,String> params,jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
-        response.setCharacterEncoding("UTF-8");response.setHeader("Content-Disposition","attachment; filename=training-report.csv");reports.export(params,response.getWriter());
+        response.setContentType("text/csv;charset=UTF-8");response.setHeader("Content-Disposition","attachment; filename=training-report.csv");reports.export(params,response.getWriter());
     }
 }
