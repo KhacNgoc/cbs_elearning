@@ -108,6 +108,12 @@ public class QuizGenerationServiceImpl implements QuizGenerationService {
         try {
             job = restTemplate.postForObject(ragUrl + "/quiz/jobs", ragRequest.body(), QuizGenerationJobDto.class);
         } catch (RestClientException exception) {
+            if (exception instanceof org.springframework.web.client.HttpStatusCodeException status
+                    && status.getStatusCode().value() == 429) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.TOO_MANY_REQUESTS,
+                        "Hệ thống AI đang bận. Vui lòng thử lại sau ít phút.");
+            }
             throw unavailable("job start", ragRequest, exception);
         }
         if (job == null || job.getJobId() == null || !JOB_ID.matcher(job.getJobId()).matches()) {
