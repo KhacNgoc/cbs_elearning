@@ -370,6 +370,36 @@ export async function run(ctx) {
       return `${ms}ms`
     })
   }
+  // Several admins opening the heaviest report at once (the data above): the server runs a few and turns the rest
+  // away with 503 instead of exhausting the database's memory and temp disk, and learners keep working meanwhile.
+  await tc('NF-P08', '6 báo cáo nặng cùng lúc ở 900k cặp học viên–khoá', async () => {
+    const since = new Date().toISOString()
+    let running = true
+    const light = []
+    const learnerLoop = (async () => {
+      while (running) {
+        const t0 = performance.now()
+        const r = await template.get('/api/users/me/learning/dashboard/courses?tab=discover&page=1&size=6')
+        light.push(r.status === 200 ? performance.now() - t0 : 1e9)
+        await sleep(200)
+      }
+    })()
+    const views = ['completion', 'learners', 'courses', 'units', 'programs', 'scores']
+    const out = await Promise.all(views.map(async (v) => {
+      const t0 = performance.now()
+      const r = await Promise.race([admin.get(`/api/admin/reports/training/read?view=${v}&page=0&size=20`), sleep(180000).then(() => ({ status: 'timeout>180s', headers: new Headers() }))])
+      return { v, status: r.status, retry: r.headers.get('retry-after'), ms: Math.round(performance.now() - t0) }
+    }))
+    running = false; await learnerLoop
+    const line = out.map((o) => `${o.v} ${o.status} ${o.ms}ms`).join(', ') + `; học viên p95=${pct(light, 95)}ms (${light.length} request)`
+    metricsOut.P08_concurrent_reports = line
+    assert.equal(docker('inspect', '-f', '{{.State.Running}}', 'cbstest-backend').trim(), 'true', `backend đã dừng: ${line}`)
+    assert.ok(!/OutOfMemoryError/.test(docker('logs', '--since', since, 'cbstest-backend')), `OOM: ${line}`)
+    assert.ok(out.every((o) => o.status === 200 || (o.status === 503 && o.retry)), `chỉ chấp nhận 200 hoặc 503 kèm Retry-After: ${line}`)
+    assert.ok(out.some((o) => o.status === 200), `không báo cáo nào chạy xong: ${line}`)
+    assert.ok(pct(light, 95) < 2000, `học viên chậm khi báo cáo chạy: ${line}`)
+    return line
+  })
 
   mkdirSync(new URL('../results/', import.meta.url), { recursive: true })
   writeFileSync(new URL('../results/load-metrics.json', import.meta.url), JSON.stringify(metricsOut, null, 1))

@@ -76,6 +76,19 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.SERVICE_UNAVAILABLE);
     }
 
+    // JSON is explicit because the CSV export asks for text/csv.
+    @ExceptionHandler(ReportBusyException.class)
+    public ResponseEntity<ErrorResponse> handleReportBusy(ReportBusyException ex, WebRequest request) {
+        log.warn("Report rejected: all report slots busy");
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header(org.springframework.http.HttpHeaders.RETRY_AFTER, String.valueOf(ReportBusyException.RETRY_AFTER_SECONDS))
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .body(ErrorResponse.builder().timestamp(LocalDateTime.now())
+                        .status(HttpStatus.SERVICE_UNAVAILABLE.value())
+                        .error(HttpStatus.SERVICE_UNAVAILABLE.getReasonPhrase()).message(ex.getMessage())
+                        .path(request.getDescription(false).replace("uri=", "")).traceId(currentTraceId()).build());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex,
             WebRequest request) {

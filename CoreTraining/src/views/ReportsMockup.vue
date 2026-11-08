@@ -121,6 +121,9 @@ const statuses=['Hoàn thành','Đang học','Chưa bắt đầu'];
 const statusColors=['#00856a','#e5b04c','#c4cfd8'];
 const examColors=['#00856a','#cc6d59','#c4cfd8'],examLabels=['Đã từng đạt','Chưa từng đạt','Chưa kiểm tra'];
 const report=ref<ReportPage|null>(null),loading=ref(true),loadError=ref('');
+// The server runs a few whole-population reports at a time and answers 503 when every slot stays busy.
+const BUSY='Hệ thống đang xử lý nhiều báo cáo cùng lúc. Vui lòng thử lại sau ít phút.';
+const reportBusy=(e:unknown)=>(e as {response?:{status?:number}})?.response?.status===503;
 const page=ref(1),pageSize=ref(20);
 let sequence=0,timer:ReturnType<typeof setTimeout>|undefined,lastScope='';
 const empty:ReportMetrics={total:0,people:0,complete:0,learning:0,notStarted:0,tested:0,passed:0,failed:0,firstPassed:0,average:null,withDeadline:0,overdue:0,overduePeople:0,peopleWithDeadline:0,mandatory:0,mandatoryComplete:0};
@@ -134,7 +137,7 @@ async function loadReport(force=true){
  if(invalidDates.value){loading.value=false;return;}
  const scope=JSON.stringify(filters),metadata=force||!report.value||lastScope!==scope;
  try{const data=await readTrainingReport({...params(),metadata});if(request!==sequence)return;reportAsOf.value=data.asOf;report.value={...report.value,...data,summary:data.summary||report.value?.summary,choices:metadata?data.choices:report.value?.choices};lastScope=scope;}
- catch{if(request===sequence)loadError.value='Không thể tải dữ liệu báo cáo. Vui lòng thử lại.';}
+ catch(e){if(request===sequence)loadError.value=reportBusy(e)?BUSY:'Không thể tải dữ liệu báo cáo. Vui lòng thử lại.';}
  finally{if(request===sequence)loading.value=false;}
 }
 function schedule(){sequence++;clearTimeout(timer);timer=setTimeout(()=>void loadReport(false),250);}
@@ -207,7 +210,7 @@ function openUnit(unit:string){filters.unit=unit;void openActions('overdue');}
 function openCourse(course:string){filters.course=course;void openActions(courseMode.value==='results'?'failed':'incomplete');}
 async function showStatus(status:string){filters.status=status;await selectView('completion');await scrollToTable();}
 function closeOnBackdrop(event:MouseEvent){if(event.target===detailDialog.value)detailDialog.value?.close();}
-async function exportCsv(){try{const blob=await exportTrainingReport(params());const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`bao-cao-${selected.value}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch{loadError.value='Không thể xuất báo cáo. Vui lòng thử lại.';}}
+async function exportCsv(){try{const blob=await exportTrainingReport(params());const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`bao-cao-${selected.value}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){loadError.value=reportBusy(e)?BUSY:'Không thể xuất báo cáo. Vui lòng thử lại.';}}
 async function printReport(){loading.value=true;try{const items:ReportPage['items']=[];for(let n=0;n<Math.ceil(totalItems.value/100);n++){const data=await readTrainingReport({...params(),page:n,size:100,metadata:false});items.push(...data.items);}printItems.value=items;printing.value=true;await nextTick();window.print();}catch{loadError.value='Không thể tải dữ liệu in. Vui lòng thử lại.';}finally{printItems.value=null;printing.value=false;loading.value=false;}}
 onMounted(()=>void loadReport());
 onBeforeUnmount(()=>{sequence++;historySequence++;dimensionSequence++;clearTimeout(timer);});
