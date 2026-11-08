@@ -54,7 +54,8 @@ export class Client {
     const res = await fetch(`${BASE}${path}`, { method, headers, body: payload, redirect: 'manual' })
     this.absorb(res)
     const buffer = Buffer.from(await res.arrayBuffer())
-    const text = buffer.toString('utf8')
+    // A string cannot hold the largest exports (over 512 MB); callers measure those with `buffer`.
+    const text = buffer.length > 256 * 1024 * 1024 ? '' : buffer.toString('utf8')
     let json
     try { json = JSON.parse(text) } catch { json = undefined }
     return { status: res.status, json, text, buffer, headers: res.headers, ms: performance.now() - started }

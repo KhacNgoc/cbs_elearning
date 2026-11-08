@@ -66,9 +66,11 @@ public class TrainingReportReadServiceImpl implements TrainingReportReadService 
     }
     public Map<String,Object> read(Filter f) {return read(f,true);}
     public Map<String,Object> read(Filter f,boolean metadata) {var scope=scope(actor());validate(f);return repository.read(scope,f,metadata);}
+    @Transactional(readOnly=true,isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public void export(Map<String,String> params,java.io.Writer writer) throws java.io.IOException {
         var actor=actor(); var f=filter(params); var scope=scope(actor);validate(f);export(scope,f,writer);
     }
+    @Transactional(readOnly=true,isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public void export(Filter f,java.io.Writer writer) throws java.io.IOException {var scope=scope(actor());validate(f);export(scope,f,writer);}
     private void export(Scope scope,Filter f,java.io.Writer writer) throws java.io.IOException {
         writer.write('\ufeff');csvLine(writer,csvHeaders(f.view()));

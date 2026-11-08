@@ -2,7 +2,7 @@
 // Durations are shortened from the scenario (machine is a shared workstation); each row says what ran.
 // Set FULL_LOAD=1 to use the scenario's durations (about an hour).
 import { execFileSync, spawnSync } from 'node:child_process'
-import { writeFileSync, mkdirSync } from 'node:fs'
+import { writeFileSync, mkdirSync, readdirSync } from 'node:fs'
 import { tc, assert, expectStatus, sql, sqlNum, sqlOne, gap, blocked, sleep, loginAs, uniq, Client, BASE, multipart } from '../lib.mjs'
 import { freshCourse, learner, answersFor, ok, readAndComplete, addQuestions, quizSettings, roleByCode, ACTIVE_PASSWORD } from '../seed.mjs'
 
@@ -31,6 +31,8 @@ async function runK6(name, stages, env) {
   const res = spawnSync('docker', ['run', '--rm', '--network', 'cbstest_default', '-v', `${script}:/scripts:ro`,
     ...Object.entries({ ...env, STAGES: JSON.stringify(stages) }).flatMap(([k, v]) => ['-e', `${k}=${v}`]),
     'grafana/k6:latest', 'run', '--quiet', '--no-usage-report', '/scripts/load.js'], { encoding: 'utf8', maxBuffer: 1 << 26, timeout: 3 * 3600e3 })
+  // spawnSync blocks the event loop, so sockets the backend closed meanwhile still look reusable; let Node see the close.
+  await sleep(50)
   const line = (res.stdout ?? '').trim().split('\n').reverse().find((l) => l.startsWith('{'))
   if (!line) throw new Error(`k6 ${name} produced no summary: ${(res.stderr ?? '').slice(-400)}`)
   const m = JSON.parse(line)
@@ -62,7 +64,7 @@ export async function run(ctx) {
     assert.equal(out.filter((r) => r.status === 200).length, 1, `statuses ${out.map((r) => r.status)}`)
     assert.ok(out.every((r) => r.status < 500), 'server error under contention')
     assert.equal(sqlNum(`select count(*) from quiz_attempts where user_id=${s.user.id}`), 1)
-    assert.equal(sqlNum(`select points from users where id=${s.user.id}`), 100)
+    assert.equal(sqlNum(`select points from users where id=${s.user.id}`), 400, 'expected 100 for the lesson and 300 for the gold badge')
   })
   await tc('NF-C01', '20 quiz không giới hạn nộp song song: lượt thi không mất', async () => {
     const f = await freshCourse(ctx, { lessons: [{ questions: 4, settings: { requiredForProgress: false } }] }); const s = await learner(ctx)
@@ -146,6 +148,7 @@ export async function run(ctx) {
 
   // ---------- NF-D03 Flyway upgrade on old data, using a second database inside the test container only.
   await tc('NF-D03', 'nâng cấp từ V1 có dữ liệu, chạy đúng một lần, restart không chạy lại', async () => {
+    const migrations = String(readdirSync(`${ROOT}CoreTrainingAPI/src/main/resources/db/migration`).filter((f) => /^V.*\.sql$/.test(f)).length)
     const pg = (db, query) => execFileSync('docker', ['exec', '-i', 'cbstest-db', 'psql', '-U', 'test', '-d', db, '-AtX', '-v', 'ON_ERROR_STOP=1'], { input: query, encoding: 'utf8' }).trim()
     pg('postgres', 'drop database if exists migrate_test; create database migrate_test;')
     const env = ['-e', 'SPRING_DATASOURCE_URL=jdbc:postgresql://test-postgres:5432/migrate_test', '-e', 'SPRING_DATASOURCE_USERNAME=test', '-e', 'SPRING_DATASOURCE_PASSWORD=test-only-password']
@@ -172,12 +175,12 @@ export async function run(ctx) {
       const logs = await boot('cbstest-mig2', [], /Started CoreTraining|APPLICATION FAILED/)
       assert.ok(/Started CoreTraining/.test(logs), `upgrade failed: ${logs.slice(-300)}`)
       const applied = pg('migrate_test', 'select count(*) from flyway_schema_history where success')
-      assert.equal(applied, '9')
+      assert.equal(applied, migrations)
       assert.equal(pg('migrate_test', "select points from users where username='legacy_user'"), '777', 'legacy row changed')
       docker('rm', '-f', 'cbstest-mig2')
       const again = await boot('cbstest-mig3', [], /Started CoreTraining|APPLICATION FAILED/)
       assert.ok(/up to date/.test(again), 'second boot re-ran migrations')
-      assert.equal(pg('migrate_test', 'select count(*) from flyway_schema_history where success'), '9')
+      assert.equal(pg('migrate_test', 'select count(*) from flyway_schema_history where success'), migrations)
       assert.equal(pg('migrate_test', "select count(*) from information_schema.tables where table_name in ('flashcard_reviews')"), '0', 'old review table left behind')
     } finally {
       for (const n of ['cbstest-mig1', 'cbstest-mig2', 'cbstest-mig3']) spawnSync('docker', ['rm', '-f', n], { stdio: 'ignore' })
@@ -268,7 +271,7 @@ export async function run(ctx) {
     const timed = async (name, call) => {
       const t0 = performance.now()
       const res = await Promise.race([call(), sleep(120000).then(() => ({ status: 'timeout>120s', text: '' }))])
-      samples[name] = `${res.status === 200 ? Math.round(performance.now() - t0) + 'ms' : res.status}${res.text ? `/${Math.round(res.text.length / 1024)}KB` : ''}`
+      samples[name] = `${res.status === 200 ? Math.round(performance.now() - t0) + 'ms' : res.status}${res.buffer ? `/${Math.round(res.buffer.length / 1024)}KB` : ''}`
       return performance.now() - t0
     }
     const results = {}
@@ -313,8 +316,60 @@ export async function run(ctx) {
     assert.ok(!/OutOfMemoryError/.test(logs), 'OOM during export')
     assert.ok(pct(times, 95) < 2000, `nộp bài p95=${pct(times, 95)}ms khi đang export`)
     assert.equal(res.status, 200, `Export không xong trong 180s (HTTP ${res.status}) ở dữ liệu 100k user/1k khoá; nộp bài song song vẫn p95=${Math.round(pct(times, 95))}ms`)
-    return `Export HTTP ${res.status}, ${Math.round((res.text?.length ?? 0) / 1024)}KB; nộp bài p95=${pct(times, 95)}ms`
+    return `Export HTTP ${res.status}, ${Math.round((res.buffer?.length ?? 0) / 1024)}KB; nộp bài p95=${pct(times, 95)}ms`
   })
+  // Bulk learners have no activity by default, which is the cheap case for the report.
+  await tc('NF-P02', 'DB 100k user / 30k học viên có hoạt động', async () => {
+    const active = `(select id from users where username like '100k_1k_${ctx.run}_%' order by id limit 30000) u`
+    const lessons = `(select id, course_id from lessons order by id limit 3) l`
+    sql(`insert into user_completed_lessons(user_id, lesson_id) select u.id, l.id from ${active} cross join ${lessons} on conflict do nothing;
+         insert into lesson_progress(user_id, lesson_id, updated_at, content_completed, text_completed, duration_seconds, last_position_seconds, watched_seconds)
+           select u.id, l.id, now(), false, false, 100, 10, 10 from ${active} cross join ${lessons} on conflict do nothing;
+         insert into user_quiz_scores(user_id, course_id, lesson_id, score, total, taken_at)
+           select u.id, l.course_id, l.id, 8, 10, now() from ${active} cross join ${lessons};`)
+    const samples = []
+    for (const view of ['completion', 'learners', 'courses']) {
+      const t0 = performance.now()
+      const res = await admin.get(`/api/admin/reports/training/read?view=${view}&page=0&size=20`)
+      const ms = Math.round(performance.now() - t0)
+      assert.equal(res.status, 200, `${view}: HTTP ${res.status} sau ${ms}ms`)
+      assert.ok(ms <= 3000, `${view}: trang đầu vượt 3s (${ms}ms)`)
+      samples.push(`${view} ${ms}ms`)
+    }
+    metricsOut.P02_100k_active = samples
+    return samples.join(', ')
+  })
+  await tc('NF-P02', 'DB 100k user / tìm kiếm trên view phẳng', async () => {
+    const samples = []
+    for (const term of ['Tải 1234', 'Tải', 'Khoá tải 5']) {
+      const t0 = performance.now()
+      const res = await admin.get(`/api/admin/reports/training/read?view=completion&page=0&size=20&search=${encodeURIComponent(term)}`)
+      const ms = Math.round(performance.now() - t0)
+      assert.equal(res.status, 200, `"${term}": HTTP ${res.status} sau ${ms}ms`)
+      assert.ok(ms <= 3000, `"${term}": trang đầu vượt 3s (${ms}ms)`)
+      samples.push(`"${term}" ${ms}ms`)
+    }
+    metricsOut.P02_100k_search = samples
+    return samples.join(', ')
+  })
+  // Learners with personal facts on most courses: rows grow with learners x courses instead of with units x courses.
+  for (const [learners, ceiling] of [[1000, 3000], [10000, null]]) {
+    await tc('NF-P02', `DB 100k user / ${learners} học viên có dữ liệu ở 90 khoá`, async () => {
+      sql(`insert into user_course_deadlines(user_id, course_id, due_date)
+           select u.id, g.course_id, current_date + 365
+           from (select id, unit_id from users where username like '100k_1k_${ctx.run}_%' order by id limit ${learners}) u
+           cross join lateral (select distinct g.course_id from course_unit_grants g where upper(g.grant_type)='MANDATORY' order by g.course_id limit 90) g
+           on conflict do nothing`)
+      const t0 = performance.now()
+      const res = await admin.get('/api/admin/reports/training/read?view=completion&page=0&size=20')
+      const ms = Math.round(performance.now() - t0)
+      metricsOut[`P02_100k_${learners}x90`] = `${res.status} ${ms}ms`
+      assert.equal(res.status, 200, `HTTP ${res.status} sau ${ms}ms`)
+      if (ceiling === null) return gap(`${learners} x 90 = ${learners * 90} cặp học viên–khoá mất ${ms}ms. Ở mức này báo cáo tính trực tiếp không đạt 3s; cần bảng tổng hợp tính sẵn.`)
+      assert.ok(ms <= ceiling, `trang đầu vượt 3s (${ms}ms)`)
+      return `${ms}ms`
+    })
+  }
 
   mkdirSync(new URL('../results/', import.meta.url), { recursive: true })
   writeFileSync(new URL('../results/load-metrics.json', import.meta.url), JSON.stringify(metricsOut, null, 1))
