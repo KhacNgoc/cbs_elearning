@@ -334,20 +334,26 @@
             Thông báo sẽ gửi đến quả chuông và popup của các cán bộ đã hoàn thành bài học này.
           </small>
         </div>
-        <footer v-if="!readOnly" class="modal-buttons lesson-modal-footer">
+      <LessonEditorFooter v-if="!readOnly">
+        <template #start>
+          <button v-if="canDelete" type="button" class="footer-danger" :disabled="loading" @click="emit('delete')">
+            <Trash2 :size="16" /> Xóa bài học
+          </button>
+        </template>
         <button type="button" class="btn btn-secondary" :disabled="loading" @click="emit('cancel')">
           Hủy
         </button>
         <button type="submit" class="btn btn-primary" :disabled="loading">
           {{ loading ? "Đang lưu..." : "Lưu nội dung" }}
         </button>
-      </footer>
+      </LessonEditorFooter>
     </form>
   </section>
 </template>
 <script setup lang="ts">
 import '../assets/styles/lesson-authoring.css';
 import LessonContentSelection from '../components/lesson/LessonContentSelection.vue';
+import LessonEditorFooter from '../components/lesson/LessonEditorFooter.vue';
 import LessonUploadProgress from '../components/lesson/LessonUploadProgress.vue';
 import { changedLessonRequirements, lessonContentLabels, lessonContentRequirements, lessonContentTypes, lessonRequirementFields, selectedLessonContent, validateSelectedLessonContent, type LessonContentType } from '../utils/lessonContent';
 import { scrollWithin } from "../utils/scrollWithin";
@@ -364,10 +370,11 @@ import type { Lesson, LessonDocument } from "../types";
 const LessonTextEditor = defineAsyncComponent(
   () => import("../components/lesson/LessonTextEditor.vue"),
 );
-const props = defineProps<{ lesson: Lesson; readOnly?: boolean }>();
+const props = defineProps<{ lesson: Lesson; readOnly?: boolean; canDelete?: boolean }>();
 const emit = defineEmits<{
-  saved: [];
+  saved: [lesson: Lesson];
   cancel: [];
+  delete: [];
   dirty: [value: boolean];
   'title-change': [title: string];
 }>();
@@ -796,7 +803,7 @@ const saveLesson = async () => {
         console.warn("Could not send lesson change notification:", notifyErr);
       }
     }
-    emit("saved");
+    emit("saved", saved);
     emit("dirty", false);
     const savedMessage = lessonModal.value.isEdit
       ? "Cập nhật bài học thành công."
@@ -825,6 +832,8 @@ const saveLesson = async () => {
     loading.value = false;
   }
 };
+// Lets the other editor tabs save pending content without switching back to this tab.
+defineExpose({ save: saveLesson, saving: loading });
 </script>
 <style scoped>
 /* Redesigned Sidebar Layout */

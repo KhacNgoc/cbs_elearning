@@ -63,13 +63,13 @@
         </div>
         <small>{{ hasTimeLimit ? 'Hết giờ, bài làm sẽ được tự động nộp; câu chưa trả lời tính là sai.' : 'Không giới hạn: học viên làm bài đến khi tự nộp.' }}</small>
       </div>
-      <div v-if="isNew && canEdit" class="settings-action">
+      <div v-if="isNew && canEdit && !embedded" class="settings-action">
         <p>Phạm vi sẽ tự động áp dụng cho mọi câu hỏi được thêm hoặc import.</p>
         <button class="primary-button" :disabled="!courseId || !lessonId || scopeLoading || !!scopeError" @click="confirmScope">
           Tiếp tục soạn câu hỏi <ArrowRight :size="17" />
         </button>
       </div>
-      <div v-else-if="canAction('update')" class="settings-action">
+      <div v-else-if="canAction('update') && !embedded" class="settings-action">
         <p>{{ questions.length ? 'Thay đổi ngưỡng đạt và thời gian sẽ áp dụng cho những lượt làm bài tiếp theo.' : 'Lưu ít nhất một câu hỏi để tạo bài kiểm tra và lưu cấu hình.' }}</p>
         <button class="primary-button" :disabled="savingSettings || !questions.length" @click="saveSettings"
           :title="!questions.length ? 'Thêm ít nhất một câu hỏi trước khi lưu cấu hình' : undefined">
@@ -247,7 +247,7 @@
         </div>
         <TablePagination v-model:page="questionPage" v-model:page-size="questionPageSize" :total="filteredQuestions.length" :page-count="questionPageCount" unit="câu hỏi" unit-label="Câu hỏi" />
       </section>
-      <section v-if="canAction('delete')" class="danger-zone">
+      <section v-if="canAction('delete') && !embedded" class="danger-zone">
         <div>
           <strong>Xóa bài kiểm tra</strong>
           <p>Xóa toàn bộ {{ questions.length }} câu hỏi của bài kiểm tra này. Thao tác không thể hoàn tác.</p>
@@ -257,6 +257,28 @@
         </button>
       </section>
     </template>
+    <!-- Inside the lesson editor, every tab keeps its actions in the same sticky footer. -->
+    <LessonEditorFooter v-if="embedded && (canEdit || canAction('delete'))">
+      <template #start>
+        <button v-if="!isNew && canAction('delete')" type="button" class="footer-danger" :disabled="deletingQuiz"
+          :title="`Xóa toàn bộ ${questions.length} câu hỏi của bài kiểm tra này. Thao tác không thể hoàn tác.`" @click="deleteQuiz">
+          <Trash2 :size="16" /> {{ deletingQuiz ? "Đang xóa..." : "Xóa bài kiểm tra" }}
+        </button>
+      </template>
+      <template v-if="isNew && canEdit">
+        <span class="footer-note">Phạm vi sẽ tự động áp dụng cho mọi câu hỏi được thêm hoặc import.</span>
+        <button class="btn btn-primary" :disabled="!courseId || !lessonId || scopeLoading || !!scopeError" @click="confirmScope">
+          Tiếp tục soạn câu hỏi <ArrowRight :size="17" />
+        </button>
+      </template>
+      <template v-else-if="canAction('update')">
+        <span class="footer-note">{{ questions.length ? 'Ngưỡng đạt và thời gian áp dụng cho lượt làm bài tiếp theo.' : 'Lưu ít nhất một câu hỏi trước khi lưu cấu hình.' }}</span>
+        <button class="btn btn-primary" :disabled="savingSettings || !questions.length" @click="saveSettings"
+          :title="!questions.length ? 'Thêm ít nhất một câu hỏi trước khi lưu cấu hình' : undefined">
+          {{ savingSettings ? "Đang lưu..." : "Lưu cấu hình" }}
+        </button>
+      </template>
+    </LessonEditorFooter>
     <ConfirmModal
       :open="confirmationModal.show"
       :title="confirmationModal.title"
@@ -286,6 +308,7 @@ import ToggleSwitch from '../components/ToggleSwitch.vue';
 import TablePagination from '../components/TablePagination.vue';
 import {useTablePagination} from '../composables/useTablePagination';
 import ConfirmModal from "../components/ConfirmModal.vue";
+import LessonEditorFooter from "../components/lesson/LessonEditorFooter.vue";
 import LessonKnowledgeSources from "../components/LessonKnowledgeSources.vue";
 import { showToast } from "../utils/toast";
 import QuestionBankPanel from '../components/QuestionBankPanel.vue';
