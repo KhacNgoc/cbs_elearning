@@ -16,6 +16,7 @@
       :has-video="Boolean(lesson.videoUrl?.trim())"
       :has-slides="lesson.documents.some(document => document.purpose === 'SLIDE')"
       :optional-content="optionalLessonContent(lesson)"
+      :content-progress="isCompleted ? undefined : contentProgress"
       @select-content="showPrimaryContent"
       :completed-count="completedCount"
       :total-lessons="course?.lessons.length || 0"
@@ -95,6 +96,7 @@
         :lesson-quiz-totals="userStore.lessonQuizTotals"
         :course-quiz-scores="userStore.quizScores"
         :course-quiz-totals="userStore.quizTotals"
+        :missing-content="missingContent"
         @close="sidebarOpen = false"
         @select="openLessonContent"
         @toggle-completion="toggleLessonCompletion"
@@ -127,6 +129,7 @@
         :course-name="fullCourse?.name"
         :completed="isCompleted"
         :completion-rule="completionRule"
+        :completion-steps="completionSteps"
       >
         <template #actions>
           <LessonReportForm
@@ -312,7 +315,7 @@ import LessonCourseSidebar from "../components/lesson/LessonCourseSidebar.vue";
 import LessonMediaStage from "../components/lesson/LessonMediaStage.vue";
 import LessonOverview from "../components/lesson/LessonOverview.vue";
 import LessonReportForm from "../components/lesson/LessonReportForm.vue";
-import { initialLessonContent, lessonCompletionRule, optionalLessonContent } from "../utils/lessonContent";
+import { initialLessonContent, lessonCompletionRule, lessonCompletionSteps, missingCompletionSteps, optionalLessonContent } from "../utils/lessonContent";
 import { createDocumentProgressJournal } from "../utils/documentProgressJournal";
 import { createVideoProgressJournal } from "../utils/videoProgressJournal";
 import LessonDiscussion from "../components/lesson/LessonDiscussion.vue";
@@ -487,6 +490,31 @@ const completionRule = computed(() => {
   const outlineLesson = course.value?.lessons.find((item) => item.id === lesson.value?.id);
   return lessonCompletionRule(lesson.value, Boolean(outlineLesson?.hasQuiz && outlineLesson.quizRequired));
 });
+// What is done and what is left, so a learner who passed the quiz can see why the lesson is not ticked yet.
+const completionSteps = computed(() => {
+  if (!lesson.value) return [];
+  const outlineLesson = course.value?.lessons.find((item) => item.id === lesson.value?.id);
+  const saved = userStore.getLatestLessonProgress(lesson.value.id);
+  // The live snapshot runs ahead of the throttled save while the video plays.
+  const live = progressLessonId.value === lesson.value.id ? currentProgressSnapshot.value : undefined;
+  const progress = {
+    ...saved,
+    watchedSeconds: Math.max(saved?.watchedSeconds || 0, live?.watchedSeconds || 0),
+    durationSeconds: Math.max(saved?.durationSeconds || 0, live?.durationSeconds || 0),
+    textCompleted: Boolean(saved?.textCompleted || live?.textCompleted),
+  };
+  return lessonCompletionSteps(lesson.value, progress, {
+    required: Boolean(outlineLesson?.hasQuiz && outlineLesson.quizRequired),
+    passed: hasPassedLessonQuiz(lesson.value.id),
+    passingScore: outlineLesson?.quizPassingScore,
+  });
+});
+const contentProgress = computed(() =>
+  Object.fromEntries(completionSteps.value.map((step) => [step.type, step])),
+);
+const missingContent = computed(() =>
+  isCompleted.value ? "" : missingCompletionSteps(completionSteps.value.filter((step) => step.type !== "QUIZ")),
+);
 // Learners rarely scroll past the player after finishing, so point them at the deck.
 watch(
   () => [lesson.value?.id, isCompleted.value, userStore.progressLoaded] as const,
@@ -990,22 +1018,21 @@ const toggleLessonCompletion = async (lessonId: string) => {
 
   if (userStore.completedLessons.includes(lessonId)) return;
 
+  // A required quiz alone decides completion, so the content check only applies without one.
+  const quizRequired = Boolean(targetLesson.hasQuiz && targetLesson.quizRequired);
   try {
     await persistCurrentProgress();
-    await axiosClient.post(
-      `/api/users/me/lessons/${lessonId}/content-complete`,
-    );
+    if (!quizRequired)
+      await axiosClient.post(
+        `/api/users/me/lessons/${lessonId}/content-complete`,
+      );
   } catch (error) {
     const message = (error as { response?: { data?: { message?: string } } })
       .response?.data?.message;
     alert(message || "Hãy học xong nội dung trước khi hoàn thành bài.");
     return;
   }
-  if (
-    targetLesson.hasQuiz &&
-    targetLesson.quizRequired &&
-    !hasPassedLessonQuiz(lessonId)
-  ) {
+  if (quizRequired && !hasPassedLessonQuiz(lessonId)) {
     quizPromptKind.value = "lesson";
     quizPromptLessonId.value = lessonId;
     quizGateOpen.value = true;
@@ -2068,6 +2095,35 @@ const deleteComment = async (commentId: number) => {
   color: var(--text-main);
   font-size: 0.85rem;
 }
+.lesson-facts .completion-steps {
+  list-style: none;
+  margin: -0.4rem 0 1rem 1.8rem;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+.lesson-facts .completion-steps li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  color: var(--warning-ink);
+}
+.lesson-facts .completion-steps li.done {
+  color: var(--success-ink);
+}
+.lesson-facts .completion-steps li span {
+  display: inline;
+  color: var(--text-main);
+  font-weight: 600;
+}
+.lesson-facts .completion-steps li small {
+  margin-left: auto;
+}
+.quiz-box p.quiz-box-missing {
+  color: var(--warning-ink);
+  font-weight: 600;
+}
 .discussion-section {
   margin-top: 3rem;
   padding-top: 2rem;
@@ -2737,6 +2793,22 @@ const deleteComment = async (commentId: number) => {
   font-weight: 500;
   line-height: 1;
   opacity: 0.8;
+}
+.content-progress-tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0.15rem 0.35rem;
+  border-radius: 999px;
+  background: var(--warning-surface);
+  color: var(--warning-ink);
+}
+.content-progress-tag.done {
+  padding: 0;
+  background: transparent;
+  color: inherit;
 }
 .lesson-content-switch button:hover {
   background: rgba(255, 255, 255, 0.09);

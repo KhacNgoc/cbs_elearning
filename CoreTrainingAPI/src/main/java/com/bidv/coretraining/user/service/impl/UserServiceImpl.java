@@ -129,12 +129,14 @@ public class UserServiceImpl implements UserService {
                                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
 
                 com.bidv.coretraining.policy.LearningPolicy.assertLessonAccess(user, lesson);
-                lessonProgressService.completeContent(username, lessonId);
-                if (lesson.isQuizRequired()
-                                && !hasPassedLessonQuiz(user, lesson)) {
-                        throw new com.bidv.coretraining.exception.BadRequestException(
-                                        "Bạn cần đạt tối thiểu " + lesson.getQuizPassingScore()
-                                                        + "% bài kiểm tra của bài học");
+                // A required quiz alone decides completion; otherwise the required content does.
+                if (lesson.isQuizRequired()) {
+                        if (!hasPassedLessonQuiz(user, lesson))
+                                throw new com.bidv.coretraining.exception.BadRequestException(
+                                                "Bạn cần đạt tối thiểu " + lesson.getQuizPassingScore()
+                                                                + "% bài kiểm tra của bài học");
+                } else {
+                        lessonProgressService.completeContent(username, lessonId);
                 }
 
                 lessonProgressService.recordCompletion(user, lesson);

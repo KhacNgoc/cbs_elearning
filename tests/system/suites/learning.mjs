@@ -180,11 +180,19 @@ export async function run(ctx) {
     assert.equal(completions(s, f.lesson.id), 0)
     assert.equal(points(s), 0)
   })
-  await tc('F-L06', 'đạt quiz nhưng thiếu nội dung: chưa hoàn thành', async () => {
-    const f = await freshCourse(ctx, { lessons: [{ questions: 5 }] }); const s = await learner(ctx)
+  await tc('F-L06', 'đạt quiz bắt buộc khi chưa học nội dung: tự hoàn thành', async () => {
+    const f = await freshCourse(ctx, { lessons: [{ questions: 5, videoUrl, videoSource: 'UPLOAD' }] }); const s = await learner(ctx)
+    expectStatus(await s.post(`/api/quizzes/lessons/${f.lesson.id}/submit`, { selectedAnswers: answersFor(f.lesson.qs, 5) }), 200)
+    assert.equal(completions(s, f.lesson.id), 1, 'required quiz passed but lesson not completed')
+    assert.equal(points(s), 100 + 300, 'expected 100 for the lesson and 300 for the gold badge')
+    expectStatus(await complete(s, f.lesson.id), 200)
+    assert.equal(points(s), 400, 'completion paid twice')
+  })
+  await tc('F-L06', 'đạt quiz tuỳ chọn khi thiếu nội dung: chưa hoàn thành', async () => {
+    const f = await freshCourse(ctx, { lessons: [{ questions: 5, settings: { requiredForProgress: false } }] }); const s = await learner(ctx)
     expectStatus(await s.post(`/api/quizzes/lessons/${f.lesson.id}/submit`, { selectedAnswers: answersFor(f.lesson.qs, 5) }), 200)
     expectRejected(await complete(s, f.lesson.id))
-    assert.equal(completions(s, f.lesson.id), 0, 'completed without reading')
+    assert.equal(completions(s, f.lesson.id), 0, 'optional quiz completed the lesson without reading')
   })
   await tc('F-L06', 'đủ cả hai: hoàn thành; quiz tuỳ chọn không chặn', async () => {
     const f = await freshCourse(ctx, { lessons: [{ questions: 5 }] }); const s = await learner(ctx)

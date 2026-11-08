@@ -200,7 +200,7 @@ export interface LessonProgress {
   contentType?: "VIDEO" | "DOCUMENT" | "TEXT";
   documentId?: number;
   documentPage?: number;
-  documentPositions?: Record<string, { page: number; scrollOffset: number }>;
+  documentPositions?: Record<string, { page: number; scrollOffset: number; completed?: boolean }>;
   scrollOffset?: number;
   contentCompleted?: boolean;
 }

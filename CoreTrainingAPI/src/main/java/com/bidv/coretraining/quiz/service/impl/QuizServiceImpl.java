@@ -171,10 +171,10 @@ public class QuizServiceImpl implements QuizService {
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             throw new IllegalStateException("Không thể lưu đề kiểm tra", e);
         }
+        // Passing a required quiz completes the lesson on its own: the quiz is what proves the learning.
         if (total > 0 && percent >= passingScore
                 && !user.getCompletedLessons().contains(lesson)
-                && lesson.isQuizRequired()
-                && progress.contentCompleted(user, lessonId)) {
+                && lesson.isQuizRequired()) {
             progress.recordCompletion(user, lesson);
         }
         awardCourseBadge(user, lesson.getCourse());

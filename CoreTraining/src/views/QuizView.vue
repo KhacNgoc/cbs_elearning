@@ -314,6 +314,10 @@
         <p class="time-spent-desc">
           Thời gian hoàn thành: <strong>{{ quizStore.formattedTime }}</strong>
         </p>
+        <p v-if="lessonStillIncomplete" class="lesson-incomplete-note" role="status">
+          Bài kiểm tra này không bắt buộc nên chưa tính hoàn thành bài học. Hãy
+          học xong nội dung bắt buộc; quay lại bài học để xem phần còn thiếu.
+        </p>
       </div>
 
       <!-- Badge Unlocked Modal/Notification -->
@@ -392,6 +396,11 @@ const totalQuestions = computed(() => quizStore.quizQuestions.length);
 const currentQuestion = computed(() => quizStore.currentQuestion);
 const selectedAnswers = computed(() => quizStore.selectedAnswers);
 const quizResult = computed(() => quizStore.quizResult);
+// The server ticks the lesson only when its required content is done too; say so instead of leaving it silent.
+const lessonStillIncomplete = computed(() =>
+  Boolean(lessonId.value && quizResult.value?.passed && !quizStore.isLoading
+    && userStore.progressLoaded && !userStore.completedLessons.includes(lessonId.value)),
+);
 const lessonId = computed(() =>
   typeof route.query.lessonId === "string" ? route.query.lessonId : undefined,
 );
@@ -801,6 +810,16 @@ const getBadgeIcon = (icon: string) => {
   color: var(--danger-ink);
 }
 
+.lesson-incomplete-note {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid var(--warning-border);
+  background: var(--warning-surface);
+  color: var(--warning-ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
 .time-up-note,
 .time-up-result {
   margin: 0.75rem 0 0;

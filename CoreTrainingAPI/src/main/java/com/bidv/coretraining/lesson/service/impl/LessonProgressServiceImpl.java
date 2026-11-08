@@ -113,11 +113,11 @@ public class LessonProgressServiceImpl implements LessonProgressService {
         boolean contentWasComplete = progress.isContentCompleted();
         progress.setContentCompleted(currentContentComplete(authorized.lesson(), progress));
         if (!lessonCompleted) {
-            // A lesson with nothing required and no required quiz waits for the learner's own
-            // "mark complete": opening it must not award completion.
-            if (progress.isContentCompleted()
-                    && (lesson.isQuizRequired() ? LearningPolicy.quizPassed(user, lesson)
-                            : requirements(authorized.lesson()).anyRequired())) {
+            // A passed required quiz completes the lesson whatever content is left. Without one, a
+            // lesson with nothing required waits for the learner's own "mark complete": opening it
+            // must not award completion.
+            if (lesson.isQuizRequired() ? LearningPolicy.quizPassed(user, lesson)
+                    : progress.isContentCompleted() && requirements(authorized.lesson()).anyRequired()) {
                 recordCompletion(user, lesson);
                 lessonCompleted = true;
             }
