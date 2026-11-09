@@ -63,7 +63,7 @@
           :class="{ active: tab === 'content' }"
           @click="tab = 'content'"
         >
-          Nội dung bài học<span v-if="dirty" class="unsaved-dot" aria-label="Có thay đổi chưa lưu" title="Có thay đổi chưa lưu"></span></button
+          Nội dung<span class="tab-label-long"> bài học</span><span v-if="dirty" class="unsaved-dot" aria-label="Có thay đổi chưa lưu" title="Có thay đổi chưa lưu"></span></button
         ><button
           id="flashcard-tab"
           role="tab"
@@ -83,8 +83,8 @@
           :class="{ active: tab === 'quiz' }"
           @click="tab = 'quiz'"
         >
-          Bài kiểm tra
-          <span v-if="lesson.hasQuiz">{{
+          <span class="tab-label-long">Bài kiểm tra</span><span class="tab-label-short">Kiểm tra</span>
+          <span v-if="lesson.hasQuiz" class="tab-badge">{{
             lesson.quizRequired ? "Bắt buộc" : "Tùy chọn"
           }}</span>
         </button>
@@ -434,6 +434,8 @@ h1 {
   margin-bottom: 1.5rem;
 }
 .editor-tabs button {
+  flex-shrink: 0;
+  white-space: nowrap;
   border: 0;
   border-bottom: 3px solid transparent;
   background: none;
@@ -447,9 +449,19 @@ h1 {
   border-color: var(--primary-color);
   font-weight: 700;
 }
-.editor-tabs span {
-  font-size: 0.75rem;
+.editor-tabs .tab-label-short {
+  display: none;
+}
+.editor-tabs .tab-badge {
   margin-left: 0.5rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--primary-light);
+  color: var(--primary-ink);
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.4;
+  vertical-align: middle;
 }
 .editor-tabs .unsaved-dot {
   display: inline-block;
@@ -492,6 +504,25 @@ h1 {
   .lesson-editor-page header {
     flex-direction: column;
     align-items: flex-start;
+  }
+  /* Short labels keep all three tabs on one line; scrolling is the fallback on very narrow screens. */
+  .editor-tabs {
+    gap: 1.5rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .editor-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .editor-tabs button {
+    padding: 0.85rem 0;
+    font-size: 0.95rem;
+  }
+  .editor-tabs .tab-label-long {
+    display: none;
+  }
+  .editor-tabs .tab-label-short {
+    display: inline;
   }
 }
 .title-header-container {

@@ -25,6 +25,7 @@
           :aria-pressed="mobilePanel === tab.id"
           :aria-controls="`permission-${tab.id}-panel`"
           :class="{ active: mobilePanel === tab.id }"
+          :title="tab.label"
           @click="mobilePanel = tab.id"
         >
           {{ tab.label }}
@@ -700,8 +701,16 @@ onMounted(load);
   flex-shrink: 0;
   padding-bottom: 12px;
 }
+/* Equal, fixed-size tabs: the active tab only changes colour, never weight, so its label
+   cannot wrap to two lines and make the tab taller than the others. */
 .permission-panel-tabs button {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 40px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
   padding: 9px 6px;
   border: 1px solid var(--line-dde5ec);
   border-radius: 6px;
@@ -714,7 +723,6 @@ onMounted(load);
   background: var(--primary-light);
   color: var(--primary-ink);
   border-color: var(--primary-color);
-  font-weight: 600;
 }
 @container (max-width:899px) {
   .permission-panel-tabs {
@@ -733,6 +741,34 @@ onMounted(load);
 @media (max-width: 850px) {
   .permission-footer {
     flex-wrap: wrap;
+  }
+}
+/* On phones the viewport-locked layout leaves the active panel only a sliver of height.
+   Let the page scroll as a whole so the unit tree / permission list shows at full length,
+   and pin the save bar to the bottom of the screen instead. */
+@media (max-width: 768px) {
+  .permission-page {
+    height: auto;
+    overflow: visible;
+  }
+  .permission-content {
+    flex: none;
+    overflow: visible;
+  }
+  /* Heights become content-sized, so the inner overflow:auto boxes no longer scroll
+     vertically (the wide permission matrix still scrolls sideways). */
+  .permission-layout,
+  .panel-body,
+  .unit-panel :deep(.fill-height .check-tree-body) {
+    flex: none;
+  }
+  .permission-layout {
+    grid-template-rows: auto;
+  }
+  .permission-page > .permission-footer {
+    position: sticky;
+    bottom: 0;
+    padding: 12px 0;
   }
 }
 </style>

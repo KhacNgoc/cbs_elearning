@@ -128,6 +128,8 @@ public class TrainingReportReadServiceImpl implements TrainingReportReadService 
                 List.of(label + " · " + r.get("learnerId"), r.get("courseName"), number(r, "attemptCount"), avg,
                         number(r, "attemptCount") == 0 ? "Chưa kiểm tra"
                                 : number(r, "everPassed") == 1 && number(r, "requiredPassed") == 1 ? "Đã từng đạt"
+                                        // Passed every quiz taken; only an untaken required quiz is missing.
+                                        : number(r, "everPassed") == 1 ? "Đạt bài đã làm, còn bài bắt buộc chưa làm"
                                         : "Chưa từng đạt");
             default -> List.of(label + " · " + r.get("learnerId"), r.get("unit"),
                     r.get("courseName"), r.get("status"), Objects.toString(r.get("dueDate"), "Chưa quy định"), avg);
