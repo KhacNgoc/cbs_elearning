@@ -25,8 +25,7 @@
       >
     </div>
     <p v-if="error" class="report-error" role="alert">{{ error }}</p>
-    <p v-if="loading" role="status">Đang tải báo cáo…</p>
-    <div v-else class="reports-table">
+    <div class="reports-table">
       <table>
         <thead>
           <tr>
@@ -38,6 +37,8 @@
           </tr>
         </thead>
         <tbody>
+          <SkeletonTableRows v-if="loading" :columns="5" label="Đang tải báo cáo" />
+          <template v-else>
           <tr v-for="r in pageItems" :key="r.id">
             <td>
               <strong>{{ r.lessonTitle }}</strong
@@ -59,6 +60,7 @@
           <tr v-if="!items.length">
             <td colspan="5" class="empty">Không có báo cáo phù hợp.</td>
           </tr>
+          </template>
         </tbody>
       </table>
     </div>
@@ -142,6 +144,7 @@
   </main>
 </template>
 <script setup lang="ts">
+import SkeletonTableRows from "../components/SkeletonTableRows.vue";
 import { ref, onBeforeUnmount, onMounted, watch } from "vue";
 import { adminListApi } from "../api/adminListApi";
 import { useRoute } from "vue-router";

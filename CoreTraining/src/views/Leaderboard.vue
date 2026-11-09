@@ -35,10 +35,10 @@
           Bảng xếp hạng năng lực học tập dựa trên điểm tích lũy (PTS)
         </p>
 
-        <p v-if="loading" role="status">Đang tải bảng vinh danh...</p>
         <p v-if="error" role="alert">{{ error }} <button @click="load">Thử lại</button></p>
         <p v-if="currentRank">Thứ hạng của bạn: {{ currentRank.rank }} / {{ total }}</p>
-        <div class="ranks-list">
+        <SkeletonLoader v-if="loading" variant="list" :rows="10" label="Đang tải bảng vinh danh" />
+        <div v-else class="ranks-list">
           <div
             v-for="user in sortedLeaderboard"
             :key="user.username"
@@ -80,9 +80,10 @@
         </p>
 
         <div class="cabinet-group">
-          <h3>Huy hiệu nghiệp vụ đã nhận</h3><p v-if="awardsLoading" role="status">Đang tải huy hiệu...</p><p v-if="awardsError" role="alert">{{ awardsError }} <button @click="loadAwards">Thử lại</button></p>
+          <h3>Huy hiệu nghiệp vụ đã nhận</h3><p v-if="awardsError" role="alert">{{ awardsError }} <button @click="loadAwards">Thử lại</button></p>
 
-          <div class="badge-cabinet" v-if="awardsData?.items.length">
+          <SkeletonLoader v-if="awardsLoading" variant="stats" :rows="3" label="Đang tải huy hiệu" />
+          <div class="badge-cabinet" v-else-if="awardsData?.items.length">
             <div
               v-for="badge in awardsData?.items || []"
               :key="badge.id"
@@ -158,6 +159,7 @@
 </template>
 
 <script setup lang="ts">
+import SkeletonLoader from "../components/SkeletonLoader.vue";
 import { ref, computed, onMounted, watch } from "vue";
 import TablePagination from "../components/TablePagination.vue";
 import { useUserStore } from "../stores/userStore";

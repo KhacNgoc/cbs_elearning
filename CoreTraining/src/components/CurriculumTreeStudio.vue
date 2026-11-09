@@ -49,7 +49,7 @@
         placeholder="Tìm kiếm lĩnh vực, chương trình, khóa học hoặc bài giảng..."
         class="tree-search-input"
       />
-      <button
+      <button aria-label="Xóa tìm kiếm"
         v-if="searchQuery"
         type="button"
         class="clear-search-btn"
@@ -61,10 +61,7 @@
 
     <!-- Tree Body -->
     <div class="tree-scroll-container">
-      <div v-if="loading" class="tree-empty-state">
-        <Loader2 :size="24" class="spin-icon" />
-        <p>Đang tải cấu trúc chương trình...</p>
-      </div>
+      <SkeletonLoader v-if="loading" variant="tree" :rows="10" label="Đang tải cấu trúc chương trình" />
 
       <div v-else-if="!domains.length" class="tree-empty-state">
         <FolderTree :size="36" class="empty-icon" />
@@ -84,7 +81,7 @@
             :class="{ active: selectedId === domain.id, expanded: isExpanded(domain.id) }"
             @click="selectNode('domain', domain)"
           >
-            <button
+            <button aria-label="Mở rộng hoặc thu gọn"
               type="button"
               class="toggle-chevron"
               @click.stop="toggleNode(domain.id)"
@@ -161,7 +158,7 @@
                 :class="{ active: selectedId === program.id, expanded: isExpanded(program.id) }"
                 @click="selectNode('program', program)"
               >
-                <button
+                <button aria-label="Mở rộng hoặc thu gọn"
                   type="button"
                   class="toggle-chevron"
                   @click.stop="toggleNode(program.id)"
@@ -231,13 +228,13 @@
 
               <!-- LEVEL 3: COURSE (KHÓA HỌC - LAZY FETCHED) -->
               <div v-if="isExpanded(program.id)" class="tree-sub-tree">
-                <div
+                <SkeletonLoader
                   v-if="loadingProgramCoursesMap[program.id] && !getCoursesForProgram(program.id).length"
                   class="tree-inline-loading"
-                >
-                  <Loader2 :size="13" class="spin-icon" />
-                  <span>Đang tải danh sách khóa học...</span>
-                </div>
+                  variant="tree"
+                  :rows="2"
+                  label="Đang tải danh sách khóa học"
+                />
 
                 <div
                   v-for="course in getVisibleCoursesForProgram(program.id)"
@@ -249,7 +246,7 @@
                     :class="{ active: selectedId === course.id, expanded: isExpanded(course.id) }"
                     @click="selectNode('course', course, program)"
                   >
-                    <button
+                    <button aria-label="Mở rộng hoặc thu gọn"
                       type="button"
                       class="toggle-chevron"
                       @click.stop="toggleNode(course.id)"
@@ -331,13 +328,13 @@
 
                   <!-- LEVEL 4: CHAPTER (CHƯƠNG HỌC - LAZY FETCHED) -->
                   <div v-if="isExpanded(course.id)" class="tree-sub-tree">
-                    <div
+                    <SkeletonLoader
                       v-if="loadingCourseChaptersMap[course.id] && !getChaptersForCourse(course.id).length"
                       class="tree-inline-loading"
-                    >
-                      <Loader2 :size="12" class="spin-icon" />
-                      <span>Đang tải danh sách chương...</span>
-                    </div>
+                      variant="tree"
+                      :rows="2"
+                      label="Đang tải danh sách chương"
+                    />
                     <div
                       v-for="(chapter, cIdx) in getChaptersForCourse(course.id)"
                       :key="chapter.id"
@@ -348,7 +345,7 @@
                         :class="{ active: selectedId === chapter.id, expanded: isExpanded(chapter.id) }"
                         @click="selectNode('chapter', chapter, course)"
                       >
-                        <button
+                        <button aria-label="Mở rộng hoặc thu gọn"
                           type="button"
                           class="toggle-chevron"
                           @click.stop="toggleNode(chapter.id)"
@@ -418,7 +415,7 @@
                             :class="{ active: selectedId === lesson.id, expanded: isExpanded(lesson.id) }"
                             @click="selectNode('lesson', lesson, chapter, course)"
                           >
-                            <button
+                            <button aria-label="Mở rộng hoặc thu gọn"
                               type="button"
                               class="toggle-chevron"
                               @click.stop="toggleNode(lesson.id)"
@@ -645,7 +642,7 @@
           <div class="modal-title-box">
             <h4>{{ deleteConfirm.title }}</h4>
           </div>
-          <button type="button" class="close-btn" @click="closeDeleteModal">
+          <button aria-label="Đóng" type="button" class="close-btn" @click="closeDeleteModal">
             <X :size="16" />
           </button>
         </div>
@@ -693,7 +690,7 @@
             <span class="modal-level-badge">{{ levelSubtitle }}</span>
             <h4>{{ modalTitle }}</h4>
           </div>
-          <button type="button" class="close-btn" @click="closeAddModal">
+          <button aria-label="Đóng" type="button" class="close-btn" @click="closeAddModal">
             <X :size="16" />
           </button>
         </div>
@@ -796,11 +793,11 @@
           <div v-if="addModal.type === 'domain' || addModal.type === 'program' || addModal.type === 'course'" class="form-section units-section">
             <h5 class="section-sub-title">
               <Building2 :size="14" />
-              <span>Phân bổ Đơn vị áp dụng</span>
+              <span>{{ addModal.type === 'course' ? 'Phân bổ Đơn vị áp dụng' : 'Đơn vị quản lý' }}</span>
             </h5>
 
             <!-- 1. ĐƠN VỊ BẮT BUỘC -->
-            <div class="form-group unit-picker-box mandatory-box">
+            <div v-if="addModal.type === 'course'" class="form-group unit-picker-box mandatory-box">
               <div class="unit-box-header">
                 <label class="mandatory-label">
                   <ShieldCheck :size="14" />
@@ -849,16 +846,16 @@
               <div class="unit-box-header">
                 <label class="optional-label">
                   <Globe :size="14" />
-                  <span>Đơn vị áp dụng TÙY CHỌN (Không bắt buộc):</span>
+                  <span>{{ addModal.type === 'course' ? 'Đơn vị áp dụng TÙY CHỌN (Không bắt buộc):' : 'Đơn vị được quản lý nội dung:' }}</span>
                 </label>
-                <span class="badge-optional">Tự nguyện học tập</span>
+                <span v-if="addModal.type === 'course'" class="badge-optional">Tự nguyện học tập</span>
               </div>
 
               <select
                 class="form-control unit-select"
                 @change="handleSelectUnit($event, 'optional')"
               >
-                <option value="">+ Chọn đơn vị tùy chọn...</option>
+                <option value="">{{ addModal.type === 'course' ? '+ Chọn đơn vị tùy chọn...' : '+ Chọn đơn vị quản lý...' }}</option>
                 <option
                   v-for="u in availableUnitsForOptional"
                   :key="u.id"
@@ -965,6 +962,7 @@
 </template>
 
 <script setup lang="ts">
+import SkeletonLoader from "./SkeletonLoader.vue";
 import { ref, computed, watch, onMounted, nextTick } from "vue";
 import { useRouter } from "vue-router";
 import {
@@ -2133,7 +2131,7 @@ function openAddModal(
   let inheritedOptionalUnits: string[] = [];
 
   // Tự động kế thừa phân bổ đơn vị cho cả Chương trình (từ Lĩnh vực) và Khóa học (từ Chương trình / Lĩnh vực)
-  if ((type === "program" || type === "course") && resolvedParent) {
+  if (type === "program" && resolvedParent) {
     const parentUnits = extractUnitsFromObject(resolvedParent);
     if (parentUnits.mandatory.length > 0 || parentUnits.optional.length > 0) {
       inheritedMandatoryUnits = [...parentUnits.mandatory];
@@ -4480,14 +4478,8 @@ watch(
 }
 
 .tree-inline-loading {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.48rem 0.85rem;
+  width: auto;
   margin-left: 1.5rem;
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  font-style: italic;
 }
 </style>
 

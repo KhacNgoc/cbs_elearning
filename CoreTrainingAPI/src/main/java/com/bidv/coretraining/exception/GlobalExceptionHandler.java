@@ -76,6 +76,19 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.SERVICE_UNAVAILABLE);
     }
 
+    // JSON is explicit because the CSV export asks for text/csv.
+    @ExceptionHandler(ReportBusyException.class)
+    public ResponseEntity<ErrorResponse> handleReportBusy(ReportBusyException ex, WebRequest request) {
+        log.warn("Report rejected: all report slots busy");
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header(org.springframework.http.HttpHeaders.RETRY_AFTER, String.valueOf(ReportBusyException.RETRY_AFTER_SECONDS))
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .body(ErrorResponse.builder().timestamp(LocalDateTime.now())
+                        .status(HttpStatus.SERVICE_UNAVAILABLE.value())
+                        .error(HttpStatus.SERVICE_UNAVAILABLE.getReasonPhrase()).message(ex.getMessage())
+                        .path(request.getDescription(false).replace("uri=", "")).traceId(currentTraceId()).build());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex,
             WebRequest request) {
@@ -150,6 +163,46 @@ public class GlobalExceptionHandler {
             WebRequest request) {
         return handleResponseStatusException(new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,
                 "File hoặc tổng dung lượng tải lên vượt quá giới hạn cho phép"), request);
+    }
+
+    @ExceptionHandler({ org.springframework.http.converter.HttpMessageNotReadableException.class,
+            org.springframework.web.bind.MissingServletRequestParameterException.class,
+            org.springframework.web.multipart.support.MissingServletRequestPartException.class,
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
+            org.springframework.web.multipart.MultipartException.class,
+            java.time.format.DateTimeParseException.class })
+    public ResponseEntity<ErrorResponse> handleMalformedRequest(Exception ex, WebRequest request) {
+        return clientError(HttpStatus.BAD_REQUEST, "Dữ liệu gửi lên không hợp lệ", ex, request);
+    }
+
+    @ExceptionHandler({ org.springframework.web.servlet.resource.NoResourceFoundException.class,
+            org.springframework.web.servlet.NoHandlerFoundException.class })
+    public ResponseEntity<ErrorResponse> handleNoRoute(Exception ex, WebRequest request) {
+        return clientError(HttpStatus.NOT_FOUND, "Không tìm thấy đường dẫn yêu cầu", ex, request);
+    }
+
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleWrongMethod(Exception ex, WebRequest request) {
+        return clientError(HttpStatus.METHOD_NOT_ALLOWED, "Phương thức không được hỗ trợ", ex, request);
+    }
+
+    @ExceptionHandler(org.springframework.web.HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleWrongContentType(Exception ex, WebRequest request) {
+        return clientError(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Định dạng dữ liệu gửi lên không được hỗ trợ", ex, request);
+    }
+
+    @ExceptionHandler(org.springframework.web.HttpMediaTypeNotAcceptableException.class)
+    public ResponseEntity<ErrorResponse> handleNotAcceptable(Exception ex, WebRequest request) {
+        return clientError(HttpStatus.NOT_ACCEPTABLE, "Không có định dạng phản hồi phù hợp", ex, request);
+    }
+
+    // The content type is explicit because the client's Accept header may be what caused the error.
+    private ResponseEntity<ErrorResponse> clientError(HttpStatus status, String message, Exception ex, WebRequest request) {
+        log.warn("Client request rejected status={} cause={}", status.value(), ex.getMessage());
+        return ResponseEntity.status(status).contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .body(ErrorResponse.builder().timestamp(LocalDateTime.now()).status(status.value())
+                        .error(status.getReasonPhrase()).message(message)
+                        .path(request.getDescription(false).replace("uri=", "")).traceId(currentTraceId()).build());
     }
 
     @ExceptionHandler(Exception.class)

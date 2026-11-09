@@ -58,14 +58,14 @@
       </div>
     </div>
     <div class="viewer-navigation">
-      <button :disabled="currentIndex <= 0" @click="$emit('adjacent', -1)">
+      <button aria-label="Bài trước" :disabled="currentIndex <= 0" @click="$emit('adjacent', -1)">
         <ChevronLeft :size="20" /><span>Bài trước</span>
       </button>
       <div class="viewer-lesson-title">
         <span>Bài {{ currentIndex + 1 }}</span
         ><strong>{{ lesson.title }}</strong>
       </div>
-      <button
+      <button aria-label="Bài tiếp theo"
         :disabled="currentIndex >= totalLessons - 1"
         @click="$emit('adjacent', 1)"
       >

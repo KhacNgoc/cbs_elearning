@@ -316,7 +316,7 @@ const successMessage = ref("");
 const isLoading = ref(false);
 
 // Login fields
-const username = ref("admin"); // pre-fill for convenience
+const username = ref("");
 const password = ref("");
 
 // Forgot password fields

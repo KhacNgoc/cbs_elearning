@@ -2,6 +2,7 @@
   <section class="card embedded-content">
     <form class="lesson-modal-form" @submit.prevent="saveLesson">
       <div ref="lessonModalBodyRef" class="lesson-modal-body lesson-authoring-fields">
+      <fieldset class="lesson-upload-lock" :disabled="uploading">
                 <div class="form-group">
           <label>Khóa học trực thuộc <span class="required-mark" aria-hidden="true">*</span></label>
           <select
@@ -40,7 +41,7 @@
           />
         </div>
 
-        <LessonContentSelection v-model="selectedContentTypes" v-model:documents="lessonForm.documents" v-model:requirements="contentRequirements" :read-only="readOnly || loading" />
+        <LessonContentSelection v-model="selectedContentTypes" v-model:documents="lessonForm.documents" v-model:requirements="contentRequirements" :read-only="readOnly || loading" :upload-progress="documentUploadProgress" />
         <div v-if="selectedContentTypes.includes('VIDEO')" class="form-group video-source-group">
           <label id="video-source-label">Nguồn video bài học <span class="required-mark" aria-hidden="true">*</span></label>
           <div
@@ -114,7 +115,7 @@
               Tối đa {{ Math.floor(VIDEO_UPLOAD_MAX_BYTES / 1024 / 1024) }} MiB.
               MP4/M4V: H.264/AAC; WebM: VP8/VP9, Opus/Vorbis.
             </small>
-            <div v-if="videoUploadProgress !== null" role="status">
+            <div v-if="videoUploadProgress !== null" class="lesson-upload-progress" role="status">
               <progress
                 :value="videoUploadProgress"
                 max="100"
@@ -280,6 +281,10 @@
                   {{ document.documentType }} ·
                   {{ formatFileSize(document.file?.size || document.fileSize) }}
                 </small>
+                <LessonUploadProgress
+                  v-if="document.file && documentUploadProgress.has(document.file)"
+                  :percent="documentUploadProgress.get(document.file) ?? 0"
+                />
               </div>
             </div>
             <button
@@ -293,6 +298,7 @@
             </button>
           </div>
         </div>
+      </fieldset>
       </div>
               <!-- KHỐI GHI NHẬN NỘI DUNG THAY ĐỔI & THÔNG BÁO HỌC VIÊN -->
         <div v-if="!readOnly && isPreviouslyComposed" class="change-notify-card">
@@ -328,50 +334,31 @@
             Thông báo sẽ gửi đến quả chuông và popup của các cán bộ đã hoàn thành bài học này.
           </small>
         </div>
-        <footer v-if="!readOnly" class="modal-buttons lesson-modal-footer">
+      <LessonEditorFooter v-if="!readOnly">
+        <template #start>
+          <button v-if="canDelete" type="button" class="footer-danger" :disabled="loading" @click="emit('delete')">
+            <Trash2 :size="16" /> Xóa bài học
+          </button>
+        </template>
         <button type="button" class="btn btn-secondary" :disabled="loading" @click="emit('cancel')">
           Hủy
         </button>
         <button type="submit" class="btn btn-primary" :disabled="loading">
           {{ loading ? "Đang lưu..." : "Lưu nội dung" }}
         </button>
-      </footer>
+      </LessonEditorFooter>
     </form>
-
-    <!-- CHỈ HIỆN KHI TẢI TỆP LÊN (TÁC VỤ LÂU); LƯU THÔNG THƯỜNG CHỈ DÙNG TOAST -->
-    <Teleport to="body">
-      <div v-if="videoUploadProgress !== null || uploadingDocs" class="fullscreen-loading-overlay">
-        <div class="loading-modal-card">
-          <Loader2 :size="42" class="spin-icon text-primary loading-spinner" />
-          <h4 v-if="videoUploadProgress !== null">
-            Đang tải lên video ({{ videoUploadProgress }}%)...
-          </h4>
-          <h4 v-else>
-            Đang tải lên và xử lý tài liệu đính kèm...
-          </h4>
-
-          <div v-if="videoUploadProgress !== null" class="upload-progress-track">
-            <div
-              class="upload-progress-bar"
-              :style="{ width: videoUploadProgress + '%' }"
-            ></div>
-          </div>
-
-          <p>
-            Vui lòng chờ trong giây lát, hệ thống đang xử lý và chuyển thẳng sang màn hình xem trước.
-          </p>
-        </div>
-      </div>
-    </Teleport>
   </section>
 </template>
 <script setup lang="ts">
 import '../assets/styles/lesson-authoring.css';
 import LessonContentSelection from '../components/lesson/LessonContentSelection.vue';
+import LessonEditorFooter from '../components/lesson/LessonEditorFooter.vue';
+import LessonUploadProgress from '../components/lesson/LessonUploadProgress.vue';
 import { changedLessonRequirements, lessonContentLabels, lessonContentRequirements, lessonContentTypes, lessonRequirementFields, selectedLessonContent, validateSelectedLessonContent, type LessonContentType } from '../utils/lessonContent';
 import { scrollWithin } from "../utils/scrollWithin";
 import { ref, computed, nextTick, watch, defineAsyncComponent } from "vue";
-import { Upload, Link2, Plus, FileText, X, Trash2, CheckCheck, ShieldAlert, Loader2 } from "lucide-vue-next";
+import { Upload, Link2, Plus, FileText, X, Trash2, CheckCheck, ShieldAlert } from "lucide-vue-next";
 import { axiosClient } from "../api/axiosClient";
 import { onMounted } from "vue";
 import { useCourseStore } from "../stores/courseStore";
@@ -383,17 +370,21 @@ import type { Lesson, LessonDocument } from "../types";
 const LessonTextEditor = defineAsyncComponent(
   () => import("../components/lesson/LessonTextEditor.vue"),
 );
-const props = defineProps<{ lesson: Lesson; readOnly?: boolean }>();
+const props = defineProps<{ lesson: Lesson; readOnly?: boolean; canDelete?: boolean }>();
 const emit = defineEmits<{
-  saved: [];
+  saved: [lesson: Lesson];
   cancel: [];
+  delete: [];
   dirty: [value: boolean];
   'title-change': [title: string];
 }>();
 const courseStore = useCourseStore();
 const loading = ref(false),
   videoUploadProgress = ref<number | null>(null),
-  uploadingDocs = ref(false);
+  documentUploadProgress = ref(new Map<File, number>());
+const uploading = computed(
+  () => videoUploadProgress.value !== null || documentUploadProgress.value.size > 0,
+);
 const isPreviouslyComposed = computed(() => {
   const l = props.lesson;
   if (!l) return false;
@@ -709,6 +700,14 @@ onMounted(() => {
   void loadCompletedLearnersCount();
 });
 
+const revealUploadProgress = async () => {
+  await nextTick();
+  scrollWithin(
+    lessonModalBodyRef.value?.querySelector<HTMLElement>(".lesson-upload-progress"),
+    "start",
+  );
+};
+
 const saveLesson = async () => {
   if (loading.value || props.readOnly) return;
   loading.value = true;
@@ -716,18 +715,29 @@ const saveLesson = async () => {
   try {
     validateSelectedLessonContent(lessonForm.value, selectedContentTypes.value);
     const activeContent = selectedLessonContent(lessonForm.value, selectedContentTypes.value);
+    const videoFile = selectedContentTypes.value.includes("VIDEO") && lessonForm.value.videoSource === "UPLOAD"
+      ? lessonForm.value.videoFile
+      : null;
+    if (videoFile) {
+      videoUploadProgress.value = 0;
+      void revealUploadProgress();
+    }
     const videoUrl = !selectedContentTypes.value.includes("VIDEO") ? "" :
-      lessonForm.value.videoSource === "UPLOAD" && lessonForm.value.videoFile
-        ? await adminApi.uploadVideo(lessonForm.value.videoFile, (percent) => {
+      videoFile
+        ? await adminApi.uploadVideo(videoFile, (percent) => {
             videoUploadProgress.value = percent;
           })
         : lessonForm.value.videoUrl.trim();
     videoUploadProgress.value = null;
-    uploadingDocs.value = activeContent.documents.some((d) => !!d.file);
+    for (const document of activeContent.documents)
+      if (document.file) documentUploadProgress.value.set(document.file, 0);
+    if (documentUploadProgress.value.size) void revealUploadProgress();
     const documents = await Promise.all(
       activeContent.documents.map(async (document, index) => {
         const uploaded = document.file
-          ? await adminApi.uploadDocument(document.file)
+          ? await adminApi.uploadDocument(document.file, (percent) => {
+              documentUploadProgress.value.set(document.file as File, percent);
+            })
           : document;
         return {
           id: document.file ? undefined : document.id,
@@ -741,7 +751,7 @@ const saveLesson = async () => {
         } satisfies LessonDocument;
       }),
     );
-    uploadingDocs.value = false;
+    documentUploadProgress.value.clear();
 
     const payload = {
       ...activeContent,
@@ -793,7 +803,7 @@ const saveLesson = async () => {
         console.warn("Could not send lesson change notification:", notifyErr);
       }
     }
-    emit("saved");
+    emit("saved", saved);
     emit("dirty", false);
     const savedMessage = lessonModal.value.isEdit
       ? "Cập nhật bài học thành công."
@@ -818,10 +828,12 @@ const saveLesson = async () => {
     console.error(err);
   } finally {
     videoUploadProgress.value = null;
-    uploadingDocs.value = false;
+    documentUploadProgress.value.clear();
     loading.value = false;
   }
 };
+// Lets the other editor tabs save pending content without switching back to this tab.
+defineExpose({ save: saveLesson, saving: loading });
 </script>
 <style scoped>
 /* Redesigned Sidebar Layout */
@@ -2460,44 +2472,10 @@ textarea {
 }
 
 
-.fullscreen-loading-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 999999;
-  background: rgba(10, 16, 26, 0.78);
-  backdrop-filter: blur(5px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.lesson-upload-progress {
+  scroll-margin-top: 6rem;
 }
-.loading-modal-card {
-  background: var(--bg-surface, #1e293b);
-  border: 1px solid var(--border-color, #334155);
-  border-radius: 16px;
-  padding: 2.2rem 3rem;
-  text-align: center;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.65);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.9rem;
-}
-.loading-modal-card h4 {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #fff;
-}
-.loading-modal-card p {
-  margin: 0;
-  font-size: 0.9rem;
-  color: #94a3b8;
-}
-.spin-icon {
-  animation: spin 1s linear infinite;
-}
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+.lesson-upload-lock {
+  display: contents;
 }
 </style>

@@ -272,7 +272,7 @@ public class CourseServiceImpl implements CourseService {
         Comment requestedParent = commentRepository.findById(commentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Comment", "id", commentId));
         if (!requestedParent.getLesson().getId().equals(lessonId)) {
-            throw new IllegalArgumentException("Bình luận không thuộc bài học này");
+            throw new com.bidv.coretraining.exception.BadRequestException("Bình luận không thuộc bài học này");
         }
 
         Comment replyTarget = requestedParent;
@@ -281,7 +281,7 @@ public class CourseServiceImpl implements CourseService {
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "Comment", "id", request.getReplyToCommentId()));
             if (!replyTarget.getLesson().getId().equals(lessonId)) {
-                throw new IllegalArgumentException("Phản hồi không thuộc bài học này");
+                throw new com.bidv.coretraining.exception.BadRequestException("Phản hồi không thuộc bài học này");
             }
         }
         Comment root = requestedParent.getParent() == null

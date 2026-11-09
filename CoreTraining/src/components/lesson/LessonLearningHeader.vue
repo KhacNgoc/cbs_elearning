@@ -27,6 +27,9 @@
           >
             <FileText :size="17" /><span>Văn bản</span>
             <small v-if="optionalContent?.includes('TEXT')" class="content-optional-tag">Tùy chọn</small>
+            <small v-else-if="contentProgress?.TEXT" class="content-progress-tag" :class="{ done: contentProgress.TEXT.done }" :title="contentProgress.TEXT.detail">
+              <CheckCircle2 v-if="contentProgress.TEXT.done" :size="13" aria-label="Đã đọc hết" /><template v-else>Chưa xong</template>
+            </small>
           </button>
           <button
             v-if="hasVideo"
@@ -36,8 +39,11 @@
           >
             <PlayCircle :size="17" /><span>Video</span>
             <small v-if="optionalContent?.includes('VIDEO')" class="content-optional-tag">Tùy chọn</small>
+            <small v-else-if="contentProgress?.VIDEO" class="content-progress-tag" :class="{ done: contentProgress.VIDEO.done }" :title="contentProgress.VIDEO.detail">
+              <CheckCircle2 v-if="contentProgress.VIDEO.done" :size="13" aria-label="Đã xem đủ" /><template v-else>{{ contentProgress.VIDEO.detail.replace("Đã xem ", "") }}</template>
+            </small>
           </button>
-          <button v-if="hasSlides" type="button" :aria-pressed="activeContent === 'SLIDE'" @click="$emit('select-content', 'SLIDE')"><FileText :size="17" /><span>Slide</span><small v-if="optionalContent?.includes('SLIDE')" class="content-optional-tag">Tùy chọn</small></button>
+          <button v-if="hasSlides" type="button" :aria-pressed="activeContent === 'SLIDE'" @click="$emit('select-content', 'SLIDE')"><FileText :size="17" /><span>Slide</span><small v-if="optionalContent?.includes('SLIDE')" class="content-optional-tag">Tùy chọn</small><small v-else-if="contentProgress?.SLIDE" class="content-progress-tag" :class="{ done: contentProgress.SLIDE.done }" :title="contentProgress.SLIDE.detail"><CheckCircle2 v-if="contentProgress.SLIDE.done" :size="13" aria-label="Đã xem hết" /><template v-else>Chưa xong</template></small></button>
         </div>
         <button
           v-if="flashcardsEnabled"
@@ -122,6 +128,8 @@ defineProps<{
   hasText: boolean;
   hasVideo: boolean;
   optionalContent?: ("TEXT" | "VIDEO" | "SLIDE")[];
+  /** Required content's state; absent once the lesson is complete. */
+  contentProgress?: Partial<Record<"TEXT" | "VIDEO" | "SLIDE", { done: boolean; detail: string }>>;
   courseName?: string;
   backTo?: string;
   lessonTitle: string;

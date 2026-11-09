@@ -18,9 +18,7 @@
         Làm mới
       </button>
     </header>
-    <p v-if="loading" class="source-message" role="status">
-      Đang tải tài liệu và nguồn đã lưu…
-    </p>
+    <SkeletonLoader v-if="loading" variant="list" :rows="3" label="Đang tải tài liệu và nguồn đã lưu" />
     <p v-if="error" class="source-error" role="alert">
       {{ error }}
       <button v-if="loadFailed" type="button" @click="load">Thử lại</button>
@@ -330,6 +328,7 @@
 </template>
 
 <script setup lang="ts">
+import SkeletonLoader from "./SkeletonLoader.vue";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import ToggleSwitch from "./ToggleSwitch.vue";
 import TablePagination from "./TablePagination.vue";

@@ -37,8 +37,8 @@ export interface ReportAttemptQuestion {
   answered:boolean; correct:boolean;
 }
 export interface ReportAttemptAnalysis {
-  attemptId:number; available:boolean; source:'SNAPSHOT'|'CURRENT'|null; unavailableReason:'NO_ANSWERS'|'QUIZ_CHANGED'|null;
+  attemptId:string; available:boolean; source:'SNAPSHOT'|'CURRENT'|null; unavailableReason:'NO_ANSWERS'|'QUIZ_CHANGED'|null;
   correct:number; incorrect:number; unanswered:number; questions:ReportAttemptQuestion[];
 }
-export const readReportAttemptAnalysis = async(attemptId:number) =>
+export const readReportAttemptAnalysis = async(attemptId:string) =>
   (await axiosClient.get<ReportAttemptAnalysis>(`/api/admin/reports/training/attempts/${attemptId}/analysis`)).data;

@@ -12,6 +12,9 @@ spring:
       connection-timeout: ${DB_POOL_CONNECTION_TIMEOUT_MS:5000}
       # Logs the stack of any connection held longer than this, to find the next holder.
       leak-detection-threshold: ${DB_POOL_LEAK_DETECTION_MS:20000}
+      # The large report statements exceed the planner's JIT threshold and spent 1.7s of 2.1s compiling;
+      # compiling never pays for itself in this application's queries.
+      connection-init-sql: SET jit = off
   flyway:
     enabled: true
     # A database that predates Flyway is marked as already at V1 instead of running it.

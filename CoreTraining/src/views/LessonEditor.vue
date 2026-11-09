@@ -63,7 +63,7 @@
           :class="{ active: tab === 'content' }"
           @click="tab = 'content'"
         >
-          Nội dung bài học</button
+          Nội dung bài học<span v-if="dirty" class="unsaved-dot" aria-label="Có thay đổi chưa lưu" title="Có thay đổi chưa lưu"></span></button
         ><button
           id="flashcard-tab"
           role="tab"
@@ -89,6 +89,21 @@
           }}</span>
         </button>
       </div>
+      <div
+        v-if="dirty && canEdit && tab !== 'content'"
+        class="unsaved-content-bar"
+        role="status"
+      >
+        <span>Nội dung bài học có thay đổi chưa lưu.</span>
+        <button
+          type="button"
+          class="btn btn-primary"
+          :disabled="contentEditor?.saving"
+          @click="contentEditor?.save()"
+        >
+          {{ contentEditor?.saving ? "Đang lưu..." : "Lưu nội dung" }}
+        </button>
+      </div>
       <fieldset :disabled="false" class="editor-fieldset">
         <section
           id="content-panel"
@@ -97,8 +112,11 @@
           aria-labelledby="content-tab"
         >
           <LessonContentEditor
+            ref="contentEditor"
             :lesson="lesson"
             :read-only="!canEdit"
+            :can-delete="canDelete"
+            @delete="deleteOpen = true"
             @saved="savedContent"
             @dirty="dirty = $event"
             @title-change="onTitleChange"
@@ -152,14 +170,24 @@
           />
         </section>
       </fieldset>
+      <ConfirmModal
+        :open="deleteOpen"
+        title="Xác nhận xóa bài học"
+        :message="`Xóa bài học “${lesson.title}”? Xóa bài học sẽ đồng thời xóa toàn bộ học liệu và bài kiểm tra bên trong.`"
+        confirm-label="Xóa bài học"
+        :loading="deleting"
+        @cancel="deleteOpen = false"
+        @confirm="deleteLesson"
+      />
     </template>
-    <p v-else-if="loading">Đang tải bài học...</p>
+    <SkeletonLoader v-else-if="loading" :rows="8" label="Đang tải bài học" />
     <div v-else class="empty-quiz">
       <button class="btn btn-secondary" @click="load">Tải lại bài học</button>
     </div>
   </main>
 </template>
 <script setup lang="ts">
+import SkeletonLoader from "../components/SkeletonLoader.vue";
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
 import { useRoute, useRouter, onBeforeRouteLeave } from "vue-router";
 import { useUserStore } from "../stores/userStore";
@@ -171,6 +199,7 @@ import type { Lesson, Chapter, Course } from "../types";
 import LessonContentEditor from "./LessonContentEditor.vue";
 import AdminQuizDetail from "./AdminQuizDetail.vue";
 import AdminBackButton from "../components/AdminBackButton.vue";
+import ConfirmModal from "../components/ConfirmModal.vue";
 import LessonFlashcardManager from "../components/flashcards/LessonFlashcardManager.vue";
 import { Pencil } from "lucide-vue-next";
 
@@ -191,6 +220,33 @@ const lesson = ref<Lesson | null>(null),
   dirty = ref(false),
   preparingQuiz = ref(false),
   tab = ref("content");
+const contentEditor = ref<InstanceType<typeof LessonContentEditor> | null>(null);
+const canDelete = computed(
+  () => canEdit.value && !!course.value?.allowedActions?.includes("delete"),
+);
+const deleteOpen = ref(false),
+  deleting = ref(false);
+async function deleteLesson() {
+  if (!lesson.value) return;
+  deleting.value = true;
+  try {
+    await trainingApi.deleteLesson(lesson.value.id);
+    const title = lesson.value.title;
+    deleteOpen.value = false;
+    dirty.value = false; // the lesson is gone; there is nothing left to warn about
+    ensureTreeBranchSavedInSession();
+    showToast(`Đã xóa bài học "${title}".`, "success");
+    await router.push(chapterUrl.value);
+  } catch (e) {
+    showToast(
+      (e as { response?: { data?: { message?: string } } }).response?.data
+        ?.message || "Không xóa được bài học.",
+      "error",
+    );
+  } finally {
+    deleting.value = false;
+  }
+}
 
 const isEditingTitle = ref(false);
 const quickTitle = ref("");
@@ -307,18 +363,11 @@ watch(
   },
   { immediate: true },
 );
+// Saving keeps the author in the editor so they can go on to the quiz or flashcards.
 async function savedContent() {
   dirty.value = false;
-  const courseId = chapter.value?.courseId;
-  if (courseId) {
-    ensureTreeBranchSavedInSession();
-    await router.push({
-      path: `/courses/${encodeURIComponent(courseId)}`,
-      query: { from: "admin" },
-    });
-  } else if (chapterUrl.value) {
-    await router.push(chapterUrl.value);
-  }
+  ensureTreeBranchSavedInSession();
+  await refreshLesson();
 }
 function createQuiz() {
   preparingQuiz.value = true;
@@ -401,6 +450,29 @@ h1 {
 .editor-tabs span {
   font-size: 0.75rem;
   margin-left: 0.5rem;
+}
+.editor-tabs .unsaved-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-left: 0.4rem;
+  border-radius: 50%;
+  background: var(--warning-ink);
+  vertical-align: middle;
+}
+.unsaved-content-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--warning-border);
+  border-radius: 10px;
+  background: var(--warning-surface);
+  color: var(--warning-ink);
+  font-weight: 600;
 }
 .empty-quiz {
   padding: 2rem;

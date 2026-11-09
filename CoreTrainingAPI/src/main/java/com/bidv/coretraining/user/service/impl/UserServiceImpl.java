@@ -129,12 +129,14 @@ public class UserServiceImpl implements UserService {
                                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
 
                 com.bidv.coretraining.policy.LearningPolicy.assertLessonAccess(user, lesson);
-                lessonProgressService.completeContent(username, lessonId);
-                if (lesson.isQuizRequired()
-                                && !hasPassedLessonQuiz(user, lesson)) {
-                        throw new com.bidv.coretraining.exception.BadRequestException(
-                                        "Bạn cần đạt tối thiểu " + lesson.getQuizPassingScore()
-                                                        + "% bài kiểm tra của bài học");
+                // A required quiz alone decides completion; otherwise the required content does.
+                if (lesson.isQuizRequired()) {
+                        if (!hasPassedLessonQuiz(user, lesson))
+                                throw new com.bidv.coretraining.exception.BadRequestException(
+                                                "Bạn cần đạt tối thiểu " + lesson.getQuizPassingScore()
+                                                                + "% bài kiểm tra của bài học");
+                } else {
+                        lessonProgressService.completeContent(username, lessonId);
                 }
 
                 lessonProgressService.recordCompletion(user, lesson);
@@ -197,7 +199,8 @@ public class UserServiceImpl implements UserService {
                 if (!LearningPolicy.isLearnableStatus(target.getStatus()))
                         throw new org.springframework.security.access.AccessDeniedException(
                                         "Khóa học chưa được xuất bản hoặc đã ngừng sử dụng nên không thể đăng ký.");
-                User user = userRepository.findByUsername(username)
+                // Concurrent submits by one learner wait here, so the pending check below sees the first request.
+                User user = userRepository.findByUsernameForUpdate(username)
                                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
                 com.bidv.coretraining.course.entity.Course course = courseRepository.findById(courseId)
                                 .orElseThrow(() -> new ResourceNotFoundException("Course", "id", courseId));

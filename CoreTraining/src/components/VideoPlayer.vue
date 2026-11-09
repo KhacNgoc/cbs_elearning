@@ -39,16 +39,17 @@
         preload="metadata"
       ></video>
 
-      <div
-        v-if="videoError || accessLoading"
-        class="video-status"
-        role="status"
-      >
-        <p>{{ videoError || "Đang tải video…" }}</p>
-        <button v-if="videoError" type="button" @click="retryVideo">
-          Thử lại
-        </button>
+      <div v-if="videoError" class="video-status" role="status">
+        <p>{{ videoError }}</p>
+        <button type="button" @click="retryVideo">Thử lại</button>
       </div>
+      <SkeletonLoader
+        v-else-if="accessLoading"
+        class="video-skeleton"
+        variant="media"
+        height="100%"
+        label="Đang tải video"
+      />
       <!-- Big Play Button Overlay -->
       <div
         v-if="
@@ -86,7 +87,7 @@
 
         <div class="controls-row">
           <div class="left-ctrls">
-            <button class="ctrl-btn" @click="togglePlay">
+            <button aria-label="Phát hoặc tạm dừng" class="ctrl-btn" @click="togglePlay">
               <svg
                 v-if="isPlaying"
                 xmlns="http://www.w3.org/2000/svg"
@@ -178,7 +179,7 @@
               />
               <span class="volume-value">{{ Math.round(volume * 100) }}%</span>
             </div>
-            <button class="ctrl-btn" @click="toggleFullscreen">
+            <button aria-label="Toàn màn hình" class="ctrl-btn" @click="toggleFullscreen">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 24 24"
@@ -219,6 +220,7 @@
 </template>
 
 <script setup lang="ts">
+import SkeletonLoader from "./SkeletonLoader.vue";
 import { ref, computed, watch, nextTick, onBeforeUnmount } from "vue";
 import { VideoAccessSession } from "../utils/videoAccess";
 import { loadYouTubeApi } from "../utils/youtubePlayer";
@@ -697,6 +699,12 @@ const openExternal = () => {
   padding: 1rem;
   background: #111d;
   text-align: center;
+}
+.video-skeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: #111d;
 }
 .video-status button {
   padding: 0.5rem 1rem;

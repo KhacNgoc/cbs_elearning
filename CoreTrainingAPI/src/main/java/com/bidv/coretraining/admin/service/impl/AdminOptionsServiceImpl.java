@@ -62,7 +62,7 @@ public class AdminOptionsServiceImpl implements AdminOptionsService {
                 .toList();
         var domainOptions = domains.findAll().stream()
                 .map(d -> {
-                    UnitGrants grants = UnitGrants.of(d.getUnitGrants(), unitIds(d.getUnits()));
+                    UnitGrants grants = UnitGrants.of(Map.of(), unitIds(d.getUnits()));
                     return new TrainingStructureDto.DomainDto(d.getId(), d.getCode(), d.getName(),
                             d.getDescription(), d.getStatus(), Set.of("read"), d.getBusinessModule(),
                             d.getSeqNumber(), grants.all(), grants.mandatory(), grants.optional());
@@ -70,7 +70,7 @@ public class AdminOptionsServiceImpl implements AdminOptionsService {
                 .toList();
         var programOptions = programs.findAll().stream().filter(p -> AccessPolicy.allowsProgram(u, permission, p))
                 .map(p -> {
-                    UnitGrants grants = UnitGrants.of(p.getUnitGrants(), unitIds(p.getUnits()));
+                    UnitGrants grants = UnitGrants.of(Map.of(), unitIds(p.getUnits()));
                     return new TrainingStructureDto.ProgramDto(p.getId(), p.getDomain() == null ? null : p.getDomain().getId(),
                             p.getCode(), p.getName(), p.getDescription(), p.getStatus(), grants.all(),
                             Stream.of("read", "create", "update", "delete")

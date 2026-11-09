@@ -1,9 +1,10 @@
 <template>
-  <img v-if="url" :src="url" :alt="alt" /><span v-else role="status">{{
-    error ? "Không tải được ảnh minh chứng." : "Đang tải ảnh…"
-  }}</span>
+  <img v-if="url" :src="url" :alt="alt" />
+  <span v-else-if="error" role="status">Không tải được ảnh minh chứng.</span>
+  <SkeletonLoader v-else variant="media" height="10rem" label="Đang tải ảnh" />
 </template>
 <script setup lang="ts">
+import SkeletonLoader from "./SkeletonLoader.vue";
 import { ref, watch, onBeforeUnmount } from "vue";
 import { axiosClient } from "../api/axiosClient";
 const props = defineProps<{ src: string; alt: string }>();

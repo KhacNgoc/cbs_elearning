@@ -9,6 +9,7 @@ import com.bidv.coretraining.lesson.entity.LessonChangeLog;
 import com.bidv.coretraining.lesson.repository.LessonChangeLogRepository;
 import com.bidv.coretraining.lesson.repository.LessonRepository;
 import com.bidv.coretraining.lesson.service.LessonChangeService;
+import com.bidv.coretraining.learner.service.LearningAccessService;
 import com.bidv.coretraining.notification.service.NotificationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,6 +29,7 @@ public class LessonChangeServiceImpl implements LessonChangeService {
     private final LessonChangeLogRepository changeLogRepository;
     private final NotificationService notificationService;
     private final AuthorizationService authorization;
+    private final LearningAccessService learningAccess;
     private final RestTemplate restTemplate;
     private final String ragUrl;
 
@@ -36,6 +38,7 @@ public class LessonChangeServiceImpl implements LessonChangeService {
             LessonChangeLogRepository changeLogRepository,
             NotificationService notificationService,
             AuthorizationService authorization,
+            LearningAccessService learningAccess,
             @Value("${app.rag-url:http://rag-service:8001}") String ragUrl,
             @Value("${app.rag.connect-timeout-ms:5000}") int connectTimeoutMs,
             @Value("${app.rag.summary-timeout-ms:15000}") int summaryTimeoutMs) {
@@ -43,6 +46,7 @@ public class LessonChangeServiceImpl implements LessonChangeService {
         this.changeLogRepository = changeLogRepository;
         this.notificationService = notificationService;
         this.authorization = authorization;
+        this.learningAccess = learningAccess;
         this.ragUrl = ragUrl;
 
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -57,7 +61,9 @@ public class LessonChangeServiceImpl implements LessonChangeService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Optional<LessonChangeLogDto> getLatestChangeLog(String lessonId) {
+        learningAccess.requireLesson(authorization.current(), lessonId);
         return changeLogRepository.findTopByLessonIdOrderByCreatedAtDesc(lessonId)
                 .map(log -> new LessonChangeLogDto(
                         log.getId(),

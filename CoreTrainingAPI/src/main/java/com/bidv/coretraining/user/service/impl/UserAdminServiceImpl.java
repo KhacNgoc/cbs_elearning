@@ -159,6 +159,12 @@ public class UserAdminServiceImpl implements UserAdminService {
                         .mustChangePassword(true)
                         .build());
             }
+        } catch (org.apache.poi.UnsupportedFileFormatException
+                | org.apache.poi.EmptyFileException | org.apache.poi.ooxml.POIXMLException exception) {
+            throw new com.bidv.coretraining.exception.BadRequestException("File import phải là file Excel .xlsx hợp lệ");
+        } catch (org.springframework.web.server.ResponseStatusException | org.springframework.dao.DataAccessException
+                | com.bidv.coretraining.exception.BadRequestException exception) {
+            throw exception;
         } catch (Exception exception) {
             throw new RuntimeException("Lỗi khi import dữ liệu Excel: " + exception.getMessage(), exception);
         }

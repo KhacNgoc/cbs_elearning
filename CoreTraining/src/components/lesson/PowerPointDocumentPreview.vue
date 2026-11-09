@@ -12,10 +12,7 @@
       :disabled="loading || turningPage"
       @go="go"
     />
-    <div v-if="loading" class="powerpoint-preview-state">
-      <LoaderCircle class="powerpoint-preview-spinner" :size="32" />
-      <span>Đang tải bản trình chiếu PowerPoint...</span>
-    </div>
+    <SkeletonLoader v-if="loading" variant="media" label="Đang tải bản trình chiếu PowerPoint" />
     <div
       v-else-if="error"
       class="powerpoint-preview-state powerpoint-preview-error"
@@ -37,8 +34,9 @@
 </template>
 
 <script setup lang="ts">
+import SkeletonLoader from "../SkeletonLoader.vue";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { FileWarning, LoaderCircle } from "lucide-vue-next";
+import { FileWarning } from "lucide-vue-next";
 import DocumentZoomControls from "./DocumentZoomControls.vue";
 import DocumentPageNavigation from "./DocumentPageNavigation.vue";
 import { axiosClient } from "../../api/axiosClient";
@@ -244,14 +242,5 @@ onBeforeUnmount(() => {
 }
 .powerpoint-preview-error p {
   max-width: 500px;
-}
-.powerpoint-preview-spinner {
-  color: var(--ink-22a06b);
-  animation: powerpoint-spin 0.8s linear infinite;
-}
-@keyframes powerpoint-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>

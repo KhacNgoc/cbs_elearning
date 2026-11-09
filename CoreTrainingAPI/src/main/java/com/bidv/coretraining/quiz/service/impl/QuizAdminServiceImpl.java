@@ -142,7 +142,7 @@ public class QuizAdminServiceImpl implements QuizAdminService {
         Lesson lesson = lessonRepository.findById(questionDto.getLessonId())
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", questionDto.getLessonId()));
         if (!lesson.getCourse().getId().equals(course.getId())) {
-            throw new IllegalArgumentException("Bài học không thuộc khóa học đã chọn");
+            throw new com.bidv.coretraining.exception.BadRequestException("Bài học không thuộc khóa học đã chọn");
         }
         return lesson;
     }

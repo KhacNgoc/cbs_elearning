@@ -50,7 +50,7 @@
             >
             <i v-if="!item.read" class="unread-dot"></i>
           </button>
-          <div v-if="loading && !notifications.length" class="notification-empty" role="status">Đang tải thông báo...</div>
+          <SkeletonLoader v-if="loading && !notifications.length" class="notification-skeleton" variant="list" :rows="4" label="Đang tải thông báo" />
           <div v-else-if="!notifications.length && !loadError" class="notification-empty">
             <BellOff :size="28" /><span>Chưa có thông báo.</span>
           </div>
@@ -83,6 +83,7 @@
 </template>
 
 <script setup lang="ts">
+import SkeletonLoader from "./SkeletonLoader.vue";
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import {
@@ -479,5 +480,8 @@ onBeforeUnmount(() => {
     padding: 14px 16px;
     font-size: 0.95rem;
   }
+}
+.notification-skeleton {
+  padding: 0.5rem 1rem;
 }
 </style>

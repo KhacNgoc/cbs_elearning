@@ -55,9 +55,7 @@
       </div>
     </form>
 
-    <div v-if="loading" class="notes-state">
-      <LoaderCircle class="spinning" :size="22" /> Đang tải ghi chú...
-    </div>
+    <SkeletonLoader v-if="loading" variant="list" :rows="3" label="Đang tải ghi chú" />
     <div v-else-if="notes.length === 0" class="notes-state empty">
       <StickyNote :size="26" />
       <strong>Chưa có ghi chú</strong>
@@ -127,6 +125,7 @@
 </template>
 
 <script setup lang="ts">
+import SkeletonLoader from "../SkeletonLoader.vue";
 import { scrollWithin } from "../../utils/scrollWithin";
 import { computed, nextTick, ref } from "vue";
 import {

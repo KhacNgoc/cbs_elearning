@@ -48,19 +48,27 @@
           ><small>Điều kiện hoàn thành</small><strong>{{ completionRule }}</strong></span
         >
       </div>
+      <ul v-if="completionSteps?.length && !completed" class="completion-steps" aria-label="Tiến độ hoàn thành">
+        <li v-for="step in completionSteps" :key="step.type" :class="{ done: step.done }">
+          <CheckCircle2 v-if="step.done" :size="16" /><Circle v-else :size="16" />
+          <span>{{ step.label }}</span><small>{{ step.detail }}</small>
+        </li>
+      </ul>
       <slot name="actions" />
     </aside>
   </div>
 </template>
 <script setup lang="ts">
-import { BookOpen, Layers3, Lightbulb, ListChecks, ShieldCheck } from "lucide-vue-next";
+import { BookOpen, CheckCircle2, Circle, Layers3, Lightbulb, ListChecks, ShieldCheck } from "lucide-vue-next";
 import type { Lesson } from "../../types";
+import type { LessonCompletionStep } from "../../utils/lessonContent";
 // The lesson text is shown in the main viewer (header switch), so it is not repeated here.
 defineProps<{
   lesson: Lesson;
   courseName?: string;
   completed: boolean;
   completionRule?: string;
+  completionSteps?: LessonCompletionStep[];
 }>();
 </script>
 <style scoped>

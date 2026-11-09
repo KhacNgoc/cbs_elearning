@@ -52,8 +52,7 @@
       </button>
     </div>
     <p v-if="error" class="tool-error" role="alert">{{ error }}</p>
-    <p v-if="loading" role="status">Đang tải ngân hàng câu hỏi…</p>
-    <div v-else class="bank-table">
+    <div class="bank-table">
       <table>
         <thead>
           <tr>
@@ -66,6 +65,8 @@
           </tr>
         </thead>
         <tbody>
+          <SkeletonTableRows v-if="loading" :columns="picker ? 6 : 5" label="Đang tải ngân hàng câu hỏi" />
+          <template v-else>
           <tr v-for="q in pageItems" :key="q.id">
             <td v-if="picker">
               <input
@@ -117,6 +118,7 @@
               bài kiểm tra hiện có.
             </td>
           </tr>
+          </template>
         </tbody>
       </table>
     </div>
@@ -292,6 +294,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import SkeletonTableRows from "./SkeletonTableRows.vue";
 import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
 import { getQuizCourses, getQuizContext, type QuizCourseContext, type QuizLessonContext } from "../api/quizContextApi";
 import {

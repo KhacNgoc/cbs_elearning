@@ -66,9 +66,11 @@ public class TrainingReportReadServiceImpl implements TrainingReportReadService 
     }
     public Map<String,Object> read(Filter f) {return read(f,true);}
     public Map<String,Object> read(Filter f,boolean metadata) {var scope=scope(actor());validate(f);return repository.read(scope,f,metadata);}
+    @Transactional(readOnly=true,isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public void export(Map<String,String> params,java.io.Writer writer) throws java.io.IOException {
         var actor=actor(); var f=filter(params); var scope=scope(actor);validate(f);export(scope,f,writer);
     }
+    @Transactional(readOnly=true,isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public void export(Filter f,java.io.Writer writer) throws java.io.IOException {var scope=scope(actor());validate(f);export(scope,f,writer);}
     private void export(Scope scope,Filter f,java.io.Writer writer) throws java.io.IOException {
         writer.write('\ufeff');csvLine(writer,csvHeaders(f.view()));
@@ -161,7 +163,7 @@ public class TrainingReportReadServiceImpl implements TrainingReportReadService 
                         java.nio.charset.StandardCharsets.UTF_8).split("\\|", -1);
                 if (key.length != 3 || !key[0].equals(context))
                     throw new IllegalArgumentException();
-                boundary = new AttemptBoundary(LocalDateTime.parse(key[1]),Long.valueOf(key[2]));
+                boundary = new AttemptBoundary(LocalDateTime.parse(key[1]),key[2]);
             } catch (RuntimeException e) {
                 throw new com.bidv.coretraining.exception.BadRequestException("Cursor không hợp lệ");
             }
@@ -181,10 +183,13 @@ public class TrainingReportReadServiceImpl implements TrainingReportReadService 
     }
 
     @Override
-    public AttemptAnalysis attemptAnalysis(long attemptId) {
+    public AttemptAnalysis attemptAnalysis(String attemptId) {
         if(!repository.attemptVisible(scope(actor()),attemptId))
             throw new ResourceNotFoundException("Quiz attempt","id",attemptId);
-        UserQuizScore score=scores.findById(attemptId)
+        var attempt=quizAttempts.findById(attemptId);
+        if(attempt.isPresent())
+            return AttemptAnalysisAssembler.fromAttempt(attempt.get());
+        UserQuizScore score=scores.findById(Long.valueOf(attemptId))
                 .orElseThrow(()->new ResourceNotFoundException("Quiz attempt","id",attemptId));
         if(score.getLesson()==null)
             return AttemptAnalysisAssembler.fromCurrentQuestions(score,questions.findByCourseIdAndLessonIsNull(score.getCourse().getId()));

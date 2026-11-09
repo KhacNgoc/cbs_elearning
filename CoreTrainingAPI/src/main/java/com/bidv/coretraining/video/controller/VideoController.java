@@ -40,6 +40,7 @@ public class VideoController {
     @GetMapping("/stream")
     public ResponseEntity<?> stream(
             @RequestParam String token,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "Range", required = false) String range,
             @org.springframework.web.bind.annotation.RequestHeader(value = "X-Accel-Supported", required = false) String accelSupported)
             throws IOException {
         Path video = videoAccessService.authorizeStreamPath(token);
@@ -51,6 +52,11 @@ public class VideoController {
         }
 
         Resource resource = new FileSystemResource(video);
+        var requested = range == null ? null : java.util.regex.Pattern.compile("^bytes=(\\d{1,18})-\\d*$").matcher(range);
+        if (requested != null && requested.matches() && Long.parseLong(requested.group(1)) >= resource.contentLength()) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                    .header(HttpHeaders.CONTENT_RANGE, "bytes */" + resource.contentLength()).build();
+        }
         String detectedType = Files.probeContentType(video);
         MediaType mediaType = detectedType == null
                 ? MediaType.APPLICATION_OCTET_STREAM

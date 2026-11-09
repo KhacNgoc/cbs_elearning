@@ -1,7 +1,7 @@
 <template>
   <details class="question-analysis" @toggle="onToggle">
     <summary>Phân tích câu hỏi</summary>
-    <p v-if="loading" role="status">Đang tải phân tích...</p>
+    <SkeletonLoader v-if="loading" :rows="4" label="Đang tải phân tích" />
     <p v-else-if="error" role="alert">{{ error }} <button class="retry" type="button" @click="load">Thử lại</button></p>
     <p v-else-if="analysis&&!analysis.available">{{ unavailableMessage }}</p>
     <template v-else-if="analysis">
@@ -24,13 +24,14 @@
 </template>
 
 <script setup lang="ts">
+import SkeletonLoader from "./SkeletonLoader.vue";
 import { computed, ref } from 'vue';
 import TablePagination from './TablePagination.vue';
 import { useTablePagination } from '../composables/useTablePagination';
 import { readReportAttemptAnalysis } from '../api/trainingReportApi';
 import type { ReportAttemptAnalysis, ReportAttemptQuestion } from '../api/trainingReportApi';
 
-const props = defineProps<{ attemptId: number }>();
+const props = defineProps<{ attemptId: string }>();
 const analysis = ref<ReportAttemptAnalysis|null>(null);
 const loading = ref(false);
 const error = ref('');

@@ -30,6 +30,9 @@ import java.util.Map;
 public class LessonProgressServiceImpl implements LessonProgressService {
     private final LearningAccessService access;
     private final LessonDocumentRepository documents;
+    private final com.bidv.coretraining.video.service.VideoDurationService durations;
+    private static final double MAX_PLAYBACK_RATE = 2;
+    private final double watchGraceSeconds;
     private final UserRepository userRepository;
     private final LessonRepository lessonRepository;
     private final LessonProgressRepository progressRepository;
@@ -37,12 +40,16 @@ public class LessonProgressServiceImpl implements LessonProgressService {
     public LessonProgressServiceImpl(UserRepository userRepository,
             LessonRepository lessonRepository,
             LessonProgressRepository progressRepository,
-            LearningAccessService access, LessonDocumentRepository documents) {
+            LearningAccessService access, LessonDocumentRepository documents,
+            com.bidv.coretraining.video.service.VideoDurationService durations,
+            @org.springframework.beans.factory.annotation.Value("${app.progress.watch-grace-seconds:30}") double watchGraceSeconds) {
         this.userRepository = userRepository;
         this.lessonRepository = lessonRepository;
         this.progressRepository = progressRepository;
         this.access = access;
         this.documents = documents;
+        this.durations = durations;
+        this.watchGraceSeconds = watchGraceSeconds;
     }
 
     @Transactional
@@ -71,8 +78,14 @@ public class LessonProgressServiceImpl implements LessonProgressService {
 
         if (request.getLastPositionSeconds() != null)
             progress.setLastPositionSeconds(nonNegative(request.getLastPositionSeconds()));
-        progress.setWatchedSeconds(Math.max(progress.getWatchedSeconds(), nonNegative(request.getWatchedSeconds())));
-        progress.setDurationSeconds(Math.max(progress.getDurationSeconds(), nonNegative(request.getDurationSeconds())));
+        double previousDuration = Math.max(progress.getDurationSeconds(), nonNegative(request.getDurationSeconds()));
+        // Only a video report needs the file's duration; bookmarks must not read lesson content.
+        double duration = request.getWatchedSeconds() == null && request.getDurationSeconds() == null ? previousDuration
+                : durations.durationOf(lessonRepository.findVideoUrl(lessonId)).orElse(previousDuration);
+        double watched = Math.max(progress.getWatchedSeconds(),
+                Math.min(nonNegative(request.getWatchedSeconds()), progress.getWatchedSeconds() + watchAllowance(progress)));
+        progress.setDurationSeconds(duration);
+        progress.setWatchedSeconds(duration > 0 ? Math.min(watched, duration) : watched);
         if (request.getContentType() != null) {
             if ("DOCUMENT".equals(request.getContentType()) && (request.getDocumentId() == null
                     || !documents.existsByIdAndLessonId(request.getDocumentId(), lessonId)))
@@ -100,11 +113,11 @@ public class LessonProgressServiceImpl implements LessonProgressService {
         boolean contentWasComplete = progress.isContentCompleted();
         progress.setContentCompleted(currentContentComplete(authorized.lesson(), progress));
         if (!lessonCompleted) {
-            // A lesson with nothing required and no required quiz waits for the learner's own
-            // "mark complete": opening it must not award completion.
-            if (progress.isContentCompleted()
-                    && (lesson.isQuizRequired() ? LearningPolicy.quizPassed(user, lesson)
-                            : requirements(authorized.lesson()).anyRequired())) {
+            // A passed required quiz completes the lesson whatever content is left. Without one, a
+            // lesson with nothing required waits for the learner's own "mark complete": opening it
+            // must not award completion.
+            if (lesson.isQuizRequired() ? LearningPolicy.quizPassed(user, lesson)
+                    : progress.isContentCompleted() && requirements(authorized.lesson()).anyRequired()) {
                 recordCompletion(user, lesson);
                 lessonCompleted = true;
             }
@@ -121,6 +134,14 @@ public class LessonProgressServiceImpl implements LessonProgressService {
         var dto = toDto(progress);
         dto.setLessonCompleted(lessonCompleted);
         return dto;
+    }
+
+    /** Watched time can grow only as fast as the fastest playback speed since the last saved progress. */
+    private double watchAllowance(LessonProgress progress) {
+        if (progress.getUpdatedAt() == null)
+            return watchGraceSeconds;
+        double elapsed = java.time.Duration.between(progress.getUpdatedAt(), LocalDateTime.now()).toMillis() / 1000.0;
+        return Math.max(0, elapsed) * MAX_PLAYBACK_RATE + watchGraceSeconds;
     }
 
     @Transactional

@@ -1,0 +1,20 @@
+[
+  {"id":"F-A01","variant":"UI: đăng nhập đúng, reload, mở link bài trực tiếp","status":"Pass","actual":"Chromium trong app, 127.0.0.1:15173. Vào đúng /, mở /lesson/{id} trực tiếp giữ phiên; localStorage không chứa JWT."},
+  {"id":"F-A02","variant":"UI: sai mật khẩu","status":"Pass","actual":"Hiện \"Đăng nhập không thành công...\", không tạo phiên."},
+  {"id":"F-A02","variant":"UI: ô tên đăng nhập điền sẵn admin","status":"Fail","actual":"Login.vue:319 khởi tạo username = ref(\"admin\") trong bản build production: lộ tên tài khoản quản trị và người dùng gõ tiếp thành adminui_learner rồi đăng nhập thất bại."},
+  {"id":"F-A03","variant":"UI: mustChangePassword, bỏ qua bằng URL","status":"Pass","actual":"Sau đăng nhập vào /change-password; mở /lesson/{id} bị chuyển ngược về /change-password."},
+  {"id":"F-A05","variant":"UI: đăng xuất","status":"Pass","actual":"Về /login, localStorage được xoá sạch."},
+  {"id":"F-F05","variant":"UI: Space, ← →, đếm thẻ, bộ 3 thẻ","status":"Pass","actual":"Space lật thẻ, → không vượt chỉ số và kết thúc ở \"Bạn đã lướt qua hết 3 thẻ\"; hiện phím tắt. Chưa thử shuffle khi đang ở giữa và bộ 0/1 thẻ."},
+  {"id":"F-Q06","variant":"UI: reload khi quiz có giờ","status":"Pass","actual":"Còn 00:25 trước reload, 00:22 sau reload: không cấp thêm giờ. Lựa chọn 1/4 còn nguyên."},
+  {"id":"F-Q09","variant":"UI: hết giờ tự nộp phần đã trả lời","status":"Pass","actual":"\"Bài làm đã được tự động nộp khi hết giờ\", 1/4 (25%), chưa đạt."},
+  {"id":"F-Q06","variant":"UI: nộp thủ công khi chưa trả lời hết","status":"Gap","actual":"Nút Nộp bài bị khoá đến khi làm đủ câu (\"Hoàn thành tất cả để nộp bài\"); chỉ auto-submit mới nộp được một phần. Cần xác nhận đúng ý đồ."},
+  {"id":"NF-S05","variant":"UI: script trong bài và bình luận","status":"Pass","actual":"Trên trang bài học window.__xss vẫn null; không có <script> và thuộc tính onerror trong DOM; bình luận hiển thị như văn bản. DOMPurify ở frontend hoạt động."},
+  {"id":"NF-S01","variant":"UI: học viên mở /admin","status":"Pass","actual":"Bị chuyển về /."},
+  {"id":"E2E-06","variant":"UI: WebSocket hiện hữu sau khi khoá tài khoản","status":"Pass","actual":"Socket mở bằng cookie thật, đóng mã 4500 khoảng 15 giây sau khi khoá. Chưa thử reconnect sau khi khoá."},
+  {"id":"NF-U01","variant":"Chromium 1366×768 và 390×844: các trang học viên","status":"Pass","actual":"Trang chủ, flashcard, hồ sơ, quiz không tràn ngang (scrollWidth=390). Trang bài học hiển thị dùng được nhưng xem dòng dưới."},
+  {"id":"NF-U01","variant":"Chromium 390×844: trang bài học","status":"Fail","actual":"Drawer .course-sidebar position:fixed đặt ở x=390 làm layout viewport giãn lên 733px và lộ bóng ở mép phải màn hình. Mức thấp, nội dung vẫn đọc được."},
+  {"id":"NF-U01","variant":"Firefox, Safari, Edge, tablet","status":"Blocked","actual":"Môi trường chỉ có Chromium của app; chưa chạy các trình duyệt còn lại."},
+  {"id":"NF-U02","variant":"Tên truy cập của nút","status":"Fail","actual":"Trang flashcard có 2 nút mở rộng khoá/bài không có accessible name; trang bài học có 2 nút không tên. Trình đọc màn hình đọc thành \"button\". Form đăng nhập có label đúng."},
+  {"id":"NF-U02","variant":"Screen reader, zoom 200%, đo tương phản, trap modal","status":"Blocked","actual":"Cần kiểm tra thủ công với screen reader và công cụ đo; mới kiểm tra được label, tên nút và điều khiển flashcard bằng bàn phím."},
+  {"id":"NF-U03","variant":"Double click, back/forward, API chậm trong modal","status":"Blocked","actual":"Chưa chạy trên UI. Phía server các request lặp đã được kiểm tra ở F-L08, F-Q08 và NF-R01."}
+]

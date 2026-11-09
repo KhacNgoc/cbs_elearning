@@ -114,11 +114,6 @@
           <option value="PUBLISHED">Đã phát hành</option>
           <option value="DRAFT">Bản nháp</option>
         </select>
-        <div v-if="canUpdate && selectedIds.length" class="bulk-actions">
-          <span>Đã chọn {{ selectedIds.length }}</span>
-          <button class="secondary-button" :disabled="bulkSaving" @click="setStatus(selectedIds, 'PUBLISHED')">Phát hành</button>
-          <button class="secondary-button" :disabled="bulkSaving" @click="setStatus(selectedIds, 'DRAFT')">Chuyển về nháp</button>
-        </div>
       </div>
 
       <div class="admin-table-scroll">
@@ -141,7 +136,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-if="loading"><td colspan="7" class="admin-empty">Đang tải flashcard...</td></tr>
+            <SkeletonTableRows v-if="loading" :columns="7" label="Đang tải flashcard" />
             <template v-else>
             <tr v-for="(card, index) in paginated" :key="card.id">
               <td><input v-if="canUpdate" v-model="selectedIds" type="checkbox" :value="card.id" :aria-label="`Chọn thẻ ${card.front}`" /></td>
@@ -236,6 +231,32 @@
       </div>
     </AdminModal>
 
+    <!-- Same sticky action bar as the other lesson editor tabs; it acts on the cards ticked in the table. -->
+    <LessonEditorFooter v-if="canUpdate || canDelete">
+      <template #start>
+        <button v-if="canDelete" type="button" class="footer-danger" :disabled="!selectedIds.length || bulkSaving"
+          @click="bulkDeleteOpen = true">
+          <Trash2 :size="16" /> Xóa {{ selectedIds.length || "" }} thẻ đã chọn
+        </button>
+      </template>
+      <span class="footer-note">{{ selectedIds.length ? `Đã chọn ${selectedIds.length} thẻ` : "Chọn thẻ trong bảng để phát hành, chuyển về nháp hoặc xóa." }}</span>
+      <template v-if="canUpdate">
+        <button class="btn btn-secondary" :disabled="!selectedIds.length || bulkSaving" @click="setStatus(selectedIds, 'DRAFT')">Chuyển về nháp</button>
+        <button class="btn btn-primary" :disabled="!selectedIds.length || bulkSaving" @click="setStatus(selectedIds, 'PUBLISHED')">
+          {{ bulkSaving ? "Đang lưu..." : "Phát hành" }}
+        </button>
+      </template>
+    </LessonEditorFooter>
+
+    <ConfirmModal
+      :open="bulkDeleteOpen"
+      title="Xóa flashcard đã chọn"
+      :message="`Xóa ${selectedIds.length} thẻ đã chọn? Lịch ôn tập của học viên với các thẻ này cũng bị xóa.`"
+      confirm-label="Xóa thẻ"
+      :loading="bulkSaving"
+      @cancel="bulkDeleteOpen = false"
+      @confirm="removeSelected"
+    />
     <ConfirmModal
       :open="!!deleting"
       title="Xóa flashcard"
@@ -249,8 +270,10 @@
 </template>
 
 <script setup lang="ts">
+import SkeletonTableRows from "../SkeletonTableRows.vue";
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from "vue";
-import { Edit, Layers3, LoaderCircle, Plus, Search, Sparkles, X } from "lucide-vue-next";
+import { Edit, Layers3, LoaderCircle, Plus, Search, Sparkles, Trash2, X } from "lucide-vue-next";
+import LessonEditorFooter from "../lesson/LessonEditorFooter.vue";
 import AdminModal from "../AdminModal.vue";
 import ConfirmModal from "../ConfirmModal.vue";
 import ToggleSwitch from "../ToggleSwitch.vue";
@@ -394,6 +417,26 @@ async function saveForm() {
 }
 
 // Delete
+const bulkDeleteOpen = ref(false);
+async function removeSelected() {
+  const ids = [...selectedIds.value];
+  bulkSaving.value = true;
+  const removed: number[] = [];
+  try {
+    for (const id of ids) {
+      await adminFlashcardApi.remove(props.lessonId, id);
+      removed.push(id);
+    }
+    showToast(`Đã xóa ${removed.length} thẻ.`);
+  } catch (error) {
+    showToast(apiErrorMessage(error, `Đã xóa ${removed.length}/${ids.length} thẻ; không xóa được các thẻ còn lại.`), "error");
+  } finally {
+    cards.value = cards.value.filter((card) => !removed.includes(card.id));
+    selectedIds.value = selectedIds.value.filter((id) => !removed.includes(id));
+    bulkDeleteOpen.value = false;
+    bulkSaving.value = false;
+  }
+}
 const deleting = ref<AdminFlashcard | null>(null);
 const removing = ref(false);
 async function removeCard() {
@@ -602,7 +645,6 @@ onBeforeUnmount(() => abort?.abort());
 .search-box input { width: 100%; height: 42px; border: 0; outline: 0; background: transparent; }
 .list-toolbar select, .field select, .field textarea { width: 100%; padding: .65rem .7rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--surface-ffffff); color: var(--text-color); }
 .list-toolbar select { width: auto; min-width: 180px; height: 44px; }
-.bulk-actions { display: flex; align-items: center; gap: .45rem; margin-left: auto; font-size: var(--admin-text-label); color: var(--text-muted); }
 .flashcard-table { min-width: 960px; }
 .card-cell { min-width: 0; }
 .card-front { display: block; font-weight: 700; overflow-wrap: anywhere; }

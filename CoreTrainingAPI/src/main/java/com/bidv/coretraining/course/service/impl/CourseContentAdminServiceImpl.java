@@ -269,7 +269,7 @@ public class CourseContentAdminServiceImpl implements CourseContentAdminService 
                 || lessonIds.size() != lessons.size()
                 || Set.copyOf(lessonIds).size() != lessonIds.size()
                 || !existingIds.equals(Set.copyOf(lessonIds))) {
-            throw new IllegalArgumentException(
+            throw new com.bidv.coretraining.exception.BadRequestException(
                     "Danh sách sắp xếp phải chứa đầy đủ và duy nhất các bài học của khóa học");
         }
 
@@ -317,6 +317,8 @@ public class CourseContentAdminServiceImpl implements CourseContentAdminService 
                     || documentDto.getDocumentType() == null)
                 throw new BadRequestException("Tài liệu cần tên, file và định dạng hợp lệ");
             String path = normalizeUploadedPath(documentDto.getFileUrl());
+            if (path.startsWith("/uploads/documents/") && !documentStorage.exists(path))
+                throw new BadRequestException("File tài liệu không tồn tại: " + documentDto.getName());
             var purpose = documentDto.getPurpose() == null ? DocumentPurpose.SUPPORTING : documentDto.getPurpose();
             if (purpose == DocumentPurpose.SLIDE && (documentDto.getDocumentType() != DocumentType.POWERPOINT
                     || !path.startsWith("/uploads/documents/")

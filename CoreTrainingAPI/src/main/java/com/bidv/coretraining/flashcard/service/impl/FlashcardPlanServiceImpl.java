@@ -138,6 +138,9 @@ public class FlashcardPlanServiceImpl implements FlashcardPlanService {
         List<Integer> weekdays = request.weekdays() == null ? List.of() : request.weekdays();
         if (!singleDay && weekdays.isEmpty())
             throw new BadRequestException("Chọn ít nhất một ngày trong tuần");
+        if (!singleDay && request.startDate().datesUntil(request.endDate().plusDays(1)).limit(7)
+                .noneMatch(day -> weekdays.contains(day.getDayOfWeek().getValue())))
+            throw new BadRequestException("Không có ngày học nào trong khoảng đã chọn");
         if (request.items() != null)
             plan.setSelection(selection(request.items(), username));
         plan.setName(request.name().trim());

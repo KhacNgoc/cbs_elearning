@@ -45,6 +45,7 @@
               <button v-if="!readOnly && (document.file || document.fileUrl)" type="button" class="file-clear-btn" title="Gỡ file slide" aria-label="Gỡ file slide" @click="clearFile(document, $event)">Gỡ file</button>
             </div>
             <small v-if="document.file || document.fileSize" class="selected-file-meta">PPTX · {{ formatFileSize(document.file?.size || document.fileSize) }}</small>
+            <LessonUploadProgress v-if="document.file && uploadProgress?.has(document.file)" :percent="uploadProgress.get(document.file) ?? 0" />
           </div>
         </div>
         <button v-if="!readOnly && slides.length > 1" type="button" class="remove-extra" :aria-label="`Xóa slide dư ${document.name}`" @click="documents.splice(index, 1)">Xóa file dư</button>
@@ -55,6 +56,7 @@
 </template>
 <script setup lang="ts">
 import { computed, watch } from 'vue';
+import LessonUploadProgress from './LessonUploadProgress.vue';
 import type { LessonDocument } from '../../types';
 import { lessonContentLabels as labels, type LessonContentRequirements, type LessonContentType } from '../../utils/lessonContent';
 import { showToast } from '../../utils/toast';
@@ -62,7 +64,7 @@ type DocumentForm = LessonDocument & { file?: File };
 const selected = defineModel<LessonContentType[]>({ required: true });
 const documents = defineModel<DocumentForm[]>('documents', { required: true });
 const requirements = defineModel<LessonContentRequirements>('requirements', { default: () => ({ TEXT: true, VIDEO: true, SLIDE: true }) });
-const props = defineProps<{ readOnly?: boolean }>();
+const props = defineProps<{ readOnly?: boolean; uploadProgress?: ReadonlyMap<File, number> }>();
 const types: LessonContentType[] = ['TEXT', 'VIDEO', 'SLIDE'];
 const slides = computed(() => documents.value.map((document, index) => ({ document, index })).filter(({ document }) => document.purpose === 'SLIDE'));
 

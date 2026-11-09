@@ -2,10 +2,11 @@
  <section class="enrollments admin-page">
   <header><div><h1>Duyệt đăng ký</h1><p>Quản lý yêu cầu đăng ký khóa học.</p></div><button class="btn btn-secondary" :disabled="loading || busy" @click="load">Tải lại</button></header>
   <div class="filters"><label>Tìm kiếm<input v-model="query" placeholder="Học viên, tài khoản, khóa học..." /></label><label>Trạng thái<select v-model="status"><option value="">Tất cả</option><option value="PENDING">Chờ duyệt</option><option value="APPROVED">Đã duyệt</option><option value="REJECTED">Đã từ chối</option></select></label></div>
-  <p v-if="loading" role="status">Đang tải yêu cầu đăng ký...</p>
   <p v-if="error" role="alert">{{ error }} <button @click="load">Thử lại</button></p>
   <div class="table-scroll"><table class="admin-data-table"><thead><tr><th>Học viên</th><th>Khóa học</th><th>Ngày đăng ký</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
-   <tr v-for="item in items" :key="item.id"><td><strong>{{ item.fullName }}</strong><br/><small>{{ item.username }}</small></td><td>{{ item.courseName }}</td><td>{{ date(item.requestedAt) }}</td><td>{{ labels[item.status] }}<p v-if="item.rejectionReason">{{ item.rejectionReason }}</p><small v-if="item.reviewedBy">{{ item.reviewedBy }} · {{ date(item.reviewedAt) }}</small></td><td><template v-if="item.status==='PENDING' && user.can('enrollments','update')"><button class="btn btn-primary" :disabled="busy || loading" @click="review(item,true)">Duyệt</button> <button class="btn btn-secondary" :disabled="busy || loading" @click="reject=item;reason=''">Từ chối</button></template></td></tr>
+   <SkeletonTableRows v-if="loading" :columns="5" label="Đang tải yêu cầu đăng ký" />
+
+   <template v-else><tr v-for="item in items" :key="item.id"><td><strong>{{ item.fullName }}</strong><br/><small>{{ item.username }}</small></td><td>{{ item.courseName }}</td><td>{{ date(item.requestedAt) }}</td><td>{{ labels[item.status] }}<p v-if="item.rejectionReason">{{ item.rejectionReason }}</p><small v-if="item.reviewedBy">{{ item.reviewedBy }} · {{ date(item.reviewedAt) }}</small></td><td><template v-if="item.status==='PENDING' && user.can('enrollments','update')"><button class="btn btn-primary" :disabled="busy || loading" @click="review(item,true)">Duyệt</button> <button class="btn btn-secondary" :disabled="busy || loading" @click="reject=item;reason=''">Từ chối</button></template></td></tr></template>
    <tr v-if="!items.length&&!loading&&!error"><td colspan="5">Không có yêu cầu phù hợp.</td></tr>
   </tbody></table></div>
   <footer><span>Trang {{ cursors.length }} · {{ items.length }} yêu cầu</span><label>Số yêu cầu / trang<select v-model.number="size"><option :value="10">10</option><option :value="20">20</option><option :value="50">50</option></select></label><button aria-label="Trang trước" :disabled="cursors.length<=1 || loading" @click="previous">Trước</button><button aria-label="Trang sau" :disabled="!hasMore || loading" @click="next">Sau</button></footer>
@@ -13,6 +14,7 @@
  </section>
 </template>
 <script setup lang="ts">
+import SkeletonTableRows from "../components/SkeletonTableRows.vue";
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { adminListApi } from '../api/adminListApi';
 import { adminApi } from '../api/adminApi';

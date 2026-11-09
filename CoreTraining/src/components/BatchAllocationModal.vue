@@ -31,7 +31,7 @@
             placeholder="Tìm nhanh Lĩnh vực, Chương trình, Khóa học theo tên hoặc mã..."
             class="search-input"
           />
-          <button v-if="searchQuery" type="button" class="btn-clear-search" @click="searchQuery = ''">
+          <button aria-label="Xóa tìm kiếm" v-if="searchQuery" type="button" class="btn-clear-search" @click="searchQuery = ''">
             <X :size="14" />
           </button>
         </div>
@@ -51,10 +51,7 @@
 
       <!-- MAIN BODY: FULL-WIDTH INTERACTIVE TREE -->
       <div class="batch-modal-body">
-        <div v-if="loadingTree" class="loading-state">
-          <Loader2 :size="28" class="spin-icon" />
-          <p>Đang tải cấu trúc dữ liệu đào tạo...</p>
-        </div>
+        <SkeletonLoader v-if="loadingTree" variant="tree" :rows="9" label="Đang tải cấu trúc dữ liệu đào tạo" />
 
         <div v-else-if="pagedDomains.length === 0" class="empty-tree-state">
           <AlertCircle :size="28" class="empty-icon" />
@@ -83,7 +80,7 @@
                   </div>
                 </button>
 
-                <button type="button" class="btn-expand" @click.stop="toggleDomainExpand(d.id)">
+                <button aria-label="Mở rộng hoặc thu gọn" type="button" class="btn-expand" @click.stop="toggleDomainExpand(d.id)">
                   <Loader2 v-if="loadingProgramsByDomain.has(d.id)" :size="14" class="spin-icon" />
                   <ChevronDown v-else-if="expandedDomainIds.has(d.id)" :size="16" />
                   <ChevronRight v-else :size="16" />
@@ -116,10 +113,12 @@
 
             <!-- PROGRAMS LIST (LEVEL 2) -->
             <div v-if="expandedDomainIds.has(d.id)" class="children-container program-children">
-              <div v-if="loadingProgramsByDomain.has(d.id)" class="loading-child-hint">
-                <Loader2 :size="15" class="spin-icon" />
-                <span>Đang tải danh sách chương trình...</span>
-              </div>
+              <SkeletonLoader
+                v-if="loadingProgramsByDomain.has(d.id)"
+                variant="tree"
+                :rows="2"
+                label="Đang tải danh sách chương trình"
+              />
               <template v-else>
                 <div
                   v-for="p in programsOf(d.id)"
@@ -140,7 +139,7 @@
                         </div>
                       </button>
 
-                      <button type="button" class="btn-expand" @click.stop="toggleProgramExpand(p.id)">
+                      <button aria-label="Mở rộng hoặc thu gọn" type="button" class="btn-expand" @click.stop="toggleProgramExpand(p.id)">
                         <Loader2 v-if="loadingCoursesByProgram.has(p.id)" :size="14" class="spin-icon" />
                         <ChevronDown v-else-if="expandedProgramIds.has(p.id)" :size="15" />
                         <ChevronRight v-else :size="15" />
@@ -173,10 +172,12 @@
 
                   <!-- COURSES LIST (LEVEL 3) -->
                   <div v-if="expandedProgramIds.has(p.id)" class="children-container course-children">
-                    <div v-if="loadingCoursesByProgram.has(p.id) && coursesOf(p.id).length === 0" class="loading-child-hint">
-                      <Loader2 :size="14" class="spin-icon" />
-                      <span>Đang tải danh sách khóa học...</span>
-                    </div>
+                    <SkeletonLoader
+                      v-if="loadingCoursesByProgram.has(p.id) && coursesOf(p.id).length === 0"
+                      variant="tree"
+                      :rows="2"
+                      label="Đang tải danh sách khóa học"
+                    />
                     <template v-else>
                       <div
                         v-for="c in coursesOf(p.id)"
@@ -251,7 +252,7 @@
           / {{ totalDomainElements }}
         </span>
         <div class="pagination-buttons">
-          <button type="button" class="page-nav-btn" :disabled="page === 1" @click="changePage(page - 1)">
+          <button aria-label="Trang trước" type="button" class="page-nav-btn" :disabled="page === 1" @click="changePage(page - 1)">
             <ChevronLeft :size="14" />
           </button>
           <span class="page-current">{{ page }} / {{ totalPages }}</span>
@@ -312,6 +313,7 @@
 </template>
 
 <script setup lang="ts">
+import SkeletonLoader from "./SkeletonLoader.vue";
 import { ref, computed, watch } from "vue";
 import {
   Search,
@@ -1114,7 +1116,6 @@ function handleClose() {
   background: var(--bg-surface, #ffffff);
 }
 
-.loading-state,
 .empty-tree-state {
   display: flex;
   flex-direction: column;
@@ -1684,7 +1685,6 @@ function handleClose() {
   background: var(--bg-main);
 }
 
-:root[data-theme="dark"] .loading-state,
 :root[data-theme="dark"] .empty-tree-state {
   color: var(--text-muted);
 }
@@ -1918,15 +1918,6 @@ function handleClose() {
 
 :root[data-theme="dark"] .btn-primary.btn-submit-batch:hover:not(:disabled) {
   background: var(--primary-hover);
-}
-
-.loading-child-hint {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  font-size: 13px;
-  color: var(--text-muted);
 }
 
 </style>

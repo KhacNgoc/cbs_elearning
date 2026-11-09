@@ -14,7 +14,7 @@
       <div class="exam-table-scroll">
         <table><thead><tr><th>Bài kiểm tra</th><th>Số câu hỏi</th><th>Ngưỡng đạt</th><th>Thao tác</th></tr></thead>
           <tbody>
-            <tr v-if="loading"><td colspan="4" role="status">Đang tải danh sách bài kiểm tra...</td></tr>
+            <SkeletonTableRows v-if="loading" :columns="4" label="Đang tải danh sách bài kiểm tra" />
             <template v-else><tr v-for="quiz in rows" :key="`${quiz.courseId}:${quiz.lessonId || ''}`">
               <td><strong>{{ quiz.lessonTitle || `Bài kiểm tra tổng hợp — ${quiz.courseName}` }}</strong><small>{{ quiz.lessonId ? `Kiểm tra bài học · ${quiz.courseName}` : 'Kiểm tra khóa học' }}</small></td>
               <td>{{ quiz.questionCount }} câu hỏi</td><td>{{ quiz.passingScore }}%</td>
@@ -28,6 +28,7 @@
   </main>
 </template>
 <script setup lang="ts">
+import SkeletonTableRows from "../components/SkeletonTableRows.vue";
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '../stores/userStore';

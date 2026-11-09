@@ -161,7 +161,11 @@
           activeLessonPassed ? "Bài kiểm tra đã hoàn thành" : "Kiểm tra bài học"
         }}</strong>
       </div>
-      <p v-if="activeLessonPassed">
+      <p v-if="activeLessonPassed && missingContent" class="quiz-box-missing" role="status">
+        Bạn đã đạt bài kiểm tra, nhưng bài học chưa hoàn thành. Còn cần:
+        {{ missingContent }}.
+      </p>
+      <p v-else-if="activeLessonPassed">
         Bạn đã đạt bài kiểm tra này. Xem lại các câu đúng, câu sai và đáp án đã
         chọn.
       </p>
@@ -233,6 +237,8 @@ const props = defineProps<{
   lessonQuizTotals: Record<string, number>;
   courseQuizScores: Record<string, number>;
   courseQuizTotals: Record<string, number>;
+  /** Content still blocking the active lesson after its quiz is passed. */
+  missingContent?: string;
 }>();
 const emit = defineEmits<{
   close: [];

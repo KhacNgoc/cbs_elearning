@@ -1,7 +1,14 @@
 <template>
   <main class="profile-page animate-fade-in">
     <Transition name="content" mode="out-in">
-      <PageLoading v-if="loading" key="loading" label="Đang tải hồ sơ..." />
+      <SkeletonLoader v-if="loading" key="loading" label="Đang tải hồ sơ">
+        <div class="profile-hero card">
+          <SkeletonBlock width="4.5rem" height="4.5rem" radius="50%" />
+          <SkeletonLoader plain :rows="3" />
+        </div>
+        <SkeletonBlock height="2.75rem" />
+        <SkeletonLoader plain variant="stats" :rows="4" />
+      </SkeletonLoader>
       <div v-else-if="error" class="card empty" role="alert">
         <p>{{ error }}</p>
         <button class="btn btn-primary" @click="load">Thử lại</button>
@@ -92,9 +99,10 @@
             <p>{{ dataError }}</p>
             <button class="btn btn-primary" @click="loadTab">Thử lại</button>
           </div>
-          <p v-else-if="!statsLoaded" class="card empty" role="status">
-            Đang tải thống kê học tập...
-          </p>
+          <SkeletonLoader v-else-if="!statsLoaded" label="Đang tải thống kê học tập">
+            <SkeletonLoader plain variant="stats" :rows="4" />
+            <SkeletonBlock height="16rem" radius="var(--radius-md)" />
+          </SkeletonLoader>
           <div v-else-if="!stats.joined" class="card empty">
             <h2>Chưa có dữ liệu học tập</h2>
             <p>
@@ -196,9 +204,7 @@
             <p>{{ dataError }}</p>
             <button class="btn btn-primary" @click="loadTab">Thử lại</button>
           </div>
-          <p v-else-if="!resultData" class="empty" role="status">
-            Đang tải kết quả...
-          </p>
+          <SkeletonLoader v-else-if="!resultData" variant="table" :rows="5" :columns="5" label="Đang tải kết quả" />
           <template v-else>
             <div v-if="results.length" class="table-scroll">
               <table class="results-table stacked-table">
@@ -332,10 +338,11 @@
           </div>
           <template v-else
             ><div class="awards-heading">
-              <h2>Huy hiệu & điểm tích lũy</h2><p v-if="dataLoading" role="status">Đang tải huy hiệu...</p>
+              <h2>Huy hiệu & điểm tích lũy</h2>
               <strong>{{ (awardsData?.points ?? 0).toLocaleString('vi-VN') }} PTS</strong>
             </div>
-            <div class="award-grid">
+            <SkeletonLoader v-if="dataLoading" variant="stats" :rows="4" label="Đang tải huy hiệu" />
+            <div v-else class="award-grid">
               <article
                 v-for="badge in awardsData?.items || []"
                 :key="badge.id"
@@ -381,7 +388,6 @@
                 Đóng
               </button>
             </header>
-            <p v-if="historyLoading" role="status">Đang tải lịch sử...</p>
             <p v-if="historyError" role="alert">{{ historyError }} <button @click="loadMoreHistory">Thử lại</button></p>
             <div class="table-scroll">
               <table class="results-table stacked-table">
@@ -412,6 +418,12 @@
                       >
                     </td>
                   </tr>
+                  <SkeletonTableRows
+                    v-if="historyLoading"
+                    :columns="4"
+                    :rows="history.length ? 2 : 4"
+                    label="Đang tải lịch sử"
+                  />
                 </tbody>
               </table>
             </div>
@@ -447,7 +459,9 @@ import CourseThumbnail from "../components/CourseThumbnail.vue";
 import RadarChart from "../components/RadarChart.vue";
 import ProgressBar from "../components/ProgressBar.vue";
 import TablePagination from "../components/TablePagination.vue";
-import PageLoading from "../components/PageLoading.vue";
+import SkeletonBlock from "../components/SkeletonBlock.vue";
+import SkeletonLoader from "../components/SkeletonLoader.vue";
+import SkeletonTableRows from "../components/SkeletonTableRows.vue";
 const user = useUserStore(),
   route = useRoute(),
   router = useRouter();

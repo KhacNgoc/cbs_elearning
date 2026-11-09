@@ -9,5 +9,6 @@ public class CommentRequest {
     private Integer rating;
 
     @NotBlank(message = "Comment content cannot be empty")
+    @jakarta.validation.constraints.Size(max = 5000, message = "Nội dung tối đa 5000 ký tự")
     private String content;
 }

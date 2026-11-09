@@ -8,11 +8,15 @@
       </div>
     </header>
     <Transition name="content" mode="out-in">
-      <PageLoading
+      <SkeletonLoader
         v-if="learning.dashboardLoading && !learning.dashboard"
         key="loading"
-        label="Đang tải thông tin học tập..."
-      />
+        label="Đang tải thông tin học tập"
+      >
+        <SkeletonBlock height="7rem" radius="var(--radius-md)" />
+        <SkeletonLoader plain variant="stats" :rows="4" />
+        <SkeletonLoader plain variant="cards" :rows="6" />
+      </SkeletonLoader>
       <div v-else-if="learning.dashboardError" class="card empty" role="alert">
         <p>{{ learning.dashboardError }}</p>
         <button class="btn btn-primary" @click="refresh">Thử lại</button>
@@ -182,7 +186,7 @@
               </select></label
             >
           </div>
-          <p v-if="learning.dashboardLoading" role="status">Đang tải khóa học...</p>
+          <SkeletonLoader v-if="learning.dashboardLoading" variant="cards" :rows="6" label="Đang tải khóa học" />
           <TransitionGroup
             v-show="!learning.dashboardLoading"
             :key="`${tab}-${page}`"
@@ -335,7 +339,8 @@ import ProgressBar from "../components/ProgressBar.vue";
 import TablePagination from "../components/TablePagination.vue";
 import AdminModal from "../components/AdminModal.vue";
 import MotionCollapse from "../components/MotionCollapse.vue";
-import PageLoading from "../components/PageLoading.vue";
+import SkeletonBlock from "../components/SkeletonBlock.vue";
+import SkeletonLoader from "../components/SkeletonLoader.vue";
 import { showToast } from "../utils/toast";
 import { courseRegistrationError } from "../utils/courseRegistrationError";
 const user = useUserStore(),

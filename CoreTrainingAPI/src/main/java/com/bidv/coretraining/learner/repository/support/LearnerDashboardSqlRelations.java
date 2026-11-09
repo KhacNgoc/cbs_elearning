@@ -62,6 +62,7 @@ public class LearnerDashboardSqlRelations {
                 int i = 0;
                 for (var role : u.roles()) {
                     String rule;
+                    // Course-allocation scope is added below for every role that is not limited to assigned courses.
                     if (role.assignedCoursesOnly())
                         rule = "exists(select 1 from course_instructors ci where ci.course_id=c.id and ci.user_id=:uid)";
                     else {
@@ -70,6 +71,8 @@ public class LearnerDashboardSqlRelations {
                         rule = role.legacyOwnerScope() ? in("c.owner_unit_id", scope, ids, p)
                                 : "exists(select 1 from training_program_units pu where pu.program_id=c.program_id and "
                                         + in("pu.unit_id", scope, ids, p) + ")";
+                        rule = "(" + rule + " or exists(select 1 from course_unit_grants acg where acg.course_id=c.id and "
+                                + in("acg.unit_id", scope, ids, p) + "))";
                     }
                     admin.add(rule);
                     if (role.editor())
@@ -91,22 +94,11 @@ public class LearnerDashboardSqlRelations {
             editor.addAll(admin);
         String editorRule = editor.isEmpty() ? "1=0" : "(" + String.join(" or ", editor) + ")";
         List<String> allow = new ArrayList<>(admin);
-        if (own.isEmpty()) {
-            if (actorUnit == null)
-                allow.add("c.owner_unit_id is null");
-        } else {
+        if (actorUnit == null || !own.isEmpty())
             allow.add(registered);
-            for (String[] grant : List.of(new String[] { "course_unit_grants", "course_id", "c.id" },
-                    new String[] { "program_unit_grants", "program_id", "c.program_id" },
-                    new String[] { "domain_unit_grants", "domain_id", "p.domain_id" }))
-                allow.add("exists(select 1 from " + grant[0] + " g where g." + grant[1] + "=" + grant[2] + " and "
-                        + in("g.unit_id", own, "ownUnits", p) + ")");
-            allow.add(in("c.owner_unit_id", own, "ownUnits", p));
-            allow.add("exists(select 1 from training_program_units pu where pu.program_id=c.program_id and "
-                    + in("pu.unit_id", own, "ownUnits", p) + ")");
-            allow.add("exists(select 1 from training_domain_units du where du.domain_id=p.domain_id and "
-                    + in("du.unit_id", own, "ownUnits", p) + ")");
-        }
+        if (!own.isEmpty())
+            allow.add("exists(select 1 from course_unit_grants g where g.course_id=c.id and "
+                    + in("g.unit_id", own, "ownUnits", p) + ")");
         return new Context("with visible as (select c.*,p.name program_name,p.domain_id,d.name domain_name,case when "
                 + editorRule
                 + " then 1 else 0 end editor_access from courses c join training_programs p on p.id=c.program_id join training_domains d on d.id=p.domain_id where "
@@ -129,20 +121,8 @@ public class LearnerDashboardSqlRelations {
     /** Expects alias c with program_id and domain_id, as the visible relation provides. */
     private static String mandatory(LearnerQueryScope u, Map<String, Object> p) {
         Set<String> own = u.grantUnits();
-        String courseGrant = in("cg.unit_id", own, "grantUnits", p),
-                programGrant = in("pg.unit_id", own, "grantUnits", p),
-                domainGrant = in("dg.unit_id", own, "grantUnits", p);
-        return "(case when exists(select 1 from course_unit_grants cg where cg.course_id=c.id and "
-                + courseGrant
-                + ") then case when exists(select 1 from course_unit_grants cg where cg.course_id=c.id and "
-                + courseGrant
-                + " and upper(cg.grant_type)='MANDATORY') then 1 else 0 end when exists(select 1 from program_unit_grants pg where pg.program_id=c.program_id and "
-                + programGrant
-                + ") then case when exists(select 1 from program_unit_grants pg where pg.program_id=c.program_id and "
-                + programGrant
-                + " and upper(pg.grant_type)='MANDATORY') then 1 else 0 end when exists(select 1 from domain_unit_grants dg where dg.domain_id=c.domain_id and "
-                + domainGrant
-                + " and upper(dg.grant_type)='MANDATORY') then 1 else 0 end=1)";
+        return "exists(select 1 from course_unit_grants cg where cg.course_id=c.id and "
+                + in("cg.unit_id", own, "grantUnits", p) + " and upper(cg.grant_type)='MANDATORY')";
     }
 
     public Context facts(LearnerQueryScope u) {

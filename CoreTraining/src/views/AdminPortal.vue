@@ -9,10 +9,10 @@
         </div>
       </header>
       <!-- Loading State -->
-      <div v-if="loading" class="loading-overlay">
-        <div class="spinner"></div>
-        <p>Đang tải dữ liệu cấu hình...</p>
-      </div>
+      <SkeletonLoader v-if="loading" label="Đang tải dữ liệu cấu hình">
+        <SkeletonLoader plain variant="stats" :rows="4" />
+        <SkeletonLoader plain variant="table" :rows="6" :columns="5" />
+      </SkeletonLoader>
 
       <!-- Main Content Panel -->
       <div v-else class="admin-tab-content">
@@ -958,12 +958,12 @@
                 </thead>
                 <tbody>
                   <!-- Loading State -->
-                  <tr v-if="documentListLoading && courseDocuments.length === 0">
-                    <td colspan="6" class="admin-empty">
-                      <LoaderCircle :size="24" class="spin-icon" style="margin-bottom: 0.5rem;" />
-                      <p>Đang tải danh sách tài liệu...</p>
-                    </td>
-                  </tr>
+                  <SkeletonTableRows
+                    v-if="documentListLoading && courseDocuments.length === 0"
+                    :columns="6"
+                    :rows="5"
+                    label="Đang tải danh sách tài liệu"
+                  />
 
                   <!-- Data Rows -->
                   <tr v-for="document in courseDocuments" :key="document.id" style="text-align: center;">
@@ -1546,6 +1546,8 @@
 </template>
 
 <script setup lang="ts">
+import SkeletonLoader from "../components/SkeletonLoader.vue";
+import SkeletonTableRows from "../components/SkeletonTableRows.vue";
 import '../assets/styles/lesson-authoring.css';
 import LessonContentSelection from '../components/lesson/LessonContentSelection.vue';
 import { lessonContentRequirements, lessonContentTypes, lessonRequirementFields, selectedLessonContent, validateSelectedLessonContent, type LessonContentType } from '../utils/lessonContent';
@@ -4821,33 +4823,6 @@ void handleDeleteQuestion;
   .document-form-fields {
     grid-template-columns: 1fr;
   }
-}
-
-.loading-overlay {
-  width: 100%;
-  min-height: 100%;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  color: var(--text-muted);
-  text-align: center;
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid var(--primary-light);
-  border-top-color: var(--primary-color);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
 }
 
 select:disabled {

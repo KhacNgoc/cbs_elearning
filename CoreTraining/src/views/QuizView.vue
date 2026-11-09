@@ -23,8 +23,11 @@
     </div>
 
     <!-- Active Quiz Card -->
-    <div v-if="quizStore.isLoading" class="quiz-main-card card" role="status">
-      Đang tải bài kiểm tra...
+    <div v-if="quizStore.isLoading" class="quiz-main-card card">
+      <SkeletonLoader label="Đang tải bài kiểm tra">
+        <SkeletonBlock width="80%" height="1.25rem" />
+        <SkeletonLoader plain variant="list" :rows="4" />
+      </SkeletonLoader>
     </div>
     <div
       v-else-if="!isReviewMode && !totalQuestions"
@@ -311,6 +314,10 @@
         <p class="time-spent-desc">
           Thời gian hoàn thành: <strong>{{ quizStore.formattedTime }}</strong>
         </p>
+        <p v-if="lessonStillIncomplete" class="lesson-incomplete-note" role="status">
+          Bài kiểm tra này không bắt buộc nên chưa tính hoàn thành bài học. Hãy
+          học xong nội dung bắt buộc; quay lại bài học để xem phần còn thiếu.
+        </p>
       </div>
 
       <!-- Badge Unlocked Modal/Notification -->
@@ -351,10 +358,16 @@
   <div v-else-if="contextError" class="loading-state" role="alert">
     {{ contextError }} <button class="btn btn-primary" @click="loadEntry">Thử lại</button>
   </div>
-  <div v-else class="loading-state">Đang tải thông tin bài thi...</div>
+  <SkeletonLoader v-else class="quiz-entry-skeleton" label="Đang tải thông tin bài thi">
+    <SkeletonBlock width="50%" height="2rem" />
+    <SkeletonBlock height="0.5rem" radius="var(--radius-full)" />
+    <SkeletonLoader plain class="card" variant="list" :rows="4" />
+  </SkeletonLoader>
 </template>
 
 <script setup lang="ts">
+import SkeletonLoader from "../components/SkeletonLoader.vue";
+import SkeletonBlock from "../components/SkeletonBlock.vue";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { getLearnerQuizContext, type LearnerQuizContext } from "../api/learnerQuizApi";
@@ -383,6 +396,11 @@ const totalQuestions = computed(() => quizStore.quizQuestions.length);
 const currentQuestion = computed(() => quizStore.currentQuestion);
 const selectedAnswers = computed(() => quizStore.selectedAnswers);
 const quizResult = computed(() => quizStore.quizResult);
+// The server ticks the lesson only when its required content is done too; say so instead of leaving it silent.
+const lessonStillIncomplete = computed(() =>
+  Boolean(lessonId.value && quizResult.value?.passed && !quizStore.isLoading
+    && userStore.progressLoaded && !userStore.completedLessons.includes(lessonId.value)),
+);
 const lessonId = computed(() =>
   typeof route.query.lessonId === "string" ? route.query.lessonId : undefined,
 );
@@ -792,6 +810,16 @@ const getBadgeIcon = (icon: string) => {
   color: var(--danger-ink);
 }
 
+.lesson-incomplete-note {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid var(--warning-border);
+  background: var(--warning-surface);
+  color: var(--warning-ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
 .time-up-note,
 .time-up-result {
   margin: 0.75rem 0 0;
@@ -1139,5 +1167,10 @@ const getBadgeIcon = (icon: string) => {
   .review-passed-badge {
     align-self: flex-start;
   }
+}
+.quiz-entry-skeleton {
+  width: min(100%, 960px);
+  margin-inline: auto;
+  padding: 1.5rem;
 }
 </style>

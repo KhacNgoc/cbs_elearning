@@ -12,7 +12,7 @@ public final class TrainingReportDto {
     public record AttemptQuestion(Long id, String text, List<String> options, List<Integer> selectedAnswers,
                                   List<Integer> correctAnswers, boolean answered, boolean correct) {}
 
-    public record AttemptAnalysis(long attemptId, boolean available, String source, String unavailableReason,
+    public record AttemptAnalysis(String attemptId, boolean available, String source, String unavailableReason,
                                   int correct, int incorrect, int unanswered, List<AttemptQuestion> questions) {}
 
     public record Row(String id, String learnerId, String name, String unit,

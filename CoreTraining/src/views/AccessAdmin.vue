@@ -13,7 +13,7 @@
         <RefreshCw :size="16" /> Tải lại
       </button>
     </header>
-    <p v-if="loading" class="admin-empty" role="status">Đang tải dữ liệu…</p>
+    <SkeletonLoader v-if="loading" variant="table" :rows="8" :columns="5" label="Đang tải dữ liệu" />
     <template v-else>
       <section v-if="section === 'users'" class="admin-data-section">
         <div class="admin-section-heading">
@@ -364,6 +364,7 @@
   </main>
 </template>
 <script setup lang="ts">
+import SkeletonLoader from "../components/SkeletonLoader.vue";
 import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { adminListApi } from "../api/adminListApi";
 import {

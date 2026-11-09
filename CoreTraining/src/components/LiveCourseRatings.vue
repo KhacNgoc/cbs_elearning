@@ -4,7 +4,10 @@
     <div class="rating-filters"><label>Khóa học đánh giá<select v-model="courseId"><option value="">Tất cả khóa trong phạm vi quản lý</option><option v-for="course in options" :key="course.courseId" :value="course.courseId">{{ course.courseName }}</option></select></label><button class="btn btn-secondary" :aria-pressed="lowOnly" @click="lowOnly=!lowOnly;page=0">{{ lowOnly?'Hiện tất cả phản hồi':'Lọc phản hồi 1–2 sao' }}</button></div>
     <p class="scope-note">Báo cáo này tổng hợp toàn bộ đánh giá đã lưu và dùng bộ lọc khóa học riêng ở trên.</p>
     <button v-if="report" class="btn btn-secondary" @click="exportCsv">CSV đánh giá theo khóa</button>
-    <p v-if="loading" role="status">Đang tải đánh giá khóa học...</p>
+    <SkeletonLoader v-if="loading" label="Đang tải đánh giá khóa học">
+      <SkeletonLoader plain variant="stats" :rows="3" />
+      <SkeletonLoader plain variant="table" :rows="4" :columns="4" />
+    </SkeletonLoader>
     <div v-else-if="error" class="rating-error" role="alert">{{ error }} <button class="btn btn-secondary" @click="load">Thử lại</button></div>
     <template v-else-if="report">
       <div class="live-kpis"><div><span>Điểm trung bình</span><strong>{{ report.average===null?'—':`${report.average.toFixed(1)}/5` }}</strong><small>{{ report.count }} đánh giá</small></div><div><span>Tỷ lệ phản hồi</span><strong>{{ report.responseRate===null?'—':`${Math.round(report.responseRate)}%` }}</strong><small>{{ report.count }} / {{ report.completed }} lượt học có ghi nhận hoàn thành</small></div><div><span>Phản hồi 1–2 sao</span><strong>{{ report.low }}</strong><small>Cần đọc và xem xét nội dung</small></div></div>
@@ -18,6 +21,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import SkeletonLoader from "./SkeletonLoader.vue";
 import { computed,ref,watch,onBeforeUnmount } from 'vue';
 import TablePagination from './TablePagination.vue';
 import { useTablePagination } from '../composables/useTablePagination';

@@ -1,6 +1,6 @@
 <template>
   <div class="star-rating">
-    <button
+    <button :aria-label="`${star} sao`"
       v-for="star in 5"
       :key="star"
       type="button"

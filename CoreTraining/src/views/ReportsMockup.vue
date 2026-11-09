@@ -4,7 +4,10 @@
       <div><div class="eyebrow">QUẢN TRỊ ĐÀO TẠO</div><h1>{{ selected==='overview'?'Tổng quan đào tạo':`Thống kê ${currentView?.label.toLocaleLowerCase('vi')}` }}</h1></div>
       <div class="heading-actions"><button class="r-button" :disabled="loading" @click="loadReport()">Tải lại</button><button class="r-button" :disabled="loading||!!loadError" @click="exportCsv"><Download :size="16"/> CSV chi tiết</button><button class="r-button primary" :disabled="loading||!!loadError" @click="printReport"><Printer :size="16"/> In / lưu PDF</button></div>
     </header>
-    <p v-if="loading" role="status">Đang tải báo cáo...</p>
+    <SkeletonLoader v-if="loading&&!report" label="Đang tải báo cáo">
+      <SkeletonLoader plain variant="stats" :rows="4"/>
+      <SkeletonLoader plain variant="table" :rows="6" :columns="5"/>
+    </SkeletonLoader>
     <div v-if="loadError" role="alert" class="validation">{{ loadError }} <button class="r-button" @click="loadReport()">Thử lại</button></div>
     <template v-if="report&&!loadError">
     <section class="filter-card" aria-label="Bộ lọc báo cáo">
@@ -71,20 +74,21 @@
 
     <dialog ref="dimensionDialog" class="learner-dialog dimension-dialog" @close="dimensionRow=undefined">
       <template v-if="dimensionRow"><div class="dialog-heading"><div><span class="eyebrow">BÁO CÁO CHI TIẾT</span><h2>{{ dimensionRow.title }}</h2><p>{{ dimensionRow.total }} lượt học trong phạm vi đã chọn</p></div><button class="r-button" aria-label="Đóng báo cáo chi tiết" @click="dimensionDialog?.close()"><X :size="18"/></button></div>
-      <div class="dialog-body"><p v-if="dimensionLoading" role="status">Đang tải chi tiết...</p><p v-if="dimensionError" role="alert">{{ dimensionError }} <button class="r-button" @click="loadDimension">Thử lại</button></p><div class="drill-actions"><button v-if="dimensionRow.kind==='units'" class="r-button" @click="filters.unit=dimensionRow.title;selectView('learners');dimensionDialog?.close()">Xem học viên trong đơn vị</button><button v-if="dimensionRow.kind==='programs'" class="r-button" @click="filters.program=dimensionRow.title;selectView('courses');dimensionDialog?.close()">So sánh khóa học thành phần</button><button v-if="dimensionRow.kind==='courses'" class="r-button" @click="filters.course=dimensionRow.title;selectView('learners');dimensionDialog?.close()">Danh sách học viên khóa này</button></div>
+      <div class="dialog-body"><SkeletonLoader v-if="dimensionLoading" variant="table" :rows="4" :columns="3" label="Đang tải chi tiết"/><p v-if="dimensionError" role="alert">{{ dimensionError }} <button class="r-button" @click="loadDimension">Thử lại</button></p><div class="drill-actions"><button v-if="dimensionRow.kind==='units'" class="r-button" @click="filters.unit=dimensionRow.title;selectView('learners');dimensionDialog?.close()">Xem học viên trong đơn vị</button><button v-if="dimensionRow.kind==='programs'" class="r-button" @click="filters.program=dimensionRow.title;selectView('courses');dimensionDialog?.close()">So sánh khóa học thành phần</button><button v-if="dimensionRow.kind==='courses'" class="r-button" @click="filters.course=dimensionRow.title;selectView('learners');dimensionDialog?.close()">Danh sách học viên khóa này</button></div>
       <h3>{{ dimensionRow.kind==='learners'?'Hồ sơ học tập · khóa được giao và tham gia':'Tiến độ từng khóa thành phần' }}</h3>
       <div class="table-scroll"><table><thead><tr><th>Khóa học</th><th>Bắt buộc / lượt giao</th><th>Hoàn thành</th><th>Tiến độ bắt buộc</th></tr></thead><tbody><tr v-for="course in visibleDimensionCourses" :key="course.name"><td>{{ course.name }}</td><td>{{ course.mandatory }} / {{ course.total }}</td><td>{{ course.complete }} / {{ course.total }}</td><td>{{ percent(course.mandatoryComplete,course.mandatory) }}</td></tr></tbody></table></div>
       <TablePagination v-if="!printing" v-model:page="dimensionPage" v-model:page-size="dimensionPageSize" :total="dimensionTotal" :page-count="dimensionPageCount" unit="khóa học" unit-label="Khóa học"/>
       <h3 class="drill-subtitle">Học viên & lịch sử kiểm tra</h3><div class="drill-records"><button v-for="item in dimensionRow.items" :key="item.id" @click="inspectRow=item"><span><strong>{{ item.name }}</strong><small>{{ item.courseName }} · {{ item.status }} · {{ item.progress }}% bài học</small></span><span>{{ item.score===null?'Chưa kiểm tra':`${item.score}/100 gần nhất` }} <ArrowUpRight :size="14"/></span></button></div><TablePagination v-model:page="dimensionDetailsPage" :page-size="20" :total="dimensionDetailsTotal" :page-count="dimensionDetailsPageCount" :sizes="[20]" unit="lượt học"/></div>
       </template>
     </dialog>
-    <dialog ref="detailDialog" class="learner-dialog" @close="inspectRow=null" @click="closeOnBackdrop"><template v-if="inspectRow"><div class="dialog-heading"><div><span class="eyebrow">CHI TIẾT LƯỢT HỌC</span><h2>{{ inspectRow.name }}</h2><p>{{ inspectRow.learnerId }} · {{ inspectRow.unit }}</p></div><button class="r-button" aria-label="Đóng chi tiết" @click="detailDialog?.close()"><X :size="18"/></button></div><div class="dialog-body"><h3>{{ inspectRow.courseName }}</h3><dl><div><dt>Trạng thái</dt><dd>{{ inspectRow.status }} · {{ inspectRow.progress }}% tiến độ bài học</dd></div><div><dt>Hạn hoàn thành</dt><dd>{{ inspectRow.dueDate?displayDate(inspectRow.dueDate):'Chưa quy định' }}</dd></div><div><dt>Tình huống</dt><dd>{{ reason(inspectRow) }}</dd></div></dl><h3>Lịch sử kiểm tra</h3><p v-if="historyLoading" role="status">Đang tải lịch sử...</p><p v-if="historyError" role="alert">{{ historyError }} <button class="r-button" @click="loadAttempts()">Thử lại</button></p><ol v-if="inspectRow.attempts.length" class="attempt-list"><li v-for="(attempt,index) in inspectRow.attempts" :key="attempt.id??index"><span>{{ attempt.assessment }} · {{ displayDate(attempt.takenAt) }}</span><strong>{{ attempt.score }}/100 · {{ Math.round(attempt.score)>=(attempt.passingScore??inspectRow.passingScore)?'Đạt':'Chưa đạt' }}</strong><ReportAttemptAnalysis v-if="attempt.id!=null" :attempt-id="attempt.id"/></li></ol><p v-else-if="!historyLoading&&!historyError">Chưa có lần kiểm tra nào.</p><button v-if="historyHasMore" class="r-button" :disabled="historyLoading" @click="loadAttempts(true)">Tải thêm lịch sử</button><div class="dialog-note">Gợi ý: {{ isOverdue(inspectRow)?'Phối hợp đơn vị để xác nhận kế hoạch hoàn thành.':isFailed(inspectRow)?'Hướng dẫn ôn tập và kiểm tra lại.':'Theo dõi và hỗ trợ hoàn thành nội dung còn lại.' }}</div></div></template></dialog>
+    <dialog ref="detailDialog" class="learner-dialog" @close="inspectRow=null" @click="closeOnBackdrop"><template v-if="inspectRow"><div class="dialog-heading"><div><span class="eyebrow">CHI TIẾT LƯỢT HỌC</span><h2>{{ inspectRow.name }}</h2><p>{{ inspectRow.learnerId }} · {{ inspectRow.unit }}</p></div><button class="r-button" aria-label="Đóng chi tiết" @click="detailDialog?.close()"><X :size="18"/></button></div><div class="dialog-body"><h3>{{ inspectRow.courseName }}</h3><dl><div><dt>Trạng thái</dt><dd>{{ inspectRow.status }} · {{ inspectRow.progress }}% tiến độ bài học</dd></div><div><dt>Hạn hoàn thành</dt><dd>{{ inspectRow.dueDate?displayDate(inspectRow.dueDate):'Chưa quy định' }}</dd></div><div><dt>Tình huống</dt><dd>{{ reason(inspectRow) }}</dd></div></dl><h3>Lịch sử kiểm tra</h3><p v-if="historyError" role="alert">{{ historyError }} <button class="r-button" @click="loadAttempts()">Thử lại</button></p><ol v-if="inspectRow.attempts.length" class="attempt-list"><li v-for="(attempt,index) in inspectRow.attempts" :key="attempt.id??index"><span>{{ attempt.assessment }} · {{ displayDate(attempt.takenAt) }}</span><strong>{{ attempt.score }}/100 · {{ Math.round(attempt.score)>=(attempt.passingScore??inspectRow.passingScore)?'Đạt':'Chưa đạt' }}</strong><ReportAttemptAnalysis v-if="attempt.id!=null" :attempt-id="String(attempt.id)"/></li></ol><p v-else-if="!historyLoading&&!historyError">Chưa có lần kiểm tra nào.</p><SkeletonLoader v-if="historyLoading" variant="list" :rows="3" label="Đang tải lịch sử"/><button v-if="historyHasMore" class="r-button" :disabled="historyLoading" @click="loadAttempts(true)">Tải thêm lịch sử</button><div class="dialog-note">Gợi ý: {{ isOverdue(inspectRow)?'Phối hợp đơn vị để xác nhận kế hoạch hoàn thành.':isFailed(inspectRow)?'Hướng dẫn ôn tập và kiểm tra lại.':'Theo dõi và hỗ trợ hoàn thành nội dung còn lại.' }}</div></div></template></dialog>
     </template>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
+import SkeletonLoader from "../components/SkeletonLoader.vue";
 import { computed, reactive, ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import type { ChartConfiguration } from 'chart.js';
 import { Users, CircleCheck, Target, Download, Printer, Info, SlidersHorizontal, Search, ArrowUpRight, AlarmClock, CalendarCheck, X } from 'lucide-vue-next';
@@ -117,6 +121,9 @@ const statuses=['Hoàn thành','Đang học','Chưa bắt đầu'];
 const statusColors=['#00856a','#e5b04c','#c4cfd8'];
 const examColors=['#00856a','#cc6d59','#c4cfd8'],examLabels=['Đã từng đạt','Chưa từng đạt','Chưa kiểm tra'];
 const report=ref<ReportPage|null>(null),loading=ref(true),loadError=ref('');
+// The server runs a few whole-population reports at a time and answers 503 when every slot stays busy.
+const BUSY='Hệ thống đang xử lý nhiều báo cáo cùng lúc. Vui lòng thử lại sau ít phút.';
+const reportBusy=(e:unknown)=>(e as {response?:{status?:number}})?.response?.status===503;
 const page=ref(1),pageSize=ref(20);
 let sequence=0,timer:ReturnType<typeof setTimeout>|undefined,lastScope='';
 const empty:ReportMetrics={total:0,people:0,complete:0,learning:0,notStarted:0,tested:0,passed:0,failed:0,firstPassed:0,average:null,withDeadline:0,overdue:0,overduePeople:0,peopleWithDeadline:0,mandatory:0,mandatoryComplete:0};
@@ -130,7 +137,7 @@ async function loadReport(force=true){
  if(invalidDates.value){loading.value=false;return;}
  const scope=JSON.stringify(filters),metadata=force||!report.value||lastScope!==scope;
  try{const data=await readTrainingReport({...params(),metadata});if(request!==sequence)return;reportAsOf.value=data.asOf;report.value={...report.value,...data,summary:data.summary||report.value?.summary,choices:metadata?data.choices:report.value?.choices};lastScope=scope;}
- catch{if(request===sequence)loadError.value='Không thể tải dữ liệu báo cáo. Vui lòng thử lại.';}
+ catch(e){if(request===sequence)loadError.value=reportBusy(e)?BUSY:'Không thể tải dữ liệu báo cáo. Vui lòng thử lại.';}
  finally{if(request===sequence)loading.value=false;}
 }
 function schedule(){sequence++;clearTimeout(timer);timer=setTimeout(()=>void loadReport(false),250);}
@@ -203,7 +210,7 @@ function openUnit(unit:string){filters.unit=unit;void openActions('overdue');}
 function openCourse(course:string){filters.course=course;void openActions(courseMode.value==='results'?'failed':'incomplete');}
 async function showStatus(status:string){filters.status=status;await selectView('completion');await scrollToTable();}
 function closeOnBackdrop(event:MouseEvent){if(event.target===detailDialog.value)detailDialog.value?.close();}
-async function exportCsv(){try{const blob=await exportTrainingReport(params());const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`bao-cao-${selected.value}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch{loadError.value='Không thể xuất báo cáo. Vui lòng thử lại.';}}
+async function exportCsv(){try{const blob=await exportTrainingReport(params());const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`bao-cao-${selected.value}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){loadError.value=reportBusy(e)?BUSY:'Không thể xuất báo cáo. Vui lòng thử lại.';}}
 async function printReport(){loading.value=true;try{const items:ReportPage['items']=[];for(let n=0;n<Math.ceil(totalItems.value/100);n++){const data=await readTrainingReport({...params(),page:n,size:100,metadata:false});items.push(...data.items);}printItems.value=items;printing.value=true;await nextTick();window.print();}catch{loadError.value='Không thể tải dữ liệu in. Vui lòng thử lại.';}finally{printItems.value=null;printing.value=false;loading.value=false;}}
 onMounted(()=>void loadReport());
 onBeforeUnmount(()=>{sequence++;historySequence++;dimensionSequence++;clearTimeout(timer);});

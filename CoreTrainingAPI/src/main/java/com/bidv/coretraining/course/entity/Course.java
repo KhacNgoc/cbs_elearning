@@ -37,6 +37,14 @@ public class Course {
     @Column(name = "grant_type", nullable = false)
     @Builder.Default
     private java.util.Map<String, String> unitGrants = new java.util.HashMap<>();
+    // Read-only view of the same rows, needed to resolve a granted unit's parents for admin scope.
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "course_unit_grants", joinColumns = @JoinColumn(name = "course_id"), inverseJoinColumns = @JoinColumn(name = "unit_id"))
+    @org.hibernate.annotations.Immutable
+    @org.hibernate.annotations.BatchSize(size = 50)
+    @Builder.Default
+    @Setter(AccessLevel.NONE)
+    private java.util.Set<OrganizationUnit> grantedUnits = new java.util.HashSet<>();
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "course_instructors", joinColumns = @JoinColumn(name = "course_id"))
     @Column(name = "user_id", nullable = false)

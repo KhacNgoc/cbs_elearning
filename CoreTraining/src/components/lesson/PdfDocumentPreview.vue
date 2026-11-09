@@ -12,9 +12,7 @@
       :disabled="loading"
       @go="go"
     />
-    <p v-if="loading" class="pdf-state" role="status">
-      Đang tải tài liệu PDF...
-    </p>
+    <SkeletonLoader v-if="loading" variant="document" :rows="12" label="Đang tải tài liệu PDF" />
     <p v-if="error" class="pdf-state" role="alert">{{ error }}</p>
     <div ref="container" class="pdf-canvas-container">
       <div class="pdf-page-surface">
@@ -28,6 +26,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import SkeletonLoader from "../SkeletonLoader.vue";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import type {
