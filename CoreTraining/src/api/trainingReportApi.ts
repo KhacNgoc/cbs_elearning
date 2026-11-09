@@ -5,6 +5,8 @@ export interface ReportRow extends ReportingRecord {
   program:string; domain:string; completedAt:string|null; date:string;
   status:string; score:number|null; passed:boolean;
   attemptCount?:number;
+  /** Passed every quiz taken, but a required quiz is still untaken. */
+  requiredPending?:boolean;
 }
 export async function getTrainingReport():Promise<{asOf:string;rows:ReportRow[]}> {
   const {data}=await axiosClient.get('/api/admin/reports/training');

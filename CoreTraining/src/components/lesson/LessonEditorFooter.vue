@@ -69,9 +69,31 @@
   font-size: 0.85rem;
   text-align: right;
 }
+/* On phones: note on top, save actions as an even row, the destructive action full width underneath. */
 @media (max-width: 700px) {
   .lesson-editor-footer {
-    padding: 0.8rem 1rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+    padding: 0.75rem 1rem;
+  }
+  .lesson-editor-footer-end {
+    order: -1;
+    flex: none;
+    margin-left: 0;
+    gap: 0.6rem;
+  }
+  .lesson-editor-footer-start:not(:has(*)) {
+    display: none;
+  }
+  .lesson-editor-footer :slotted(button) {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+  .lesson-editor-footer :slotted(.footer-note) {
+    flex-basis: 100%;
+    text-align: left;
+    font-size: 0.8rem;
   }
 }
 </style>
