@@ -1,11 +1,11 @@
-<template><div class="report-canvas"><canvas ref="canvas" role="img" :aria-label="description">{{ description }}</canvas></div></template>
+<template><div class="report-canvas" :style="height ? { height: `${height}px` } : undefined"><canvas ref="canvas" role="img" :aria-label="description">{{ description }}</canvas></div></template>
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import { Chart, registerables } from 'chart.js';
 import type { ChartConfiguration } from 'chart.js';
 import { useTheme } from '../composables/useTheme';
 Chart.register(...registerables);
-const props = defineProps<{ config: ChartConfiguration; description: string }>();
+const props = defineProps<{ config: ChartConfiguration; description: string; /** Fixed pixel height, e.g. grown with the bar count. */ height?: number }>();
 const canvas = ref<HTMLCanvasElement>();
 const { isDark } = useTheme();
 let chart: Chart | undefined;
