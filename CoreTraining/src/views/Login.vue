@@ -69,7 +69,7 @@
               type="text"
               id="username"
               v-model="username"
-              placeholder="Nhập tên đăng nhập (ví dụ: system)"
+              placeholder="Nhập tên đăng nhập"
               required
               :disabled="isLoading"
             />

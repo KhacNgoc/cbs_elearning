@@ -1,6 +1,7 @@
 package com.bidv.coretraining.flashcard.service.impl;
 
 import com.bidv.coretraining.access.service.AuthorizationService;
+import com.bidv.coretraining.policy.CourseEditPolicy;
 import com.bidv.coretraining.course.entity.Course;
 import com.bidv.coretraining.document.entity.CourseDocument;
 import com.bidv.coretraining.document.repository.CourseDocumentRepository;
@@ -175,8 +176,7 @@ public class FlashcardAdminServiceImpl implements FlashcardAdminService {
         String courseStatus = lesson.getCourse().getStatus();
         if ("DELETED".equals(courseStatus) || "DELETED".equals(lesson.getStatus()))
             throw new BadRequestException("Bài học đã bị xóa");
-        if ("ARCHIVED".equals(courseStatus))
-            throw new BadRequestException("Khóa học đang lưu trữ. Hãy chuyển về nháp để chỉnh sửa flashcard");
+        CourseEditPolicy.requireDraft(lesson.getCourse());
         return lesson;
     }
 

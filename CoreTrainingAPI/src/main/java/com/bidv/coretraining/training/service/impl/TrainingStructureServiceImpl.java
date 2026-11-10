@@ -2,6 +2,7 @@ package com.bidv.coretraining.training.service.impl;
 
 import com.bidv.coretraining.mapper.CourseMapper;
 import com.bidv.coretraining.mapper.LessonOutlineMapper;
+import com.bidv.coretraining.policy.CourseEditPolicy;
 import com.bidv.coretraining.policy.LearningPolicy;
 import com.bidv.coretraining.policy.LessonContentPolicy;
 import com.bidv.coretraining.security.AccessPolicy;
@@ -85,8 +86,7 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
     }
 
     private void draft(Course course) {
-        if ("DELETED".equals(course.getStatus()))
-            throw new BadRequestException("Khóa học đã bị xóa");
+        CourseEditPolicy.requireDraft(course);
     }
 
     private void version(Long actual, Long expected) {

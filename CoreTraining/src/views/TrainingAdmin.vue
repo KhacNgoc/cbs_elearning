@@ -243,16 +243,23 @@
           }}
         </h2>
         <button
-          v-if="course && !chapter && canEditCourse"
+          v-if="course && !chapter && canEditCourseInfo"
           class="btn btn-secondary"
           @click="openForm('course', course)"
         >
           Thông tin khóa
         </button>
       </div>
-      <p v-if="course && !canEditCourse" class="readonly-notice">
-        Khóa học đang ở chế độ chỉ xem. Chuyển khóa về bản nháp để chỉnh sửa nội
-        dung.
+      <p v-if="course && isCourseContentLocked(course)" class="readonly-notice" role="status">
+        {{ courseLockReason(course) }} nên chương và bài học chỉ xem được.
+        <template v-if="managesCourses"
+          >Bấm “Chuyển về nháp” ở đầu trang để chỉnh sửa, rồi xuất bản lại khi
+          xong.</template
+        >
+        <template v-else>Liên hệ người quản lý khóa học để chuyển khóa về bản nháp.</template>
+      </p>
+      <p v-else-if="course && !canEditCourse" class="readonly-notice">
+        Khóa học đang ở chế độ chỉ xem.
       </p>
       <div class="table-toolbar">
         <div class="search-box">
@@ -290,7 +297,7 @@
         <button
           v-if="
             (!course && accessUser.can('courses', 'create')) ||
-            (course?.status !== 'ARCHIVED' &&
+            (!isCourseContentLocked(course) &&
               !!course?.allowedActions?.includes('create'))
           "
           class="btn btn-primary"
@@ -310,12 +317,12 @@
         :expanded-ids="expandedChapterIds"
         :can-edit="canEditCourse"
         :can-create="
-          course?.status !== 'ARCHIVED' &&
+          !isCourseContentLocked(course) &&
           accessUser.can('courses', 'create') &&
           !!course?.allowedActions?.includes('create')
         "
         :can-delete="
-          course?.status !== 'ARCHIVED' &&
+          !isCourseContentLocked(course) &&
           accessUser.can('courses', 'delete') &&
           !!course?.allowedActions?.includes('delete')
         "
@@ -636,6 +643,7 @@ import {
   Layers,
   Table,
 } from "lucide-vue-next";
+import { isCourseContentLocked, courseLockReason } from "../utils/courseEditLock";
 import { trainingApi } from "../api/trainingApi";
 import { adminApi } from "../api/adminApi";
 import type {
@@ -714,12 +722,16 @@ const rows = computed<Row[]>(
   () =>
     chapter.value?.lessons || (course.value ? chapters.value : courses.value),
 );
-const canEditCourse = computed(
+// Course details (name, units, ...) stay editable while published; its chapters and lessons do not.
+const canEditCourseInfo = computed(
   () => course.value?.status !== "ARCHIVED" && course.value?.status !== "DELETED" && managesCourses.value,
+);
+const canEditCourse = computed(
+  () => canEditCourseInfo.value && !isCourseContentLocked(course.value),
 );
 const canEditRow = (row: Row) =>
   course.value
-    ? course.value.status !== "ARCHIVED" &&
+    ? !isCourseContentLocked(course.value) &&
       course.value.status !== "DELETED" &&
       course.value.allowedActions?.some((a) => a === "update" || a === "delete")
     : row.status !== "ARCHIVED" &&

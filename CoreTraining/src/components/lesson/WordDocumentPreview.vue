@@ -24,7 +24,11 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { FileWarning } from "lucide-vue-next";
 import DocumentZoomControls from "./DocumentZoomControls.vue";
 import DocumentPageNavigation from "./DocumentPageNavigation.vue";
-import { axiosClient } from "../../api/axiosClient";
+import {
+  axiosClient,
+  DOCUMENT_DOWNLOAD_TIMEOUT_MS,
+} from "../../api/axiosClient";
+import { assertZipWithinLimits, ZipSafetyError } from "../../utils/zipSafety";
 
 const props = defineProps<{
   url: string;
@@ -111,7 +115,9 @@ const renderDocument = async () => {
   try {
     const response = await axiosClient.get<ArrayBuffer>(props.url, {
       responseType: "arraybuffer",
+      timeout: DOCUMENT_DOWNLOAD_TIMEOUT_MS,
     });
+    assertZipWithinLimits(response.data);
     const { renderAsync } = await import("docx-preview");
     await nextTick();
     if (previewContainer.value) {
@@ -148,7 +154,9 @@ const renderDocument = async () => {
   } catch (cause) {
     console.error("Failed to preview Word document:", cause);
     error.value =
-      "Không tải được nội dung tài liệu. Bạn vẫn có thể sử dụng nút Tải xuống.";
+      cause instanceof ZipSafetyError
+        ? "Tài liệu quá lớn để xem trực tiếp trên trình duyệt. Vui lòng sử dụng nút Tải xuống."
+        : "Không tải được nội dung tài liệu. Bạn vẫn có thể sử dụng nút Tải xuống.";
   } finally {
     loading.value = false;
     if (!error.value) savePosition();

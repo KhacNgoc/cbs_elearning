@@ -22,7 +22,14 @@ export const QUIZ_GENERATION_TIMEOUT_MS = positiveTimeout(
   420_000,
 );
 
-export const isTimeoutError = (error: unknown): boolean => {
+// Lesson files are fetched whole before they render; when a class opens the
+// same deck at once over a shared link, 15s only covers a couple of megabytes.
+export const DOCUMENT_DOWNLOAD_TIMEOUT_MS = positiveTimeout(
+  import.meta.env.VITE_DOCUMENT_DOWNLOAD_TIMEOUT_MS,
+  600_000,
+);
+
+export const isTimeoutError =(error: unknown): boolean => {
   if (!axios.isAxiosError(error)) return false;
   return (
     error.code === "ECONNABORTED" ||

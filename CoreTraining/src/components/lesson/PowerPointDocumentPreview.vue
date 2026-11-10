@@ -39,7 +39,10 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { FileWarning } from "lucide-vue-next";
 import DocumentZoomControls from "./DocumentZoomControls.vue";
 import DocumentPageNavigation from "./DocumentPageNavigation.vue";
-import { axiosClient } from "../../api/axiosClient";
+import {
+  axiosClient,
+  DOCUMENT_DOWNLOAD_TIMEOUT_MS,
+} from "../../api/axiosClient";
 import type { PptxViewer } from "@aiden0z/pptx-renderer";
 
 const props = defineProps<{
@@ -133,6 +136,7 @@ const renderDocument = async () => {
   try {
     const response = await axiosClient.get<ArrayBuffer>(props.url, {
       responseType: "arraybuffer",
+      timeout: DOCUMENT_DOWNLOAD_TIMEOUT_MS,
     });
     const { PptxViewer, RECOMMENDED_ZIP_LIMITS } =
       await import("@aiden0z/pptx-renderer");

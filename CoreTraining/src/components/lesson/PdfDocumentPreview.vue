@@ -38,8 +38,13 @@ import type {
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?worker&url";
 import DocumentZoomControls from "./DocumentZoomControls.vue";
 import DocumentPageNavigation from "./DocumentPageNavigation.vue";
-import { axiosClient } from "../../api/axiosClient";
+import {
+  axiosClient,
+  DOCUMENT_DOWNLOAD_TIMEOUT_MS,
+} from "../../api/axiosClient";
 GlobalWorkerOptions.workerSrc = workerUrl;
+/** iOS Safari's per-canvas limit; also bounds memory to ~64MB per page. */
+const MAX_CANVAS_PIXELS = 16_777_216;
 const props = defineProps<{ url: string; initialPage?: number }>();
 const emit = defineEmits<{
   "position-change": [
@@ -82,17 +87,24 @@ async function draw() {
     const viewport = sheet.getViewport({ scale: 1 });
     const width = Math.max(1, container.value.clientWidth - 104);
     const height = Math.max(1, container.value.clientHeight - 64);
-    const ratio = window.devicePixelRatio || 1;
-    const scaled = sheet.getViewport({
-      scale:
-        Math.min(width / viewport.width, height / viewport.height, 2) *
-        (zoom.value / 100) *
-        ratio,
-    });
-    canvas.value.width = scaled.width;
-    canvas.value.height = scaled.height;
-    canvas.value.style.width = `${scaled.width / ratio}px`;
-    canvas.value.style.height = `${scaled.height / ratio}px`;
+    const display =
+      Math.min(width / viewport.width, height / viewport.height, 2) *
+      (zoom.value / 100);
+    // Zoomed pages on high-DPI screens can ask for canvases of 100M+ pixels (400MB+),
+    // which mobile browsers refuse or crash on. Past the cap, render fewer device pixels
+    // at the same on-screen size: slightly softer, never blank.
+    const ratio = Math.min(
+      window.devicePixelRatio || 1,
+      Math.sqrt(
+        MAX_CANVAS_PIXELS /
+          (viewport.width * display * viewport.height * display),
+      ),
+    );
+    const scaled = sheet.getViewport({ scale: display * ratio });
+    canvas.value.width = Math.floor(scaled.width);
+    canvas.value.height = Math.floor(scaled.height);
+    canvas.value.style.width = `${viewport.width * display}px`;
+    canvas.value.style.height = `${viewport.height * display}px`;
     renderTask = sheet.render({ canvas: canvas.value, viewport: scaled });
     await renderTask.promise;
     if (current === drawRequest && doc === pdf && requested === page.value)
@@ -123,6 +135,7 @@ async function load() {
     const data = (
       await axiosClient.get<ArrayBuffer>(props.url, {
         responseType: "arraybuffer",
+        timeout: DOCUMENT_DOWNLOAD_TIMEOUT_MS,
       })
     ).data;
     if (id !== request) return;

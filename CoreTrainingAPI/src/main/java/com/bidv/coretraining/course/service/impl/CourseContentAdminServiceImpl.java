@@ -9,6 +9,7 @@ import com.bidv.coretraining.enums.VideoSource;
 import com.bidv.coretraining.exception.BadRequestException;
 import com.bidv.coretraining.exception.ResourceNotFoundException;
 import com.bidv.coretraining.mapper.CourseMapper;
+import com.bidv.coretraining.policy.CourseEditPolicy;
 import com.bidv.coretraining.policy.LessonContentPolicy;
 import com.bidv.coretraining.training.dto.TrainingStructureDto;
 import com.bidv.coretraining.training.service.TrainingStructureService;
@@ -94,8 +95,7 @@ public class CourseContentAdminServiceImpl implements CourseContentAdminService 
         Chapter chapter = structure.chapter(lessonDto.getChapterId());
         Course course = chapter.getCourse();
         authorization.edit(course);
-        if ("DELETED".equals(course.getStatus()))
-            throw new BadRequestException("Khóa học đã bị xóa");
+        CourseEditPolicy.requireDraft(course);
         String targetLessonId = lessonDto.getId().trim();
         Lesson existing = lessonRepository.findById(targetLessonId).orElse(null);
         Lesson lesson;
@@ -192,8 +192,7 @@ public class CourseContentAdminServiceImpl implements CourseContentAdminService 
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", id));
 
         authorization.edit(lesson.getCourse());
-        if ("DELETED".equals(lesson.getCourse().getStatus()))
-            throw new BadRequestException("Khóa học đã bị xóa");
+        CourseEditPolicy.requireDraft(lesson.getCourse());
         if (lessonDto.getVersion() != null && !java.util.Objects.equals(lesson.getVersion(), lessonDto.getVersion()))
             throw new org.springframework.web.server.ResponseStatusException(
                     org.springframework.http.HttpStatus.CONFLICT, "Bài học đã thay đổi. Tải lại trước khi lưu");
@@ -260,9 +259,8 @@ public class CourseContentAdminServiceImpl implements CourseContentAdminService 
     @Transactional
     public List<LessonDto> reorderLessons(String courseId, List<String> lessonIds) {
         authorization.edit(courseId);
-        if (!courseRepository.existsById(courseId)) {
-            throw new ResourceNotFoundException("Course", "id", courseId);
-        }
+        CourseEditPolicy.requireDraft(courseRepository.findById(courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course", "id", courseId)));
         List<Lesson> lessons = lessonRepository.findByCourseIdOrderByLessonOrderAscIdAsc(courseId);
         Set<String> existingIds = lessons.stream().map(Lesson::getId).collect(Collectors.toSet());
         if (lessonIds == null
