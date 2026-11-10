@@ -2,7 +2,7 @@
   <div class="change-password-container animate-fade-in">
     <div class="login-card card">
       <div class="login-header">
-        <div class="logo-box-large">B</div>
+        <img class="logo-box-large" :src="appLogo" alt="BIDV Core Training" width="72" height="72" />
         <h2>Yêu cầu đổi mật khẩu</h2>
         <p>
           Tài khoản của bạn được khởi tạo với mật khẩu mặc định. Vui lòng đổi
@@ -142,6 +142,7 @@ import { useUserStore } from "../stores/userStore";
 import { updateCachedAuthSession } from "../utils/authSession";
 import { courseApi } from "../api/courseApi";
 import router from "../router";
+import appLogo from "../assets/app-logo.png";
 
 const newPassword = ref("");
 const confirmPassword = ref("");
@@ -227,22 +228,11 @@ const handleLogout = () => {
 }
 
 .logo-box-large {
-  width: 60px;
-  height: 60px;
-  background: radial-gradient(
-    circle,
-    var(--accent-secondary) 20%,
-    var(--primary-color) 80%
-  );
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: 800;
-  font-size: 2rem;
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  display: block;
   margin-bottom: 0.5rem;
-  box-shadow: 0 4px 15px rgba(0, 91, 65, 0.25);
 }
 
 .login-header h2 {

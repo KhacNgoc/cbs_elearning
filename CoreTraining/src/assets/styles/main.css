@@ -190,14 +190,10 @@ button:disabled {
 .nav-logo {
   width: 32px;
   height: 32px;
-  background: radial-gradient(circle, var(--accent-secondary) 20%, var(--primary-color) 80%);
+  object-fit: contain;
+  flex-shrink: 0;
+  display: block;
   border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: 800;
-  font-size: 1.1rem;
 }
 
 .nav-links {

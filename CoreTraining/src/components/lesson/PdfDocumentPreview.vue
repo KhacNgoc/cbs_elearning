@@ -199,6 +199,12 @@ onBeforeUnmount(() => {
   flex-direction: column;
   background: var(--surface-e8eeec);
   min-height: 0;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.pdf-preview :is(input, textarea, select) {
+  -webkit-user-select: text;
+  user-select: text;
 }
 .pdf-canvas-container {
   flex: 1;

@@ -23,6 +23,8 @@
     "@tiptap/pm": "^3.32.0",
     "@tiptap/starter-kit": "^3.32.0",
     "@tiptap/vue-3": "^3.32.0",
+    "@web-ppt/core": "^0.8.0",
+    "@web-ppt/viewer-core": "^0.8.0",
     "axios": "^1.18.1",
     "chart.js": "^4.5.1",
     "docx-preview": "^0.4.0",
