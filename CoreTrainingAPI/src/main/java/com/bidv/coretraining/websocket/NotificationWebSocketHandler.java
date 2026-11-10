@@ -18,7 +18,17 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 @Slf4j
 public class NotificationWebSocketHandler extends TextWebSocketHandler {
-    private static final long IDLE_TIMEOUT_MS = 60_000;
+    /*
+     * Clients PING every 20s, but browsers throttle timers in hidden tabs to about
+     * once a minute (Chrome intensive throttling), so a live background tab can go
+     * just over 60s between PINGs. 120s tolerates that and still reaps dead sockets.
+     */
+    private static final long IDLE_TIMEOUT_MS = 120_000;
+    /*
+     * Re-checking the account (expiry, lock, token version) hits the database, so a
+     * positive result is reused for this long instead of on every PING, send and sweep.
+     */
+    private static final long AUTH_RECHECK_MS = 60_000;
 
     @org.springframework.beans.factory.annotation.Autowired
     private com.bidv.coretraining.security.UserDetailsServiceImpl detailsService;
@@ -26,6 +36,19 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
     private com.bidv.coretraining.security.JwtTokenProvider tokens;
 
     private boolean authorized(WebSocketSession session) {
+        long now = Instant.now().toEpochMilli();
+        Long checkedAt = authCheckedAt.get(session.getId());
+        if (checkedAt != null && now - checkedAt < AUTH_RECHECK_MS)
+            return true;
+        boolean ok = checkAuthorization(session);
+        if (ok && sessionsById.containsKey(session.getId()))
+            authCheckedAt.put(session.getId(), now);
+        else
+            authCheckedAt.remove(session.getId());
+        return ok;
+    }
+
+    private boolean checkAuthorization(WebSocketSession session) {
         Object token = session.getAttributes().get("token");
         Object username = session.getAttributes().get(JwtHandshakeInterceptor.USERNAME_ATTRIBUTE);
         if (token == null || username == null)
@@ -43,6 +66,7 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
     private final ConcurrentHashMap<String, Set<WebSocketSession>> sessionsByUser = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, WebSocketSession> sessionsById = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Long> lastSeen = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Long> authCheckedAt = new ConcurrentHashMap<>();
 
     public NotificationWebSocketHandler(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
@@ -65,6 +89,8 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
                 .add(session);
         sessionsById.put(session.getId(), session);
         lastSeen.put(session.getId(), now);
+        // JwtHandshakeInterceptor just validated the token against the account.
+        authCheckedAt.put(session.getId(), now);
         session.sendMessage(new TextMessage(payload));
         log.info("WebSocket connected user={} sessionId={} activeConnections={}",
                 username, session.getId(), sessionsById.size());
@@ -126,10 +152,15 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
                 lastSeen.remove(sessionId);
                 return;
             }
-            if (!authorized(session) || now - seenAt > IDLE_TIMEOUT_MS) {
-                log.warn("Closing stale WebSocket sessionId={} idleMs={}",
-                        sessionId, now - seenAt);
+            long idleMs = now - seenAt;
+            if (idleMs > IDLE_TIMEOUT_MS) {
+                // Routine: the client vanished without a close frame (sleep, network loss).
+                log.info("Closing WebSocket sessionId={} reason=idle idleMs={}", sessionId, idleMs);
                 closeQuietly(session, CloseStatus.SESSION_NOT_RELIABLE);
+            } else if (!authorized(session)) {
+                // Token expired, account locked, or token version bumped (password change, logout-all).
+                log.info("Closing WebSocket sessionId={} reason=unauthorized idleMs={}", sessionId, idleMs);
+                closeQuietly(session, CloseStatus.POLICY_VIOLATION);
             }
         });
     }
@@ -170,6 +201,7 @@ public class NotificationWebSocketHandler extends TextWebSocketHandler {
     private void removeSession(WebSocketSession session) {
         String sessionId = session.getId();
         lastSeen.remove(sessionId);
+        authCheckedAt.remove(sessionId);
         sessionsById.remove(sessionId, session);
         Object username = session.getAttributes().get(JwtHandshakeInterceptor.USERNAME_ATTRIBUTE);
         if (username != null) {
