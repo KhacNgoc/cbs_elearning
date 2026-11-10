@@ -44,7 +44,7 @@
           class="nav-brand"
           aria-label="BIDV Core Training — Trang chủ"
         >
-          <div class="nav-logo">B</div>
+          <img class="nav-logo" :src="appLogo" alt="" width="32" height="32" />
           <span class="nav-brand-full" aria-hidden="true">BIDV Core Training</span>
           <span class="nav-brand-short" aria-hidden="true">BIDV</span>
         </router-link>
@@ -116,6 +116,7 @@ import NotificationCenter from "./components/NotificationCenter.vue";
 import ThemeToggle from "./components/ThemeToggle.vue";
 import LearningChatbot from "./components/LearningChatbot.vue";
 import AdminLayout from "./views/AdminLayout.vue";
+import appLogo from "./assets/app-logo.png";
 import {
   BookOpen,
   ClipboardCheck,
