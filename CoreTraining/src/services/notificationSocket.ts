@@ -1,9 +1,12 @@
 import type { AppNotification } from "../api/notificationApi";
+import { authApi } from "../api/authApi";
 
 export class NotificationSocket {
   private socket: WebSocket | null = null;
   private stopped = false;
   private attempt = 0;
+  private authenticated = false;
+  private verifyingSession = false;
   private reconnectTimer?: number;
   private heartbeatTimer?: number;
   private pongTimer?: number;
@@ -45,6 +48,7 @@ export class NotificationSocket {
 
     const socket = new WebSocket(url.toString());
     this.socket = socket;
+    this.authenticated = false;
     this.connectTimer = window.setTimeout(() => {
       if (socket.readyState !== WebSocket.OPEN) socket.close();
     }, 10_000);
@@ -58,14 +62,36 @@ export class NotificationSocket {
       this.socket = null;
       this.onStatus(false);
       this.clearHeartbeat();
-      this.scheduleReconnect();
+      if (this.authenticated) this.scheduleReconnect();
+      else void this.verifySessionThenReconnect();
     };
+  }
+
+  // Browsers hide the HTTP status of a rejected handshake, so a closed socket that
+  // never authenticated may mean an expired session. Ask the REST API: a 401 there
+  // redirects to login (axios interceptor) instead of retrying the socket forever.
+  private async verifySessionThenReconnect() {
+    if (this.verifyingSession) return;
+    this.verifyingSession = true;
+    try {
+      await authApi.session();
+    } catch (error) {
+      const status = (error as { response?: { status?: number } }).response?.status;
+      if (status === 401 || status === 403) {
+        this.stop();
+        return;
+      }
+    } finally {
+      this.verifyingSession = false;
+    }
+    this.scheduleReconnect();
   }
 
   private handleMessage(event: MessageEvent<string>) {
     try {
       const message = JSON.parse(event.data);
       if (message.type === "AUTHENTICATED") {
+        this.authenticated = true;
         this.attempt = 0;
         this.onStatus(true);
         this.startHeartbeat();

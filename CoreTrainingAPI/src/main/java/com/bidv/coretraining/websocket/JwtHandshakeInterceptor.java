@@ -31,8 +31,15 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
             WebSocketHandler wsHandler,
             Map<String, Object> attributes) {
         String token = resolveToken(request);
-        if (!StringUtils.hasText(token) || !tokenProvider.validateToken(token)) {
-            log.warn("Rejected WebSocket handshake remote={} reason=invalid_or_missing_token",
+        if (!StringUtils.hasText(token)) {
+            // Usual after the auth cookie expires in a still-open tab: expected, not a warning.
+            log.debug("Rejected WebSocket handshake remote={} reason=missing_token",
+                    request.getRemoteAddress());
+            response.setStatusCode(HttpStatus.UNAUTHORIZED);
+            return false;
+        }
+        if (!tokenProvider.validateToken(token)) {
+            log.warn("Rejected WebSocket handshake remote={} reason=invalid_token",
                     request.getRemoteAddress());
             response.setStatusCode(HttpStatus.UNAUTHORIZED);
             return false;
