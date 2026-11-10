@@ -309,20 +309,18 @@
                 {{ u.name }}
               </option>
             </select></label
+          ><label class="admin-form-field"
+            >Vai trò *<select v-model="selectedRoleId" required>
+              <option
+                v-for="r in selectableRoles"
+                :key="r.id"
+                :value="r.id"
+              >
+                {{ r.name }}
+              </option>
+            </select></label
           >
         </div>
-        <p class="admin-modal-help">
-          Vai trò hiện tại:
-          {{
-            userForm.roles
-              .map(
-                (code) =>
-                  users.find((u) => u.id === editingId)?.roleNames?.[code] ||
-                  code,
-              )
-              .join(", ") || "Chưa gán role"
-          }}. Cấp hoặc thay đổi vai trò tại menu Quản lý role.
-        </p>
         <LearnerDeadlineEditor
           v-if="editingId"
           :key="editingId"
@@ -384,6 +382,7 @@ import { useRoute, useRouter } from "vue-router";
 import { axiosClient } from "../api/axiosClient";
 import { showToast } from "../utils/toast";
 import { adminApi, type AdminUser } from "../api/adminApi";
+import { roleApi, type AccessRole } from "../api/roleApi";
 import { useUserStore } from "../stores/userStore";
 import type { OrganizationUnit as Unit } from "../types/organization";
 import OrganizationTreeTable from "../components/OrganizationTreeTable.vue";
@@ -398,7 +397,9 @@ const route = useRoute(),
   router = useRouter(),
   user = useUserStore();
 const units = ref<Unit[]>([]),
-  users = ref<AdminUser[]>([]);
+  users = ref<AdminUser[]>([]),
+  roleOptions = ref<AccessRole[]>([]);
+const selectedRoleId = ref("");
 const loading = ref(false),
   busy = ref(false),
   query = ref("");
@@ -434,6 +435,16 @@ const learnerNames: Record<string, string> = {
   EXTERNAL: "Học viên đơn vị khác",
 };
 const activeUnits = computed(() => units.value.filter((u) => u.active));
+const selectableRoles = computed(() =>
+  roleOptions.value.filter(
+    (r) => r.active && (system.value || !r.protectedRole),
+  ),
+);
+const defaultLearnerRoleId = () =>
+  selectableRoles.value.find((r) => r.code === "ROLE_USER")?.id ||
+  selectableRoles.value.find((r) => r.learnerRole)?.id ||
+  selectableRoles.value[0]?.id ||
+  "";
 const unitName = (id?: string | null) =>
   units.value.find((u) => u.id === id)?.name || id || "Chưa gán";
 const matches = (text: string, query: string) =>
@@ -595,9 +606,15 @@ async function load() {
       const result = await axiosClient.get<Unit[]>("/api/admin/units");
       if (request === listRequest) units.value = result.data;
     } else {
-      const options = (await axiosClient.get(`/api/admin/options/${section.value}`)).data;
+      const [optionsResult, rolesResult] = await Promise.all([
+        axiosClient.get(`/api/admin/options/${section.value}`),
+        section.value === "users"
+          ? roleApi.list().catch(() => [] as AccessRole[])
+          : Promise.resolve([] as AccessRole[]),
+      ]);
       if (request !== listRequest) return;
-      units.value = options.units;
+      units.value = optionsResult.data.units;
+      if (section.value === "users") roleOptions.value = rolesResult;
       await loadRows();
     }
   } catch (e) { if (request === listRequest) error(e); }
@@ -608,6 +625,12 @@ function closeEditor() {
     editor.value = "";
     if (route.query.user) router.replace({ query: {} });
   }
+}
+function roleIdForCodes(codes: string[]) {
+  return (
+    selectableRoles.value.find((r) => codes.includes(r.code))?.id ||
+    defaultLearnerRoleId()
+  );
 }
 function editUser(u?: AdminUser) {
   editingId.value = u?.id || null;
@@ -621,7 +644,36 @@ function editUser(u?: AdminUser) {
     status: u?.status || "ACTIVE",
     learnerType: u?.learnerType || "CURRENT_STAFF",
   };
+  selectedRoleId.value = u
+    ? roleIdForCodes(u.roles || [])
+    : defaultLearnerRoleId();
   editor.value = "user";
+}
+async function syncUserRole(userId: number, previousCodes: string[]) {
+  if (!selectedRoleId.value) return;
+  const selected = selectableRoles.value.find(
+    (r) => r.id === selectedRoleId.value,
+  );
+  if (!selected) return;
+  const previousIds = selectableRoles.value
+    .filter((r) => previousCodes.includes(r.code) && r.id !== selected.id)
+    .map((r) => r.id);
+  if (!previousCodes.includes(selected.code)) {
+    const role = await adminListApi.roleOption(selected.id);
+    await adminListApi.assignRoleChanges(role.id, {
+      addUserIds: [userId],
+      removeUserIds: [],
+      version: role.version,
+    });
+  }
+  for (const roleId of previousIds) {
+    const role = await adminListApi.roleOption(roleId);
+    await adminListApi.assignRoleChanges(role.id, {
+      addUserIds: [],
+      removeUserIds: [userId],
+      version: role.version,
+    });
+  }
 }
 function editUnit(u?: Unit, parentId = "") {
   editingId.value = u?.id || null;
@@ -634,8 +686,11 @@ async function saveEditor() {
   busy.value = true;
   try {
     const endpoint = editor.value === "user" ? "users" : "units";
+    const savingUser = editor.value === "user";
+    const previousCodes = savingUser ? [...userForm.value.roles] : [];
+    const editingUserId = savingUser ? editingId.value : null;
     const data =
-      editor.value === "user"
+      savingUser
         ? userForm.value
         : {
             ...unitForm.value,
@@ -643,11 +698,28 @@ async function saveEditor() {
               ? unitForm.value.id
               : unitForm.value.id || undefined,
           };
-    await axiosClient.request({
+    const response = await axiosClient.request({
       method: editingId.value ? "put" : "post",
       url: `/api/admin/${endpoint}${editingId.value ? "/" + encodeURIComponent(String(editingId.value)) : ""}`,
       data,
     });
+    if (savingUser && selectedRoleId.value) {
+      try {
+        const userId = Number(editingUserId || response.data?.id);
+        if (userId) await syncUserRole(userId, previousCodes);
+      } catch {
+        editor.value = "";
+        if (route.query.user) await router.replace({ query: {} });
+        showToast(
+          editingUserId
+            ? "Đã lưu tài khoản nhưng chưa cập nhật được vai trò. Hãy gán tại menu Quản lý role."
+            : "Đã tạo tài khoản nhưng chưa gán được vai trò. Hãy gán tại menu Quản lý role.",
+          "error",
+        );
+        await load();
+        return;
+      }
+    }
     editor.value = "";
     if (route.query.user) await router.replace({ query: {} });
     showToast("Đã lưu", "success");

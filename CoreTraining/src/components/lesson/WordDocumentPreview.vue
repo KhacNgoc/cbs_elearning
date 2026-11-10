@@ -186,6 +186,12 @@ watch(() => props.url, renderDocument);
   min-height: 0;
   padding-bottom: 52px;
   background: var(--surface-e8eeec);
+  -webkit-user-select: none;
+  user-select: none;
+}
+.word-preview-shell :is(input, textarea, select) {
+  -webkit-user-select: text;
+  user-select: text;
 }
 .word-preview {
   height: 100%;

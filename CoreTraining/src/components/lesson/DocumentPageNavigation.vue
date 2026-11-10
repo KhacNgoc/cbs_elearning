@@ -6,7 +6,7 @@
       aria-label="Trang trước"
       title="Trang trước (←)"
       aria-keyshortcuts="ArrowLeft"
-      :disabled="disabled || page <= 1"
+      :disabled="disabled || (prevDisabled ?? page <= 1)"
       @click="$emit('go', page - 1)"
     >
       <ChevronLeft :size="28" :stroke-width="2.5" />
@@ -17,7 +17,7 @@
       aria-label="Trang sau"
       title="Trang sau (→)"
       aria-keyshortcuts="ArrowRight"
-      :disabled="disabled || page >= total"
+      :disabled="disabled || (nextDisabled ?? page >= total)"
       @click="$emit('go', page + 1)"
     >
       <ChevronRight :size="28" :stroke-width="2.5" />
@@ -30,7 +30,15 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { ChevronLeft, ChevronRight } from "lucide-vue-next";
-const props = defineProps<{ page: number; total: number; disabled?: boolean }>();
+const props = defineProps<{
+  page: number;
+  total: number;
+  disabled?: boolean;
+  /** When set, overrides the default first-page disable rule. */
+  prevDisabled?: boolean;
+  /** When set, overrides the default last-page disable rule (needed for in-slide animations). */
+  nextDisabled?: boolean;
+}>();
 const emit = defineEmits<{ go: [page: number] }>();
 const navigation = ref<HTMLElement | null>(null);
 const nativeArrowControls = 'input, textarea, select, video, audio, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="combobox"], [role="slider"], [role="listbox"], [role="menu"], [role="tablist"]';
@@ -52,8 +60,12 @@ function handleArrowKey(event: KeyboardEvent) {
   if (otherDialog) return;
   const focusedViewer = document.activeElement?.closest('.pdf-preview, .powerpoint-preview, .word-preview-shell');
   if (focusedViewer && focusedViewer !== viewer) return;
-  const next = props.page + (event.key === 'ArrowRight' ? 1 : -1);
-  if (next < 1 || next > props.total) return;
+  const goingNext = event.key === 'ArrowRight';
+  const blocked = goingNext
+    ? (props.nextDisabled ?? props.page >= props.total)
+    : (props.prevDisabled ?? props.page <= 1);
+  if (blocked) return;
+  const next = props.page + (goingNext ? 1 : -1);
   event.preventDefault();
   emit('go', next);
 }

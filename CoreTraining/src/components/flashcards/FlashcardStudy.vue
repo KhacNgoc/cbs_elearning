@@ -198,6 +198,8 @@ function onKey(event: KeyboardEvent) {
   flex-direction: column;
   gap: 0.85rem;
   outline: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .study-toolbar {
   display: flex;

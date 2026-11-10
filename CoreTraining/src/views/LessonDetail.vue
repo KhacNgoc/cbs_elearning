@@ -50,7 +50,13 @@
         ×
       </button>
     </div>
-    <div class="learning-stage" :class="{ 'sidebar-hidden': !sidebarOpen }">
+    <div
+      class="learning-stage"
+      :class="{ 'sidebar-hidden': !sidebarOpen }"
+      @copy.capture.prevent="blockLearningCopy"
+      @cut.capture.prevent="blockLearningCopy"
+      @contextmenu.capture="blockLearningContextMenu"
+    >
       <LessonMediaStage
         v-if="lesson && chapter && !lessonLoading"
         ref="mediaStage"
@@ -691,6 +697,18 @@ const loadVideoNotes = async (lessonId: string, loadId: number) => {
 
 const flushProgress = () => {
   void persistCurrentProgress();
+};
+const isLearningCopyTarget = (target: EventTarget | null) => {
+  if (!(target instanceof Element)) return true;
+  return !target.closest("input, textarea, select, [contenteditable='true']");
+};
+const blockLearningCopy = (event: ClipboardEvent) => {
+  if (!isLearningCopyTarget(event.target)) return;
+  event.preventDefault();
+};
+const blockLearningContextMenu = (event: MouseEvent) => {
+  if (!isLearningCopyTarget(event.target)) return;
+  event.preventDefault();
 };
 const handleOnline = () => {
   if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
@@ -1351,9 +1369,9 @@ const deleteComment = async (commentId: number) => {
   display: flex;
   align-items: center;
   gap: 1rem;
-  background: #10251f;
-  color: white;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--bg-card);
+  color: var(--text-main);
+  border-bottom: 1px solid var(--border-color);
 }
 .back-button {
   width: 40px;
@@ -1361,11 +1379,11 @@ const deleteComment = async (commentId: number) => {
   display: grid;
   place-items: center;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--border-color);
   transition: 0.2s ease;
 }
 .back-button:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-subtle);
   transform: translateX(-2px);
 }
 .header-copy {
@@ -1376,14 +1394,14 @@ const deleteComment = async (commentId: number) => {
   gap: 0.9rem;
 }
 .course-name {
-  color: var(--ink-e4c760);
+  color: var(--primary-ink);
   font-weight: 700;
   white-space: nowrap;
 }
 .header-separator {
   width: 1px;
   height: 24px;
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--border-color);
 }
 .header-copy h1 {
   font-size: 1rem;
@@ -1401,23 +1419,23 @@ const deleteComment = async (commentId: number) => {
   gap: 0.5rem;
 }
 .progress-summary {
-  color: var(--ink-dbe7e3);
+  color: var(--text-muted);
   font-size: 0.82rem;
 }
 .outline-action,
 .mobile-content-button {
   min-height: 38px;
   padding: 0 0.85rem;
-  color: white;
+  color: var(--text-main);
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid var(--border-color);
   border-radius: 7px;
   cursor: pointer;
   font-weight: 600;
 }
 .outline-action:disabled {
-  color: var(--ink-8ae2c2);
-  border-color: rgba(138, 226, 194, 0.35);
+  color: var(--success-ink);
+  border-color: var(--success-border);
   cursor: default;
 }
 .mobile-content-button {
@@ -1425,10 +1443,16 @@ const deleteComment = async (commentId: number) => {
 }
 .learning-stage {
   display: block;
-  background: #17201e;
+  background: var(--bg-subtle);
   height: max(480px, var(--learning-stage-fill, calc(100vh - 193px)));
   position: relative;
   overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.learning-stage :is(input, textarea, select, [contenteditable="true"]) {
+  -webkit-user-select: text;
+  user-select: text;
 }
 .viewer-area {
   width: 100%;
@@ -1446,8 +1470,8 @@ const deleteComment = async (commentId: number) => {
   display: grid;
   place-items: stretch;
   overflow: hidden;
-  background: #080b0a;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+  background: var(--bg-main);
+  box-shadow: var(--shadow-md);
 }
 .viewer-shell .card {
   border: 0;
@@ -1488,7 +1512,7 @@ const deleteComment = async (commentId: number) => {
   display: grid;
   grid-template-columns: 150px 1fr 150px;
   align-items: center;
-  color: white;
+  color: var(--text-main);
 }
 .viewer-navigation button {
   display: flex;
@@ -1497,11 +1521,11 @@ const deleteComment = async (commentId: number) => {
   gap: 0.4rem;
   background: transparent;
   border: 0;
-  color: var(--ink-d5ddda);
+  color: var(--text-muted);
   cursor: pointer;
 }
 .viewer-navigation button:hover:not(:disabled) {
-  color: var(--ink-e4c760);
+  color: var(--primary-ink);
 }
 .viewer-navigation button:disabled {
   opacity: 0.3;
@@ -1514,7 +1538,7 @@ const deleteComment = async (commentId: number) => {
   flex-direction: column;
 }
 .viewer-lesson-title span {
-  color: var(--ink-8ba29a);
+  color: var(--text-muted);
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -1991,10 +2015,10 @@ const deleteComment = async (commentId: number) => {
   align-items: center;
   justify-content: flex-start;
   gap: 0.35rem;
-  background: #132b24;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 12px rgba(5, 18, 14, 0.14);
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
   overflow-x: auto;
 }
 .content-tabs button {
@@ -2007,7 +2031,7 @@ const deleteComment = async (commentId: number) => {
   background: transparent;
   border: 1px solid transparent;
   border-radius: 7px;
-  color: var(--ink-aebdb8);
+  color: var(--text-muted);
   white-space: nowrap;
   font-size: 0.86rem;
   font-weight: 600;
@@ -2015,8 +2039,8 @@ const deleteComment = async (commentId: number) => {
   transition: 0.2s ease;
 }
 .content-tabs button:hover {
-  color: white;
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-main);
+  background: var(--bg-subtle);
 }
 .content-tabs button::after {
   content: "";
@@ -2029,12 +2053,12 @@ const deleteComment = async (commentId: number) => {
   background: transparent;
 }
 .content-tabs button.active {
-  color: white;
-  background: rgba(0, 91, 65, 0.45);
-  border-color: rgba(126, 205, 177, 0.22);
+  color: var(--primary-ink);
+  background: var(--primary-light);
+  border-color: var(--border-color);
 }
 .content-tabs button.active svg {
-  color: var(--ink-e4c760);
+  color: var(--primary-ink);
 }
 .content-tabs button.active::after {
   background: var(--surface-e4c760);
@@ -2754,9 +2778,9 @@ const deleteComment = async (commentId: number) => {
   align-items: center;
   gap: 4px;
   padding: 4px;
-  border: 1px solid rgba(138, 226, 194, 0.28);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--bg-subtle);
 }
 .lesson-content-switch button {
   min-height: 36px;
@@ -2768,7 +2792,7 @@ const deleteComment = async (commentId: number) => {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #dbe7e3;
+  color: var(--text-muted);
   font: inherit;
   font-size: 0.85rem;
   font-weight: 600;
@@ -2811,16 +2835,16 @@ const deleteComment = async (commentId: number) => {
   color: inherit;
 }
 .lesson-content-switch button:hover {
-  background: rgba(255, 255, 255, 0.09);
-  color: #fff;
+  background: var(--bg-main);
+  color: var(--text-main);
 }
 .lesson-content-switch button[aria-pressed="true"] {
-  background: #e7f2ee;
-  color: #005b41;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  background: var(--primary-light);
+  color: var(--primary-ink);
+  box-shadow: var(--shadow-sm);
 }
 .lesson-content-switch button:focus-visible {
-  outline: 2px solid #8ae2c2;
+  outline: 2px solid var(--primary-ink);
   outline-offset: 2px;
 }
 .lesson-tools {
@@ -2838,10 +2862,10 @@ const deleteComment = async (commentId: number) => {
   gap: 0.5rem;
   min-height: 38px;
   padding: 0 0.85rem;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid var(--border-color);
   border-radius: 7px;
   background: transparent;
-  color: white;
+  color: var(--text-main);
   font: inherit;
   font-size: 0.85rem;
   font-weight: 600;
@@ -2850,19 +2874,19 @@ const deleteComment = async (commentId: number) => {
   cursor: pointer;
 }
 .flashcard-shortcut:hover {
-  background: #294c40;
-  border-color: var(--line-8ae2c2);
+  background: var(--primary-light);
+  border-color: var(--primary-color);
 }
 .flashcard-shortcut:focus-visible {
-  outline: 2px solid #8ae2c2;
+  outline: 2px solid var(--primary-ink);
   outline-offset: 2px;
 }
 .flashcard-shortcut strong {
   min-width: 1.35rem;
   padding: 0.2rem 0.4rem;
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
+  background: var(--bg-subtle);
+  color: var(--text-main);
   font-size: 0.72rem;
   line-height: 1;
   text-align: center;
