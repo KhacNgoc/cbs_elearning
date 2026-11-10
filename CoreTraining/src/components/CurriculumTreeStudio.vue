@@ -299,6 +299,7 @@
                         <span>Xem trước</span>
                       </button>
                       <button
+                        v-if="!isCourseContentLocked(course)"
                         type="button"
                         class="btn-studio-node btn-primary-node"
                         title="Thêm Chương vào Khóa học này"
@@ -375,6 +376,15 @@
 
                         <!-- Hover Actions -->
                         <div class="node-hover-actions" @click.stop>
+                          <span
+                            v-if="isCourseContentLocked(course)"
+                            class="locked-node-hint"
+                            :title="`${courseLockReason(course)}. Chuyển khóa học về bản nháp để thêm, sửa hoặc xóa chương và bài học.`"
+                          >
+                            <Lock :size="12" />
+                            <span>Chuyển về nháp để sửa</span>
+                          </span>
+                          <template v-else>
                           <button
                             type="button"
                             class="btn-studio-node btn-primary-node"
@@ -400,6 +410,7 @@
                           >
                             <Trash2 :size="13" />
                           </button>
+                          </template>
                         </div>
                       </div>
 
@@ -476,13 +487,14 @@
                               <button
                                 type="button"
                                 class="btn-studio-node btn-editor-node"
-                                title="Mở trang soạn bài học toàn diện"
+                                :title="isCourseContentLocked(course) ? 'Xem bài học (khóa học cần chuyển về nháp để chỉnh sửa)' : 'Mở trang soạn bài học toàn diện'"
                                 @click="openLessonEditor(lesson.id)"
                               >
                                 <ExternalLink :size="12" />
-                                <span>Soạn bài</span>
+                                <span>{{ isCourseContentLocked(course) ? "Xem bài" : "Soạn bài" }}</span>
                               </button>
                               <button
+                                v-if="!isCourseContentLocked(course)"
                                 type="button"
                                 class="hover-action-btn delete-btn"
                                 title="Xóa Bài học này"
@@ -994,6 +1006,7 @@ import {
   Eye,
   Zap,
 } from "lucide-vue-next";
+import { isCourseContentLocked, courseLockReason } from "../utils/courseEditLock";
 import QuickCurriculumImportModal from "./QuickCurriculumImportModal.vue";
 import { courseApi } from "../api/courseApi";
 import { lessonMetadataUpdate } from "../utils/lessonContent";
@@ -3036,6 +3049,21 @@ watch(
   transition: all 0.15s ease;
   white-space: nowrap;
   box-sizing: border-box;
+}
+
+.locked-node-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  height: 26px;
+  padding: 0 0.6rem;
+  border-radius: 6px;
+  background: var(--surface-fff5de);
+  color: var(--ink-805b00);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: help;
 }
 
 .btn-studio-node.btn-primary-node {

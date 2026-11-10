@@ -1,8 +1,7 @@
 package com.bidv.coretraining.document.service.impl;
-import com.bidv.coretraining.policy.LearningPolicy;
-
 
 import com.bidv.coretraining.access.service.AuthorizationService;
+import com.bidv.coretraining.learner.service.LearningAccessService;
 import com.bidv.coretraining.document.entity.UploadedAsset;
 import com.bidv.coretraining.document.repository.UploadedAssetRepository;
 import com.bidv.coretraining.document.service.AssetAccessService;
@@ -18,11 +17,14 @@ public class AssetAccessServiceImpl implements AssetAccessService {
     private final UploadedAssetRepository assets;
     private final LessonRepository lessons;
     private final AuthorizationService auth;
+    private final LearningAccessService learningAccess;
 
-    public AssetAccessServiceImpl(UploadedAssetRepository assets, LessonRepository lessons, AuthorizationService auth) {
+    public AssetAccessServiceImpl(UploadedAssetRepository assets, LessonRepository lessons, AuthorizationService auth,
+            LearningAccessService learningAccess) {
         this.assets = assets;
         this.lessons = lessons;
         this.auth = auth;
+        this.learningAccess = learningAccess;
     }
 
     public void record(String path) {
@@ -46,9 +48,11 @@ public class AssetAccessServiceImpl implements AssetAccessService {
         if (assets.findById(path).map(a -> a.getUploadedBy().equals(user.getUsername())).orElse(false)
                 && AccessPolicy.permissions(user).contains("CONTENT_EDIT"))
             return;
-        boolean allowed = lessons.findByAssetPath(path).stream().anyMatch(l -> {
+        // Runs on every file view, so a whole class opening one lesson repeats it at once: use the same
+        // id/exists checks as opening the lesson instead of walking the course's chapters and lessons.
+        boolean allowed = lessons.findIdsByAssetPath(path).stream().anyMatch(id -> {
             try {
-                LearningPolicy.assertLessonAccess(user, l);
+                learningAccess.requireLesson(user, id);
                 return true;
             } catch (org.springframework.security.access.AccessDeniedException e) {
                 return false;

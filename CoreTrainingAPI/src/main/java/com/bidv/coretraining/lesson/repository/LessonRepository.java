@@ -108,6 +108,10 @@ public interface LessonRepository extends JpaRepository<Lesson, String> {
   @org.springframework.data.jpa.repository.Query("select distinct l from Lesson l left join l.documents d where d.fileUrl=:path or l.content.videoUrl=:path")
   java.util.List<Lesson> findByAssetPath(@org.springframework.data.repository.query.Param("path") String path);
 
+  /** Ids only, for the per-download access check: loading lessons would pull their course graph. */
+  @org.springframework.data.jpa.repository.Query("select distinct l.id from Lesson l left join l.documents d left join l.content c where d.fileUrl=:path or c.videoUrl=:path")
+  java.util.List<String> findIdsByAssetPath(@org.springframework.data.repository.query.Param("path") String path);
+
   List<Lesson> findByChapterIdOrderByLessonOrderAscIdAsc(String chapterId);
 
   List<Lesson> findByCourseIdOrderByLessonOrderAscIdAsc(String courseId);

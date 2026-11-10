@@ -307,7 +307,7 @@ import { useRoute, useRouter } from "vue-router";
 import { AlertTriangle, ChevronLeft, ChevronRight, Layers3, X, Sparkles } from "lucide-vue-next";
 import { useCourseStore } from "../stores/courseStore";
 import { useUserStore } from "../stores/userStore";
-import { axiosClient } from "../api/axiosClient";
+import { axiosClient, DOCUMENT_DOWNLOAD_TIMEOUT_MS } from "../api/axiosClient";
 import { outlineContext } from "../utils/learningStructure";
 import { courseApi } from "../api/courseApi";
 import type {
@@ -955,7 +955,10 @@ const downloadDocument = async (
       document.fileUrl.startsWith("blob:")
         ? document.fileUrl
         : `${apiBaseUrl}${document.fileUrl.startsWith("/") ? document.fileUrl : `/${document.fileUrl}`}`;
-    const response = await axiosClient.get<Blob>(url, { responseType: "blob" });
+    const response = await axiosClient.get<Blob>(url, {
+      responseType: "blob",
+      timeout: DOCUMENT_DOWNLOAD_TIMEOUT_MS,
+    });
     const objectUrl = URL.createObjectURL(response.data);
     const link = window.document.createElement("a");
     link.href = objectUrl;

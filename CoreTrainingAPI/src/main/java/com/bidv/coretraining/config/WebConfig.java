@@ -20,6 +20,13 @@ public class WebConfig implements WebMvcConfigurer {
             "/api/admin/quizzes/generate/jobs/**", "/api/admin/lessons/*/flashcards/generate/**",
             "/api/admin/lessons/*/ai-summarize-changes", "/api/admin/courses/*/documents/*/outline"};
 
+    /**
+     * File downloads: open-in-view would keep the connection used by the access check until the
+     * last byte reaches a slow client, so a classroom opening one deck at once drains the pool.
+     * The access check runs in its own read-only transaction.
+     */
+    static final String[] FILE_DOWNLOAD_PATHS = {"/uploads/documents/**"};
+
     private final ObjectProvider<OpenEntityManagerInViewInterceptor> openInView;
 
     public WebConfig(ObjectProvider<OpenEntityManagerInViewInterceptor> openInView) {
@@ -40,6 +47,7 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         openInView.ifAvailable(interceptor ->
-                registry.addWebRequestInterceptor(interceptor).excludePathPatterns(RAG_WAITING_PATHS));
+                registry.addWebRequestInterceptor(interceptor).excludePathPatterns(RAG_WAITING_PATHS)
+                        .excludePathPatterns(FILE_DOWNLOAD_PATHS));
     }
 }

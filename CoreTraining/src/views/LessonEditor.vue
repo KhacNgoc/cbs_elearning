@@ -47,12 +47,16 @@
           </div>
         </div>
       </header>
-      <p v-if="course?.status === 'ARCHIVED'" class="readonly-notice">
-        Khóa đang ở trạng thái lưu trữ.
-        <RouterLink :to="`/admin/courses/${chapter.courseId}`"
-          >Mở chi tiết khóa và chuyển về nháp</RouterLink
-        >
-        để chỉnh sửa bài.
+      <p v-if="contentLocked" class="readonly-notice" role="status">
+        <Lock :size="16" aria-hidden="true" />
+        <span>
+          {{ courseLockReason(course) }} nên bài học chỉ xem được: không lưu,
+          xóa hay sửa nội dung, bài kiểm tra và flashcard.
+          <RouterLink :to="`/admin/courses/${chapter.courseId}`"
+            >Mở chi tiết khóa học và bấm “Chuyển về nháp”</RouterLink
+          >
+          để chỉnh sửa, rồi xuất bản lại khi xong.
+        </span>
       </p>
       <div class="editor-tabs" role="tablist">
         <button
@@ -138,7 +142,7 @@
             </p>
             <button
               v-if="
-                course?.status !== 'ARCHIVED' &&
+                !contentLocked &&
                 !!course?.adminActions?.exams?.includes('create')
               "
               class="btn btn-primary"
@@ -152,7 +156,7 @@
             :key="lesson.id"
             embedded
             :lesson="lesson"
-            :read-only="course?.status === 'ARCHIVED'"
+            :read-only="contentLocked"
             @saved="refreshLesson"
           />
         </section>
@@ -201,15 +205,18 @@ import AdminQuizDetail from "./AdminQuizDetail.vue";
 import AdminBackButton from "../components/AdminBackButton.vue";
 import ConfirmModal from "../components/ConfirmModal.vue";
 import LessonFlashcardManager from "../components/flashcards/LessonFlashcardManager.vue";
-import { Pencil } from "lucide-vue-next";
+import { Lock, Pencil } from "lucide-vue-next";
+import { isCourseContentLocked, courseLockReason } from "../utils/courseEditLock";
 
 const route = useRoute(),
   router = useRouter(),
   courseStore = useCourseStore(),
   user = useUserStore();
+// Published and archived courses are read-only here; the author moves the course back to draft first.
+const contentLocked = computed(() => isCourseContentLocked(course.value));
 const canEdit = computed(
   () =>
-    course.value?.status !== "ARCHIVED" &&
+    !contentLocked.value &&
     course.value?.status !== "DELETED" &&
     !!course.value?.allowedActions?.includes("update"),
 );
@@ -396,6 +403,10 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", beforeUnload));
   min-width: 0;
 }
 .readonly-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  line-height: 1.5;
   padding: 1rem;
   background: var(--surface-fff5de);
   color: var(--ink-805b00);
