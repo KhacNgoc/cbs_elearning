@@ -430,7 +430,13 @@ public class TrainingReportQueryRepositoryImpl implements TrainingReportQueryRep
     }
 
     private static final List<String> CHART_DIMENSIONS = List.of("units", "courses", "programs", "domains");
-    private static final List<String> CHOICES = List.of("courses", "programs", "units");
+    /**
+     * Columns of a chart point, after its name: every group of a chart dimension is sent in this compact form so charts
+     * and rankings can sort and pick groups in the browser. The frontend reads them in this order (CHART_POINT_FIELDS).
+     */
+    private static final List<String> CHART_POINT_COLUMNS = List.of("total", "complete", "learning", "not_started", "tested",
+            "passed", "failed", "with_deadline", "overdue", "mandatory", "mandatory_complete");
+    private static final List<String> CHOICES =List.of("courses", "programs", "units");
 
     /** A row of the read statement's result: every section shares these columns and leaves the others null. */
     private static String section(String name, String group, String learnerName, String ord, String y, String m, String n, String metrics) {
@@ -508,6 +514,9 @@ public class TrainingReportQueryRepositoryImpl implements TrainingReportQueryRep
                 choices.put(key, new ArrayList<String>());
         for (String d : CHART_DIMENSIONS)
             charts.put(d, new ArrayList<Map<String, Object>>());
+        Map<String, List<List<Object>>> chartPoints = new LinkedHashMap<>();
+        for (String d : CHART_DIMENSIONS)
+            chartPoints.put(d, new ArrayList<>());
         List<Long> pageLearners = new ArrayList<>();
         long pageStart = Long.MAX_VALUE;
         long total = 0;
@@ -551,6 +560,11 @@ public class TrainingReportQueryRepositoryImpl implements TrainingReportQueryRep
                     } else {
                         @SuppressWarnings("unchecked")
                         var list = (List<Map<String, Object>>) charts.get(sectionName);
+                        // The statement already computes every group; charts used to see only the first 20.
+                        // All of them go out compact, so sorting or picking groups needs no other report read.
+                        var points = chartPoints.get(sectionName);
+                        if (points != null)
+                            points.add(chartPoint(row));
                         if (list.size() < 20) {
                             Map<String, Object> chart = metrics(row);
                             chart.put("name", row.get("name"));
@@ -574,9 +588,20 @@ public class TrainingReportQueryRepositoryImpl implements TrainingReportQueryRep
             return result;
         result.put("actions", actions);
         result.put("charts", charts);
+        result.put("chartPoints", chartPoints);
         result.put("months", months);
         result.put("bins", bins);
         return result;
+    }
+
+    /** [name, CHART_POINT_COLUMNS..., average]; the average stays null when nobody was evaluated. */
+    private static List<Object> chartPoint(Map<String, Object> row) {
+        List<Object> point = new ArrayList<>(CHART_POINT_COLUMNS.size() + 2);
+        point.add(Objects.toString(row.get("name"), ""));
+        for (String column : CHART_POINT_COLUMNS)
+            point.add(row.get(column) instanceof Number n ? n.longValue() : 0L);
+        point.add(row.get("average") instanceof Number n ? n.doubleValue() : null);
+        return point;
     }
 
     private static Map<String, Object> metrics(Map<String, Object> row) {

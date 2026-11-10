@@ -36,7 +36,7 @@
       </section>
       <section class="outcomes-grid training-progress">
         <article class="report-card"><div class="card-heading"><div><h3>Lượt hoàn thành theo tháng</h3><p></p></div><span class="chart-tag">{{ completedInPeriod.length }} lượt</span></div><ReportMockChart v-if="completedInPeriod.length" :config="trendChart" description="Lượt hoàn thành theo ngày được ghi nhận"/><div v-else class="chart-empty"><CalendarCheck :size="28"/><p>Chưa có lượt hoàn thành trong kỳ.</p></div><div class="trend-values"><span v-for="item in months" :key="item.key">{{ item.label }} <strong>{{ item.count }}</strong></span></div></article>
-        <article class="report-card"><div class="card-heading"><div><h3>So sánh tiến độ đơn vị</h3><p>Tỷ lệ hoàn thành, đang học và chưa bắt đầu trên lượt học.</p></div></div><ReportMockChart v-if="summary.total" :config="unitComparison" description="So sánh tỷ lệ trạng thái giữa các đơn vị"/><p v-else class="no-data">Chưa có dữ liệu so sánh.</p><div class="group-scale"><button v-for="unit in aggregates('units')" :key="unit.name" @click="filters.unit=unit.name || '';selectView('units')">{{ unit.name }} <strong>{{ unit.complete }}/{{ unit.total }} hoàn thành</strong></button></div></article>
+        <article class="report-card"><div class="card-heading"><div><h3>So sánh tiến độ đơn vị</h3><p>Tỷ lệ hoàn thành, đang học và chưa bắt đầu trên lượt học. {{ overviewUnitsNote }}</p></div><GroupChartControls v-if="summary.total" v-model:sort="overviewUnitsSort" v-model:picked="overviewUnitsPicked" :sorts="statusSorts" :names="overviewUnitsNames" noun="đơn vị"/></div><ReportMockChart v-if="summary.total" :config="unitComparison" :height="overviewUnitsHeight" description="So sánh tỷ lệ trạng thái giữa các đơn vị"/><p v-else class="no-data">Chưa có dữ liệu so sánh.</p><div class="group-scale"><button v-for="unit in overviewUnitsShown" :key="unit.name" @click="filters.unit=unit.name || '';selectView('units')">{{ unit.name }} <strong>{{ unit.complete }}/{{ unit.total }} hoàn thành</strong></button></div></article>
       </section>
       <div class="section-label"><div><h2>Kết quả đào tạo</h2></div></div>
       <section class="outcomes-grid">
@@ -48,7 +48,7 @@
       <section class="priority-grid">
         <article class="report-card"><div class="card-heading"><div><h3>Đơn vị có lượt học quá hạn</h3><p>Xếp theo tỷ lệ quá hạn trên lượt học có hạn hoàn thành.</p></div><span class="chart-tag danger">CẦN CHÚ Ý</span></div>
           <div v-if="unitStats.length" class="ranking-list"><button v-for="unit in unitStats" :key="unit.name" class="ranking-row" @click="openUnit(unit.name || '')"><div><strong>{{ unit.name }}</strong><span>{{ percent(unit.overdue,unit.withDeadline) }}</span></div><div class="ranking-track"><span :style="{width:`${rate(unit.overdue,unit.withDeadline)}%`}"></span></div><small>{{ unit.overdue }} quá hạn / {{ unit.withDeadline }} lượt có hạn · {{ unit.total-unit.withDeadline }} chưa có hạn</small></button></div><p v-else class="no-data">Không có dữ liệu đơn vị.</p>
-          <div class="card-foot"><Info :size="13"/> Bấm đơn vị để xem lượt học quá hạn. Đơn vị chưa có hạn hoàn thành không được tính tỷ lệ.</div>
+          <div class="card-foot"><Info :size="13"/> {{ unitStats.length<unitGroups.length?`Hiển thị ${unitStats.length}/${unitGroups.length} đơn vị có tỷ lệ quá hạn cao nhất. `:'' }}Bấm đơn vị để xem lượt học quá hạn. Đơn vị chưa có hạn hoàn thành không được tính tỷ lệ.</div>
         </article>
         <article class="report-card"><div class="card-heading"><div><h3>Khóa học cần can thiệp</h3><p>{{ courseMode==='progress'?'Ưu tiên số lượt quá hạn, sau đó đến số lượt chưa hoàn thành.':'Ưu tiên số lượt đã kiểm tra nhưng chưa từng đạt.' }}</p></div></div>
           <div class="segmented" aria-label="Chế độ theo dõi khóa học"><button :aria-pressed="courseMode==='progress'" :class="{active:courseMode==='progress'}" @click="courseMode='progress'">Tiến độ học</button><button :aria-pressed="courseMode==='results'" :class="{active:courseMode==='results'}" @click="courseMode='results'">Kết quả kiểm tra</button></div>
@@ -62,7 +62,7 @@
 
       <div class="detail-title"><h3>{{ currentView?.label }}</h3><p>{{ currentView?.caption }}</p></div>
 
-      <article v-if="showDetailChart&&summary.total" class="report-card detail-chart"><div class="card-heading"><div><h3>{{ detailChartTitle }}</h3><p>{{ selected==='domains'?'Điểm gần nhất trung bình /100; số học viên được đánh giá ở bảng bên dưới.':selected==='scores'?'Điểm gần nhất cho mỗi lượt học. Ngưỡng đạt theo từng bài.':selected==='programs'?'Chỉ tính lượt khóa bắt buộc được giao, cùng mẫu số với bảng tiến độ chương trình. Biểu đồ hiển thị tối đa 20 đối tượng có nhiều lượt học nhất.':'Tỷ lệ trạng thái theo đối tượng; quy mô thực tế được ghi ở bảng.' }}</p></div></div><ReportMockChart :config="detailChart" :description="detailChartTitle+'. Số liệu chi tiết trong bảng bên dưới.'"/></article>
+      <article v-if="showDetailChart&&summary.total" class="report-card detail-chart"><div class="card-heading"><div><h3>{{ detailChartTitle }}</h3><p>{{ detailChartNote }}</p></div><GroupChartControls v-if="isGroupChart" v-model:sort="detailSort" v-model:picked="detailPicked" :sorts="groupSorts[selected]||[]" :names="detailNames" :noun="groupNouns[selected]||''"/></div><ReportMockChart :config="detailChart" :height="isGroupChart?detailHeight:undefined" :description="detailChartTitle+'. Số liệu chi tiết trong bảng bên dưới.'"/></article>
     </template>
     <LiveCourseRatings v-if="selected==='courses'" :printing="printing"/>
     <section ref="tableSection" class="report-card detail-card" aria-label="Báo cáo chi tiết và danh sách xử lý">
@@ -93,6 +93,8 @@ import { computed, reactive, ref, watch, onMounted, onBeforeUnmount, nextTick } 
 import type { ChartConfiguration } from 'chart.js';
 import { Users, CircleCheck, Target, Download, Printer, Info, SlidersHorizontal, Search, ArrowUpRight, AlarmClock, CalendarCheck, X } from 'lucide-vue-next';
 import ReportMockChart from '../components/ReportMockChart.vue';
+import GroupChartControls from '../components/GroupChartControls.vue';
+import { useGroupChart, pointMetrics, axisLabel, GROUP_CHART_LIMIT, type GroupSort } from '../utils/reportGroups';
 import LiveCourseRatings from '../components/LiveCourseRatings.vue';
 import TablePagination from '../components/TablePagination.vue';
 import ReportAttemptAnalysis from '../components/ReportAttemptAnalysis.vue';
@@ -164,22 +166,49 @@ const kpis=computed(()=>[
 ]);
 const metrics=(s:ReportMetrics)=>({...s,completionRate:s.total?s.complete/s.total*100:null,programProgress:s.mandatory?s.mandatoryComplete/s.mandatory*100:null});
 const aggregates=(dimension:string)=>(report.value?.charts?.[dimension]||[]).map(metrics);
-const unitStats=computed(()=>aggregates('units').sort((a,b)=>(b.withDeadline?b.overdue/b.withDeadline:-1)-(a.withDeadline?a.overdue/a.withDeadline:-1)));
-const courseStats=computed(()=>aggregates('courses').sort((a,b)=>courseMode.value==='progress'?b.overdue-a.overdue||(b.total-b.complete)-(a.total-a.complete):b.failed-a.failed).slice(0,5));
+// Every group of a dimension. charts holds only the 20 biggest, so a ranking built on it misses smaller groups;
+// an older backend without chartPoints still gets those 20.
+const allGroups=(dimension:string)=>{const points=report.value?.chartPoints?.[dimension];return points?points.map(p=>metrics(pointMetrics(p))):aggregates(dimension);};
+type Group=ReturnType<typeof metrics>;
+const overdueShare=(g:Group)=>g.withDeadline?g.overdue/g.withDeadline:-1;
+const unitGroups=computed(()=>allGroups('units'));
+const unitStats=computed(()=>[...unitGroups.value].sort((a,b)=>overdueShare(b)-overdueShare(a)).slice(0,GROUP_CHART_LIMIT));
+const courseStats=computed(()=>[...allGroups('courses')].sort((a,b)=>courseMode.value==='progress'?b.overdue-a.overdue||(b.total-b.complete)-(a.total-a.complete):b.failed-a.failed).slice(0,5));
 const months=computed(()=>(report.value?.months||[]).map(m=>({key:`${m.year}-${m.month}`,label:`T${m.month}/${m.year}`,count:m.count})));
 const completedInPeriod=computed(()=>({length:months.value.reduce((n,m)=>n+m.count,0)}));
-function comparison(items:ReportMetrics[]):ChartConfiguration{return {type:'bar',data:{labels:items.map(g=>g.name||''),datasets:statuses.map((label,index)=>({label,data:items.map(g=>g.total?[g.complete,g.learning,g.notStarted][index]!/g.total*100:0),backgroundColor:statusColors[index],maxBarThickness:25}))},options:{indexAxis:'y',plugins:{legend:{position:'bottom',labels:{boxWidth:8,usePointStyle:true}}},scales:{x:{min:0,max:100,stacked:true},y:{stacked:true,grid:{display:false}}}}};}
-const unitComparison=computed(()=>comparison(aggregates('units')));
+type StatusCounts=Pick<ReportMetrics,'name'|'total'|'complete'|'learning'|'notStarted'>;
+// Every axis label is drawn (group charts grow to fit them); long names are cut on the axis and shown whole in the tooltip.
+const groupAxis={stacked:true,grid:{display:false},ticks:{autoSkip:false,callback(this:{getLabelForValue(v:number):string},value:string|number){return axisLabel(String(this.getLabelForValue(Number(value))));}}};
+function comparison(items:StatusCounts[]):ChartConfiguration{const counts=(g:StatusCounts)=>[g.complete,g.learning,g.notStarted];return {type:'bar',data:{labels:items.map(g=>g.name||''),datasets:statuses.map((label,index)=>({label,data:items.map(g=>g.total?counts(g)[index]!/g.total*100:0),backgroundColor:statusColors[index],maxBarThickness:25}))},options:{indexAxis:'y',plugins:{legend:{position:'bottom',labels:{boxWidth:8,usePointStyle:true}},tooltip:{callbacks:{label:ctx=>{const g=items[ctx.dataIndex];return g?`${ctx.dataset.label}: ${Number(ctx.parsed.x).toFixed(1)}% (${counts(g)[ctx.datasetIndex]} / ${g.total} lượt)`:'';}}}},scales:{x:{min:0,max:100,stacked:true},y:groupAxis}}} as ChartConfiguration;}
+/** One measure per group on a 0–100 scale (programme progress, average score). */
+function groupBars(items:Group[],label:string,value:(g:Group)=>number|null,detail:(g:Group)=>string):ChartConfiguration{return {type:'bar',data:{labels:items.map(g=>g.name||''),datasets:[{label,data:items.map(value),backgroundColor:'#00856a',maxBarThickness:25}]},options:{indexAxis:'y',plugins:{tooltip:{callbacks:{label:ctx=>{const g=items[ctx.dataIndex];const v=g?value(g):null;return g?`${label}: ${v===null?'Chưa có dữ liệu':Number(v).toFixed(1)} · ${detail(g)}`:'';}}}},scales:{x:{min:0,max:100},y:{...groupAxis,stacked:false}}}} as ChartConfiguration;}
+const byLowest=(value:(g:Group)=>number|null)=>(a:Group,b:Group)=>{const x=value(a),y=value(b);return x===null?(y===null?b.total-a.total:1):y===null?-1:x-y||b.total-a.total;};
+const byVolume:GroupSort<Group>={id:'volume',label:'Nhiều lượt học nhất',note:'có nhiều lượt học nhất'};
+const statusSorts:GroupSort<Group>[]=[byVolume,{id:'lowest',label:'Tỷ lệ hoàn thành thấp nhất',note:'có tỷ lệ hoàn thành thấp nhất',compare:byLowest(g=>g.completionRate)}];
+const groupSorts:Record<string,GroupSort<Group>[]>={units:statusSorts,courses:statusSorts,
+ programs:[byVolume,{id:'lowest',label:'Tiến độ thấp nhất',note:'có tiến độ khóa bắt buộc thấp nhất',compare:byLowest(g=>g.programProgress)}],
+ domains:[byVolume,{id:'lowest',label:'Điểm thấp nhất',note:'có điểm trung bình thấp nhất',compare:byLowest(g=>g.average)}]};
+const groupNouns:Record<string,string>={units:'đơn vị',courses:'khóa học',programs:'chương trình',domains:'lĩnh vực'};
+// The detail chart of a dimension view, and the unit comparison of the overview, each keep their own order and pick.
+const isGroupChart=computed(()=>selected.value in groupSorts);
+const detailGroups=useGroupChart(()=>isGroupChart.value?allGroups(selected.value):[],{noun:()=>groupNouns[selected.value]||'',sorts:()=>groupSorts[selected.value]||[],fullList:'xem đầy đủ ở bảng',resetOn:selected});
+const overviewUnits=useGroupChart(()=>unitGroups.value,{noun:()=>'đơn vị',sorts:()=>statusSorts,fullList:'xem đầy đủ ở báo cáo Đơn vị'});
+const unitComparison=computed(()=>comparison(overviewUnits.shown.value));
+const {sortId:detailSort,picked:detailPicked,names:detailNames,height:detailHeight}=detailGroups;
+const {sortId:overviewUnitsSort,picked:overviewUnitsPicked,names:overviewUnitsNames,height:overviewUnitsHeight,shown:overviewUnitsShown,note:overviewUnitsNote}=overviewUnits;
 const trendChart=computed<ChartConfiguration>(()=>({type:'bar',data:{labels:months.value.map(m=>m.label),datasets:[{label:'Lượt hoàn thành',data:months.value.map(m=>m.count),backgroundColor:'#00856a',borderRadius:5}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}}));
 const actionLabels:Record<string,string>={overdue:'Quá hạn',dueSoon:'Sắp đến hạn, chưa bắt đầu',failed:'Chưa đạt yêu cầu kiểm tra',untested:'Chưa kiểm tra',incomplete:'Chưa hoàn thành'};
 const actionOptions=computed(()=>(report.value?.actions||[]).map(a=>({...a,label:actionLabels[a.id]})));
 const showDetailChart=computed(()=>!['learners','completion','overview'].includes(selected.value));
 const detailChartTitle=computed(()=>selected.value==='domains'?'Điểm kiểm tra gần nhất theo lĩnh vực':selected.value==='scores'?'Phân bố điểm kiểm tra gần nhất':selected.value==='programs'?'Tiến độ chương trình · khóa bắt buộc':'So sánh tiến độ học tập');
+const detailChartNote=computed(()=>{const lead=selected.value==='domains'?'Điểm gần nhất trung bình /100; số học viên được đánh giá ở bảng bên dưới.':selected.value==='scores'?'Điểm gần nhất cho mỗi lượt học. Ngưỡng đạt theo từng bài.':selected.value==='programs'?'Chỉ tính lượt khóa bắt buộc được giao, cùng mẫu số với bảng tiến độ chương trình.':'Tỷ lệ trạng thái theo đối tượng.';return isGroupChart.value?`${lead} ${detailGroups.note.value}`:lead;});
 const detailChart=computed<ChartConfiguration>(()=>{
  const data=aggregates(selected.value);
  if(selected.value==='scores')return {type:'bar',data:{labels:(report.value?.bins||[]).map(b=>b.name),datasets:[{label:'Lượt học',data:(report.value?.bins||[]).map(b=>b.count),backgroundColor:'#4a8fa8'}]}};
- if(['programs','domains'].includes(selected.value))return {type:'bar',data:{labels:data.map(g=>g.name||''),datasets:[{label:detailChartTitle.value,data:data.map(g=>selected.value==='programs'?g.programProgress:g.average),backgroundColor:'#00856a'}]},options:{indexAxis:'y',scales:{x:{min:0,max:100}}}};
- return comparison(data);
+ const shown=detailGroups.shown.value;
+ if(selected.value==='programs')return groupBars(shown,detailChartTitle.value,g=>g.programProgress,g=>`${g.mandatoryComplete}/${g.mandatory} lượt bắt buộc hoàn thành`);
+ if(selected.value==='domains')return groupBars(shown,detailChartTitle.value,g=>g.average,g=>`${g.tested} lượt đã kiểm tra`);
+ return isGroupChart.value?comparison(shown):comparison(data);
 });
 const individualTable=computed(()=>['overview','completion','scores'].includes(selected.value));
 const tableHeaders=computed(()=>selected.value==='scores'?['Học viên','Khóa học','Số lần thi','TB điểm gần nhất /100','Kết quả qua các lần thi','Thao tác']:individualTable.value?['Học viên','Đơn vị','Khóa học','Trạng thái','Hạn hoàn thành','Kết quả kiểm tra','Cần theo dõi','Thao tác']:selected.value==='domains'?['Lĩnh vực','Học viên','Lượt học','Tỷ lệ hoàn thành','Đạt kiểm tra / đã thi','Điểm kiểm tra TB /100','Thao tác']:selected.value==='learners'?['Học viên','Khóa được giao / tham gia','Hoàn thành','Tỷ lệ hoàn thành','Đạt kiểm tra / đã thi','Điểm TB /100','Thao tác']:selected.value==='programs'?['Chương trình','Học viên','Khóa bắt buộc đã giao','Bắt buộc hoàn thành','Tiến độ chương trình','Đạt kiểm tra / đã thi','Thao tác']:selected.value==='courses'?['Khóa học','Ghi danh','Hoàn thành','Tỷ lệ hoàn thành','Đạt kiểm tra / đã thi','Điểm TB /100','Bỏ dở','Thao tác']:['Đối tượng','Học viên','Lượt học','Tỷ lệ hoàn thành','Tỷ lệ đạt kiểm tra','Học viên quá hạn / có hạn','Thao tác']);
@@ -227,6 +256,7 @@ onBeforeUnmount(()=>{sequence++;historySequence++;dimensionSequence++;clearTimeo
 <style scoped src="../assets/styles/reporting-mockup.css"></style>
 <style scoped>
 .report-pagination{margin-top:0;padding:16px 20px}
+.card-heading:has(.group-chart-controls){flex-wrap:wrap}
 .attempt-list li{flex-wrap:wrap}
 @media(max-width:600px){
   .report-pagination{padding:12px}

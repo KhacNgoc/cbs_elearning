@@ -23,9 +23,13 @@ export interface ReportFact {
   average:number|null;everPassed:number;requiredPassed:number;passingScore:number;progress:number;
 }
 export type ReportParams = Record<string,string|number|boolean>;
+/** [name, ...CHART_POINT_FIELDS counts, average]; see utils/reportGroups. */
+export type ChartPoint = (string|number|null)[];
 export interface ReportPage {
   asOf:string;summary?:ReportMetrics;choices?:Record<string,string[]>;items:(ReportFact|ReportMetrics)[];total:number;page:number;size:number;
   actions?:{id:string;count:number}[];charts?:Record<string,ReportMetrics[]>;
+  /** Every group of each chart dimension in compact form, biggest first; charts holds only the first 20. */
+  chartPoints?:Record<string,ChartPoint[]>;
   months?:{year:number;month:number;count:number}[];bins?:{name:string;count:number}[];
 }
 export const readTrainingReport = async(params:ReportParams) =>
