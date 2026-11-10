@@ -19,6 +19,7 @@ import java.util.regex.Pattern;
 public class RequestLoggingFilter extends OncePerRequestFilter {
     public static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
     public static final String TRACE_ID_MDC_KEY = "traceId";
+    private static final String WEBSOCKET_PATH_PREFIX = "/ws/";
     private static final Pattern SAFE_CORRELATION_ID = Pattern.compile("[A-Za-z0-9._-]{1,64}");
     private static final Logger log = LoggerFactory.getLogger(RequestLoggingFilter.class);
 
@@ -50,6 +51,9 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
 
             if (status >= 500) {
                 log.error(message, arguments);
+            } else if (status == 401 && request.getRequestURI().startsWith(WEBSOCKET_PATH_PREFIX)) {
+                // The handshake interceptor already logs why it rejected the upgrade.
+                log.debug(message, arguments);
             } else if (status >= 400) {
                 log.warn(message, arguments);
             } else {
