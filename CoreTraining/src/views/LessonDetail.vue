@@ -50,7 +50,13 @@
         ×
       </button>
     </div>
-    <div class="learning-stage" :class="{ 'sidebar-hidden': !sidebarOpen }">
+    <div
+      class="learning-stage"
+      :class="{ 'sidebar-hidden': !sidebarOpen }"
+      @copy.capture.prevent="blockLearningCopy"
+      @cut.capture.prevent="blockLearningCopy"
+      @contextmenu.capture="blockLearningContextMenu"
+    >
       <LessonMediaStage
         v-if="lesson && chapter && !lessonLoading"
         ref="mediaStage"
@@ -691,6 +697,18 @@ const loadVideoNotes = async (lessonId: string, loadId: number) => {
 
 const flushProgress = () => {
   void persistCurrentProgress();
+};
+const isLearningCopyTarget = (target: EventTarget | null) => {
+  if (!(target instanceof Element)) return true;
+  return !target.closest("input, textarea, select, [contenteditable='true']");
+};
+const blockLearningCopy = (event: ClipboardEvent) => {
+  if (!isLearningCopyTarget(event.target)) return;
+  event.preventDefault();
+};
+const blockLearningContextMenu = (event: MouseEvent) => {
+  if (!isLearningCopyTarget(event.target)) return;
+  event.preventDefault();
 };
 const handleOnline = () => {
   if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
@@ -1429,6 +1447,12 @@ const deleteComment = async (commentId: number) => {
   height: max(480px, var(--learning-stage-fill, calc(100vh - 193px)));
   position: relative;
   overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.learning-stage :is(input, textarea, select, [contenteditable="true"]) {
+  -webkit-user-select: text;
+  user-select: text;
 }
 .viewer-area {
   width: 100%;

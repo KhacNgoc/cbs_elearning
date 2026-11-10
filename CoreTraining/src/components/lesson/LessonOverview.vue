@@ -72,6 +72,10 @@ defineProps<{
 }>();
 </script>
 <style scoped>
+.info-main {
+  -webkit-user-select: none;
+  user-select: none;
+}
 .procedure-content {
   display: flex;
   flex-direction: column;

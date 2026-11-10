@@ -172,6 +172,8 @@ const resolveDocumentUrl = (url: string) => {
   padding: 2rem;
   background: var(--surface-ffffff);
   color: var(--text-main);
+  -webkit-user-select: none;
+  user-select: none;
 }
 .lesson-text-viewer h2 {
   font-size: 1.3rem;
