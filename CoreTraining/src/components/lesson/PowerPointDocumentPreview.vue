@@ -204,7 +204,7 @@ onBeforeUnmount(() => {
   position: relative;
   height: 100%;
   min-height: 0;
-  background: #111827;
+  background: var(--bg-main);
 }
 .powerpoint-preview-scroll {
   height: 100%;
