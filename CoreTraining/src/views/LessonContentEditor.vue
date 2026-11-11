@@ -12,7 +12,7 @@
             required
           >
             <option
-              v-for="t in courseStore.courses"
+              v-for="t in courseOptions"
               :key="t.id"
               :value="t.id"
             >
@@ -361,16 +361,17 @@ import { ref, computed, nextTick, watch, defineAsyncComponent } from "vue";
 import { Upload, Link2, Plus, FileText, X, Trash2, CheckCheck, ShieldAlert } from "lucide-vue-next";
 import { axiosClient } from "../api/axiosClient";
 import { onMounted } from "vue";
-import { useCourseStore } from "../stores/courseStore";
 import { adminApi, VIDEO_UPLOAD_MAX_BYTES } from "../api/adminApi";
 import { trainingApi } from "../api/trainingApi";
 import { validateVideoUpload } from "../utils/videoAccess";
 import { showToast } from "../utils/toast";
-import type { Lesson, LessonDocument } from "../types";
+import type { Course, Lesson, LessonDocument } from "../types";
 const LessonTextEditor = defineAsyncComponent(
   () => import("../components/lesson/LessonTextEditor.vue"),
 );
-const props = defineProps<{ lesson: Lesson; readOnly?: boolean; canDelete?: boolean }>();
+const props = defineProps<{ lesson: Lesson; course?: Course | null; readOnly?: boolean; canDelete?: boolean }>();
+// The course is fixed for an existing lesson; the parent already loaded it, so no course list is needed.
+const courseOptions = computed(() => (props.course ? [props.course] : []));
 const emit = defineEmits<{
   saved: [lesson: Lesson];
   cancel: [];
@@ -378,7 +379,6 @@ const emit = defineEmits<{
   dirty: [value: boolean];
   'title-change': [title: string];
 }>();
-const courseStore = useCourseStore();
 const loading = ref(false),
   videoUploadProgress = ref<number | null>(null),
   documentUploadProgress = ref(new Map<File, number>());
@@ -813,7 +813,6 @@ const saveLesson = async () => {
         ? `${savedMessage} Đã gửi thông báo cập nhật kiến thức tới ${notifiedCount} cán bộ đã hoàn thành bài.`
         : savedMessage,
     );
-    await courseStore.fetchCourses(true);
   } catch (err) {
     const serverMessage = (
       err as { response?: { data?: { message?: string } } }

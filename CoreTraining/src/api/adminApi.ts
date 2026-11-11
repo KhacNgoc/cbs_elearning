@@ -12,6 +12,15 @@ import {
   type QuizGenerationJob,
 } from "../utils/quizGenerationJob";
 
+/** A course picker entry: course identity plus the admin actions allowed on it. */
+export interface CourseSearchOption {
+  id: string;
+  code?: string;
+  name: string;
+  status: string;
+  adminActions?: Record<string, string[]>;
+}
+
 // Set from QUIZ_MAX_QUESTIONS at build time; the backend enforces the same value.
 export const QUIZ_MAX_QUESTIONS =
   Number(import.meta.env.VITE_QUIZ_MAX_QUESTIONS) || 10;
@@ -129,13 +138,6 @@ export interface QuizGenerationRequest {
 export type QuizGenerationJobSnapshot = QuizGenerationJob<QuizGenerationResponse>;
 
 export const adminApi = {
-  async getEnrollmentRequests(): Promise<EnrollmentRequest[]> {
-    const response = await axiosClient.get<EnrollmentRequest[]>(
-      "/api/admin/enrollment-requests",
-    );
-    return response.data;
-  },
-
   async reviewEnrollmentRequest(
     id: number,
     approve: boolean,
@@ -175,13 +177,16 @@ export const adminApi = {
     return response.data;
   },
 
+  /** `page` reads the courses under that admin page's permission (as `/api/admin/courses?page=`). */
   async searchCourses(
     search?: string,
     limit = 50,
-  ): Promise<{ id: string; code?: string; name: string; status: string }[]> {
-    const response = await axiosClient.get<
-      { id: string; code?: string; name: string; status: string }[]
-    >("/api/admin/courses/search", { params: { search, limit } });
+    page?: "exams" | "documents",
+  ): Promise<CourseSearchOption[]> {
+    const response = await axiosClient.get<CourseSearchOption[]>(
+      "/api/admin/courses/search",
+      { params: { search, limit, page } },
+    );
     return response.data;
   },
 
@@ -250,34 +255,6 @@ export const adminApi = {
         { params: { page } },
       )
     ).data;
-  },
-
-  // ==========================================
-  // User Management
-  // ==========================================
-  async getAllUsers(): Promise<AdminUser[]> {
-    const response = await axiosClient.get<AdminUser[]>("/api/admin/users");
-    return response.data;
-  },
-
-  async createUser(user: AdminUser): Promise<AdminUser> {
-    const response = await axiosClient.post<AdminUser>(
-      "/api/admin/users",
-      user,
-    );
-    return response.data;
-  },
-
-  async updateUser(id: number, user: AdminUser): Promise<AdminUser> {
-    const response = await axiosClient.put<AdminUser>(
-      `/api/admin/users/${id}`,
-      user,
-    );
-    return response.data;
-  },
-
-  async deleteUser(id: number): Promise<void> {
-    await axiosClient.delete(`/api/admin/users/${id}`);
   },
 
   // ==========================================
@@ -379,21 +356,6 @@ export const adminApi = {
     const response = await axiosClient.put<Lesson>(
       `/api/admin/lessons/${id}`,
       lesson,
-    );
-    return response.data;
-  },
-
-  async deleteLesson(id: string): Promise<void> {
-    await axiosClient.delete(`/api/admin/lessons/${id}`);
-  },
-
-  async reorderLessons(
-    courseId: string,
-    lessonIds: string[],
-  ): Promise<Lesson[]> {
-    const response = await axiosClient.put<Lesson[]>(
-      `/api/admin/courses/${encodeURIComponent(courseId)}/lessons/order`,
-      lessonIds,
     );
     return response.data;
   },

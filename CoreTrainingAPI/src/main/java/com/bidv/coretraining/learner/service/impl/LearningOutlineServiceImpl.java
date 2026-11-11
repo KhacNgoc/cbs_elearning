@@ -60,6 +60,8 @@ public class LearningOutlineServiceImpl implements LearningOutlineService {
                         Collectors.mapping(d -> new LessonDocumentDto(d.getId(), d.getName(), d.getDocumentType(),
                                 d.getFileUrl(), d.getOriginalFileName(), d.getFileSize(), d.getDocumentOrder(), d.getPurpose()),
                                 Collectors.toList())));
+        // Editors see "compose" vs "edit" per lesson; one id query instead of loading lesson content.
+        Set<String> withProcedure = editor ? lessons.findLessonIdsWithProcedure(id) : Set.of();
         Set<String> completed = users.findCompletedLessonIds(user.getId(), id);
         Map<String, List<LessonOutlineView>> grouped = rows.stream()
                 .collect(Collectors.groupingBy(LessonOutlineView::getChapterId));
@@ -83,6 +85,8 @@ public class LearningOutlineServiceImpl implements LearningOutlineService {
                     all.stream().map(row -> {
                         LessonDto dto = lessonDto(row);
                         dto.setDocuments(documentMetadata.getOrDefault(row.getId(), List.of()));
+                        if (editor)
+                            dto.setHasProcedure(withProcedure.contains(row.getId()));
                         return dto;
                     }).toList(), !editor && !precedingChaptersComplete, done));
             if ("PUBLISHED".equals(chapter.getStatus()))

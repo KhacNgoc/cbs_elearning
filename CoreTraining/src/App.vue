@@ -328,6 +328,18 @@ onMounted(async () => {
   }
 }
 
+/* Equal side columns keep the menu centred on the screen, not in the gap between brand and user menu.
+   The user menu never shrinks below its content, so on narrow desktops the menu drifts left instead of overlapping. */
+@media (min-width: 1101px) {
+  .navbar.learner-navbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr);
+  }
+  .learner-navbar .nav-user-menu {
+    justify-self: end;
+  }
+}
+
 /* Learner navigation has a dedicated second row on tablet and mobile. */
 @media (max-width: 1100px) {
   .navbar.learner-navbar {

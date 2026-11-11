@@ -29,6 +29,8 @@ public class LessonDto {
     private Boolean hasQuiz;
     private Boolean hasVideo;
     private Boolean hasText;
+    /** Outline flag for editors: the lesson has procedure steps. Ignored on update. */
+    private Boolean hasProcedure;
     /** On update, null keeps the stored value. */
     private Boolean textRequired;
     private Boolean videoRequired;

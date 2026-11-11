@@ -77,6 +77,8 @@ public interface CourseMapper {
         @Mapping(target = "comments", qualifiedByName = "rootComments")
         // The detail service supplies the total from its paginated comments query.
         @Mapping(target = "commentCount", ignore = true)
+        // Outline-only flag; detail responses already carry the procedure steps.
+        @Mapping(target = "hasProcedure", ignore = true)
         LessonDto toLessonDto(Lesson lesson);
 
         @InheritConfiguration(name = "toLessonDto")

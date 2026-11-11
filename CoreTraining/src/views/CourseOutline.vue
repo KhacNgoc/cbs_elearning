@@ -312,12 +312,13 @@ function start(c: Chapter) {
   if (l) learn(l.id);
 }
 
+// The editor outline carries content flags, so no lesson content is downloaded to decide this.
 function isLessonComposed(l: Lesson): boolean {
   if (l.status === 'PUBLISHED') return true;
   if (l.hasText || (l.textBody && l.textBody.trim().length > 0)) return true;
   if (l.hasVideo || (l.videoUrl && l.videoUrl.trim().length > 0)) return true;
   if (Array.isArray(l.documents) && l.documents.length > 0) return true;
-  if (Array.isArray((l as any).procedureSteps) && (l as any).procedureSteps.length > 0) return true;
+  if (l.hasProcedure || (Array.isArray(l.procedureSteps) && l.procedureSteps.length > 0)) return true;
   if (l.hasQuiz) return true;
   return false;
 }
@@ -370,7 +371,6 @@ async function changeCourseStatus(status: "PUBLISHED" | "DRAFT") {
         l.status = status;
       }
     }
-    await courses.fetchCourses(true);
     showToast(
       status === "PUBLISHED"
         ? "Đã xuất bản khóa học và toàn bộ bài học thành công!"
@@ -407,34 +407,6 @@ watch(
       if (user.systemAdmin || user.can("courses") || !!loaded.course.canEdit) {
         if (shouldBackToTree.value) {
           syncAdminTreeState(loaded);
-        }
-        try {
-          const adminChaps = await trainingApi.chapters(String(courseId));
-          if (Array.isArray(adminChaps)) {
-            const map = new Map<string, any>();
-            for (const ac of adminChaps) {
-              for (const al of ac.lessons || []) {
-                map.set(al.id, al);
-              }
-            }
-            for (const ch of loaded.chapters) {
-              for (let i = 0; i < ch.lessons.length; i++) {
-                const detailed = map.get(ch.lessons[i].id);
-                if (detailed) {
-                  ch.lessons[i] = {
-                    ...ch.lessons[i],
-                    textBody: detailed.textBody,
-                    videoUrl: detailed.videoUrl,
-                    documents: detailed.documents || ch.lessons[i].documents,
-                    procedureSteps: detailed.procedureSteps,
-                    hasQuiz: detailed.hasQuiz ?? ch.lessons[i].hasQuiz,
-                  };
-                }
-              }
-            }
-          }
-        } catch {
-          // ignore
         }
       }
       if (Array.isArray(loaded.chapters) && loaded.chapters.length > 0) {

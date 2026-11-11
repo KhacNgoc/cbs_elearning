@@ -55,6 +55,12 @@ public interface LessonRepository extends JpaRepository<Lesson, String> {
   java.util.Set<String> findCourseIdsOf(
       @org.springframework.data.repository.query.Param("ids") java.util.Collection<String> ids);
 
+  /** Lessons of a course with at least one procedure section, without loading the sections. */
+  @org.springframework.data.jpa.repository.Query(
+      "select distinct ps.lesson.id from ProcedureSection ps where ps.lesson.course.id = :courseId")
+  java.util.Set<String> findLessonIdsWithProcedure(
+      @org.springframework.data.repository.query.Param("courseId") String courseId);
+
   default List<LessonOutlineView> findOutline(String courseId, boolean includeDraft) {
     return findOutlines(List.of(courseId), includeDraft);
   }

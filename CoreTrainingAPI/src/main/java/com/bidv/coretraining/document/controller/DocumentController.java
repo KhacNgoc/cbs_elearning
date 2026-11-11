@@ -8,6 +8,7 @@ import com.bidv.coretraining.rag.dto.RagChatHistoryDto;
 import com.bidv.coretraining.rag.dto.RagChatRequest;
 import com.bidv.coretraining.rag.dto.RagChatResponse;
 import com.bidv.coretraining.rag.service.RagChatService;
+import com.bidv.coretraining.security.AccessPolicy;
 import com.bidv.coretraining.security.CustomUserDetails;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -36,6 +37,7 @@ public class DocumentController {
     public ResponseEntity<List<Map<String, Object>>> searchCourses(
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "50") int limit) {
+        var user = authorization.current();
         List<Map<String, Object>> result = authorization.searchEditableCourses(search, limit).stream()
                 .map(c -> {
                     Map<String, Object> m = new HashMap<>();
@@ -43,6 +45,8 @@ public class DocumentController {
                     m.put("code", c.getCode());
                     m.put("name", c.getName());
                     m.put("status", c.getStatus());
+                    // The course picker decides upload/delete buttons from these, as from the full course list.
+                    m.put("adminActions", AccessPolicy.adminActions(user, c));
                     return m;
                 })
                 .toList();
