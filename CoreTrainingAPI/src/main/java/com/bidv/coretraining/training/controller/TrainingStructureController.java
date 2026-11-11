@@ -183,9 +183,29 @@ public class TrainingStructureController {
         return service.adminCoursesByUnit(unitId);
     }
 
+    @GetMapping("/admin/courses/paged")
+    public PagedResult<CourseDto> coursesPaged(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String programId) {
+        return service.adminCoursesPaged(search, status, programId, page, size);
+    }
+
+    @GetMapping("/admin/courses/{id}")
+    public CourseDto course(@PathVariable String id) {
+        return service.adminCourse(id);
+    }
+
     @GetMapping("/admin/courses/{id}/chapters")
     public List<ChapterDto> chapters(@PathVariable String id) {
         return service.adminChapters(id);
+    }
+
+    @GetMapping(value = "/admin/courses/{id}/chapters", params = "view=outline")
+    public List<ChapterDto> chapterOutlines(@PathVariable String id) {
+        return service.adminChapterOutlines(id);
     }
 
     @GetMapping("/admin/chapters/{id}")

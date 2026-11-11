@@ -11,11 +11,6 @@ import type {
 } from "../types";
 
 export const courseApi = {
-  async getAllCourses(): Promise<Course[]> {
-    const response = await axiosClient.get<Course[]>("/api/courses");
-    return response.data;
-  },
-
   async getCourseById(id: string): Promise<Course> {
     const response = await axiosClient.get<Course>(`/api/courses/${id}`);
     return response.data;

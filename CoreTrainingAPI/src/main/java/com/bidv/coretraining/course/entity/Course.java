@@ -35,6 +35,8 @@ public class Course {
     @CollectionTable(name = "course_unit_grants", joinColumns = @JoinColumn(name = "course_id"))
     @MapKeyColumn(name = "unit_id")
     @Column(name = "grant_type", nullable = false)
+    // Course lists check access per course; batch these rows instead of one query per course.
+    @org.hibernate.annotations.BatchSize(size = 50)
     @Builder.Default
     private java.util.Map<String, String> unitGrants = new java.util.HashMap<>();
     // Read-only view of the same rows, needed to resolve a granted unit's parents for admin scope.
@@ -48,6 +50,7 @@ public class Course {
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "course_instructors", joinColumns = @JoinColumn(name = "course_id"))
     @Column(name = "user_id", nullable = false)
+    @org.hibernate.annotations.BatchSize(size = 50)
     @Builder.Default
     private java.util.Set<Long> instructorIds = new java.util.HashSet<>();
 

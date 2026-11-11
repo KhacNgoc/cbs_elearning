@@ -46,6 +46,21 @@ public interface CourseRepository extends JpaRepository<Course, String> {
             @Param("search") String search,
             Pageable pageable);
 
+    /**
+     * Admin course table: filters in the database; per-course access is checked by the caller.
+     * Program and domain are fetched with the course so neither the access check nor the
+     * mapping issues one query per course. Empty strings mean "no filter".
+     */
+    @Query("SELECT c FROM Course c JOIN FETCH c.program p JOIN FETCH p.domain " +
+           "WHERE (:programId = '' OR p.id = :programId) " +
+           "AND (:status = '' OR c.status = :status) " +
+           "AND (:search = '' OR c.name ILIKE CONCAT('%', :search, '%') OR c.code ILIKE CONCAT('%', :search, '%')) " +
+           "ORDER BY c.code ASC, c.name ASC, c.id ASC")
+    List<Course> findAdminList(
+            @Param("search") String search,
+            @Param("status") String status,
+            @Param("programId") String programId);
+
     @Query("select distinct c from Course c join c.unitGrants ug where key(ug) = :unitId and c.status <> 'DELETED'")
     List<Course> findByUnitGrant(@Param("unitId") String unitId);
 }

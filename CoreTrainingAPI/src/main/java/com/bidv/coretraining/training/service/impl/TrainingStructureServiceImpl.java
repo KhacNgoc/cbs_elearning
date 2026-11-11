@@ -6,6 +6,7 @@ import com.bidv.coretraining.policy.CourseEditPolicy;
 import com.bidv.coretraining.policy.LearningPolicy;
 import com.bidv.coretraining.policy.LessonContentPolicy;
 import com.bidv.coretraining.security.AccessPolicy;
+import com.bidv.coretraining.security.AdminOperation;
 
 
 import com.bidv.coretraining.training.dto.TrainingStructureDto.*;
@@ -24,6 +25,7 @@ import com.bidv.coretraining.lesson.dto.LessonDto;
 import com.bidv.coretraining.lesson.entity.Lesson;
 import com.bidv.coretraining.lesson.repository.LessonProgressRepository;
 import com.bidv.coretraining.lesson.repository.LessonRepository;
+import com.bidv.coretraining.quiz.repository.QuestionRepository;
 import com.bidv.coretraining.training.dto.PagedResult;
 import com.bidv.coretraining.training.entity.TrainingDomain;
 import com.bidv.coretraining.training.entity.TrainingProgram;
@@ -57,13 +59,15 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
     private final UserRepository users;
     private final CourseMapper mapper;
     private final LessonProgressRepository progress;
+    private final QuestionRepository questions;
 
     public TrainingStructureServiceImpl(TrainingDomainRepository domains, TrainingProgramRepository programs,
             CourseRepository courses, ChapterRepository chapters, LessonRepository lessons, UserRepository users,
             CourseMapper mapper,
             LearningOutlineService learningOutline, LearningAccessService learningAccess, CourseImageService courseImages,
             AuthorizationService authorization,
-            LessonProgressRepository progress, UnitAllocationNativeRepository catalogNative) {
+            LessonProgressRepository progress, UnitAllocationNativeRepository catalogNative,
+            QuestionRepository questions) {
         this.domains = domains;
         this.programs = programs;
         this.courses = courses;
@@ -77,6 +81,7 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
         this.authorization = authorization;
         this.progress = progress;
         this.catalogNative = catalogNative;
+        this.questions = questions;
     }
 
     private String required(String value, String label) {
@@ -843,8 +848,55 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
                 .toList();
     }
 
+    public CourseDto adminCourse(String id) {
+        // A GET resolves to courses:read, the same rule adminCourses() filters its list with.
+        Course c = authorization.edit(id);
+        return adminCourseSummary(c, questions.existsByCourseIdAndLessonIsNull(id));
+    }
+
+    public PagedResult<CourseDto> adminCoursesPaged(String search, String status, String programId, int page,
+            int size) {
+        int pageIndex = Math.max(page, 0);
+        int pageSize = Math.min(Math.max(size, 1), 100);
+        User user = authorization.current();
+        // Same rule as adminCourses(): the request resolves to courses:read.
+        String permission = AdminOperation.current("courses", "read").permission();
+        List<Course> allowed = courses.findAdminList(filter(search), filter(status), filter(programId)).stream()
+                .filter(c -> AccessPolicy.allowsCourse(user, permission, c))
+                .toList();
+        int from = (int) Math.min((long) pageIndex * pageSize, allowed.size());
+        List<Course> slice = allowed.subList(from, Math.min(from + pageSize, allowed.size()));
+        Set<String> withQuiz = slice.isEmpty() ? Set.of()
+                : questions.findCourseIdsWithQuiz(slice.stream().map(Course::getId).toList());
+        List<CourseDto> items = slice.stream()
+                .map(c -> adminCourseSummary(c, withQuiz.contains(c.getId())))
+                .toList();
+        int totalPages = (allowed.size() + pageSize - 1) / pageSize;
+        return new PagedResult<>(items, pageIndex, pageSize, allowed.size(), totalPages,
+                from + pageSize < allowed.size());
+    }
+
+    private static String filter(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    /** Course metadata and admin actions only: the mapper would also load every lesson with its content. */
+    private CourseDto adminCourseSummary(Course c, boolean hasCourseQuiz) {
+        CourseDto dto = learningOutline.courseMetadata(c, false, hasCourseQuiz);
+        dto.setSeqNumber(c.getSeqNumber());
+        applyAdminAccess(c, dto);
+        return dto;
+    }
+
     private CourseDto mapToAdminCourseDto(Course c) {
         CourseDto dto = mapper.toCourseDto(c);
+        if (!AccessPolicy.canReadCourse(authorization.current(), c))
+            dto.getLessons().forEach(LessonOutlineMapper::outlineOnly);
+        applyAdminAccess(c, dto);
+        return dto;
+    }
+
+    private void applyAdminAccess(Course c, CourseDto dto) {
         dto.setCanEdit(AccessPolicy.canEdit(authorization.current(), c));
         dto.setAllowedActions(
                 AccessPolicy.courseActions(authorization.current(), c));
@@ -854,8 +906,6 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
                                  .filter(a -> AccessPolicy
                                         .allowsCourse(authorization.current(), p + ":" + a, c))
                                 .collect(java.util.stream.Collectors.toSet()))));
-        if (!AccessPolicy.canReadCourse(authorization.current(), c))
-            dto.getLessons().forEach(LessonOutlineMapper::outlineOnly);
 
         Set<String> mandatory = new HashSet<>();
         Set<String> optional = new HashSet<>();
@@ -873,8 +923,6 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
         Set<String> allUnits = new HashSet<>(mandatory);
         allUnits.addAll(optional);
         dto.setUnitIds(allUnits);
-
-        return dto;
     }
 
     public List<ChapterDto> adminChapters(String courseId) {
@@ -882,6 +930,22 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
         return chapters.findByCourseIdOrderByChapterOrderAscIdAsc(courseId).stream()
                 .filter(c -> !"DELETED".equals(c.getStatus()))
                 .map(c -> chapterDto(c, null))
+                .toList();
+    }
+
+    public List<ChapterDto> adminChapterOutlines(String courseId) {
+        authorization.edit(courseId);
+        // One projection query for all lessons; lesson content and collections are never loaded.
+        Map<String, List<LessonDto>> lessonsByChapter = new HashMap<>();
+        for (var row : lessons.findOutline(courseId, true))
+            if (!"DELETED".equals(row.getStatus()))
+                lessonsByChapter.computeIfAbsent(row.getChapterId(), key -> new ArrayList<>())
+                        .add(learningOutline.lessonDto(row));
+        return chapters.findByCourseIdOrderByChapterOrderAscIdAsc(courseId).stream()
+                .filter(c -> !"DELETED".equals(c.getStatus()))
+                .map(c -> new ChapterDto(c.getId(), courseId, c.getCode(), c.getTitle(), c.getDescription(),
+                        c.getChapterOrder(), c.getStatus(), c.getVersion(),
+                        lessonsByChapter.getOrDefault(c.getId(), List.of()), false, false))
                 .toList();
     }
 

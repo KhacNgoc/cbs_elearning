@@ -82,7 +82,7 @@
     </header>
 
     <div v-if="!chapter && viewType === 'tree'" class="tree-studio-wrapper">
-      <CurriculumTreeStudio :initial-course-id="course?.id" @refresh="load" />
+      <CurriculumTreeStudio :initial-course-id="course?.id" @refresh="load()" />
     </div>
     <div v-else-if="mode === 'catalog'" class="catalog-layout">
       <section class="card catalog-domains">
@@ -463,7 +463,7 @@
       <TablePagination
         v-model:page="page"
         v-model:page-size="pageSize"
-        :total="filtered.length"
+        :total="listTotal"
         :page-count="pageCount"
         :unit="course && !chapter ? 'chương' : 'bản ghi'"
         :unit-label="course && !chapter ? 'Chương' : 'Bản ghi'"
@@ -630,7 +630,7 @@ const managesCourses = computed(
 );
 const units = ref<OrganizationUnit[]>([]);
 const canManageDomains = ref(false);
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   Search,
@@ -758,8 +758,11 @@ function visibleLessons(target: Chapter): Lesson[] {
         (a.lessonOrder ?? 0) - (b.lessonOrder ?? 0) || a.id.localeCompare(b.id),
     );
 }
+// The course table is filtered and paged by the server; chapter and lesson rows stay client-side.
+const serverCourseList = computed(() => !course.value && !chapter.value);
+const courseTotal = ref(0);
 const filtered = computed(() =>
-  rows.value.filter((row) => {
+  serverCourseList.value ? rows.value : rows.value.filter((row) => {
     if (course.value && !chapter.value) {
       const target = row as Chapter;
       return (
@@ -818,17 +821,32 @@ watch(
   programPageCount,
   (count) => (programPage.value = Math.min(programPage.value, count)),
 );
+const listTotal = computed(() =>
+  serverCourseList.value ? courseTotal.value : filtered.value.length,
+);
 const pageCount = computed(() =>
-  Math.max(1, Math.ceil(filtered.value.length / pageSize.value)),
+  Math.max(1, Math.ceil(listTotal.value / pageSize.value)),
 );
 const paginated = computed(() =>
-  filtered.value.slice(
-    (page.value - 1) * pageSize.value,
-    page.value * pageSize.value,
-  ),
+  serverCourseList.value
+    ? filtered.value
+    : filtered.value.slice(
+        (page.value - 1) * pageSize.value,
+        page.value * pageSize.value,
+      ),
 );
 watch(pageSize, () => (page.value = 1));
 watch([query, statusFilter, programFilter], () => (page.value = 1));
+// Each page or filter change of the course table asks the server for that page only.
+let coursePageTimer: ReturnType<typeof setTimeout> | undefined;
+watch([page, pageSize, query, statusFilter, programFilter], () => {
+  if (!serverCourseList.value || !courseListShown()) return;
+  // A route change already asked for this exact page while resetting the filters.
+  if (JSON.stringify(coursePageParams()) === requestedCoursePage) return;
+  clearTimeout(coursePageTimer);
+  coursePageTimer = setTimeout(() => void loadCoursePage().catch(showLoadError), 250);
+});
+onBeforeUnmount(() => clearTimeout(coursePageTimer));
 let expansionBeforeFilter = new Set<string>();
 watch(
   [query, statusFilter],
@@ -859,32 +877,86 @@ function serverError(e: unknown) {
     (e instanceof Error ? e.message : "Không thể thực hiện. Vui lòng thử lại.")
   );
 }
-async function load() {
+// A course the account cannot open falls back to the course list, as before.
+function missingCourse(failure: unknown): null {
+  const status = (failure as { response?: { status?: number } }).response?.status;
+  if (status === 403 || status === 404) return null;
+  throw failure;
+}
+let catalogPath = "";
+async function loadCatalog() {
+  const path = route.path;
+  const catalog =
+    mode.value === "catalog"
+      ? await trainingApi.catalog()
+      : (await axiosClient.get("/api/admin/options/courses")).data;
+  const options =
+    mode.value === "catalog"
+      ? (await axiosClient.get("/api/admin/options/catalog")).data
+      : catalog;
+  units.value = options.units;
+  canManageDomains.value = !!options.canManageDomains;
+  domains.value = catalog.domains;
+  programs.value = catalog.programs;
+  domainId.value ||= domains.value[0]?.id || "";
+  catalogPath = path;
+}
+function showLoadError(failure: unknown) {
+  showToast(serverError(failure), "error");
+}
+// The course table shows in table view, or in place of a course this account cannot open.
+function courseListShown() {
+  return mode.value !== "catalog" && (viewType.value === "table" || !!route.params.courseId);
+}
+let coursePageRequest = 0;
+let requestedCoursePage = "";
+function coursePageParams() {
+  return {
+    page: page.value - 1,
+    size: pageSize.value,
+    search: query.value.trim() || undefined,
+    status: statusFilter.value || undefined,
+    programId: programFilter.value || undefined,
+  };
+}
+async function loadCoursePage() {
+  const params = coursePageParams();
+  const request = ++coursePageRequest;
+  requestedCoursePage = JSON.stringify(params);
+  clearTimeout(coursePageTimer);
+  const result = await trainingApi.coursesPaged(params);
+  if (request !== coursePageRequest) return;
+  courses.value = result.items;
+  courseTotal.value = result.totalElements;
+}
+// One course and its chapter outline; one page of courses only for the course table.
+async function loadCourses() {
+  const courseId =
+    mode.value !== "catalog" && typeof route.params.courseId === "string"
+      ? route.params.courseId
+      : "";
+  const [detail, outlines] = courseId
+    ? await Promise.all([
+        trainingApi.course(courseId).catch(missingCourse),
+        trainingApi.chapterOutlines(courseId).catch(missingCourse),
+      ])
+    : [null, null];
+  const needsCourseList =
+    mode.value !== "catalog" && (viewType.value === "table" || (!!courseId && !detail));
+  if (needsCourseList) await loadCoursePage();
+  else {
+    coursePageRequest++;
+    courses.value = [];
+    courseTotal.value = 0;
+  }
+  course.value = detail;
+  chapter.value = null;
+  chapters.value = detail ? outlines || [] : [];
+}
+async function load(refreshCatalog = true) {
   loading.value = true;
   try {
-    const catalog =
-      mode.value === "catalog"
-        ? await trainingApi.catalog()
-        : (await axiosClient.get("/api/admin/options/courses")).data;
-    const options =
-      mode.value === "catalog"
-        ? (await axiosClient.get("/api/admin/options/catalog")).data
-        : catalog;
-    units.value = options.units;
-    canManageDomains.value = !!options.canManageDomains;
-    domains.value = catalog.domains;
-    programs.value = catalog.programs;
-    domainId.value ||= domains.value[0]?.id || "";
-    const needsAllCourses =
-      mode.value !== "catalog" &&
-      (viewType.value === "table" || !!route.params.courseId || !!route.params.chapterId);
-    courses.value = needsAllCourses ? await trainingApi.courses() : [];
-    course.value =
-      courses.value.find((item) => item.id === route.params.courseId) || null;
-    chapter.value = null;
-    chapters.value = course.value
-      ? await trainingApi.chapters(course.value.id)
-      : [];
+    await Promise.all([refreshCatalog ? loadCatalog() : null, loadCourses()]);
     const focusId =
       typeof route.query.chapter === "string" ? route.query.chapter : "";
     if (focusId && !focusApplied.value) {
@@ -904,6 +976,8 @@ async function load() {
     loading.value = false;
   }
 }
+// The catalog and unit options depend on the page path only; a query change such as
+// ?chapter= after creating a chapter reloads the course and its chapters, not the catalog.
 watch(
   () => route.fullPath,
   () => {
@@ -913,14 +987,15 @@ watch(
     page.value = 1;
     expandedChapterIds.value = new Set();
     focusApplied.value = false;
-    void load();
+    void load(catalogPath !== route.path);
   },
   { immediate: true },
 );
 watch(viewType, async (nextView) => {
-  if (nextView === "table" && mode.value !== "catalog" && !courses.value.length) {
+  // A course page lists its chapters; only the course list needs a page of courses.
+  if (nextView === "table" && mode.value !== "catalog" && !course.value && !courses.value.length) {
     try {
-      courses.value = await trainingApi.courses();
+      await loadCoursePage();
     } catch (e) {}
   }
 });

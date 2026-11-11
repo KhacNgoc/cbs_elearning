@@ -72,7 +72,9 @@ public record AdminOperation(String page, String action) {
                 (p.matches("/api/admin/lessons/[^/]+/knowledge-sources")
                         || action.equals("read") && p.matches("/api/admin/courses/[^/]+/documents(/[^/]+/outline)?")))
             page = "exams";
-        if (p.equals("/api/admin/courses") && action.equals("read") && request.getParameter("page") != null) {
+        // Course pickers of the exam and document pages read courses under that page's permission.
+        if ((p.equals("/api/admin/courses") || p.equals("/api/admin/courses/search"))
+                && action.equals("read") && request.getParameter("page") != null) {
             if (java.util.Set.of("exams", "documents").contains(request.getParameter("page")))
                 page = request.getParameter("page");
             else

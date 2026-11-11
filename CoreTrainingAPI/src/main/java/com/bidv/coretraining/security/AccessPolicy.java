@@ -80,6 +80,19 @@ public final class AccessPolicy {
                 .filter(a -> allowsCourse(u, "courses:" + a, c)).collect(java.util.stream.Collectors.toSet());
     }
 
+    /** Per admin page (courses, exams, documents), the actions the user may take on this course. */
+    public static Map<String, Set<String>> adminActions(User u, Course c) {
+        Map<String, Set<String>> result = new HashMap<>();
+        for (String page : List.of("courses", "exams", "documents")) {
+            Set<String> actions = new HashSet<>();
+            for (String action : List.of("read", "create", "update", "delete"))
+                if (allowsCourse(u, page + ":" + action, c))
+                    actions.add(action);
+            result.put(page, actions);
+        }
+        return result;
+    }
+
     public static boolean canReadCourse(User u, Course c) {
         return u.activeAccount() && (system(u) || activeUnit(u.getOrganizationUnit()))
                 && allowsCourse(u, "courses:read", c);

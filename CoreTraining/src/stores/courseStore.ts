@@ -8,7 +8,6 @@ import { createAsyncResourceCache } from "../utils/asyncResourceCache";
 
 const outlineCaches = new WeakMap<object, ReturnType<typeof createAsyncResourceCache<CourseOutline>>>();
 
-let coursesRequest: Promise<void> | null = null;
 let lessonRequestId = 0;
 
 export const useCourseStore = defineStore("course", {
@@ -46,27 +45,6 @@ export const useCourseStore = defineStore("course", {
       return cache.get(JSON.stringify([courseId, context]), () => trainingApi.outline(courseId), force);
     },
     clearOutlineCache() { outlineCaches.get(this)?.clear(); },
-    async fetchCourses(force = false) {
-      if (this.courses.length > 0 && !force) return;
-      if (coursesRequest && !force) return coursesRequest;
-      this.isLoading = true;
-      coursesRequest = (async () => {
-        this.courses = await courseApi.getAllCourses();
-      })();
-      try {
-        await coursesRequest;
-      } catch (error) {
-        console.error("Failed to load courses:", error);
-        showToast(
-          "Không thể tải danh sách khóa học. Vui lòng thử lại.",
-          "error",
-        );
-      } finally {
-        coursesRequest = null;
-        this.isLoading = false;
-      }
-    },
-
     async fetchLessonDetail(lessonId: string) {
       const requestId = ++lessonRequestId;
       this.isLoading = true;

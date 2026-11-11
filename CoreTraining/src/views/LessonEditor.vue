@@ -118,6 +118,7 @@
           <LessonContentEditor
             ref="contentEditor"
             :lesson="lesson"
+            :course="course"
             :read-only="!canEdit"
             :can-delete="canDelete"
             @delete="deleteOpen = true"
@@ -198,7 +199,6 @@ import { useUserStore } from "../stores/userStore";
 import { trainingApi } from "../api/trainingApi";
 import { adminApi } from "../api/adminApi";
 import { showToast } from "../utils/toast";
-import { useCourseStore } from "../stores/courseStore";
 import type { Lesson, Chapter, Course } from "../types";
 import LessonContentEditor from "./LessonContentEditor.vue";
 import AdminQuizDetail from "./AdminQuizDetail.vue";
@@ -210,7 +210,6 @@ import { isCourseContentLocked, courseLockReason } from "../utils/courseEditLock
 
 const route = useRoute(),
   router = useRouter(),
-  courseStore = useCourseStore(),
   user = useUserStore();
 // Published and archived courses are read-only here; the author moves the course back to draft first.
 const contentLocked = computed(() => isCourseContentLocked(course.value));
@@ -332,19 +331,33 @@ function ensureTreeBranchSavedInSession() {
 async function refreshLesson() {
   lesson.value = await trainingApi.lesson(String(route.params.lessonId));
 }
+// A course the account cannot manage still opens read-only from its outline, as before.
+function missingCourse(failure: unknown): null {
+  const status = (failure as { response?: { status?: number } }).response?.status;
+  if (status === 403 || status === 404) return null;
+  throw failure;
+}
 async function load() {
   loading.value = true;
   try {
     lesson.value = null;
     chapter.value = null;
-    await courseStore.fetchCourses(true);
     await refreshLesson();
-    chapter.value = await trainingApi.chapter(lesson.value!.chapterId!);
-    course.value =
-      courseStore.courses.find((c) => c.id === chapter.value?.courseId) || null;
-    if (!course.value && chapter.value?.courseId) {
+    const courseId = lesson.value!.courseId;
+    const chapterId = lesson.value!.chapterId!;
+    // Only this course and its chapter titles: no course list and no other lesson's content.
+    const [courseData, chapterOutlines] = await Promise.all([
+      trainingApi.course(courseId).catch(missingCourse),
+      trainingApi.chapterOutlines(courseId),
+    ]);
+    // The outline skips deleted chapters; the single-chapter request still covers that case.
+    chapter.value =
+      chapterOutlines.find((item) => item.id === chapterId) ||
+      (await trainingApi.chapter(chapterId));
+    course.value = courseData;
+    if (!course.value) {
       try {
-        const outlineData = await trainingApi.outline(chapter.value.courseId);
+        const outlineData = await trainingApi.outline(courseId);
         course.value = outlineData.course;
       } catch {
         // ignore

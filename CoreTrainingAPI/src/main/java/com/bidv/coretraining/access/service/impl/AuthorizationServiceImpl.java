@@ -124,12 +124,24 @@ public class AuthorizationServiceImpl implements AuthorizationService {
         var op = AdminOperation.current("courses", "read");
         String query = (search != null && !search.isBlank()) ? search.trim() : null;
         int maxResults = (limit > 0 && limit <= 200) ? limit : 50;
-        return courses.searchActiveCourses(query, org.springframework.data.domain.PageRequest.of(0, maxResults))
-                .getContent()
-                .stream()
-                .filter(c -> (c.getCode() == null || !c.getCode().contains("_DEL_"))
-                        && AccessPolicy.allowsCourse(u, op.permission(), c))
-                .toList();
+        // Access is checked per course, so read further pages until enough allowed courses are found;
+        // limiting before the check would hide a scoped admin's courses behind other units' ones.
+        List<Course> result = new java.util.ArrayList<>();
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 200);
+        org.springframework.data.domain.Page<Course> batch;
+        do {
+            batch = courses.searchActiveCourses(query, pageable);
+            for (Course c : batch.getContent()) {
+                if ((c.getCode() == null || !c.getCode().contains("_DEL_"))
+                        && AccessPolicy.allowsCourse(u, op.permission(), c)) {
+                    result.add(c);
+                    if (result.size() == maxResults)
+                        return result;
+                }
+            }
+            pageable = batch.nextPageable();
+        } while (batch.hasNext());
+        return result;
     }
 
     public List<User> manageableUsers() {

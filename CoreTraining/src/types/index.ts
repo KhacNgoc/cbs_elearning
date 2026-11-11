@@ -66,6 +66,8 @@ export interface Lesson {
   hasQuiz?: boolean;
   hasVideo?: boolean;
   hasText?: boolean;
+  /** Outline flag for editors: the lesson has procedure steps. */
+  hasProcedure?: boolean;
   textRequired?: boolean;
   videoRequired?: boolean;
   slideRequired?: boolean;
@@ -254,20 +256,6 @@ export interface LearnerAttempt {
   passingScore: number;
   passed: boolean;
   takenAt: string;
-}
-
-export interface LearnerWorkspace {
-  courses: LearnerCourse[];
-  resume?: ResumeTarget;
-  attempts: LearnerAttempt[];
-  legacyScores?: {
-    courseId: string;
-    lessonId?: string;
-    title: string;
-    score: number;
-    total: number;
-    takenAt: string;
-  }[];
 }
 
 export interface UserProfile {

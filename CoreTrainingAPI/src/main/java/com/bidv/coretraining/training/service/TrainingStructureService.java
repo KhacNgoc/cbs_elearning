@@ -72,6 +72,16 @@ public interface TrainingStructureService {
 
     public List<ChapterDto> adminChapters(String courseId);
 
+    /** One editable course with its admin actions and without lessons. */
+    public CourseDto adminCourse(String id);
+
+    /** Editable courses filtered and paged on the server, without lessons. */
+    public PagedResult<CourseDto> adminCoursesPaged(String search, String status, String programId, int page,
+            int size);
+
+    /** Chapters with lesson metadata only (no text, video, documents or procedure steps). */
+    public List<ChapterDto> adminChapterOutlines(String courseId);
+
     public ChapterDto adminChapter(String id);
 
     public ChapterDto saveChapter(String courseId, String id, ChapterRequest r);
