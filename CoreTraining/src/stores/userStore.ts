@@ -7,7 +7,7 @@ import type { LoginRequest } from "../api/authApi";
 import { courseApi } from "../api/courseApi";
 import { userApi } from "../api/userApi";
 import { useNavigationStore } from "./navigationStore";
-import { clearAuthSession, setCachedAuthSession, clearUserDraftsAndTemporaryState } from "../utils/authSession";
+import { clearAuthSession, markSignedOut, setCachedAuthSession, clearUserDraftsAndTemporaryState } from "../utils/authSession";
 import { showToast } from "../utils/toast";
 import { useLearningStore } from "./learningStore";
 
@@ -185,12 +185,21 @@ export const useUserStore = defineStore("user", {
     },
 
     async logout() {
+      let serverSignedOut = false;
       try {
         await authApi.logout();
+        serverSignedOut = true;
       } catch (error) {
         console.error("Server logout failed:", error);
       }
       clearAuthSession();
+      if (serverSignedOut) {
+        markSignedOut();
+        // Leave the current page before resetting auth state: flipping isAuthenticated/permissions
+        // swaps App.vue's layout wrapper, which would remount the current (admin) page and let it
+        // fire API calls with the revoked cookie.
+        await navigate("/login");
+      }
       clearUserDraftsAndTemporaryState();
       localStorage.removeItem("accessToken");
       localStorage.removeItem("userRole");
@@ -234,7 +243,8 @@ export const useUserStore = defineStore("user", {
         const { useQuizStore } = await import("./quizStore");
         useQuizStore().$reset();
       } catch {}
-      await navigate("/login");
+      // Server logout failed: the guard re-checks the session and returns the user home if it is still valid.
+      if (!serverSignedOut) await navigate("/login");
     },
 
     async fetchProgress() {

@@ -10,7 +10,7 @@ const AdminOverview = () => import('../views/AdminOverview.vue');
 const AdminQuizDetail = () => import('../views/AdminQuizDetail.vue');
 const Profile = () => import('../views/Profile.vue');
 import { useNavigationStore } from '../stores/navigationStore';
-import { clearAuthSession, getCachedAuthSession, setCachedAuthSession } from '../utils/authSession';
+import { clearAuthSession, getCachedAuthSession, isSignedOut, setCachedAuthSession } from '../utils/authSession';
 import { authApi } from '../api/authApi';
 
 const TrainingAdmin = () => import('../views/TrainingAdmin.vue');
@@ -196,7 +196,7 @@ router.beforeEach(async (to, from, next) => {
   if (requiresAuth || to.name === 'Login') {
     if (session) {
       revalidateInBackground();
-    } else {
+    } else if (!isSignedOut()) {
       try {
         session = await authApi.session();
         applySession(session);

@@ -23,11 +23,19 @@ export interface AuthSession {
 }
 
 let cachedSession: AuthSession | null = null;
+// Set after a successful logout in this tab: the server session is known to be gone,
+// so the route guard skips asking /api/auth/session (it would only answer 401).
+let signedOut = false;
 
 export const getCachedAuthSession = () => cachedSession;
+export const isSignedOut = () => signedOut;
+export const markSignedOut = () => {
+  signedOut = true;
+};
 
 export const setCachedAuthSession = (session: AuthSession) => {
   cachedSession = session;
+  signedOut = false;
 };
 
 export const updateCachedAuthSession = (updates: Partial<AuthSession>) => {
