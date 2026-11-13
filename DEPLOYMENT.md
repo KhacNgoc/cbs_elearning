@@ -55,7 +55,7 @@ luồng người học. Kiểm thử tự động dùng dữ liệu riêng, khô
   thế, hiển thị lỗi thay vì lặp vô hạn. Video đã upload trước thay đổi này
   cần kiểm tra codec lại; thay đổi không tự chuyển đổi file cũ.
 - Volume được giữ qua việc tạo lại container. Trước khi dùng thật cần có
-  sao lưu volume và database. Nếu chạy trên nhiều máy, thay volume cục bộ
+  sao lưu volume và database (xem `docs/backup-gcs.vi.md`). Nếu chạy trên nhiều máy, thay volume cục bộ
   bằng kho dùng chung để backend và Nginx đều đọc được cùng file.
 
 ## Build và kiểm tra video

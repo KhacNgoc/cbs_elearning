@@ -1,0 +1,30 @@
+# Garage một node cho máy chủ backup. Không chứa secret: rpc_secret và admin token nằm trong
+# garage.env (GARAGE_RPC_SECRET, GARAGE_ADMIN_TOKEN, GARAGE_METRICS_TOKEN).
+# Tham khảo: https://garagehq.deuxfleurs.fr/documentation/reference-manual/configuration/
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+
+# sqlite chịu được mất điện tốt hơn lmdb (theo tài liệu Garage); tải backup không cần lmdb.
+db_engine = "sqlite"
+metadata_auto_snapshot_interval = "6h"
+
+# Ưu tiên an toàn dữ liệu hơn tốc độ ghi.
+metadata_fsync = true
+data_fsync = true
+
+# Một node: Garage không tự nhân bản dữ liệu, dự phòng đĩa do Btrfs RAID1 đảm nhiệm.
+replication_factor = 1
+
+# Dữ liệu restic đã nén và mã hóa, nén thêm chỉ tốn CPU.
+compression_level = "none"
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "[::]:3900"
+
+[admin]
+api_bind_addr = "[::]:3903"

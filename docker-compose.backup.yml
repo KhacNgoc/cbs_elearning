@@ -1,0 +1,29 @@
+# Container restic dùng cho scripts/backup. Không chạy trực tiếp: backup.sh và restore.sh
+# gọi file này cùng docker-compose.yml để dùng đúng volume của dự án.
+# Hướng dẫn: docs/backup-gcs.vi.md và docs/backup-garage.vi.md.
+x-restic: &restic
+  profiles: ["backup"]
+  image: restic/restic:0.19.1
+  # restic nhóm snapshot theo hostname; giữ cố định để chính sách giữ bản hoạt động đúng.
+  hostname: ${BACKUP_HOSTNAME:-cbs-elearning}
+  env_file: ${BACKUP_CONFIG_DIR:?BACKUP_CONFIG_DIR is required}/backup.env
+
+services:
+  backup:
+    <<: *restic
+    volumes:
+      - ${BACKUP_CONFIG_DIR}:/secrets:ro
+      - ${BACKUP_STAGING_DIR:?BACKUP_STAGING_DIR is required}:/data/staging:ro
+      - training_uploads:/data/uploads:ro
+      - restic_cache:/root/.cache/restic
+
+  restore:
+    <<: *restic
+    volumes:
+      - ${BACKUP_CONFIG_DIR}:/secrets:ro
+      - ${BACKUP_RESTORE_DIR:?BACKUP_RESTORE_DIR is required}:/restore
+      - training_uploads:/data/uploads
+      - restic_cache:/root/.cache/restic
+
+volumes:
+  restic_cache:

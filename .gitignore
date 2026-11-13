@@ -107,3 +107,12 @@ docs/*
 !docs/functional-non-functional-test-scenarios.vi.md
 !docs/test-execution-report.vi.md
 !docs/production-indexes.md
+!docs/backup-gcs.vi.md
+!docs/backup-garage.vi.md
+
+# ==========================================
+# Backup (cấu hình thật nằm ngoài repo, xem docs/backup-gcs.vi.md)
+# ==========================================
+scripts/backup/backup.env
+scripts/backup/garage/garage.env
+scripts/backup/garage/certs/

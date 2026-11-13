@@ -1,0 +1,2 @@
+# Script chạy trên máy chủ Linux: luôn giữ LF kể cả khi checkout trên Windows.
+*.sh text eol=lf

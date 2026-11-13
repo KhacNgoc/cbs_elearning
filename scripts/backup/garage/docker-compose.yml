@@ -1,0 +1,29 @@
+# Garage cho MÁY CHỦ BACKUP RIÊNG, không chạy trên máy chủ ứng dụng.
+# Hướng dẫn: docs/backup-garage.vi.md
+#
+# Garage không tự làm TLS: nginx nhận HTTPS ở cổng 3900 rồi chuyển vào Garage qua mạng nội bộ
+# của Docker. Cổng S3, RPC và admin của Garage không publish ra ngoài.
+services:
+  garage:
+    image: dxflrs/garage:v2.5.0
+    container_name: garage-backup
+    env_file: ./garage.env
+    volumes:
+      - ./garage.toml:/etc/garage.toml:ro
+      - ${GARAGE_STORE:-/srv/garage/store}/meta:/var/lib/garage/meta
+      - ${GARAGE_STORE:-/srv/garage/store}/data:/var/lib/garage/data
+    restart: always
+
+  tls-proxy:
+    image: nginx:1.28.0-alpine
+    container_name: garage-tls
+    ports:
+      # Đặt GARAGE_LISTEN_ADDR là IP mạng nội bộ của máy (ví dụ 10.0.0.20) để không lắng nghe
+      # trên các card mạng khác.
+      - "${GARAGE_LISTEN_ADDR:-0.0.0.0}:3900:3900"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/certs:ro
+    depends_on:
+      - garage
+    restart: always
