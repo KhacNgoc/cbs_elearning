@@ -31,6 +31,7 @@
         <button
           type="button"
           class="btn-studio btn-ghost"
+          :aria-label="expandAll ? 'Thu gọn tất cả' : 'Mở rộng tất cả'"
           @click="expandAll = !expandAll; toggleAllNodes(expandAll)"
           :title="expandAll ? 'Thu gọn tất cả' : 'Mở rộng tất cả'"
         >
@@ -111,7 +112,7 @@
                 :title="`Đơn vị bắt buộc: ${domain.mandatoryUnitIds.map(getUnitName).join(', ')}`"
               >
                 <ShieldCheck :size="11" />
-                {{ domain.mandatoryUnitIds.length }} ĐV Bắt buộc
+                {{ domain.mandatoryUnitIds.length }}<span class="mandatory-tag-label"> ĐV Bắt buộc</span>
               </span>
               <span class="count-tag">{{ getProgramsForDomain(domain.id).length }} CT</span>
             </div>
@@ -188,7 +189,7 @@
                     :title="`Đơn vị bắt buộc: ${program.mandatoryUnitIds.map(getUnitName).join(', ')}`"
                   >
                     <ShieldCheck :size="11" />
-                    {{ program.mandatoryUnitIds.length }} ĐV Bắt buộc
+                    {{ program.mandatoryUnitIds.length }}<span class="mandatory-tag-label"> ĐV Bắt buộc</span>
                   </span>
                   <span v-if="isProgramCourseCountLoaded(program.id)" class="count-tag">
                     <Loader2 v-if="loadingProgramCoursesMap[program.id]" :size="10" class="spin-icon" />
@@ -277,7 +278,7 @@
                         :title="`Đơn vị bắt buộc: ${getCourseMandatoryUnits(course).map(getUnitName).join(', ')}`"
                       >
                         <ShieldCheck :size="11" />
-                        {{ getCourseMandatoryUnits(course).length }} ĐV Bắt buộc
+                        {{ getCourseMandatoryUnits(course).length }}<span class="mandatory-tag-label"> ĐV Bắt buộc</span>
                       </span>
                       <span v-if="course.status === 'PUBLISHED'" class="status-pill published">
                         Đã xuất bản
@@ -4508,6 +4509,279 @@ watch(
 .tree-inline-loading {
   width: auto;
   margin-left: 1.5rem;
+}
+
+/* ==========================================================================
+   TOUCH DEVICES: no hover, so show node actions on the selected node instead
+   ========================================================================== */
+@media (hover: none) {
+  .tree-node:hover {
+    background: transparent;
+    border-color: transparent;
+  }
+
+  .domain-node:hover {
+    background: var(--bg-main);
+    border-color: var(--border-color);
+  }
+
+  .tree-node.active,
+  .tree-node.active:hover {
+    background: var(--primary-light);
+    border-color: var(--primary-color);
+  }
+
+  .tree-node:hover .node-hover-actions {
+    display: none;
+  }
+
+  .tree-node.active .node-hover-actions {
+    display: flex;
+  }
+}
+
+/* ==========================================================================
+   MOBILE LAYOUT
+   ========================================================================== */
+@media (max-width: 640px) {
+  .curriculum-tree-studio {
+    border-radius: 12px;
+  }
+
+  /* Header: title on its own line, actions in a full-width row */
+  .tree-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.7rem;
+    padding: 0.85rem 0.9rem;
+  }
+
+  .header-left {
+    justify-content: space-between;
+    min-width: 0;
+  }
+
+  .tree-title {
+    font-size: 0.92rem;
+    min-width: 0;
+  }
+
+  .tree-title span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .title-icon {
+    flex-shrink: 0;
+  }
+
+  .tree-badge {
+    display: none;
+  }
+
+  .header-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 0.45rem;
+  }
+
+  .header-actions .btn-studio {
+    justify-content: center;
+    padding: 0.55rem 0.6rem;
+    min-height: 40px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  .header-actions .btn-studio > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .header-actions .btn-studio.btn-ghost {
+    width: 40px;
+    padding: 0;
+  }
+
+  .header-actions .btn-studio.btn-ghost > span {
+    display: none;
+  }
+
+  /* Search */
+  .tree-search-wrapper {
+    padding: 0.65rem 0.9rem;
+  }
+
+  .tree-search-input {
+    font-size: 16px; /* prevent iOS zoom on focus */
+  }
+
+  /* Tree: tighter indentation so deep levels keep room for titles */
+  .tree-scroll-container {
+    padding: 0.65rem 0.55rem;
+  }
+
+  .tree-sub-tree {
+    margin-left: 0.7rem;
+    padding-left: 0.35rem;
+  }
+
+  .tree-node {
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    padding: 0.35rem 0.45rem;
+    min-height: 44px;
+  }
+
+  .toggle-chevron {
+    flex-shrink: 0;
+  }
+
+  .node-icon {
+    flex-shrink: 0;
+  }
+
+  .node-info {
+    gap: 0.3rem;
+    font-size: 0.86rem;
+  }
+
+  .node-index {
+    font-size: 0.74rem;
+    flex-shrink: 0;
+  }
+
+  .node-badge-group {
+    gap: 0.25rem;
+  }
+
+  .count-tag {
+    padding: 0 0.45rem;
+    height: 22px;
+    font-size: 0.68rem;
+    white-space: nowrap;
+  }
+
+  .status-pill {
+    font-size: 0.66rem;
+    padding: 0.1rem 0.45rem;
+    white-space: nowrap;
+  }
+
+  /* "2 ĐV Bắt buộc" -> icon + number only */
+  .mandatory-tag-label {
+    display: none;
+  }
+
+  /* Actions drop to their own row under the selected node */
+  .node-hover-actions {
+    flex-basis: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    height: auto;
+    margin-left: 0;
+    gap: 0.4rem;
+    padding: 0.35rem 0 0.1rem;
+    border-top: 1px dashed var(--border-color);
+  }
+
+  .btn-studio-node,
+  .locked-node-hint {
+    height: 32px;
+    font-size: 0.76rem;
+  }
+
+  .hover-action-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .content-blocks-tree .block-node {
+    flex-wrap: nowrap;
+  }
+
+  .block-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* In-branch pagination */
+  .in-branch-pagination-row {
+    padding: 0.5rem 0.6rem;
+  }
+
+  .in-branch-actions {
+    width: 100%;
+  }
+
+  .btn-in-branch-more,
+  .btn-in-branch-collapse {
+    flex: 1;
+    min-height: 34px;
+  }
+
+  /* Footer pagination: stacked, full-width controls */
+  .tree-pagination-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+    padding: 0.7rem 0.9rem;
+  }
+
+  .pagination-summary {
+    font-size: 0.74rem;
+    text-align: center;
+  }
+
+  .pagination-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.55rem;
+  }
+
+  .page-size-label {
+    justify-content: space-between;
+  }
+
+  .page-size-select {
+    flex: 1;
+    max-width: 220px;
+    min-height: 36px;
+  }
+
+  .page-nav-group {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 0.5rem;
+  }
+
+  .page-btn {
+    min-height: 38px;
+  }
+
+  .page-indicator {
+    text-align: center;
+  }
+
+  /* Modals */
+  .tree-modal-backdrop {
+    padding: 0.5rem;
+    align-items: flex-end;
+  }
+
+  .tree-quick-modal.enriched-modal {
+    height: min(720px, 94dvh);
+    padding: 1rem;
+    border-radius: 14px 14px 10px 10px;
+  }
+
+  .form-row-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
 
