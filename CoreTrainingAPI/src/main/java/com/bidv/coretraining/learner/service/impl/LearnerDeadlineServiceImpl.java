@@ -11,7 +11,11 @@ import com.bidv.coretraining.security.AccessPolicy;
 import com.bidv.coretraining.user.entity.User;
 import com.bidv.coretraining.user.repository.UserRepository;
 import org.springframework.transaction.annotation.Transactional;
+import com.bidv.coretraining.training.dto.PagedResult;
+import com.bidv.coretraining.user.entity.OrganizationUnit;
+import org.springframework.data.domain.PageRequest;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class LearnerDeadlineServiceImpl implements LearnerDeadlineService {
@@ -46,6 +50,28 @@ public class LearnerDeadlineServiceImpl implements LearnerDeadlineService {
                                                 c.getCompletionDeadline(),
                                                 u.getCourseDeadlines().containsKey(c.getId())))
                                 .toList();
+        }
+
+        @Transactional(readOnly = true)
+        public PagedResult<Deadline> page(Long userId, String search, int page, int size) {
+                User u = target(userId);
+                // enrolled() in SQL: registered courses count unless the learner's unit is inactive
+                // (AccessPolicy.visible), mandatory grants need an active unit (AccessPolicy.mandatory).
+                OrganizationUnit unit = u.getOrganizationUnit();
+                boolean unitActive = unit != null && AccessPolicy.activeUnit(unit);
+                boolean allowRegistered = unit == null || unitActive
+                                || (AccessPolicy.system(u) && u.activeAccount());
+                Set<String> mandatoryUnits = unitActive ? AccessPolicy.ancestors(unit) : Set.of("");
+                String filter = search == null ? "" : search.trim();
+                var result = courses.findLearnerDeadlineCourses(u.getId(), allowRegistered, mandatoryUnits, filter,
+                                PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100)));
+                return PagedResult.of(result, c -> toDeadline(u, c));
+        }
+
+        private Deadline toDeadline(User u, Course c) {
+                return new Deadline(c.getId(), c.getName(),
+                                u.getCourseDeadlines().getOrDefault(c.getId(), c.getCompletionDeadline()),
+                                c.getCompletionDeadline(), u.getCourseDeadlines().containsKey(c.getId()));
         }
 
         @Transactional

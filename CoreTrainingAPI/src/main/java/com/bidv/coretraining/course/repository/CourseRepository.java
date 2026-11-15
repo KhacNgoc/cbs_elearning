@@ -63,4 +63,32 @@ public interface CourseRepository extends JpaRepository<Course, String> {
 
     @Query("select distinct c from Course c join c.unitGrants ug where key(ug) = :unitId and c.status <> 'DELETED'")
     List<Course> findByUnitGrant(@Param("unitId") String unitId);
+
+    /**
+     * Admin "deadlines per learner" list, paged by the database. Same rule as
+     * LearnerDeadlineServiceImpl.enrolled: a published course the learner registered for
+     * (when {@code allowRegistered}), or one granted MANDATORY to any of {@code mandatoryUnitIds}.
+     * Pass a non-matching sentinel such as "" when there are no units; empty search means no filter.
+     */
+    @Query(value = "SELECT c FROM Course c WHERE c.status = 'PUBLISHED' " +
+           "AND ((:allowRegistered = true AND EXISTS (SELECT 1 FROM User u JOIN u.registeredCourses rc " +
+           "WHERE u.id = :userId AND rc.id = c.id)) " +
+           "OR EXISTS (SELECT 1 FROM Course c2 JOIN c2.unitGrants g WHERE c2.id = c.id " +
+           "AND KEY(g) IN :mandatoryUnitIds AND UPPER(VALUE(g)) = 'MANDATORY')) " +
+           "AND (:search = '' OR c.name ILIKE CONCAT('%', :search, '%') OR c.code ILIKE CONCAT('%', :search, '%') " +
+           "OR c.id ILIKE CONCAT('%', :search, '%')) " +
+           "ORDER BY c.name ASC, c.id ASC",
+           countQuery = "SELECT count(c) FROM Course c WHERE c.status = 'PUBLISHED' " +
+           "AND ((:allowRegistered = true AND EXISTS (SELECT 1 FROM User u JOIN u.registeredCourses rc " +
+           "WHERE u.id = :userId AND rc.id = c.id)) " +
+           "OR EXISTS (SELECT 1 FROM Course c2 JOIN c2.unitGrants g WHERE c2.id = c.id " +
+           "AND KEY(g) IN :mandatoryUnitIds AND UPPER(VALUE(g)) = 'MANDATORY')) " +
+           "AND (:search = '' OR c.name ILIKE CONCAT('%', :search, '%') OR c.code ILIKE CONCAT('%', :search, '%') " +
+           "OR c.id ILIKE CONCAT('%', :search, '%'))")
+    Page<Course> findLearnerDeadlineCourses(
+            @Param("userId") Long userId,
+            @Param("allowRegistered") boolean allowRegistered,
+            @Param("mandatoryUnitIds") Collection<String> mandatoryUnitIds,
+            @Param("search") String search,
+            Pageable pageable);
 }
