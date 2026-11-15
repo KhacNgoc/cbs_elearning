@@ -22,6 +22,8 @@ import java.util.*;
 
 @Service @Transactional(readOnly=true)
 public class CourseRatingServiceImpl implements CourseRatingService {
+    static final int FEEDBACK_PAGE_SIZE = 10;
+
 
     private final CourseRatingRepository ratings;
     private final CourseRepository courses;
@@ -64,7 +66,8 @@ public class CourseRatingServiceImpl implements CourseRatingService {
         if(allowed.isEmpty())return new Report(summaries,0,null,0,0,null,distribution,List.of(),0,0,0);
         var ids=allowed.stream().map(Course::getId).toList();
         ratings.distribution(ids).forEach(s->distribution.put(s.getStars(),s.getCount()));
-        var feedback=ratings.feedback(ids,lowOnly,PageRequest.of(Math.max(0,page),20,Sort.by(Sort.Order.desc("updatedAt"),Sort.Order.desc("id"))));
+        // Ten per page keeps the latest-feedback block about as tall as the rest of the report.
+        var feedback=ratings.feedback(ids,lowOnly,PageRequest.of(Math.max(0,page),FEEDBACK_PAGE_SIZE,Sort.by(Sort.Order.desc("updatedAt"),Sort.Order.desc("id"))));
         return new Report(summaries,count,average,completed,low,completed==0?null:count*100.0/completed,distribution,feedback.stream().map(r->new Feedback(r.getId(),r.getCourse().getId(),r.getCourse().getName(),r.getUser().getFullName(),r.getStars(),r.getContent(),r.getUpdatedAt())).toList(),feedback.getTotalElements(),feedback.getNumber(),feedback.getTotalPages());
     }
 }
