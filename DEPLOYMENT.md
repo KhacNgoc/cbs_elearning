@@ -98,29 +98,22 @@ docker compose --env-file .env.production \
   -f docker-compose.yml -f docker-compose.production.yml up -d --build
 ```
 
-Override bật cookie Secure, hỗ trợ forwarded headers cho backend, bỏ hoàn
-toàn port mapping của PostgreSQL và không chạy pgAdmin mặc định (profile
-`db-tools`). Backend vẫn kết nối database qua `postgres:5432` trong mạng
-Docker; giữ `SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/coretraining`.
-Không bật profile `db-tools` hoặc `--profile '*'` trên production. pgAdmin
-cũng không có port mapping trong cấu hình production.
+Override bật cookie Secure và hỗ trợ forwarded headers cho backend. Backend
+kết nối database qua `postgres:5432` trong mạng Docker; giữ
+`SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/coretraining`.
 
-Nếu pgAdmin đã chạy từ cấu hình cũ, dừng và xóa container trước khi áp dụng
-override (các lệnh này giữ nguyên volume dữ liệu):
+Stack không còn pgAdmin. Nếu máy chủ còn container `coretraining-db-ide` từ
+cấu hình cũ, xóa nó khi deploy bằng `--remove-orphans` (volume `pgadmin_data`
+cũ không còn dùng, xóa tay nếu muốn):
 
 ```sh
-docker compose --env-file .env.production -f docker-compose.yml stop pgadmin
-docker compose --env-file .env.production -f docker-compose.yml rm -f pgadmin
 docker compose --env-file .env.production \
-  -f docker-compose.yml -f docker-compose.production.yml up -d --build
+  -f docker-compose.yml -f docker-compose.production.yml up -d --build --remove-orphans
 ```
 
-Kiểm tra bằng `docker ps --format 'table {{.Names}}\t{{.Ports}}'`: PostgreSQL
-không có mapping dạng `5432->5432`, và không có container
-`coretraining-db-ide` đang chạy. Docker có thể vẫn hiển thị `5432/tcp`, đây
-là cổng bên trong container, không phải cổng publish ra host.
-
-Các cổng frontend và dịch vụ AI trong override chỉ bind loopback.
+Các cổng frontend, backend, Grafana, Loki và dịch vụ AI trong override chỉ
+bind loopback. PostgreSQL là dịch vụ duy nhất ngoài reverse proxy được mở ra
+ngoài, xem mục "Truy cập PostgreSQL".
 Đặt reverse proxy HTTPS trên cùng máy trỏ
 đến `http://127.0.0.1:5173`; API và video cùng tên miền với frontend.
 Proxy ngoài cần ghi đè Host và X-Forwarded-Proto, giữ nguyên Range, hỗ trợ
@@ -146,6 +139,66 @@ năng thời gian thực. Tránh log query string của URL stream vì có token
 Nginx frontend đã bỏ query string trong access log. Thay các secret mẫu
 trước khi triển khai. Khi giữ API cùng origin, không cần mở CORS cho nhiều
 domain; nếu tách domain cần cấu hình lại origin/cookie và kiểm thử riêng.
+
+## Truy cập PostgreSQL
+
+PostgreSQL publish cổng ra máy chủ để kết nối bằng công cụ (DBeaver, psql, DataGrip...) với user và mật khẩu. Đăng nhập dùng SCRAM-SHA-256; mọi kết nối được ghi vào log PostgreSQL (`log_connections`).
+
+| Biến | Mặc định | Ý nghĩa |
+|---|---|---|
+| `POSTGRES_PUBLISH_ADDRESS` | `0.0.0.0` | Địa chỉ của máy chủ mà cổng lắng nghe. `127.0.0.1` nếu chỉ truy cập qua SSH tunnel, hoặc IP của card mạng nội bộ |
+| `POSTGRES_PUBLISH_PORT` | `5432` | Cổng trên máy chủ. Đổi sang cổng khác giảm bớt dò quét tự động, không thay cho tường lửa |
+
+Trước khi mở cổng:
+
+1. **Giới hạn nguồn truy cập bằng tường lửa** của máy chủ hoặc hạ tầng (security group, firewall), chỉ cho IP văn phòng / VPN. Không để cổng database mở ra Internet.
+2. **Không dùng user `postgres` cho người truy cập.** User này là superuser và là user của backend. Tạo user riêng cho từng người hoặc nhóm (chạy bằng `docker exec -it coretraining-db psql -U postgres -d coretraining`):
+
+   ```sql
+   -- Chỉ đọc: tra cứu, báo cáo
+   CREATE ROLE readonly_user LOGIN PASSWORD '<mật khẩu mạnh>';
+   GRANT CONNECT ON DATABASE coretraining TO readonly_user;
+   GRANT USAGE ON SCHEMA public TO readonly_user;
+   GRANT SELECT ON ALL TABLES IN SCHEMA public TO readonly_user;
+   ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON TABLES TO readonly_user;
+
+   -- Thu hồi khi người dùng không còn cần
+   DROP OWNED BY readonly_user; DROP ROLE readonly_user;
+   ```
+
+   `ALTER DEFAULT PRIVILEGES` cho user này quyền đọc cả các bảng mà migration tạo sau này.
+3. Đặt mật khẩu mạnh cho `POSTGRES_PASSWORD`. Biến này chỉ có tác dụng khi volume database được tạo lần đầu; đổi mật khẩu của database đang chạy bằng `ALTER ROLE postgres PASSWORD '...'`, rồi cập nhật `SPRING_DATASOURCE_PASSWORD` và khởi động lại backend.
+
+Kết nối chưa mã hóa TLS: mật khẩu không bị lộ (SCRAM), nhưng dữ liệu truy vấn đi dạng rõ. Khi truy cập qua mạng không tin cậy, dùng VPN hoặc SSH tunnel (`ssh -L 5432:127.0.0.1:5432 <máy chủ>` với `POSTGRES_PUBLISH_ADDRESS=127.0.0.1`).
+
+Các lệnh quản trị (`CREATE EXTENSION`, script trong `scripts/sql/`) vẫn chạy bằng user `postgres`; user chỉ đọc không có quyền này.
+
+## Tài nguyên và cấu hình PostgreSQL
+
+Override production chỉ mở ra ngoài reverse proxy và PostgreSQL (mục trên); backend (9000), frontend (5173), Grafana (3000), Loki (3100) và các dịch vụ AI chỉ bind `127.0.0.1`. Đặt `GRAFANA_ADMIN_PASSWORD` trong file env (mặc định vẫn là `admin`).
+
+Mọi container giới hạn log stdout ở 5 file × 20 MB. Log file của backend xoay vòng tối đa 1 GB (`logback-spring.xml`), Loki giữ log 30 ngày.
+
+Các giá trị mặc định dưới đây phù hợp máy chủ khoảng 8 GB RAM dành cho stack (không tính Ollama). Đổi bằng biến trong file env, rồi tạo lại container (`up -d postgres backend`):
+
+| Biến | Mặc định | Hướng dẫn |
+|---|---|---|
+| `POSTGRES_SHARED_BUFFERS` | `1GB` | Khoảng 25% RAM dành cho PostgreSQL |
+| `POSTGRES_EFFECTIVE_CACHE_SIZE` | `3GB` | Khoảng 50–75% RAM; chỉ là ước lượng cho planner, không cấp phát |
+| `POSTGRES_WORK_MEM` | `16MB` | Bộ nhớ mỗi phép sort/hash. Truy vấn báo cáo tự nâng lên 64 MB trong transaction của nó |
+| `POSTGRES_MAINTENANCE_WORK_MEM` | `256MB` | Dùng cho VACUUM, tạo index |
+| `POSTGRES_MAX_CONNECTIONS` | `100` | Phải lớn hơn tổng `DB_POOL_MAX_SIZE` của mọi instance backend cộng công cụ quản trị |
+| `POSTGRES_SHM_SIZE` | `1g` | `/dev/shm` cho truy vấn song song; mặc định 64 MB của Docker làm báo cáo lỗi `could not resize shared memory segment` |
+| `POSTGRES_MAX_WAL_SIZE` | `4GB` | Giảm tần suất checkpoint khi ghi nhiều (import, seed) |
+| `POSTGRES_RANDOM_PAGE_COST` | `1.1` | Cho SSD; đặt `4` nếu dùng ổ HDD |
+| `POSTGRES_LOG_MIN_DURATION` | `2000` | Ghi log câu lệnh chạy quá số ms này |
+| `DB_POOL_MAX_SIZE` | `20` | Kết nối tối đa của một instance backend |
+| `REPORT_MAX_CONCURRENT` | `2` | Số báo cáo toàn bộ chạy đồng thời mỗi instance; báo cáo thứ ba chờ tối đa 20 giây rồi nhận 503 |
+| `BACKEND_MEMORY_LIMIT` | `3g` | Giới hạn bộ nhớ container backend; heap Java là 70% giá trị này |
+
+PostgreSQL bật `pg_stat_statements`. Muốn xem câu lệnh tốn thời gian nhất, chạy một lần `CREATE EXTENSION IF NOT EXISTS pg_stat_statements;` rồi truy vấn view cùng tên. `idle_in_transaction_session_timeout` (10 phút) đóng các transaction bị bỏ dở để chúng không giữ khóa và chặn autovacuum.
+
+Chưa có sao lưu tự động: lập lịch `pg_dump -Fc` hằng ngày ra ngoài máy chủ, và sao lưu cả volume `training_uploads` (tài liệu, video).
 
 ## Migration database (Flyway)
 

@@ -33,6 +33,13 @@ ruler:
 limits_config:
   reject_old_samples: false
   max_cache_freshness_per_query: 10m
+  # Logs older than this are deleted by the compactor; without it loki_data grows until the disk is full.
+  retention_period: 720h
+
+compactor:
+  working_directory: /tmp/loki/compactor
+  retention_enabled: true
+  delete_request_store: filesystem
 
 analytics:
   reporting_enabled: false
