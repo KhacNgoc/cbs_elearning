@@ -65,6 +65,17 @@ public interface CourseRepository extends JpaRepository<Course, String> {
     List<Course> findByUnitGrant(@Param("unitId") String unitId);
 
     /**
+     * Learnable courses granted as MANDATORY to any of {@code unitIds} (the learner's unit and its ancestors).
+     * Same result as filtering every course with AccessPolicy.mandatory, without loading the catalog.
+     */
+    @Query(value = """
+        select distinct c.id from courses c join course_unit_grants g on g.course_id = c.id
+        where g.unit_id in (:unitIds) and upper(g.grant_type) = 'MANDATORY'
+          and (c.status is null or upper(c.status) in ('PUBLISHED', 'ACTIVE'))
+        """, nativeQuery = true)
+    List<String> findMandatoryCourseIds(@Param("unitIds") Collection<String> unitIds);
+
+    /**
      * Admin "deadlines per learner" list, paged by the database. Same rule as
      * LearnerDeadlineServiceImpl.enrolled: a published course the learner registered for
      * (when {@code allowRegistered}), or one granted MANDATORY to any of {@code mandatoryUnitIds}.

@@ -251,11 +251,14 @@ public class UserServiceImpl implements UserService {
                         }
                 }
 
-                java.util.List<String> mandatoryCourses = courseRepository.findAll().stream()
-                                .filter(c -> LearningPolicy.isLearnableStatus(c.getStatus())
-                                                && com.bidv.coretraining.security.AccessPolicy.visible(user, c)
-                                                && com.bidv.coretraining.security.AccessPolicy.mandatory(user, c))
-                                .map(Course::getId).toList();
+                // A mandatory grant to the learner's active unit (or an ancestor) also makes the course visible,
+                // so the grant rows alone decide; the catalog is never loaded here.
+                var unit = user.getOrganizationUnit();
+                java.util.List<String> mandatoryCourses = unit == null
+                                || !com.bidv.coretraining.security.AccessPolicy.activeUnit(unit)
+                                                ? java.util.List.of()
+                                                : courseRepository.findMandatoryCourseIds(
+                                                                com.bidv.coretraining.security.AccessPolicy.ancestors(unit));
                 java.util.List<String> registeredCourses = user.getRegisteredCourses().stream()
                                 .map(com.bidv.coretraining.course.entity.Course::getId)
                                 .collect(Collectors.toList());
