@@ -107,3 +107,8 @@ docs/*
 !docs/functional-non-functional-test-scenarios.vi.md
 !docs/test-execution-report.vi.md
 !docs/production-indexes.md
+
+# ==========================================
+# Load-test seed data: local only
+# ==========================================
+scripts/loadtest/seed-*.sql
