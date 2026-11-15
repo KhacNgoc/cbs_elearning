@@ -35,13 +35,19 @@ public class AdminOptionsServiceImpl implements AdminOptionsService {
 
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public AdminOptionsDto options(String page) {
+        return options(page, null);
+    }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public AdminOptionsDto options(String page, Set<String> parts) {
+        java.util.function.Predicate<String> wants = part -> parts == null || parts.isEmpty() || parts.contains(part);
         AccessPolicy
                 .require(Set.of("users", "roles", "catalog", "courses", "exams", "documents").contains(page));
         auth.requireOperation(page, "read");
         var u = auth.current();
         String permission = page + ":read";
         boolean canManageDomains = AccessPolicy.has(u, "catalog:create");
-        List<AccessManagementDto.UnitDto> unitOptions = units.findAll().stream()
+        List<AccessManagementDto.UnitDto> unitOptions = !wants.test("units") ? List.of() : units.findAll().stream()
                 .filter(n -> AccessPolicy.system(u) || AccessPolicy.inScope(u, n))
                 .map(n -> new AccessManagementDto.UnitDto(n.getId(), n.getName(), n.getType(),
                         n.getParent() == null ? null : n.getParent().getId(), n.isActive()))
@@ -52,7 +58,7 @@ public class AdminOptionsServiceImpl implements AdminOptionsService {
             return new AdminOptionsDto(canManageDomains, unitOptions, List.of(), List.of(), List.of());
         }
 
-        var courseOptions = courses.findAll().stream().filter(c -> AccessPolicy.allowsCourse(u, permission, c))
+        List<AdminOptionsDto.CourseOption> courseOptions = !wants.test("courses") ? List.of() : courses.findAll().stream().filter(c -> AccessPolicy.allowsCourse(u, permission, c))
                 .map(c -> {
                     UnitGrants grants = UnitGrants.of(c.getUnitGrants(), Set.of());
                     return new AdminOptionsDto.CourseOption(c.getId(), c.getName(),
@@ -60,7 +66,7 @@ public class AdminOptionsServiceImpl implements AdminOptionsService {
                             grants.all());
                 })
                 .toList();
-        var domainOptions = domains.findAll().stream()
+        List<TrainingStructureDto.DomainDto> domainOptions = !wants.test("domains") ? List.of() : domains.findAll().stream()
                 .map(d -> {
                     UnitGrants grants = UnitGrants.of(Map.of(), unitIds(d.getUnits()));
                     return new TrainingStructureDto.DomainDto(d.getId(), d.getCode(), d.getName(),
@@ -68,7 +74,7 @@ public class AdminOptionsServiceImpl implements AdminOptionsService {
                             d.getSeqNumber(), grants.all(), grants.mandatory(), grants.optional());
                 })
                 .toList();
-        var programOptions = programs.findAll().stream().filter(p -> AccessPolicy.allowsProgram(u, permission, p))
+        List<TrainingStructureDto.ProgramDto> programOptions = !wants.test("programs") ? List.of() : programs.findAll().stream().filter(p -> AccessPolicy.allowsProgram(u, permission, p))
                 .map(p -> {
                     UnitGrants grants = UnitGrants.of(Map.of(), unitIds(p.getUnits()));
                     return new TrainingStructureDto.ProgramDto(p.getId(), p.getDomain() == null ? null : p.getDomain().getId(),
