@@ -60,6 +60,7 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
     private final CourseMapper mapper;
     private final LessonProgressRepository progress;
     private final QuestionRepository questions;
+    private final com.bidv.coretraining.document.repository.LessonDocumentRepository lessonDocuments;
 
     public TrainingStructureServiceImpl(TrainingDomainRepository domains, TrainingProgramRepository programs,
             CourseRepository courses, ChapterRepository chapters, LessonRepository lessons, UserRepository users,
@@ -67,7 +68,9 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
             LearningOutlineService learningOutline, LearningAccessService learningAccess, CourseImageService courseImages,
             AuthorizationService authorization,
             LessonProgressRepository progress, UnitAllocationNativeRepository catalogNative,
-            QuestionRepository questions) {
+            QuestionRepository questions,
+            com.bidv.coretraining.document.repository.LessonDocumentRepository lessonDocuments) {
+        this.lessonDocuments = lessonDocuments;
         this.domains = domains;
         this.programs = programs;
         this.courses = courses;
@@ -144,22 +147,32 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
     }
 
     private boolean canUpdateDomain(TrainingDomain d) {
+        return canUpdateDomain(d, null);
+    }
+
+    /** @param activePrograms the domain's non-deleted programs when already loaded, or null to query them. */
+    private boolean canUpdateDomain(TrainingDomain d, List<TrainingProgram> activePrograms) {
         var u = authorization.current();
         if (AccessPolicy.system(u)) {
             return true;
         }
-        return AccessPolicy.has(u, "catalog:update")
-                && programs.findByDomainId(d.getId()).stream()
-                        .filter(p -> !"DELETED".equals(p.getStatus()))
-                        .allMatch(p -> AccessPolicy.allowsProgram(u, "catalog:update", p));
+        if (!AccessPolicy.has(u, "catalog:update"))
+            return false;
+        List<TrainingProgram> list = activePrograms != null ? activePrograms
+                : programs.findByDomainId(d.getId()).stream().filter(p -> !"DELETED".equals(p.getStatus())).toList();
+        return list.stream().allMatch(p -> AccessPolicy.allowsProgram(u, "catalog:update", p));
     }
 
     private DomainDto domainDto(TrainingDomain d) {
+        return domainDto(d, null);
+    }
+
+    private DomainDto domainDto(TrainingDomain d, List<TrainingProgram> activePrograms) {
         Set<String> actions = new HashSet<>();
         actions.add("read");
         if (AccessPolicy.has(authorization.current(), "catalog:create"))
             actions.add("create");
-        if (canUpdateDomain(d))
+        if (canUpdateDomain(d, activePrograms))
             actions.add("update");
 
         Set<String> allUnits = new HashSet<>(d.getUnits().stream().map(OrganizationUnit::getId).toList());
@@ -535,8 +548,41 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
         String query = (search != null && !search.isBlank()) ? search.trim() : null;
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
         org.springframework.data.domain.Page<TrainingDomain> result = domains.findByFilter(query, pageable);
-        return PagedResult.of(result, d -> DomainListItem.of(domainDto(d),
-                programs.countByDomainIdAndStatusNot(d.getId(), "DELETED")));
+        List<String> ids = result.getContent().stream().map(TrainingDomain::getId).toList();
+        Map<String, Long> counts = ids.isEmpty() ? Map.of() : countMap(programs.countActiveByDomainIds(ids));
+        // Non-system users need every program of the domain to decide "update"; load them once for the page.
+        var u = authorization.current();
+        Map<String, List<TrainingProgram>> programsByDomain = ids.isEmpty() || AccessPolicy.system(u)
+                || !AccessPolicy.has(u, "catalog:update") ? Map.of()
+                : programs.findActiveByDomainIds(ids).stream()
+                        .collect(java.util.stream.Collectors.groupingBy(p -> p.getDomain().getId()));
+        return PagedResult.of(result, d -> DomainListItem.of(
+                domainDto(d, programsByDomain.getOrDefault(d.getId(), List.of())),
+                counts.getOrDefault(d.getId(), 0L)));
+    }
+
+    private static Map<String, Long> countMap(List<Object[]> rows) {
+        Map<String, Long> map = new HashMap<>();
+        for (Object[] row : rows)
+            map.put((String) row[0], ((Number) row[1]).longValue());
+        return map;
+    }
+
+    @Override
+    public List<ProgramListItem> adminProgramsByDomains(Collection<String> domainIds, String search) {
+        List<String> ids = domainIds == null ? List.of()
+                : domainIds.stream().filter(id -> id != null && !id.isBlank()).map(String::trim).distinct().limit(100)
+                        .toList();
+        if (ids.isEmpty())
+            return List.of();
+        String query = (search != null && !search.isBlank()) ? search.trim() : null;
+        List<TrainingProgram> list = query == null ? programs.findActiveByDomainIds(ids)
+                : programs.searchActiveByDomainIds(ids, query);
+        Map<String, Long> counts = list.isEmpty() ? Map.of()
+                : countMap(courses.countActiveByProgramIds(list.stream().map(TrainingProgram::getId).toList()));
+        return list.stream()
+                .map(p -> ProgramListItem.of(programDto(p), counts.getOrDefault(p.getId(), 0L)))
+                .toList();
     }
 
     @Override
@@ -546,7 +592,11 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
         }
         String query = (search != null && !search.isBlank()) ? search.trim() : null;
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
-        return PagedResult.of(courses.findByProgramIdWithFilter(programId, query, pageable), this::mapToAdminCourseDto);
+        var result = courses.findByProgramIdWithFilter(programId, query, pageable);
+        // Metadata only: the full mapper would load every lesson of every course with its content.
+        List<String> ids = result.getContent().stream().map(Course::getId).toList();
+        Set<String> withQuiz = ids.isEmpty() ? Set.of() : questions.findCourseIdsWithQuiz(ids);
+        return PagedResult.of(result, c -> adminCourseSummary(c, withQuiz.contains(c.getId())));
     }
 
     @Override
@@ -557,8 +607,10 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
         String query = (search != null && !search.isBlank()) ? search.trim() : null;
         String dId = (domainId != null && !domainId.isBlank()) ? domainId.trim() : null;
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
-        return PagedResult.of(programs.findByDomainIdWithFilter(dId, query, pageable),
-                p -> ProgramListItem.of(programDto(p), courses.countByProgramIdAndStatusNot(p.getId(), "DELETED")));
+        var result = programs.findByDomainIdWithFilter(dId, query, pageable);
+        List<String> ids = result.getContent().stream().map(TrainingProgram::getId).toList();
+        Map<String, Long> counts = ids.isEmpty() ? Map.of() : countMap(courses.countActiveByProgramIds(ids));
+        return PagedResult.of(result, p -> ProgramListItem.of(programDto(p), counts.getOrDefault(p.getId(), 0L)));
     }
 
     @Override
@@ -861,6 +913,15 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
         User user = authorization.current();
         // Same rule as adminCourses(): the request resolves to courses:read.
         String permission = AdminOperation.current("courses", "read").permission();
+        if (AccessPolicy.system(user)) {
+            // Every course is allowed, so the database pages the list instead of loading all of it.
+            var result = courses.findAdminPage(filter(search), filter(status), filter(programId),
+                    org.springframework.data.domain.PageRequest.of(pageIndex, pageSize));
+            List<Course> slice = result.getContent();
+            Set<String> withQuiz = slice.isEmpty() ? Set.of()
+                    : questions.findCourseIdsWithQuiz(slice.stream().map(Course::getId).toList());
+            return PagedResult.of(result, c -> adminCourseSummary(c, withQuiz.contains(c.getId())));
+        }
         List<Course> allowed = courses.findAdminList(filter(search), filter(status), filter(programId)).stream()
                 .filter(c -> AccessPolicy.allowsCourse(user, permission, c))
                 .toList();
@@ -937,10 +998,17 @@ public class TrainingStructureServiceImpl implements TrainingStructureService {
         authorization.edit(courseId);
         // One projection query for all lessons; lesson content and collections are never loaded.
         Map<String, List<LessonDto>> lessonsByChapter = new HashMap<>();
+        Map<String, Long> documentCounts = countMap(lessonDocuments.countByLessonForCourse(courseId));
+        Map<String, Long> procedureCounts = countMap(lessons.countProcedureSectionsByLesson(courseId));
         for (var row : lessons.findOutline(courseId, true))
-            if (!"DELETED".equals(row.getStatus()))
-                lessonsByChapter.computeIfAbsent(row.getChapterId(), key -> new ArrayList<>())
-                        .add(learningOutline.lessonDto(row));
+            if (!"DELETED".equals(row.getStatus())) {
+                LessonDto dto = learningOutline.lessonDto(row);
+                dto.setDocumentCount(documentCounts.getOrDefault(row.getId(), 0L).intValue());
+                long steps = procedureCounts.getOrDefault(row.getId(), 0L);
+                dto.setProcedureStepCount((int) steps);
+                dto.setHasProcedure(steps > 0);
+                lessonsByChapter.computeIfAbsent(row.getChapterId(), key -> new ArrayList<>()).add(dto);
+            }
         return chapters.findByCourseIdOrderByChapterOrderAscIdAsc(courseId).stream()
                 .filter(c -> !"DELETED".equals(c.getStatus()))
                 .map(c -> new ChapterDto(c.getId(), courseId, c.getCode(), c.getTitle(), c.getDescription(),

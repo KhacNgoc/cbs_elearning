@@ -110,7 +110,7 @@
             </thead>
             <tbody>
               <tr
-                v-for="domain in paginatedDomains"
+                v-for="domain in domainRows"
                 :key="domain.id"
                 :class="{ 'selected-domain': domain.id === domainId }"
               >
@@ -123,9 +123,7 @@
                     {{ domain.name }}</button
                   ><small
                     >{{ domain.code }} ·
-                    {{
-                      programs.filter((p) => p.domainId === domain.id).length
-                    }}
+                    {{ domain.programsCount ?? 0 }}
                     chương trình</small
                   >
                 </td>
@@ -140,7 +138,7 @@
                   </button>
                 </td>
               </tr>
-              <tr v-if="!domains.length">
+              <tr v-if="!domainRows.length">
                 <td colspan="2" class="empty">Chưa có lĩnh vực đào tạo.</td>
               </tr>
             </tbody>
@@ -149,7 +147,7 @@
         <TablePagination
           v-model:page="domainPage"
           v-model:page-size="domainPageSize"
-          :total="domains.length"
+          :total="domainTotal"
           :page-count="domainPageCount"
           unit="lĩnh vực"
           unit-label="Lĩnh vực"
@@ -191,7 +189,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="program in paginatedPrograms" :key="program.id">
+              <tr v-for="program in programRows" :key="program.id">
                 <td>
                   <strong>{{ program.name }}</strong
                   ><small>{{ program.code }}</small>
@@ -217,13 +215,13 @@
             </tbody>
           </table>
         </div>
-        <p v-if="!filteredPrograms.length" class="empty">
+        <p v-if="!programRows.length" class="empty">
           Chưa có chương trình phù hợp.
         </p>
         <TablePagination
           v-model:page="programPage"
           v-model:page-size="programPageSize"
-          :total="filteredPrograms.length"
+          :total="programTotal"
           :page-count="programPageCount"
           unit="chương trình"
           unit-label="Chương trình"
@@ -280,20 +278,15 @@
           <option value="PUBLISHED">Đã xuất bản</option>
           <option value="ARCHIVED">Đã lưu trữ</option>
         </select>
-        <select
+        <SearchSelect
           v-if="!course"
           v-model="programFilter"
+          class="program-filter-select"
           aria-label="Lọc chương trình"
-        >
-          <option value="">Tất cả chương trình</option>
-          <option
-            v-for="program in programs"
-            :key="program.id"
-            :value="program.id"
-          >
-            {{ program.name }}
-          </option>
-        </select>
+          all-label="Tất cả chương trình"
+          search-placeholder="Gõ tên chương trình..."
+          :options="programFilterOptions"
+        />
         <button
           v-if="
             (!course && accessUser.can('courses', 'create')) ||
@@ -504,17 +497,14 @@
         >Tên *<input v-model="form.name" required
       /></label>
       <label class="admin-form-field" v-if="formKind === 'course'"
-        >Chương trình đào tạo *<select v-model="form.programId" required>
-          <option value="" disabled>Chọn chương trình</option>
-          <option
-            v-for="program in programs.filter((p) => p.status === 'ACTIVE')"
-            :key="program.id"
-            :value="program.id"
-          >
-            {{ domains.find((d) => d.id === program.domainId)?.name }} /
-            {{ program.name }}
-          </option>
-        </select></label
+        >Chương trình đào tạo *<SearchSelect
+          v-model="form.programId"
+          aria-label="Chương trình đào tạo"
+          all-label="Chọn chương trình"
+          :allow-all="false"
+          search-placeholder="Gõ tên chương trình hoặc lĩnh vực..."
+          :options="programFormOptions"
+        /></label
       >
       <template v-if="formKind === 'course'">
         <div class="admin-form-grid">
@@ -621,6 +611,7 @@
 
 <script setup lang="ts">
 import SkeletonLoader from "../components/SkeletonLoader.vue";
+import SearchSelect from "../components/SearchSelect.vue";
 import { useUserStore } from "../stores/userStore";
 const accessUser = useUserStore();
 const managesCourses = computed(
@@ -675,6 +666,13 @@ const domains = ref<TrainingDomain[]>([]),
   programs = ref<TrainingProgram[]>([]),
   courses = ref<Course[]>([]),
   chapters = ref<Chapter[]>([]);
+// Hundreds of programmes: picked with SearchSelect instead of a <select> listing all of them.
+const programFilterOptions = computed(() => programs.value.map((p) => ({ value: p.id, label: p.name })));
+const programFormOptions = computed(() =>
+  programs.value
+    .filter((p) => p.status === "ACTIVE")
+    .map((p) => ({ value: p.id, label: p.name, hint: domains.value.find((d) => d.id === p.domainId)?.name })),
+);
 const course = ref<Course | null>(null),
   chapter = ref<Chapter | null>(null),
   domainId = ref(""),
@@ -780,47 +778,84 @@ const filtered = computed(() =>
     );
   }),
 );
-const filteredPrograms = computed(() =>
-  programs.value.filter(
-    (p) =>
-      p.domainId === domainId.value &&
-      `${p.code} ${p.name}`
-        .toLocaleLowerCase("vi")
-        .includes(query.value.toLocaleLowerCase("vi")),
-  ),
-);
+// Catalog table view: domains and programs are paged and searched by the server.
 const domainPage = ref(1),
   programPage = ref(1);
 const domainPageSize = ref(10),
   programPageSize = ref(10);
+const domainRows = ref<(TrainingDomain & { programsCount?: number })[]>([]),
+  programRows = ref<TrainingProgram[]>([]);
+const domainTotal = ref(0),
+  programTotal = ref(0);
 const domainPageCount = computed(() =>
-  Math.max(1, Math.ceil(domains.value.length / domainPageSize.value)),
+  Math.max(1, Math.ceil(domainTotal.value / domainPageSize.value)),
 );
 const programPageCount = computed(() =>
-  Math.max(1, Math.ceil(filteredPrograms.value.length / programPageSize.value)),
+  Math.max(1, Math.ceil(programTotal.value / programPageSize.value)),
 );
-const paginatedDomains = computed(() =>
-  domains.value.slice(
-    (domainPage.value - 1) * domainPageSize.value,
-    domainPage.value * domainPageSize.value,
-  ),
-);
-const paginatedPrograms = computed(() =>
-  filteredPrograms.value.slice(
-    (programPage.value - 1) * programPageSize.value,
-    programPage.value * programPageSize.value,
-  ),
-);
-watch([query, domainId, programPageSize], () => (programPage.value = 1));
-watch(domainPageSize, () => (domainPage.value = 1));
-watch(
-  domainPageCount,
-  (count) => (domainPage.value = Math.min(domainPage.value, count)),
-);
-watch(
-  programPageCount,
-  (count) => (programPage.value = Math.min(programPage.value, count)),
-);
+const catalogTableShown = () => mode.value === "catalog" && viewType.value === "table";
+let domainPageRequest = 0;
+async function loadDomainPage() {
+  const request = ++domainPageRequest;
+  const result = await trainingApi.domainsPaged({
+    page: domainPage.value - 1,
+    size: domainPageSize.value,
+  });
+  if (request !== domainPageRequest) return;
+  domainRows.value = result.items;
+  domainTotal.value = result.totalElements;
+  if (!domainId.value || !domains.value.some((d) => d.id === domainId.value))
+    domainId.value = result.items[0]?.id || "";
+}
+let programPageRequest = 0;
+async function loadProgramPage() {
+  const request = ++programPageRequest;
+  if (!domainId.value) {
+    programRows.value = [];
+    programTotal.value = 0;
+    return;
+  }
+  const result = await trainingApi.programsPaged({
+    domainId: domainId.value,
+    search: query.value.trim() || undefined,
+    page: programPage.value - 1,
+    size: programPageSize.value,
+  });
+  if (request !== programPageRequest) return;
+  programRows.value = result.items;
+  programTotal.value = result.totalElements;
+}
+// Every program-page load goes through one timer, so a default domain chosen while the
+// domain page loads and the explicit load below collapse into a single request.
+let programPageTimer: ReturnType<typeof setTimeout> | undefined;
+function scheduleProgramPage(delay = 0) {
+  clearTimeout(programPageTimer);
+  programPageTimer = setTimeout(() => void loadProgramPage().catch(showLoadError), delay);
+}
+async function loadCatalogTables() {
+  await loadDomainPage();
+  scheduleProgramPage();
+}
+watch([domainPage, domainPageSize], ([, size], [, oldSize]) => {
+  if (!catalogTableShown() || catalogRequest) return;
+  if (size !== oldSize && domainPage.value !== 1) {
+    domainPage.value = 1;
+    return;
+  }
+  void loadDomainPage().catch(showLoadError);
+});
+watch([domainId, query, programPage, programPageSize], (next, prev) => {
+  // While the catalog loads it picks the default domain and then loads the programs itself.
+  if (!catalogTableShown() || catalogRequest) return;
+  const filterChanged = next[0] !== prev[0] || next[1] !== prev[1] || next[3] !== prev[3];
+  if (filterChanged && programPage.value !== 1) {
+    programPage.value = 1;
+    return;
+  }
+  // Typing in the search box waits for a pause; paging and domain clicks load at once.
+  scheduleProgramPage(next[1] !== prev[1] ? 250 : 0);
+});
+onBeforeUnmount(() => clearTimeout(programPageTimer));
 const listTotal = computed(() =>
   serverCourseList.value ? courseTotal.value : filtered.value.length,
 );
@@ -883,23 +918,36 @@ function missingCourse(failure: unknown): null {
   if (status === 403 || status === 404) return null;
   throw failure;
 }
+// Units, domains and programs feed the table views and their forms only; the tree view loads
+// its own data. The catalog page needs no program list (its program table is paged), and no
+// page needs the course options, so they are never requested.
 let catalogPath = "";
+let catalogRequest: Promise<void> | null = null;
 async function loadCatalog() {
   const path = route.path;
-  const catalog =
-    mode.value === "catalog"
-      ? await trainingApi.catalog()
-      : (await axiosClient.get("/api/admin/options/courses")).data;
-  const options =
-    mode.value === "catalog"
-      ? (await axiosClient.get("/api/admin/options/catalog")).data
-      : catalog;
-  units.value = options.units;
+  const catalogMode = mode.value === "catalog";
+  const options = (
+    await axiosClient.get(`/api/admin/options/${catalogMode ? "catalog" : "courses"}`, {
+      params: { parts: catalogMode ? "units,domains" : "units,domains,programs" },
+    })
+  ).data;
+  if (route.path !== path) return;
+  units.value = options.units || [];
   canManageDomains.value = !!options.canManageDomains;
-  domains.value = catalog.domains;
-  programs.value = catalog.programs;
+  domains.value = (options.domains || []).filter(
+    (d: TrainingDomain) => d.status !== "DELETED",
+  );
+  programs.value = (options.programs || []).filter(
+    (p: TrainingProgram) => p.status !== "DELETED",
+  );
   domainId.value ||= domains.value[0]?.id || "";
   catalogPath = path;
+  if (catalogMode && viewType.value === "table") await loadCatalogTables();
+}
+function ensureCatalog(force = false) {
+  if (!force && catalogPath === route.path) return Promise.resolve();
+  catalogRequest ??= loadCatalog().finally(() => (catalogRequest = null));
+  return catalogRequest;
 }
 function showLoadError(failure: unknown) {
   showToast(serverError(failure), "error");
@@ -956,7 +1004,10 @@ async function loadCourses() {
 async function load(refreshCatalog = true) {
   loading.value = true;
   try {
-    await Promise.all([refreshCatalog ? loadCatalog() : null, loadCourses()]);
+    // A stale catalog is reloaded on the next table view or form instead of on every tree change.
+    if (refreshCatalog) catalogPath = "";
+    const catalogNow = viewType.value === "table";
+    await Promise.all([catalogNow ? ensureCatalog(true) : null, loadCourses()]);
     const focusId =
       typeof route.query.chapter === "string" ? route.query.chapter : "";
     if (focusId && !focusApplied.value) {
@@ -992,6 +1043,14 @@ watch(
   { immediate: true },
 );
 watch(viewType, async (nextView) => {
+  if (nextView === "table") {
+    try {
+      if (catalogPath !== route.path) await ensureCatalog();
+      else if (mode.value === "catalog") await loadCatalogTables();
+    } catch (failure) {
+      showLoadError(failure);
+    }
+  }
   // A course page lists its chapters; only the course list needs a page of courses.
   if (nextView === "table" && mode.value !== "catalog" && !course.value && !courses.value.length) {
     try {
@@ -1054,6 +1113,9 @@ function openForm(
   r?: Partial<Row | TrainingDomain | TrainingProgram>,
 ) {
   formKind.value = kind;
+  // Course and program forms choose a program, domain or units from the catalog options.
+  if (kind === "course" || kind === "program")
+    void ensureCatalog().catch(showLoadError);
   const item = r as
     | Partial<Course & Chapter & Lesson & TrainingProgram>
     | undefined;
@@ -1097,6 +1159,11 @@ function editRow(r: Row) {
 }
 async function save() {
   if (busy.value || uploadingImage.value || !formKind.value) return;
+  // The programme picker is not a native <select required>, so the form checks it here.
+  if (formKind.value === "course" && !form.value.programId) {
+    showToast("Chọn chương trình đào tạo cho khóa học.", "warning");
+    return;
+  }
   busy.value = true;
   const f = form.value,
     kind = formKind.value;
@@ -1383,6 +1450,14 @@ small {
 .table-toolbar {
   margin-bottom: 1.5rem;
   flex-wrap: wrap;
+}
+/* The programme picker sits beside native toolbar selects: same height, its own width. */
+.program-filter-select {
+  width: 260px;
+}
+.program-filter-select :deep(.search-select-trigger) {
+  min-height: 0;
+  padding: 0.6rem;
 }
 .table-toolbar select {
   padding: 0.6rem;
@@ -1778,6 +1853,7 @@ button:disabled {
   }
   .table-toolbar .search-box,
   .table-toolbar select,
+  .table-toolbar .program-filter-select,
   .table-toolbar > .btn {
     width: 100%;
     min-width: 0;

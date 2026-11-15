@@ -61,8 +61,29 @@ public interface CourseRepository extends JpaRepository<Course, String> {
             @Param("status") String status,
             @Param("programId") String programId);
 
+    /** findAdminList paged by the database, for accounts that may read every course. */
+    @Query(value = "SELECT c FROM Course c JOIN FETCH c.program p JOIN FETCH p.domain " +
+           "WHERE (:programId = '' OR p.id = :programId) " +
+           "AND (:status = '' OR c.status = :status) " +
+           "AND (:search = '' OR c.name ILIKE CONCAT('%', :search, '%') OR c.code ILIKE CONCAT('%', :search, '%')) " +
+           "ORDER BY c.code ASC, c.name ASC, c.id ASC",
+           countQuery = "SELECT count(c) FROM Course c " +
+           "WHERE (:programId = '' OR c.program.id = :programId) " +
+           "AND (:status = '' OR c.status = :status) " +
+           "AND (:search = '' OR c.name ILIKE CONCAT('%', :search, '%') OR c.code ILIKE CONCAT('%', :search, '%'))")
+    Page<Course> findAdminPage(
+            @Param("search") String search,
+            @Param("status") String status,
+            @Param("programId") String programId,
+            Pageable pageable);
+
     @Query("select distinct c from Course c join c.unitGrants ug where key(ug) = :unitId and c.status <> 'DELETED'")
     List<Course> findByUnitGrant(@Param("unitId") String unitId);
+
+    /** Course counts for a page of programs in one grouped query (programId, count). */
+    @Query("SELECT c.program.id, COUNT(c) FROM Course c " +
+           "WHERE c.program.id IN :programIds AND c.status <> 'DELETED' GROUP BY c.program.id")
+    List<Object[]> countActiveByProgramIds(@Param("programIds") Collection<String> programIds);
 
     /**
      * Learnable courses granted as MANDATORY to any of {@code unitIds} (the learner's unit and its ancestors).

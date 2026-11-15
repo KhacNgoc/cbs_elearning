@@ -121,4 +121,10 @@ public interface LessonRepository extends JpaRepository<Lesson, String> {
   List<Lesson> findByChapterIdOrderByLessonOrderAscIdAsc(String chapterId);
 
   List<Lesson> findByCourseIdOrderByLessonOrderAscIdAsc(String courseId);
+
+  /** Procedure section count per lesson of a course (lessonId, count), without loading the sections. */
+  @org.springframework.data.jpa.repository.Query(
+      "select ps.lesson.id, count(ps) from ProcedureSection ps where ps.lesson.course.id = :courseId group by ps.lesson.id")
+  List<Object[]> countProcedureSectionsByLesson(
+      @org.springframework.data.repository.query.Param("courseId") String courseId);
 }

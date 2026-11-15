@@ -454,23 +454,23 @@
                             <!-- Level 6 & 7 Indicators -->
                             <div class="node-badge-group mini-blocks">
                               <span
-                                v-if="lesson.videoUrl"
+                                v-if="lessonHasVideo(lesson)"
                                 class="mini-block-badge video"
                                 title="Đã có Video bài giảng"
                               >
                                 <Video :size="10" />
                               </span>
                               <span
-                                v-if="lesson.documents && lesson.documents.length"
+                                v-if="lessonDocumentCount(lesson)"
                                 class="mini-block-badge docs"
-                                :title="`${lesson.documents.length} tài liệu đính kèm`"
+                                :title="`${lessonDocumentCount(lesson)} tài liệu đính kèm`"
                               >
                                 <FileUp :size="10" />
                               </span>
                               <span
-                                v-if="lesson.procedureSteps && lesson.procedureSteps.length"
+                                v-if="lessonProcedureCount(lesson)"
                                 class="mini-block-badge proc"
-                                :title="`${lesson.procedureSteps.length} bước quy trình CBS`"
+                                :title="`${lessonProcedureCount(lesson)} bước quy trình CBS`"
                               >
                                 <ListOrdered :size="10" />
                               </span>
@@ -511,40 +511,40 @@
                             <!-- Block 1: Video -->
                             <div
                               class="tree-node block-node video-block"
-                              :class="{ active: !!lesson.videoUrl }"
+                              :class="{ active: lessonHasVideo(lesson) }"
                               @click="editLessonBlock(lesson, 'video')"
                             >
                               <Video :size="12" class="block-icon video-icon" />
                               <span class="block-title">
-                                {{ lesson.videoUrl ? 'Video bài giảng (Đã thiết lập)' : '(Chưa có Video - Click để thêm)' }}
+                                {{ lessonHasVideo(lesson) ? 'Video bài giảng (Đã thiết lập)' : '(Chưa có Video - Click để thêm)' }}
                               </span>
-                              <span v-if="lesson.videoUrl" class="block-check">✓</span>
+                              <span v-if="lessonHasVideo(lesson)" class="block-check">✓</span>
                             </div>
 
                             <!-- Block 2: Documents -->
                             <div
                               class="tree-node block-node docs-block"
-                              :class="{ active: !!(lesson.documents && lesson.documents.length) }"
+                              :class="{ active: lessonDocumentCount(lesson) > 0 }"
                               @click="editLessonBlock(lesson, 'documents')"
                             >
                               <FileUp :size="12" class="block-icon doc-icon" />
                               <span class="block-title">
-                                {{ (lesson.documents && lesson.documents.length) ? `${lesson.documents.length} tài liệu học tập` : '(Chưa có tài liệu - Click để tải lên)' }}
+                                {{ lessonDocumentCount(lesson) ? `${lessonDocumentCount(lesson)} tài liệu học tập` : '(Chưa có tài liệu - Click để tải lên)' }}
                               </span>
-                              <span v-if="lesson.documents && lesson.documents.length" class="block-check">✓</span>
+                              <span v-if="lessonDocumentCount(lesson)" class="block-check">✓</span>
                             </div>
 
                             <!-- Block 3: Procedure Steps -->
                             <div
                               class="tree-node block-node procedure-block"
-                              :class="{ active: !!(lesson.procedureSteps && lesson.procedureSteps.length) }"
+                              :class="{ active: lessonProcedureCount(lesson) > 0 }"
                               @click="editLessonBlock(lesson, 'procedure')"
                             >
                               <ListOrdered :size="12" class="block-icon proc-icon" />
                               <span class="block-title">
-                                {{ (lesson.procedureSteps && lesson.procedureSteps.length) ? `${lesson.procedureSteps.length} bước quy trình CBS` : '(Chưa có quy trình - Click để thêm)' }}
+                                {{ lessonProcedureCount(lesson) ? `${lessonProcedureCount(lesson)} bước quy trình CBS` : '(Chưa có quy trình - Click để thêm)' }}
                               </span>
-                              <span v-if="lesson.procedureSteps && lesson.procedureSteps.length" class="block-check">✓</span>
+                              <span v-if="lessonProcedureCount(lesson)" class="block-check">✓</span>
                             </div>
 
                             <!-- Block 4: Assessment / Quiz (Level 7) -->
@@ -604,48 +604,17 @@
       </div>
     </div>
 
-    <!-- TIER-1 ROOT TREE PAGINATION FOOTER BAR -->
+    <!-- TIER-1 ROOT TREE PAGINATION (shared footer, same as other admin pages) -->
     <div v-if="!loading && domains.length > 0" class="tree-pagination-bar">
-      <div class="pagination-summary">
-        <span>
-          Hiển thị <strong>{{ (treeDomainPage - 1) * treeDomainPageSize + 1 }}–{{ Math.min(treeDomainPage * treeDomainPageSize, treeDomainTotalElements) }}</strong>
-          trên tổng số <strong>{{ treeDomainTotalElements }}</strong> lĩnh vực
-          ({{ totalActiveProgramsCount }} chương trình)
-        </span>
-      </div>
-
-      <div class="pagination-controls">
-        <label class="page-size-label">
-          <span>Hiển thị:</span>
-          <select v-model.number="treeDomainPageSize" class="page-size-select">
-            <option :value="5">5 lĩnh vực / trang</option>
-            <option :value="10">10 lĩnh vực / trang</option>
-            <option :value="20">20 lĩnh vực / trang</option>
-          </select>
-        </label>
-
-        <div class="page-nav-group">
-          <button
-            type="button"
-            class="page-btn"
-            :disabled="treeDomainPage <= 1"
-            @click="treeDomainPage--"
-          >
-            Trước
-          </button>
-          <span class="page-indicator">
-            Trang {{ treeDomainPage }} / {{ treeDomainTotalPages }}
-          </span>
-          <button
-            type="button"
-            class="page-btn"
-            :disabled="treeDomainPage >= treeDomainTotalPages"
-            @click="treeDomainPage++"
-          >
-            Sau
-          </button>
-        </div>
-      </div>
+      <TablePagination
+        v-model:page="treeDomainPage"
+        v-model:page-size="treeDomainPageSize"
+        :total="treeDomainTotalElements"
+        :page-count="treeDomainTotalPages"
+        :sizes="[5, 10, 20]"
+        unit="lĩnh vực"
+        unit-label="Lĩnh vực"
+      />
     </div>
 
     <!-- CONFIRM DELETE MODAL -->
@@ -819,19 +788,16 @@
                 <span class="badge-mandatory">Bắt buộc hoàn thành</span>
               </div>
 
-              <select
-                class="form-control unit-select"
-                @change="handleSelectUnit($event, 'mandatory')"
-              >
-                <option value="">+ Chọn đơn vị bắt buộc...</option>
-                <option
-                  v-for="u in availableUnitsForMandatory"
-                  :key="u.id"
-                  :value="u.id"
-                >
-                  {{ u.name }} ({{ u.type === 'DEPARTMENT' ? 'Phòng ban' : 'Chi nhánh/Hội sở' }})
-                </option>
-              </select>
+              <SearchSelect
+                class="unit-select"
+                model-value=""
+                aria-label="Thêm đơn vị bắt buộc"
+                all-label="+ Chọn đơn vị bắt buộc..."
+                :allow-all="false"
+                search-placeholder="Gõ tên đơn vị..."
+                :options="unitPickOptions(availableUnitsForMandatory)"
+                @update:model-value="handleSelectUnit($event, 'mandatory')"
+              />
 
               <!-- Tags đơn vị bắt buộc đã chọn -->
               <div v-if="addModal.mandatoryUnitIds.length" class="unit-tags-container">
@@ -864,19 +830,16 @@
                 <span v-if="addModal.type === 'course'" class="badge-optional">Tự nguyện học tập</span>
               </div>
 
-              <select
-                class="form-control unit-select"
-                @change="handleSelectUnit($event, 'optional')"
-              >
-                <option value="">{{ addModal.type === 'course' ? '+ Chọn đơn vị tùy chọn...' : '+ Chọn đơn vị quản lý...' }}</option>
-                <option
-                  v-for="u in availableUnitsForOptional"
-                  :key="u.id"
-                  :value="u.id"
-                >
-                  {{ u.name }} ({{ u.type === 'DEPARTMENT' ? 'Phòng ban' : 'Chi nhánh/Hội sở' }})
-                </option>
-              </select>
+              <SearchSelect
+                class="unit-select"
+                model-value=""
+                :aria-label="addModal.type === 'course' ? 'Thêm đơn vị tùy chọn' : 'Thêm đơn vị quản lý'"
+                :all-label="addModal.type === 'course' ? '+ Chọn đơn vị tùy chọn...' : '+ Chọn đơn vị quản lý...'"
+                :allow-all="false"
+                search-placeholder="Gõ tên đơn vị..."
+                :options="unitPickOptions(availableUnitsForOptional)"
+                @update:model-value="handleSelectUnit($event, 'optional')"
+              />
 
               <!-- Tags đơn vị tùy chọn đã chọn -->
               <div v-if="addModal.optionalUnitIds.length" class="unit-tags-container">
@@ -976,6 +939,8 @@
 
 <script setup lang="ts">
 import SkeletonLoader from "./SkeletonLoader.vue";
+import SearchSelect from "./SearchSelect.vue";
+import TablePagination from "./TablePagination.vue";
 import { ref, computed, watch, onMounted, nextTick } from "vue";
 import { useRouter } from "vue-router";
 import {
@@ -1561,9 +1526,11 @@ function getCourseMandatoryUnits(course: any): string[] {
   return [];
 }
 
-function handleSelectUnit(event: Event, type: "mandatory" | "optional") {
-  const select = event.target as HTMLSelectElement;
-  const unitId = select.value;
+// The picker always shows its placeholder: choosing a unit adds it to the tags below.
+const unitPickOptions = (units: { id: string; name: string; type?: string }[]) =>
+  units.map((u) => ({ value: u.id, label: u.name, hint: u.type === "DEPARTMENT" ? "Phòng ban" : "Chi nhánh/Hội sở" }));
+
+function handleSelectUnit(unitId: string, type: "mandatory" | "optional") {
   if (!unitId) return;
 
   if (type === "mandatory") {
@@ -1575,7 +1542,6 @@ function handleSelectUnit(event: Event, type: "mandatory" | "optional") {
       addModal.value.optionalUnitIds.push(unitId);
     }
   }
-  select.value = "";
 }
 
 function removeUnit(unitId: string, type: "mandatory" | "optional") {
@@ -1631,17 +1597,26 @@ function mergeCoursesIntoStore(newCourses: Course[]) {
   courses.value = Array.from(map.values());
 }
 
+// Unit names for badges and modals: one shared request, units only (not every course and program).
+let unitOptionsRequest: Promise<void> | null = null;
+function loadUnitOptions(): Promise<void> {
+  if (unitsList.value.length) return Promise.resolve();
+  unitOptionsRequest ??= axiosClient
+    .get("/api/admin/options/catalog", { params: { parts: "units" } })
+    .then((res) => {
+      if (res.data?.units) unitsList.value = res.data.units;
+    })
+    .catch((e) => {
+      unitOptionsRequest = null; // allow a retry on the next need
+      console.warn("Could not load unit options:", e);
+    });
+  return unitOptionsRequest;
+}
+
 async function ensureModalAuxiliaryDataLoaded() {
   if (auxiliaryModalLoaded.value) return;
   auxiliaryModalLoaded.value = true;
-  try {
-    const res = await axiosClient.get("/api/admin/options/catalog");
-    if (res.data?.units) {
-      unitsList.value = res.data.units;
-    }
-  } catch (e) {
-    console.warn("Could not lazy-load auxiliary modal data:", e);
-  }
+  await loadUnitOptions();
 }
 
 async function ensureProgramCoursesLoaded(programId: string, forceReload = false) {
@@ -1837,16 +1812,12 @@ async function loadTreeData(expandTarget?: { type: string; id?: string; parentId
 
     const domainIds = domains.value.map((d) => d.id);
     if (domainIds.length > 0) {
-      const progResponses = await Promise.all(
-        domainIds.map((dId) =>
-          trainingApi.programsPaged({
-            domainId: dId,
-            search: searchQuery.value.trim() || undefined,
-            size: 100,
-          })
-        )
+      // One request for every domain on the page instead of one per domain.
+      const pagePrograms = await trainingApi.programsByDomains(
+        domainIds,
+        searchQuery.value.trim() || undefined,
       );
-      programs.value = progResponses.flatMap((r) => (r.items || []).filter((p) => p.status !== "DELETED"));
+      programs.value = pagePrograms.filter((p) => p.status !== "DELETED");
     } else {
       programs.value = [];
     }
@@ -1862,14 +1833,7 @@ async function loadTreeData(expandTarget?: { type: string; id?: string; parentId
     }
 
     // Load units lightly so unit badges on courses/programs have names
-    if (!unitsList.value.length) {
-      axiosClient
-        .get("/api/admin/options/catalog")
-        .then((res) => {
-          if (res.data?.units) unitsList.value = res.data.units;
-        })
-        .catch(() => {});
-    }
+    void loadUnitOptions();
 
     if (props.initialCourseId) {
       // Only fetch the specific course if needed
@@ -1939,7 +1903,8 @@ async function loadChaptersForCourse(courseId: string, forceReload = false) {
   }
   loadingCourseChaptersMap.value = { ...loadingCourseChaptersMap.value, [courseId]: true };
   try {
-    const chapters = await trainingApi.chapters(courseId);
+    // Outline: lesson metadata and counts only, no lesson content.
+    const chapters = await trainingApi.chapterOutlines(courseId);
     chaptersMap.value = {
       ...chaptersMap.value,
       [courseId]: chapters || [],
@@ -1965,6 +1930,19 @@ function getCoursesForProgram(programId: string) {
     return programCoursesMap.value[programId].filter((c) => c.status !== "DELETED");
   }
   return courses.value.filter((c) => c.programId === programId && c.status !== "DELETED");
+}
+
+// Lessons come from the chapter outline (counts/flags) or from a full lesson (lists).
+function lessonHasVideo(lesson: Partial<Lesson> | null | undefined): boolean {
+  return !!(lesson?.hasVideo ?? lesson?.videoUrl);
+}
+
+function lessonDocumentCount(lesson: Partial<Lesson> | null | undefined): number {
+  return lesson?.documentCount ?? lesson?.documents?.length ?? 0;
+}
+
+function lessonProcedureCount(lesson: Partial<Lesson> | null | undefined): number {
+  return lesson?.procedureStepCount ?? lesson?.procedureSteps?.length ?? 0;
 }
 
 function getChaptersForCourse(courseId: string) {
@@ -2510,9 +2488,9 @@ async function promptDeleteNode(
   } else if (type === "lesson") {
     typeLabel = "bài học";
     const docCount =
-      (item.documents || []).length +
-      (item.procedureSteps || []).length +
-      (item.videoUrl ? 1 : 0);
+      lessonDocumentCount(item) +
+      lessonProcedureCount(item) +
+      (lessonHasVideo(item) ? 1 : 0);
     notes = [
       `Bài học này hiện có ${docCount} nội dung học liệu${item.hasQuiz ? " và 1 bài kiểm tra" : ""}.`,
       `Xóa bài học sẽ đồng thời xóa toàn bộ học liệu và bài kiểm tra bên trong.`,
@@ -2682,10 +2660,6 @@ const treeDomainPageSize = ref(5);
 const treeDomainTotalPages = ref(1);
 const treeDomainTotalElements = ref(0);
 
-const totalActiveProgramsCount = computed(() =>
-  programs.value.filter((p) => p.status !== "DELETED").length
-);
-
 const TREE_STATE_STORAGE_KEY = "cbs_curriculum_tree_state_v1";
 let isRestoringTreeState = false;
 
@@ -2724,7 +2698,11 @@ function loadTreeStateFromStorage(): boolean {
     if (typeof parsed.treeDomainPage === "number" && parsed.treeDomainPage > 0) {
       treeDomainPage.value = parsed.treeDomainPage;
     }
-    isRestoringTreeState = false;
+    // The page/size watcher runs on the next flush; keep the flag until then so restoring
+    // the saved page does not trigger a second loadTreeData() next to the one in onMounted.
+    void nextTick(() => {
+      isRestoringTreeState = false;
+    });
     return true;
   } catch {
     isRestoringTreeState = false;
@@ -2732,15 +2710,14 @@ function loadTreeStateFromStorage(): boolean {
   }
 }
 
-watch(treeDomainPageSize, () => {
+// One watcher for both: TablePagination resets the page and changes the size
+// in the same tick, which must trigger a single reload.
+watch([treeDomainPage, treeDomainPageSize], ([, size], [, oldSize]) => {
   if (isRestoringTreeState) return;
-  treeDomainPage.value = 1;
-  saveTreeStateToStorage();
-  loadTreeData();
-});
-
-watch(treeDomainPage, () => {
-  if (isRestoringTreeState) return;
+  if (size !== oldSize && treeDomainPage.value !== 1) {
+    treeDomainPage.value = 1;
+    return;
+  }
   saveTreeStateToStorage();
   loadTreeData();
 });
@@ -2867,9 +2844,9 @@ function showNodeTooltip(
       extraMeta = `${lessonCount} bài giảng`;
     } else if (type === "lesson") {
       const parts: string[] = [];
-      if (rawObj.videoUrl) parts.push("Video");
-      if (rawObj.documents?.length) parts.push(`${rawObj.documents.length} Tài liệu`);
-      if (rawObj.procedureSteps?.length) parts.push(`${rawObj.procedureSteps.length} Bước quy trình`);
+      if (lessonHasVideo(rawObj)) parts.push("Video");
+      if (lessonDocumentCount(rawObj)) parts.push(`${lessonDocumentCount(rawObj)} Tài liệu`);
+      if (lessonProcedureCount(rawObj)) parts.push(`${lessonProcedureCount(rawObj)} Bước quy trình`);
       if (rawObj.hasQuiz) parts.push("Quiz đánh giá");
       extraMeta = parts.length ? parts.join(" • ") : "Chưa đính kèm học liệu";
     }
@@ -4417,93 +4394,9 @@ watch(
 }
 
 .tree-pagination-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.75rem 1.25rem;
-  border-top: 1px solid var(--border-color);
-  background: var(--bg-main);
-  flex-wrap: wrap;
-  margin-top: auto;
-}
-
-.pagination-summary {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.pagination-summary strong {
-  color: var(--text-main);
-}
-
-.pagination-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.page-size-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.76rem;
-  color: var(--text-muted);
-}
-
-.page-size-select {
+  padding: 0 1.25rem 0.75rem;
+  border-top: 0;
   background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  color: var(--text-main);
-  border-radius: 8px;
-  padding: 0.25rem 0.55rem;
-  font-size: 0.76rem;
-  font-weight: 600;
-  outline: none;
-  cursor: pointer;
-}
-
-.page-size-select:focus {
-  border-color: var(--primary-color);
-}
-
-.page-nav-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.page-btn {
-  padding: 0.28rem 0.68rem;
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-card);
-  color: var(--text-main);
-  font-size: 0.76rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.14s ease;
-}
-
-.page-btn:hover:not(:disabled) {
-  background: var(--primary-light);
-  border-color: var(--primary-color);
-  color: var(--primary-ink);
-}
-
-.page-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.page-indicator {
-  font-size: 0.76rem;
-  font-weight: 600;
-  color: var(--text-main);
-  padding: 0 0.25rem;
-  font-variant-numeric: tabular-nums;
 }
 
 .tree-inline-loading {
@@ -4588,16 +4481,17 @@ watch(
 
   .header-actions .btn-studio {
     justify-content: center;
-    padding: 0.55rem 0.6rem;
+    gap: 0.3rem;
+    padding: 0.4rem 0.5rem;
     min-height: 40px;
-    font-size: 0.8rem;
-    white-space: nowrap;
+    font-size: 0.78rem;
+    line-height: 1.2;
+    text-align: center;
     min-width: 0;
   }
 
-  .header-actions .btn-studio > span {
-    overflow: hidden;
-    text-overflow: ellipsis;
+  .header-actions .btn-studio > svg {
+    flex-shrink: 0;
   }
 
   .header-actions .btn-studio.btn-ghost {
@@ -4724,47 +4618,8 @@ watch(
     min-height: 34px;
   }
 
-  /* Footer pagination: stacked, full-width controls */
   .tree-pagination-bar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.6rem;
-    padding: 0.7rem 0.9rem;
-  }
-
-  .pagination-summary {
-    font-size: 0.74rem;
-    text-align: center;
-  }
-
-  .pagination-controls {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.55rem;
-  }
-
-  .page-size-label {
-    justify-content: space-between;
-  }
-
-  .page-size-select {
-    flex: 1;
-    max-width: 220px;
-    min-height: 36px;
-  }
-
-  .page-nav-group {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    gap: 0.5rem;
-  }
-
-  .page-btn {
-    min-height: 38px;
-  }
-
-  .page-indicator {
-    text-align: center;
+    padding: 0 0.9rem 0.75rem;
   }
 
   /* Modals */

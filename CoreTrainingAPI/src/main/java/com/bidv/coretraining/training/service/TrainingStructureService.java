@@ -42,6 +42,8 @@ public interface TrainingStructureService {
     }
 
     public PagedResult<ProgramListItem> adminProgramsPaged(String domainId, String search, int page, int size, String unallocatedForUnitId);
+    /** Active programs of a page of domains in one call (at most 100 domains). */
+    public List<ProgramListItem> adminProgramsByDomains(java.util.Collection<String> domainIds, String search);
     default PagedResult<ProgramListItem> adminProgramsPaged(String domainId, String search, int page, int size) {
         return adminProgramsPaged(domainId, search, page, size, null);
     }

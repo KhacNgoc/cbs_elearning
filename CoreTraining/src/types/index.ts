@@ -68,6 +68,9 @@ export interface Lesson {
   hasText?: boolean;
   /** Outline flag for editors: the lesson has procedure steps. */
   hasProcedure?: boolean;
+  /** Outline counts: lists show badges without loading documents or procedure steps. */
+  documentCount?: number;
+  procedureStepCount?: number;
   textRequired?: boolean;
   videoRequired?: boolean;
   slideRequired?: boolean;

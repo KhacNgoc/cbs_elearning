@@ -165,6 +165,16 @@ export const trainingApi = {
       }>("/api/admin/programs/paged", { params })
     ).data;
   },
+  /** Active programs of several domains in one request (a page of the curriculum tree). */
+  async programsByDomains(domainIds: string[], search?: string) {
+    if (!domainIds.length) return [];
+    return (
+      await axiosClient.get<(TrainingProgram & { coursesCount?: number })[]>(
+        "/api/admin/programs/by-domains",
+        { params: { domainIds: domainIds.join(","), search: search || undefined } },
+      )
+    ).data;
+  },
   async coursesByProgramPaged(programId: string, params?: { search?: string; page?: number; size?: number; unallocatedForUnitId?: string }) {
     return (
       await axiosClient.get<{

@@ -40,4 +40,7 @@ public class LessonDto {
     private List<ProcedureSectionDto> procedureSteps;
     private List<CommentDto> comments;
     private Long commentCount;
+    /** Outline-only counts so lists can show badges without loading documents or procedure steps. */
+    private Integer documentCount;
+    private Integer procedureStepCount;
 }
