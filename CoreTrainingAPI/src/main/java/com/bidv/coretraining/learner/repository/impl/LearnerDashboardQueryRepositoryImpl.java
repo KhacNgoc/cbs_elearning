@@ -56,7 +56,6 @@ public class LearnerDashboardQueryRepositoryImpl implements LearnerDashboardQuer
             p.put("search",
                     "%" + normalize(f.search().trim()).replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%");
         }
-        long count = jdbc.queryForObject(c.sql() + " select count(*) from facts" + where, p, Long.class);
         int size = Math.max(1, Math.min(f.size(), 60)), page = Math.max(1, f.page());
         p.put("limit", size);
         p.put("offset", (long) (page - 1) * size);
@@ -67,9 +66,12 @@ public class LearnerDashboardQueryRepositoryImpl implements LearnerDashboardQuer
             default ->
                 "case when learning_status<>'COMPLETED' and source in ('ASSIGNED','REGISTERED') then due_date else null end asc nulls last,last_accessed_at desc nulls last,id";
         };
+        // The total comes with the page (count over the filtered rows) so facts is evaluated once.
+        long[] count = { 0 };
         var items = jdbc.query(c.sql()
-                + " select id,code,name,thumbnail,icon_name,program_id,program_name,domain_id,domain_name,business_module,level,source,mandatory,learning_status,completed_count,total_count,due_date,last_accessed_at from facts"
+                + " select id,code,name,thumbnail,icon_name,program_id,program_name,domain_id,domain_name,business_module,level,source,mandatory,learning_status,completed_count,total_count,due_date,last_accessed_at,count(*) over() total_rows from facts"
                 + where + " order by " + order + " limit :limit offset :offset", p, (r, n) -> {
+                    count[0] = r.getLong("total_rows");
                     var dto = CourseDto.builder().id(r.getString("id")).code(r.getString("code"))
                             .name(r.getString("name")).thumbnail(r.getString("thumbnail"))
                             .iconName(r.getString("icon_name")).programId(r.getString("program_id"))
@@ -83,37 +85,75 @@ public class LearnerDashboardQueryRepositoryImpl implements LearnerDashboardQuer
                             r.getObject("due_date", LocalDate.class),
                             r.getObject("last_accessed_at", LocalDateTime.class), null);
                 });
-        return new Page(items, count, page, size);
+        // A page past the end has no row to carry the total.
+        if (items.isEmpty() && page > 1)
+            count[0] = jdbc.queryForObject(c.sql() + " select count(*) from facts" + where, p, Long.class);
+        return new Page(items, count[0], page, size);
     }
 
-    public Map<String, List<Choice>> choices(LearnerQueryScope u, String tab) {
+    /**
+     * Summary, filter choices and resume course of the dashboard from one evaluation of the facts relation.
+     * The relation holds one row per visible published course, so it is aggregated here rather than
+     * re-evaluated by three queries.
+     */
+    public OverviewFacts overview(LearnerQueryScope u, String tab) {
         var c = relations.facts(u);
-        String where = " where source "
-                + ("discover".equals(tab) ? "in ('AVAILABLE','PENDING')" : "in ('ASSIGNED','REGISTERED')");
-        Map<String, List<Choice>> result = new LinkedHashMap<>();
-        List<String> selects = new ArrayList<>();
-        for (var entry : Map.of("status", "learning_status", "source", "source", "domainId", "domain_id", "programId",
-                "program_id", "businessModule", "business_module", "level", "level").entrySet()) {
-            result.put(entry.getKey(), new ArrayList<>());
-            String column = entry.getValue(), label = column.equals("domain_id") ? "domain_name"
-                    : column.equals("program_id") ? "program_name" : column;
-            selects.add("select distinct '" + entry.getKey() + "' choice_key," + column + " choice_value," + label
-                    + " choice_label from facts" + where + " and " + column + " is not null");
-        }
-        jdbc.query(c.sql() + String.join(" union all ", selects) + " order by choice_key,choice_value", c.params(),
-                r -> {
-                    result.get(r.getString("choice_key"))
-                            .add(new Choice(r.getString("choice_value"), r.getString("choice_label")));
+        record Row(String id, String source, String status, boolean mandatory, long done, long total,
+                LocalDateTime accessed, Map<String, Choice> choices) {}
+        var rows = jdbc.query(c.sql()
+                + " select id,source,learning_status,mandatory,completed_count,total_count,last_accessed_at,"
+                + "domain_id,domain_name,program_id,program_name,business_module,level from facts",
+                c.params(), (r, n) -> {
+                    Map<String, Choice> choices = new LinkedHashMap<>();
+                    choices.put("status", new Choice(r.getString("learning_status"), r.getString("learning_status")));
+                    choices.put("source", new Choice(r.getString("source"), r.getString("source")));
+                    choices.put("domainId", new Choice(r.getString("domain_id"), r.getString("domain_name")));
+                    choices.put("programId", new Choice(r.getString("program_id"), r.getString("program_name")));
+                    choices.put("businessModule", new Choice(r.getString("business_module"), r.getString("business_module")));
+                    choices.put("level", new Choice(r.getString("level"), r.getString("level")));
+                    return new Row(r.getString("id"), r.getString("source"), r.getString("learning_status"),
+                            r.getInt("mandatory") == 1, r.getLong("completed_count"), r.getLong("total_count"),
+                            r.getObject("last_accessed_at", LocalDateTime.class), choices);
                 });
-        return result;
-    }
+        Set<String> joinedSources = Set.of("ASSIGNED", "REGISTERED");
+        long joined = 0, discover = 0, notStarted = 0, inProgress = 0, completed = 0, mandatory = 0,
+                mandatoryComplete = 0, done = 0, total = 0;
+        for (var row : rows) {
+            boolean isJoined = joinedSources.contains(row.source());
+            if (isJoined) {
+                joined++;
+                done += row.done();
+                total += row.total();
+            } else if ("AVAILABLE".equals(row.source()) || "PENDING".equals(row.source()))
+                discover++;
+            switch (row.status()) {
+                case "NOT_STARTED" -> notStarted++;
+                case "IN_PROGRESS" -> inProgress++;
+                case "COMPLETED" -> completed++;
+                default -> { }
+            }
+            if (row.mandatory()) {
+                mandatory++;
+                if ("COMPLETED".equals(row.status()))
+                    mandatoryComplete++;
+            }
+        }
+        var summary = new Summary(joined, discover, notStarted, inProgress, completed, mandatory, mandatoryComplete,
+                done, total, total == 0 ? null : (int) Math.round(done * 100.0 / total));
 
-    public String resumeCourseId(LearnerQueryScope u) {
-        var c = relations.facts(u);
-        var ids = jdbc.query(c.sql()
-                + " select id from facts where source in ('ASSIGNED','REGISTERED') and learning_status<>'COMPLETED' and total_count>0 order by last_accessed_at desc nulls last,id limit 1",
-                c.params(), (r, n) -> r.getString(1));
-        return ids.isEmpty() ? null : ids.get(0);
+        boolean discoverTab = "discover".equals(tab);
+        var tabRows = rows.stream().filter(row -> joinedSources.contains(row.source()) != discoverTab).toList();
+        Map<String, List<Choice>> choices = new LinkedHashMap<>();
+        for (String key : List.of("status", "source", "domainId", "programId", "businessModule", "level"))
+            choices.put(key, tabRows.stream().map(row -> row.choices().get(key)).filter(choice -> choice.value() != null)
+                    .distinct().sorted(Comparator.comparing(Choice::value)).toList());
+
+        String resume = rows.stream()
+                .filter(row -> joinedSources.contains(row.source()) && !"COMPLETED".equals(row.status()) && row.total() > 0)
+                .min(Comparator.comparing(Row::accessed, Comparator.nullsLast(Comparator.<LocalDateTime>reverseOrder()))
+                        .thenComparing(Row::id))
+                .map(Row::id).orElse(null);
+        return new OverviewFacts(summary, choices, resume);
     }
 
     private static final String JOINED_COURSES = " select id,name from visible c where (editor_access=1 or exists(select 1 from facts f where f.id=c.id and f.source in ('ASSIGNED','REGISTERED')))";

@@ -30,7 +30,7 @@ public class LearnerDashboardServiceImpl implements LearnerDashboardService {
     }
     public Overview overview(String tab) {
         var user=auth.current();
-        var summary=query.summary(LearnerQueryScopeFactory.from(user));var choices=query.choices(LearnerQueryScopeFactory.from(user),tab);var id=query.resumeCourseId(LearnerQueryScopeFactory.from(user));
+        var facts=query.overview(LearnerQueryScopeFactory.from(user),tab);var summary=facts.summary();var choices=facts.choices();var id=facts.resumeCourseId();
         // Hydrate only the selected course for the shared completion/content/unlock resume policy.
         var resume=id==null?null:scopedResume(user,courses.findById(id).orElseThrow());
         return new Overview(summary,choices,resume);
