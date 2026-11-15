@@ -100,8 +100,8 @@
             v-for="(option, idx) in currentQuestion.options"
             :key="idx"
             class="option-item cursor-pointer"
-            :class="{ selected: isSelected(currentQuestion.id, idx) }"
-            @click="selectOption(currentQuestion.id, idx)"
+            :class="{ selected: isSelected(currentQuestion.id, originalIndex(currentQuestion, idx)) }"
+            @click="selectOption(currentQuestion.id, originalIndex(currentQuestion, idx))"
           >
             <div
               class="radio-indicator"
@@ -109,7 +109,7 @@
             >
               <span
                 class="inner-dot"
-                v-if="isSelected(currentQuestion.id, idx)"
+                v-if="isSelected(currentQuestion.id, originalIndex(currentQuestion, idx))"
               ></span>
             </div>
             <span class="option-text">{{ option }}</span>
@@ -375,6 +375,7 @@ import { useQuizStore } from "../stores/quizStore";
 import { useUserStore } from "../stores/userStore";
 import { quizApi } from "../api/quizApi";
 import type { QuizReview } from "../api/quizApi";
+import type { QuizQuestion } from "../types";
 import { Award, CheckCircle2, Shield, Medal, XCircle } from "lucide-vue-next";
 
 const props = defineProps({
@@ -489,6 +490,10 @@ const openQuizOrReview = async (current = entryRequest) => {
   }
   if (current === entryRequest) startNewQuiz();
 };
+
+// With shuffled options the server sends each option's original index; answers use that index.
+const originalIndex = (question: QuizQuestion, displayIdx: number) =>
+  question.optionIndexes?.[displayIdx] ?? displayIdx;
 
 const selectOption = (questionId: number, optionIdx: number) => {
   quizStore.selectAnswer(questionId, optionIdx);

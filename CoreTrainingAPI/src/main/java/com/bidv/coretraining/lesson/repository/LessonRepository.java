@@ -18,7 +18,8 @@ public interface LessonRepository extends JpaRepository<Lesson, String> {
 
   @org.springframework.data.jpa.repository.Query("""
       select new com.bidv.coretraining.quiz.dto.QuizLessonContextDto(l.id, l.title, l.course.id,
-        coalesce(q.passingScore, 80), coalesce(q.requiredForProgress, true), q.timeLimitMinutes)
+        coalesce(q.passingScore, 80), coalesce(q.requiredForProgress, true), q.timeLimitMinutes,
+        coalesce(q.shuffleQuestions, false), coalesce(q.shuffleOptions, false))
       from Lesson l join l.chapter ch left join l.quiz q
       where l.course.id = :courseId and (:lessonId is null or l.id = :lessonId)
         and l.status <> 'DELETED' and ch.status <> 'DELETED'

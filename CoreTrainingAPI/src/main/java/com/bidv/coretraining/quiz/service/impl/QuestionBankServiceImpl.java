@@ -151,7 +151,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         if (!"DRAFT".equals(target.getCourse().getStatus()))
             throw new BadRequestException("Chuyển khóa đích về nháp trước khi thêm câu hỏi");
         List<QuestionDto> result = new ArrayList<>();
-        Set<Long> existing = questions.findByLessonId(lessonId).stream().map(Question::getBankQuestionId)
+        Set<Long> existing = questions.findByLessonIdOrderByQuestionOrderAscIdAsc(lessonId).stream().map(Question::getBankQuestionId)
                 .filter(Objects::nonNull).collect(java.util.stream.Collectors.toSet());
         for (Long id : ids) {
             if (existing.contains(id))

@@ -194,12 +194,12 @@ public class TrainingReportReadServiceImpl implements TrainingReportReadService 
         UserQuizScore score=scores.findById(Long.valueOf(attemptId))
                 .orElseThrow(()->new ResourceNotFoundException("Quiz attempt","id",attemptId));
         if(score.getLesson()==null)
-            return AttemptAnalysisAssembler.fromCurrentQuestions(score,questions.findByCourseIdAndLessonIsNull(score.getCourse().getId()));
+            return AttemptAnalysisAssembler.fromCurrentQuestions(score,questions.findByCourseIdAndLessonIsNullOrderByQuestionOrderAscIdAsc(score.getCourse().getId()));
         String lessonId=score.getLesson().getId();
         // Submission writes the score first and its snapshot moments later in the same transaction.
         return quizAttempts.findRecordedSnapshots(score.getUser().getId(),lessonId,score.getScore(),score.getTotal(),score.getTakenAt(),score.getTakenAt().plusMinutes(1)).stream()
                 .flatMap(a->AttemptAnalysisAssembler.fromSnapshot(attemptId,score.getScore(),score.getTotal(),a.getQuestionsJson(),a.getAnswersJson()).stream())
                 .findFirst()
-                .orElseGet(()->AttemptAnalysisAssembler.fromCurrentQuestions(score,questions.findByLessonId(lessonId)));
+                .orElseGet(()->AttemptAnalysisAssembler.fromCurrentQuestions(score,questions.findByLessonIdOrderByQuestionOrderAscIdAsc(lessonId)));
     }
 }

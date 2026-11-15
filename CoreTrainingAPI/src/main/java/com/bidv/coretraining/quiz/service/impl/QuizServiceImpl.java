@@ -99,10 +99,56 @@ public class QuizServiceImpl implements QuizService {
         if (!lessonRepository.existsById(lessonId)) {
             throw new ResourceNotFoundException("Lesson", "id", lessonId);
         }
-        structure.requireLesson(lessonId, org.springframework.security.core.context.SecurityContextHolder.getContext()
-                .getAuthentication().getName());
-        return questionRepository.findByLessonId(lessonId).stream()
-                .map(this::toQuizQuestionDto).toList();
+        String username = org.springframework.security.core.context.SecurityContextHolder.getContext()
+                .getAuthentication().getName();
+        structure.requireLesson(lessonId, username);
+        List<Question> questions = questionRepository.findByLessonIdOrderByQuestionOrderAscIdAsc(lessonId);
+        var quiz = lessonRepository.findById(lessonId).map(Lesson::getQuiz).orElse(null);
+        Long userId = userRepository.findByUsername(username).map(User::getId).orElse(0L);
+        Map<Long, Question> byId = questions.stream()
+                .collect(java.util.stream.Collectors.toMap(Question::getId, q -> q));
+        return layoutFor(quiz, userId, questions).stream().map(slot -> {
+            QuizQuestionDto dto = toQuizQuestionDto(byId.get(slot.questionId()));
+            dto.setOptionIndexes(slot.optionOrder());
+            dto.setOptions(slot.optionOrder().stream().map(dto.getOptions()::get).toList());
+            return dto;
+        }).toList();
+    }
+
+    /**
+     * One question as a learner sees it: {@code optionOrder} lists the original option indexes in display
+     * order. Answers are always submitted and graded with original indexes.
+     */
+    record LayoutSlot(Long questionId, List<Integer> optionOrder) {}
+
+    /**
+     * The order this learner sees in their current attempt. Seeded by learner, quiz, attempt number and quiz
+     * revision: reloading during an attempt (and grading its submission) gives the same layout, while each
+     * new attempt and each learner gets a different one. Without shuffle settings it is the editor's order.
+     */
+    private List<LayoutSlot> layoutFor(com.bidv.coretraining.quiz.entity.Quiz quiz, Long userId,
+            List<Question> questions) {
+        boolean shuffleQuestions = quiz != null && quiz.isShuffleQuestions();
+        boolean shuffleOptions = quiz != null && quiz.isShuffleOptions();
+        java.util.Random random = shuffleQuestions || shuffleOptions
+                ? new java.util.Random(java.util.Objects.hash(userId, quiz.getId(),
+                        attempts.countByUserIdAndQuizId(userId, quiz.getId()), quiz.getRevision()))
+                : null;
+        List<Question> ordered = new java.util.ArrayList<>(questions);
+        if (shuffleQuestions)
+            java.util.Collections.shuffle(ordered, random);
+        return ordered.stream().map(question -> {
+            List<Integer> order = new java.util.ArrayList<>(
+                    java.util.stream.IntStream.range(0, question.getOptions().size()).boxed().toList());
+            if (shuffleOptions)
+                java.util.Collections.shuffle(order, random);
+            return new LayoutSlot(question.getId(), List.copyOf(order));
+        }).toList();
+    }
+
+    /** Original option index to the position the learner saw it in. */
+    private static List<Integer> toDisplay(List<Integer> originalIndexes, List<Integer> optionOrder) {
+        return originalIndexes.stream().map(optionOrder::indexOf).filter(index -> index >= 0).sorted().toList();
     }
 
     @Override
@@ -116,10 +162,13 @@ public class QuizServiceImpl implements QuizService {
         LearningPolicy.assertLessonAccess(user, lesson);
         if (lesson.getQuiz() == null)
             throw new BadRequestException("Bài học chưa có kiểm tra");
-        List<Question> questions = questionRepository.findByLessonId(lessonId);
+        List<Question> questions = questionRepository.findByLessonIdOrderByQuestionOrderAscIdAsc(lessonId);
         if (questions.isEmpty())
             throw new BadRequestException("Bài học chưa có câu hỏi kiểm tra");
         quizSessions.consume(user, lesson, request.getSessionId());
+        // Same seed as when the questions were served: the attempt is not recorded yet.
+        List<LayoutSlot> layout = layoutFor(lesson.getQuiz(), user.getId(), questions);
+        String layoutJson = writeJson(layout);
         Map<Long, List<Integer>> submittedAnswers = request.getSelectedAnswers() == null
                 ? Map.of()
                 : request.getSelectedAnswers();
@@ -141,6 +190,7 @@ public class QuizServiceImpl implements QuizService {
                 quizScore.setTotal(total);
                 quizScore.setTakenAt(LocalDateTime.now());
                 saveSelectedAnswers(quizScore, submittedAnswers);
+                quizScore.setQuestionLayout(layoutJson);
                 userQuizScoreRepository.save(quizScore);
             }
         } else if (total > 0) {
@@ -151,26 +201,33 @@ public class QuizServiceImpl implements QuizService {
                     .score(score)
                     .total(total)
                     .takenAt(LocalDateTime.now())
+                    .questionLayout(layoutJson)
                     .build();
             saveSelectedAnswers(quizScore, submittedAnswers);
             userQuizScoreRepository.save(quizScore);
             user.getQuizScores().add(quizScore);
         }
-        try {
-            attempts.save(
-                    QuizAttempt.builder().user(user).quiz(lesson.getQuiz()).revision(lesson.getQuiz().getRevision())
-                            .score(score).total(total).passingScore(passingScore)
-                            .passed(total > 0 && percent >= passingScore)
-                            .takenAt(LocalDateTime.now()).answersJson(json.writeValueAsString(submittedAnswers))
-                            .questionsJson(
-                                    json.writeValueAsString(questions.stream()
-                                            .map(q -> Map.of("id", q.getId(), "text", q.getText(), "options",
-                                                    q.getOptions(), "correctAnswers", correctAnswers(q)))
-                                            .toList()))
-                            .build());
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            throw new IllegalStateException("Không thể lưu đề kiểm tra", e);
-        }
+        // The snapshot records the exam exactly as this learner saw it: question order, option order, and
+        // answers as display positions, so reports read it like the page the learner answered.
+        Map<Long, Question> byId = questions.stream()
+                .collect(java.util.stream.Collectors.toMap(Question::getId, q -> q));
+        Map<Long, List<Integer>> displayedAnswers = new java.util.LinkedHashMap<>();
+        List<Map<String, Object>> snapshot = layout.stream().map(slot -> {
+            Question q = byId.get(slot.questionId());
+            List<Integer> selected = submittedAnswers.get(q.getId());
+            if (selected != null)
+                displayedAnswers.put(q.getId(), toDisplay(normalizeAnswers(selected), slot.optionOrder()));
+            return Map.<String, Object>of("id", q.getId(), "text", q.getText(),
+                    "options", slot.optionOrder().stream().map(q.getOptions()::get).toList(),
+                    "correctAnswers", toDisplay(correctAnswers(q), slot.optionOrder()));
+        }).toList();
+        attempts.save(
+                QuizAttempt.builder().user(user).quiz(lesson.getQuiz()).revision(lesson.getQuiz().getRevision())
+                        .score(score).total(total).passingScore(passingScore)
+                        .passed(total > 0 && percent >= passingScore)
+                        .takenAt(LocalDateTime.now()).answersJson(writeJson(displayedAnswers))
+                        .questionsJson(writeJson(snapshot))
+                        .build());
         // Passing a required quiz completes the lesson on its own: the quiz is what proves the learning.
         if (total > 0 && percent >= passingScore
                 && !user.getCompletedLessons().contains(lesson)
@@ -214,7 +271,7 @@ public class QuizServiceImpl implements QuizService {
         UserQuizScore score = userQuizScoreRepository
                 .findByUserIdAndCourseIdAndLessonIsNull(user.getId(), courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz attempt", "courseId", courseId));
-        return buildReview(score, questionRepository.findByCourseIdAndLessonIsNull(courseId),
+        return buildReview(score, questionRepository.findByCourseIdAndLessonIsNullOrderByQuestionOrderAscIdAsc(courseId),
                 course.getQuizPassingScore());
     }
 
@@ -228,7 +285,31 @@ public class QuizServiceImpl implements QuizService {
         LearningPolicy.assertLessonAccess(user, lesson);
         UserQuizScore score = userQuizScoreRepository.findByUserIdAndLessonId(user.getId(), lessonId)
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz attempt", "lessonId", lessonId));
-        return buildReview(score, questionRepository.findByLessonId(lessonId), lesson.getQuizPassingScore());
+        return buildReview(score, questionRepository.findByLessonIdOrderByQuestionOrderAscIdAsc(lessonId), lesson.getQuizPassingScore());
+    }
+
+    private String writeJson(Object value) {
+        try {
+            return json.writeValueAsString(value);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException("Không thể lưu đề kiểm tra", e);
+        }
+    }
+
+    private static boolean isPermutation(List<Integer> order, int size) {
+        return order.size() == size && new java.util.HashSet<>(order).size() == size
+                && order.stream().allMatch(index -> index != null && index >= 0 && index < size);
+    }
+
+    /** Stored layout of a result; empty for results recorded before layouts were kept. */
+    private List<LayoutSlot> readLayout(String layoutJson) {
+        if (layoutJson == null || layoutJson.isBlank())
+            return List.of();
+        try {
+            return json.readValue(layoutJson, new com.fasterxml.jackson.core.type.TypeReference<List<LayoutSlot>>() {});
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            return List.of();
+        }
     }
 
     private QuizReviewDto buildReview(UserQuizScore score, List<Question> questions, int passingScore) {
@@ -239,17 +320,26 @@ public class QuizServiceImpl implements QuizService {
                 && (score.getSelectedAnswers() == null || score.getSelectedAnswers().isEmpty())) {
             throw new BadRequestException("Lần làm bài cũ chưa có dữ liệu đáp án để xem lại");
         }
+        // Replay the order the learner saw. Questions added since, or whose options changed, fall back to
+        // the editor's order after the recorded ones.
+        Map<Long, List<Integer>> optionOrders = new java.util.LinkedHashMap<>();
+        readLayout(score.getQuestionLayout()).forEach(slot -> optionOrders.put(slot.questionId(), slot.optionOrder()));
+        Map<Long, Integer> position = new HashMap<>();
+        optionOrders.keySet().forEach(id -> position.put(id, position.size()));
         List<QuizReviewQuestionDto> reviewQuestions = questions.stream()
+                .sorted(java.util.Comparator.comparingInt(q -> position.getOrDefault(q.getId(), Integer.MAX_VALUE)))
                 .map(question -> {
-                    List<Integer> selected = storedSelectedAnswers(score, question.getId());
-                    List<Integer> correct = correctAnswers(question);
+                    boolean graded = answersMatch(storedSelectedAnswers(score, question.getId()), correctAnswers(question));
+                    List<Integer> order = optionOrders.get(question.getId());
+                    if (order == null || !isPermutation(order, question.getOptions().size()))
+                        order = java.util.stream.IntStream.range(0, question.getOptions().size()).boxed().toList();
                     return QuizReviewQuestionDto.builder()
                             .id(question.getId())
                             .text(question.getText())
-                            .options(question.getOptions())
-                            .selectedAnswers(selected)
-                            .correctAnswers(correct)
-                            .correct(answersMatch(selected, correct))
+                            .options(order.stream().map(question.getOptions()::get).toList())
+                            .selectedAnswers(toDisplay(storedSelectedAnswers(score, question.getId()), order))
+                            .correctAnswers(toDisplay(correctAnswers(question), order))
+                            .correct(graded)
                             .build();
                 })
                 .toList();
@@ -269,7 +359,8 @@ public class QuizServiceImpl implements QuizService {
                 .courseId(question.getCourse().getId())
                 .lessonId(question.getLesson() == null ? null : question.getLesson().getId())
                 .text(question.getText())
-                .options(question.getOptions())
+                .options(List.copyOf(question.getOptions()))
+                .optionIndexes(java.util.stream.IntStream.range(0, question.getOptions().size()).boxed().toList())
                 .type(question.getType() == null ? QuestionType.SINGLE_CHOICE : question.getType())
                 .build();
     }

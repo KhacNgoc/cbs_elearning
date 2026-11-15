@@ -7,6 +7,8 @@ export interface QuizLessonContext {
   quizPassingScore: number;
   quizRequired: boolean;
   quizTimeLimitMinutes: number | null;
+  quizShuffleQuestions?: boolean;
+  quizShuffleOptions?: boolean;
 }
 export interface QuizCourseContext {
   id: string;
@@ -16,9 +18,6 @@ export interface QuizCourseContext {
   quizPassingScore: number;
   adminActions: { exams: string[] };
   lessons: QuizLessonContext[];
-}
-export async function getQuizCourses(): Promise<QuizCourseContext[]> {
-  return (await axiosClient.get<QuizCourseContext[]>('/api/admin/quizzes/courses')).data;
 }
 export async function getQuizContext(params: { courseId?: string; lessonId?: string }): Promise<QuizCourseContext> {
   return (await axiosClient.get<QuizCourseContext>('/api/admin/quizzes/context', { params })).data;

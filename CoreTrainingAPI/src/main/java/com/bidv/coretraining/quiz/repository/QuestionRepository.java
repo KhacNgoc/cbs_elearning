@@ -40,9 +40,13 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
     @org.springframework.data.jpa.repository.Query("select q.quiz.id, count(q) from Question q where q.quiz.id in :quizIds group by q.quiz.id")
     List<Object[]> countByQuizIds(@org.springframework.data.repository.query.Param("quizIds") java.util.Collection<String> quizIds);
 
-    List<Question> findByCourseIdAndLessonIsNull(String courseId);
+    List<Question> findByCourseIdAndLessonIsNullOrderByQuestionOrderAscIdAsc(String courseId);
 
-    List<Question> findByLessonId(String lessonId);
+    List<Question> findByLessonIdOrderByQuestionOrderAscIdAsc(String lessonId);
+
+    /** Order for a question appended to the quiz: one past the last, or 0 for an empty quiz. */
+    @org.springframework.data.jpa.repository.Query("select coalesce(max(q.questionOrder) + 1, 0) from Question q where q.quiz.id = :quizId")
+    int nextQuestionOrder(@org.springframework.data.repository.query.Param("quizId") String quizId);
 
     @org.springframework.data.jpa.repository.Query("select q.text from Question q where q.lesson.id = :lessonId")
     List<String> findTextsByLessonId(@org.springframework.data.repository.query.Param("lessonId") String lessonId);

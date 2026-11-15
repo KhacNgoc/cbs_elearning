@@ -27,13 +27,18 @@
         <div><h2>Thông tin bài kiểm tra</h2><p>Chọn khóa học và phạm vi áp dụng.</p></div>
       </div>
       <div class="settings-grid">
-        <label>
-          <span>Khóa học</span>
-          <select v-model="courseId" :disabled="!isNew">
-            <option value="" disabled>Chọn khóa học</option>
-            <option v-for="course in quizCourses" :key="course.id" :value="course.id">{{ course.name }}</option>
-          </select>
-        </label>
+        <div class="settings-field">
+          <span id="quiz-course-label">Khóa học</span>
+          <CourseSearchSelect
+            v-model="courseId"
+            page="exams"
+            all-label="Chọn khóa học"
+            :allow-all="false"
+            :disabled="!isNew"
+            :selected-label="quizCourses.find((c) => c.id === courseId)?.name"
+            aria-labelledby="quiz-course-label"
+          />
+        </div>
         <label>
           <span>Phạm vi</span>
           <select v-model="lessonId" :disabled="!isNew || !courseId || scopeLoading || !!scopeError">
@@ -54,15 +59,20 @@
           <small>Học viên cần đạt tối thiểu mức này để hoàn thành bài kiểm tra.</small>
         </label>
       </div>
-      <div class="required-quiz-setting"><ToggleSwitch v-model="requiredForProgress" :disabled="!canAction('update') && !isNew" label="Bắt buộc đạt để sang bài tiếp theo" /><small>Tắt tùy chọn: bài kiểm tra tự luyện, không chặn hoàn thành bài, chương hoặc khóa.</small></div>
-      <div class="required-quiz-setting time-limit-setting">
-        <ToggleSwitch v-model="hasTimeLimit" :disabled="!canAction('update') && !isNew" label="Giới hạn thời gian làm bài" />
-        <div v-if="hasTimeLimit" class="score-input time-limit-input">
-          <input v-model.number="timeLimitMinutes" :disabled="!canAction('update') && !isNew" type="number" min="1" max="300" aria-label="Số phút làm bài" />
-          <strong>phút</strong>
+      <!-- Quiz options side by side: four cards when the block is wide, two when medium, one when narrow. -->
+      <div class="quiz-option-area"><div class="quiz-option-grid">
+        <div class="required-quiz-setting"><ToggleSwitch v-model="requiredForProgress" :disabled="!canAction('update') && !isNew" label="Bắt buộc đạt để sang bài tiếp theo" /><small>Tắt tùy chọn: bài kiểm tra tự luyện, không chặn hoàn thành bài, chương hoặc khóa.</small></div>
+        <div class="required-quiz-setting time-limit-setting">
+          <ToggleSwitch v-model="hasTimeLimit" :disabled="!canAction('update') && !isNew" label="Giới hạn thời gian làm bài" />
+          <div v-if="hasTimeLimit" class="score-input time-limit-input">
+            <input v-model.number="timeLimitMinutes" :disabled="!canAction('update') && !isNew" type="number" min="1" max="300" aria-label="Số phút làm bài" />
+            <strong>phút</strong>
+          </div>
+          <small>{{ hasTimeLimit ? 'Hết giờ, bài làm sẽ được tự động nộp; câu chưa trả lời tính là sai.' : 'Không giới hạn: học viên làm bài đến khi tự nộp.' }}</small>
         </div>
-        <small>{{ hasTimeLimit ? 'Hết giờ, bài làm sẽ được tự động nộp; câu chưa trả lời tính là sai.' : 'Không giới hạn: học viên làm bài đến khi tự nộp.' }}</small>
-      </div>
+        <div class="required-quiz-setting"><ToggleSwitch v-model="shuffleQuestions" :disabled="!canAction('update') && !isNew" label="Đảo thứ tự câu hỏi" /><small>Mỗi học viên, mỗi lượt làm bài nhận thứ tự câu hỏi khác nhau.</small></div>
+        <div class="required-quiz-setting"><ToggleSwitch v-model="shuffleOptions" :disabled="!canAction('update') && !isNew" label="Đảo thứ tự đáp án" /><small>Các phương án của từng câu được xáo trộn; chấm điểm vẫn theo đáp án đúng đã soạn.</small></div>
+      </div></div>
       <div v-if="isNew && canEdit && !embedded" class="settings-action">
         <p>Phạm vi sẽ tự động áp dụng cho mọi câu hỏi được thêm hoặc import.</p>
         <button class="primary-button" :disabled="!courseId || !lessonId || scopeLoading || !!scopeError" @click="confirmScope">
@@ -294,7 +304,8 @@
 
 <script setup lang="ts">
 import SkeletonLoader from "../components/SkeletonLoader.vue";
-import {getQuizCourses, getQuizContext, type QuizCourseContext} from "../api/quizContextApi";
+import {getQuizContext, type QuizCourseContext} from "../api/quizContextApi";
+import CourseSearchSelect from "../components/CourseSearchSelect.vue";
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ArrowLeft, ArrowRight, CheckCircle2, Download, Edit, FileUp, LoaderCircle, Plus, Search, Sparkles, Trash2, X } from "lucide-vue-next";
@@ -320,6 +331,8 @@ const requiredForProgress=ref(true);
 const hasTimeLimit=ref(false);
 const timeLimitMinutes=ref(30);
 const applyTimeLimit=(minutes?:number|null)=>{hasTimeLimit.value=!!minutes;timeLimitMinutes.value=minutes||30;};
+const shuffleQuestions=ref(false);
+const shuffleOptions=ref(false);
 const route = useRoute();
 const router = useRouter();
 const quizCourses = ref<QuizCourseContext[]>([]);
@@ -416,7 +429,7 @@ async function refreshQuizContext() {
 
 let initialRequestId = 0;
 let questionRequestId = 0;
-let pendingCreationSettings: { courseId: string; lessonId: string; passingScore: number; requiredForProgress: boolean; timeLimitMinutes: number | null } | null = null;
+let pendingCreationSettings: { courseId: string; lessonId: string; passingScore: number; requiredForProgress: boolean; timeLimitMinutes: number | null; shuffleQuestions: boolean; shuffleOptions: boolean } | null = null;
 async function initialize() {
   const id = ++initialRequestId;
   ++questionRequestId;
@@ -428,10 +441,10 @@ async function initialize() {
   questions.value = [];
   try {
   if (isNew.value) {
-    const options = await getQuizCourses();
-    if (id !== initialRequestId) return;
-    quizCourses.value = options;
-    courseId.value = typeof route.query.courseId === "string" ? route.query.courseId : quizCourses.value[0]?.id || "";
+    // The course is picked with a server-side search (17k+ courses on large catalogs), so only the
+    // chosen course's context is loaded.
+    quizCourses.value = [];
+    courseId.value = typeof route.query.courseId === "string" ? route.query.courseId : "";
     lessonId.value = '';
     if (courseId.value) {
       const context = await getQuizContext({ courseId: courseId.value });
@@ -451,10 +464,14 @@ async function initialize() {
     passingScore.value = lesson?.quizPassingScore ?? course?.quizPassingScore ?? 80;
     requiredForProgress.value = lesson?.quizRequired ?? true;
     applyTimeLimit(lesson?.quizTimeLimitMinutes);
+    shuffleQuestions.value = lesson?.quizShuffleQuestions ?? false;
+    shuffleOptions.value = lesson?.quizShuffleOptions ?? false;
     if (pendingCreationSettings?.courseId === context.id && pendingCreationSettings.lessonId === lessonId.value) {
       passingScore.value = pendingCreationSettings.passingScore;
       requiredForProgress.value = pendingCreationSettings.requiredForProgress;
       applyTimeLimit(pendingCreationSettings.timeLimitMinutes);
+      shuffleQuestions.value = pendingCreationSettings.shuffleQuestions;
+      shuffleOptions.value = pendingCreationSettings.shuffleOptions;
     }
     await loadQuestions();
     if (id === initialRequestId) pendingCreationSettings = null;
@@ -498,7 +515,8 @@ onBeforeUnmount(() => { ++initialRequestId; ++questionRequestId; ++scopeRequestI
 const confirmScope = () => {
   pendingCreationSettings = { courseId: courseId.value, lessonId: lessonId.value,
     passingScore: passingScore.value, requiredForProgress: requiredForProgress.value,
-    timeLimitMinutes: hasTimeLimit.value ? timeLimitMinutes.value : null };
+    timeLimitMinutes: hasTimeLimit.value ? timeLimitMinutes.value : null,
+    shuffleQuestions: shuffleQuestions.value, shuffleOptions: shuffleOptions.value };
   return router.replace(lessonId.value
     ? `/admin/quizzes/lesson/${encodeURIComponent(lessonId.value)}`
     : `/admin/quizzes/course/${encodeURIComponent(courseId.value)}`);
@@ -515,7 +533,8 @@ const saveSettings = async () => {
   savingSettings.value = true;
   try {
     await adminApi.updateQuizSettings(courseId.value, lessonId.value || undefined, passingScore.value, requiredForProgress.value,
-      hasTimeLimit.value ? timeLimitMinutes.value : null);
+      hasTimeLimit.value ? timeLimitMinutes.value : null,
+      { questions: shuffleQuestions.value, options: shuffleOptions.value });
     showToast("Đã lưu cấu hình bài kiểm tra.");
     await refreshQuizContext();
     emit("saved");
@@ -909,7 +928,7 @@ const importCsv = async (event: Event) => {
 .quiz-editor-page .admin-data-table .bank-save-status { font-size: var(--admin-text-label, .8125rem); font-weight: 600; }
 .quiz-questions-table{min-width:960px}.quiz-question-actions{display:flex;align-items:center;flex-wrap:wrap;gap:.5rem}.quiz-question-actions button{white-space:nowrap}.bank-save-action{padding:.45rem .65rem;font-size:.8rem}.bank-save-action:disabled{opacity:.55;cursor:wait}.bank-save-status{display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .55rem;border-radius:6px;background:var(--surface-f1f5f9);color:var(--text-muted);font-size:.78rem;white-space:nowrap}.bank-save-status.saved{background:var(--primary-light);color:var(--primary-ink)}.bank-source-code{display:block;margin-top:.4rem;color:var(--text-muted);font-size:.72rem;overflow-wrap:anywhere}
 
-.required-quiz-setting{display:block;margin:1rem 0;color:var(--primary-ink);font-weight:600}.required-quiz-setting input{margin-right:.5rem}.time-limit-input{max-width:12rem;margin-top:.75rem}.time-limit-input input{padding-right:3.5rem}.required-quiz-setting small{display:block;margin-top:.5rem;font-weight:400;color:var(--text-muted)}
+.quiz-option-area{container-type:inline-size;margin:1.25rem 0 .5rem}.quiz-option-grid{display:grid;grid-template-columns:1fr;gap:1rem}@container (min-width:560px){.quiz-option-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@container (min-width:1100px){.quiz-option-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}.quiz-option-grid .required-quiz-setting{margin:0;padding:1rem;border:1px solid var(--border-color);border-radius:10px;background:var(--surface-ffffff)}.required-quiz-setting{display:block;margin:1rem 0;color:var(--primary-ink);font-weight:600}.required-quiz-setting input{margin-right:.5rem}.time-limit-input{max-width:12rem;margin-top:.75rem}.time-limit-input input{padding-right:3.5rem}.required-quiz-setting small{display:block;margin-top:.5rem;font-weight:400;color:var(--text-muted)}
 .quiz-editor-page { width: min(1240px, calc(100% - 3rem)); min-height: 100%; margin: 0 auto; padding: 1.5rem; color: var(--text-color); }
 .quiz-editor-header { display: grid; grid-template-columns: 180px 1fr; gap: 1rem; align-items: start; margin-bottom: 1.2rem; }
 .back-button { display: flex; align-items: center; gap: .65rem; min-width: 170px; padding: .7rem .85rem; border: 1px solid var(--primary-color); border-radius: var(--radius-md); background: var(--primary-color); color: white; cursor: pointer; text-align: left; box-shadow: 0 5px 14px rgba(0,91,65,.18); }
@@ -925,7 +944,7 @@ const importCsv = async (event: Event) => {
 .section-heading > span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--primary-color); color: white; font-weight: 800; }
 .section-heading h2 { margin: 0 0 .15rem; font-size: var(--admin-heading-section); line-height: 1.3; }
 .settings-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
-.settings-grid label > span, .question-text-field > span { display: block; margin-bottom: .35rem; font-size: var(--admin-text-label); font-weight: 700; }
+.settings-grid label > span, .settings-grid .settings-field > span, .question-text-field > span { display: block; margin-bottom: .35rem; font-size: var(--admin-text-label); font-weight: 700; }
 .settings-grid label > small { display: block; margin-top: .35rem; color: var(--text-muted); line-height: 1.35; }
 select, .score-input input, textarea, .question-text-field input { width: 100%; padding: .7rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--surface-ffffff); }
 .score-input { position: relative; }

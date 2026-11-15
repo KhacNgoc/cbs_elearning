@@ -19,4 +19,9 @@ public class QuizQuestionDto {
     private String text;
     private List<String> options;
     private QuestionType type;
+    /**
+     * Original index of each option in {@link #options}, in display order. Answers are submitted with
+     * these original indexes, so shuffled options are graded like unshuffled ones.
+     */
+    private List<Integer> optionIndexes;
 }
