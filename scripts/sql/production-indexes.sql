@@ -1,4 +1,4 @@
--- PostgreSQL 15+: consolidated inventory of the 19 explicit application indexes.
+-- PostgreSQL 15+: consolidated inventory of the 27 explicit application btree indexes.
 -- Sources: CoreTrainingAPI entity @Index, resources/schema.sql and migrations/.
 -- Apply table/column migrations FIRST. This script does not create tables,
 -- migrate data, or recreate indexes supplied by PRIMARY KEY / UNIQUE constraints.
@@ -48,7 +48,17 @@ INSERT INTO pg_temp.cbs_production_index_inventory VALUES
     ('idx_flashcards_course_status', 'flashcards', ARRAY['course_id', 'status']),
     ('idx_flashcards_owner_lesson', 'flashcards', ARRAY['owner_user_id', 'lesson_id']),
     ('idx_flashcard_plans_user', 'flashcard_study_plans', ARRAY['user_id']),
-    ('idx_flashcard_plans_next_reminder', 'flashcard_study_plans', ARRAY['next_reminder_at']);
+    ('idx_flashcard_plans_next_reminder', 'flashcard_study_plans', ARRAY['next_reminder_at']),
+    ('idx_programs_domain_code', 'training_programs', ARRAY['domain_id', 'code']),
+    ('idx_courses_program_code', 'courses', ARRAY['program_id', 'code']),
+    ('idx_questions_course_lesson', 'questions', ARRAY['course_id', 'lesson_id']),
+    ('idx_lesson_documents_lesson', 'lesson_documents', ARRAY['lesson_id']),
+    ('idx_procedure_sections_lesson', 'procedure_sections', ARRAY['lesson_id']),
+    ('idx_lessons_course', 'lessons', ARRAY['course_id']),
+    ('idx_questions_quiz', 'questions', ARRAY['quiz_id']),
+    ('idx_questions_lesson', 'questions', ARRAY['lesson_id']),
+    ('idx_chapters_course', 'chapters', ARRAY['course_id']),
+    ('idx_lessons_chapter', 'lessons', ARRAY['chapter_id']);
 
 -- Fail before building any indexes when prerequisites are absent or an existing
 -- namesake is invalid / refers to a different table or set/order of key columns.
@@ -142,7 +152,23 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_flashcards_owner_lesson ON public.fl
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_flashcard_plans_user ON public.flashcard_study_plans (user_id);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_flashcard_plans_next_reminder ON public.flashcard_study_plans (next_reminder_at);
 
--- Deployment report: expect 19 rows, all status=OK. Preserve indexdef in the
+-- Curriculum tree and chapter outline: db/migration/V20261114_1__curriculum_tree_indexes.sql and
+-- V20261114_2__lesson_question_indexes.sql. The trigram (gin) domain search indexes of V20261114_1
+-- are not btree, so they stay in the migration only.
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_programs_domain_code ON public.training_programs (domain_id, code);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_courses_program_code ON public.courses (program_id, code);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_questions_course_lesson ON public.questions (course_id, lesson_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lesson_documents_lesson ON public.lesson_documents (lesson_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_procedure_sections_lesson ON public.procedure_sections (lesson_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lessons_course ON public.lessons (course_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_questions_quiz ON public.questions (quiz_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_questions_lesson ON public.questions (lesson_id);
+
+-- Learner dashboard facts: db/migration/V20261115_4__learner_dashboard_indexes.sql.
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_chapters_course ON public.chapters (course_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lessons_chapter ON public.lessons (chapter_id);
+
+-- Deployment report: expect 29 rows, all status=OK. Preserve indexdef in the
 -- deployment log; a future definition change needs a new migration, not just IF NOT EXISTS.
 SELECT e.table_name, e.index_name,
        CASE WHEN i.indisvalid AND i.indisready THEN 'OK' ELSE 'MISSING / INVALID' END AS status,
