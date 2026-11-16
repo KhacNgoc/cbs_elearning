@@ -117,22 +117,52 @@ ngoài, xem mục "Truy cập PostgreSQL".
 Đặt reverse proxy HTTPS trên cùng máy trỏ
 đến `http://127.0.0.1:5173`; API và video cùng tên miền với frontend.
 Proxy ngoài cần ghi đè Host và X-Forwarded-Proto, giữ nguyên Range, hỗ trợ
-upload 510 MiB và thời gian chờ upload 30 phút. Ví dụ bên trong server HTTPS:
+upload 510 MiB và thời gian chờ upload 30 phút. Ví dụ file site (Ubuntu đặt
+file trong `sites-enabled/` vào khối `http`, nên `limit_req_zone` đặt ngoài `server`):
 
 ```nginx
-client_max_body_size 510m;
-client_body_timeout 1800s;
-location / {
-    proxy_pass http://127.0.0.1:5173;
-    proxy_set_header Host $http_host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_http_version 1.1;
-    proxy_request_buffering off;
-    proxy_read_timeout 1800s;
-    proxy_send_timeout 1800s;
+# Mỗi IP tối đa 10 lần gọi đăng nhập/phút, cho phép dồn 5 lần.
+limit_req_zone $binary_remote_addr zone=login:10m rate=10r/m;
+
+server {
+    # ... listen 443 ssl, chứng chỉ ...
+    server_tokens off;   # ẩn phiên bản nginx/Ubuntu trong header Server và trang lỗi
+    client_max_body_size 510m;
+    client_body_timeout 1800s;
+
+    location = /api/auth/login {
+        limit_req zone=login burst=5 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:5173;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $remote_addr;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:5173;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # Ghi đè, không nối thêm: backend lấy IP đầu tiên trong header này để giới hạn
+        # đăng nhập sai, nối thêm thì client tự đặt được IP giả.
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_http_version 1.1;
+        proxy_request_buffering off;
+        proxy_read_timeout 1800s;
+        proxy_send_timeout 1800s;
+    }
 }
 ```
+
+Security headers (HSTS, CSP, X-Frame-Options, nosniff, Referrer-Policy) do
+Nginx frontend trong container gửi, proxy ngoài chỉ chuyển tiếp. Nếu proxy ngoài
+tự thêm `add_header`, đừng thêm trùng các header này.
+
+Backend cũng tự khoá đăng nhập: 5 lần sai cho một tài khoản hoặc 30 lần sai từ
+một IP trong 15 phút thì khoá 15 phút (trả 429). Đổi bằng biến
+`APP_LOGIN_LIMIT_MAX_FAILURES_PER_USERNAME`, `APP_LOGIN_LIMIT_MAX_FAILURES_PER_IP`,
+`APP_LOGIN_LIMIT_WINDOW`, `APP_LOGIN_LIMIT_BLOCK_DURATION` (ví dụ `15m`).
+Bộ đếm nằm trong bộ nhớ, khởi động lại backend thì mở khoá hết.
 
 Thêm cấu hình chứng chỉ và websocket `/ws/` vào proxy ngoài nếu dùng tính
 năng thời gian thực. Tránh log query string của URL stream vì có token;
