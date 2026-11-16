@@ -14,11 +14,9 @@ import com.bidv.coretraining.rag.dto.RagChatRequest;
 import com.bidv.coretraining.rag.dto.RagChatResponse;
 import com.bidv.coretraining.rag.dto.RagServiceChatResponse;
 import com.bidv.coretraining.rag.dto.RagSourceDto;
-import com.bidv.coretraining.rag.entity.RagChatMessage;
 import com.bidv.coretraining.rag.entity.RagConversation;
 import com.bidv.coretraining.rag.entity.RagConversationMessage;
 import com.bidv.coretraining.rag.entity.RagConversationSource;
-import com.bidv.coretraining.rag.repository.RagChatMessageRepository;
 import com.bidv.coretraining.rag.repository.RagConversationMessageRepository;
 import com.bidv.coretraining.rag.repository.RagConversationRepository;
 import com.bidv.coretraining.rag.service.RagChatService;
@@ -49,7 +47,6 @@ public class RagChatServiceImpl implements RagChatService {
     private final CourseRepository courseRepository;
     private final RagConversationRepository conversationRepository;
     private final RagConversationMessageRepository messageRepository;
-    private final RagChatMessageRepository legacyMessageRepository;
     private final RagConversationSummaryService summaryService;
     private final TrainingStructureService structure;
     private final RagCourseScopeService courseScopeService;
@@ -62,7 +59,6 @@ public class RagChatServiceImpl implements RagChatService {
             CourseRepository courseRepository,
             RagConversationRepository conversationRepository,
             RagConversationMessageRepository messageRepository,
-            RagChatMessageRepository legacyMessageRepository,
             RagConversationSummaryService summaryService,
             TrainingStructureService structure,
             RagCourseScopeService courseScopeService,
@@ -75,7 +71,6 @@ public class RagChatServiceImpl implements RagChatService {
         this.courseRepository = courseRepository;
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
-        this.legacyMessageRepository = legacyMessageRepository;
         this.summaryService = summaryService;
         this.structure = structure;
         this.courseScopeService = courseScopeService;
@@ -206,8 +201,7 @@ public class RagChatServiceImpl implements RagChatService {
     }
     @Transactional(readOnly=true)
     public HistoryPage historyPage(String username,String courseId,String conversationId,Long beforeId,int size) {
-        // Without a course the learner resumes their latest conversation across all courses;
-        // a course still selects the legacy per-course history.
+        // With no explicit conversation, resume the latest one in the requested scope.
         User user=requireUser(username);Course course=isBlank(courseId)?null:requireAccessibleCourse(user,courseId);
         Optional<RagConversation> selected=!isBlank(conversationId)
             ? Optional.of(requireOwnedConversation(user,conversationId))
@@ -217,12 +211,7 @@ public class RagChatServiceImpl implements RagChatService {
         int limit=Math.max(1,Math.min(50,size));long before=beforeId==null?Long.MAX_VALUE:beforeId;
         var page=org.springframework.data.domain.PageRequest.of(0,limit+1);
         if(selected.isEmpty()) {
-            if(course==null)return new HistoryPage(List.of(),null,false);
-            var ids=legacyMessageRepository.findHistoryIds(user.getId(),course.getId(),before,page);
-            boolean more=ids.size()>limit;var kept=ids.subList(0,Math.min(limit,ids.size()));
-            var records=kept.isEmpty()?List.<RagChatMessage>of():legacyMessageRepository.findHistoryMessages(kept);
-            var items=records.stream().sorted(Comparator.comparing(RagChatMessage::getId)).map(message->new RagChatHistoryDto(message.getId(),null,courseId,message.getQuestion(),message.getAnswer(),message.isGrounded(),false,message.getSources().stream().map(source->new RagSourceDto(source.getDocumentId(),source.getDocumentName(),source.getPage(),source.getSection(),course.getId(),course.getName())).toList(),message.getCreatedAt())).toList();
-            return new HistoryPage(items,more?kept.get(kept.size()-1):null,more);
+            return new HistoryPage(List.of(), null, false);
         }
         var conversation=selected.get();String conversationCourseId=conversation.getCourse()==null?null:conversation.getCourse().getId();
         var pairs=messageRepository.findExchangeIds(conversation.getId(),before,page);
