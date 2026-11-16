@@ -97,6 +97,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/session", "/api/auth/logout").authenticated()
                         .requestMatchers("/api/auth/register", "/api/auth/reset-password-direct").denyAll()
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/health").permitAll()
                         .requestMatchers("/ws/**").permitAll()
                         .requestMatchers("/uploads/videos/**").denyAll()
                         .requestMatchers("/api/videos/stream").permitAll()
