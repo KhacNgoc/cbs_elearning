@@ -1,5 +1,6 @@
 package com.bidv.coretraining.logging;
 
+import com.bidv.coretraining.health.HealthController;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -56,6 +57,9 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
                 log.debug(message, arguments);
             } else if (status >= 400) {
                 log.warn(message, arguments);
+            } else if (HealthController.PATH.equals(request.getRequestURI())) {
+                // The container healthcheck calls this every few seconds; only failures are worth an INFO line.
+                log.debug(message, arguments);
             } else {
                 log.info(message, arguments);
             }
