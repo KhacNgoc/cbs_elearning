@@ -32,4 +32,25 @@ public interface TrainingProgramRepository extends JpaRepository<TrainingProgram
             @Param("domainId") String domainId,
             @Param("search") String search,
             Pageable pageable);
+
+    /** Program counts for a page of domains in one grouped query (domainId, count). */
+    @Query("SELECT p.domain.id, COUNT(p) FROM TrainingProgram p " +
+           "WHERE p.domain.id IN :domainIds AND p.status <> 'DELETED' GROUP BY p.domain.id")
+    List<Object[]> countActiveByDomainIds(@Param("domainIds") java.util.Collection<String> domainIds);
+
+    /** Active programs of several domains at once, in tree order. */
+    @Query("SELECT p FROM TrainingProgram p WHERE p.domain.id IN :domainIds AND p.status <> 'DELETED' " +
+           "ORDER BY p.code ASC, p.name ASC")
+    List<TrainingProgram> findActiveByDomainIds(@Param("domainIds") java.util.Collection<String> domainIds);
+
+    /** Same as findByDomainIdWithFilter's search, for several domains in one query. */
+    @Query("SELECT p FROM TrainingProgram p WHERE p.domain.id IN :domainIds AND p.status <> 'DELETED' " +
+           "AND (p.name ILIKE CONCAT('%', :search, '%') " +
+           "     OR p.code ILIKE CONCAT('%', :search, '%') " +
+           "     OR EXISTS (SELECT 1 FROM Course c WHERE c.program.id = p.id AND c.status <> 'DELETED' " +
+           "                AND (c.name ILIKE CONCAT('%', :search, '%') OR c.code ILIKE CONCAT('%', :search, '%')))) " +
+           "ORDER BY p.code ASC, p.name ASC")
+    List<TrainingProgram> searchActiveByDomainIds(
+            @Param("domainIds") java.util.Collection<String> domainIds,
+            @Param("search") String search);
 }

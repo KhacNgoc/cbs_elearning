@@ -24,7 +24,11 @@ scrape_configs:
           max_wait_time: 3s
       - regex:
           expression: '^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z?|[^\s]+)\s+(?P<level>[A-Z]+)\s+\[(?P<thread>[^\]]+)\]\s+\[traceId=(?P<traceId>[^\]]*)\]\s+(?P<logger>[^\s]+)\s+-\s+(?P<message>.*)$'
+      # Labels must have few values: each combination is a separate Loki stream, and Loki rejects pushes
+      # (429, logs lost) past its stream limit. traceId is unique per request, so it is structured metadata:
+      # still searchable with {job="backend"} | traceId="...", without creating a stream.
       - labels:
           level:
-          traceId:
           logger:
+      - structured_metadata:
+          traceId:

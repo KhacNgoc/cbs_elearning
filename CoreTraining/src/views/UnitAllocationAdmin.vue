@@ -21,7 +21,7 @@
         </p>
       </div>
       <div class="header-actions">
-        <button type="button" class="btn btn-secondary" @click="loadData" :disabled="loading">
+        <button type="button" class="btn btn-secondary" aria-label="Làm mới" title="Làm mới" @click="loadData" :disabled="loading">
           <RotateCcw :size="14" :class="{ 'spin-icon': loading }" />
           <span>Làm mới</span>
         </button>
@@ -169,17 +169,17 @@
                   </div>
                 </div>
               </td>
-              <td class="col-stat text-center">
+              <td class="col-stat text-center" data-label="Lĩnh vực">
                 <span class="badge-stat stat-domain">
                   {{ u.domainCount ?? getUnitDomainCount(u.id) }}
                 </span>
               </td>
-              <td class="col-stat text-center">
+              <td class="col-stat text-center" data-label="Chương trình">
                 <span class="badge-stat stat-program">
                   {{ u.programCount ?? getUnitProgramCount(u.id) }}
                 </span>
               </td>
-              <td class="col-stat text-center">
+              <td class="col-stat text-center" data-label="Khóa học">
                 <span class="badge-stat stat-course">
                   {{ u.courseCount ?? getUnitCourseCount(u.id) }}
                 </span>
@@ -222,30 +222,17 @@
         </table>
       </div>
 
-      <!-- PAGINATION BAR -->
-      <div v-if="unitDirectoryTotalElements > unitDirectoryPageSize" class="directory-pagination">
-        <span class="pagination-summary">
-          Hiển thị {{ (unitDirectoryPage - 1) * unitDirectoryPageSize + 1 }}–{{ Math.min(unitDirectoryPage * unitDirectoryPageSize, unitDirectoryTotalElements) }} trong tổng số {{ unitDirectoryTotalElements }} đơn vị
-        </span>
-        <div class="pagination-buttons">
-          <button
-            type="button"
-            class="page-nav-btn"
-            :disabled="unitDirectoryPage <= 1"
-            @click="unitDirectoryPage--"
-          >
-            Trước
-          </button>
-          <span class="page-current">Trang {{ unitDirectoryPage }} / {{ unitDirectoryTotalPages }}</span>
-          <button
-            type="button"
-            class="page-nav-btn"
-            :disabled="unitDirectoryPage >= unitDirectoryTotalPages"
-            @click="unitDirectoryPage++"
-          >
-            Sau
-          </button>
-        </div>
+      <!-- PAGINATION BAR (shared footer, same as other admin pages) -->
+      <div v-if="directoryUnits.length > 0" class="directory-pagination">
+        <TablePagination
+          v-model:page="unitDirectoryPage"
+          v-model:page-size="unitDirectoryPageSize"
+          :total="unitDirectoryTotalElements"
+          :page-count="unitDirectoryTotalPages"
+          :sizes="[10, 20, 50]"
+          unit="đơn vị"
+          unit-label="Đơn vị"
+        />
       </div>
     </section>
 
@@ -281,6 +268,8 @@
             <button
               type="button"
               class="btn btn-outline-primary btn-sm"
+              aria-label="Phân bổ thêm"
+              title="Phân bổ thêm"
               @click="openBatchModalFromDetail"
             >
               <FolderPlus :size="14" />
@@ -813,6 +802,7 @@ import { showToast } from "../utils/toast";
 import type { TrainingDomain, TrainingProgram } from "../types";
 import type { OrganizationUnit } from "../types/organization";
 import BatchAllocationModal from "../components/BatchAllocationModal.vue";
+import TablePagination from "../components/TablePagination.vue";
 
 // State
 const loading = ref(false);
@@ -957,7 +947,7 @@ const unitDirectoryQuery = ref("");
 const typeFilter = ref<"ALL" | "BRANCH" | "DEPARTMENT">("ALL");
 const statusFilter = ref<"ALL" | "ALLOCATED" | "UNALLOCATED">("ALL");
 const unitDirectoryPage = ref(1);
-const unitDirectoryPageSize = 10;
+const unitDirectoryPageSize = ref(10);
 const directoryStats = ref({
   totalCount: 0,
   allocatedCount: 0,
@@ -986,7 +976,11 @@ watch([typeFilter, statusFilter], () => {
   fetchDirectoryUnits();
 });
 
-watch(unitDirectoryPage, () => {
+watch([unitDirectoryPage, unitDirectoryPageSize], ([, size], [, oldSize]) => {
+  if (size !== oldSize && unitDirectoryPage.value !== 1) {
+    unitDirectoryPage.value = 1;
+    return;
+  }
   fetchDirectoryUnits();
 });
 
@@ -998,7 +992,7 @@ async function fetchDirectoryUnits() {
       type: typeFilter.value,
       status: statusFilter.value,
       page: unitDirectoryPage.value - 1,
-      size: unitDirectoryPageSize,
+      size: unitDirectoryPageSize.value,
     });
     directoryUnits.value = res.items || [];
     unitDirectoryTotalElements.value = res.totalElements || 0;
@@ -1047,7 +1041,8 @@ async function loadData() {
   try {
     const [, optionsRes] = await Promise.all([
       fetchDirectoryUnits(),
-      axiosClient.get("/api/admin/options/catalog"),
+      // Only the lists this page uses; the full catalog also ships every course (~4 MB on large data).
+      axiosClient.get("/api/admin/options/catalog", { params: { parts: "units,domains,programs" } }),
     ]);
 
     if (optionsRes.data?.units) {
@@ -1072,6 +1067,14 @@ onMounted(() => {
 });
 
 // ================= STAGED IN-MEMORY ALLOCATION LOGIC =================
+function programDomainId(programId: string | undefined, allocated: any[]): string | undefined {
+  if (!programId) return undefined;
+  return (
+    programs.value.find((p) => p.id === programId)?.domainId ||
+    allocated.find((a) => a.categoryType === "program" && a.targetId === programId)?.parentId ||
+    undefined
+  );
+}
 async function initStagedAllocations() {
   if (!currentDetailUnit.value) {
     stagedAllocations.value = [];
@@ -1102,7 +1105,14 @@ async function initStagedAllocations() {
                programs.value.find((p) => p.id === item.parentId)?.name)
             : undefined,
         programId: item.categoryType === "course" ? item.parentId : undefined,
-        domainId: item.categoryType === "program" ? item.parentId : undefined,
+        // A course's domain is its program's domain; without it, course-only allocations
+        // all landed under "Lĩnh vực khác".
+        domainId:
+          item.categoryType === "program"
+            ? item.parentId
+            : item.categoryType === "course"
+            ? programDomainId(item.parentId, allocated)
+            : undefined,
         isModified: false,
         isRemoved: false,
       };
@@ -2070,44 +2080,249 @@ async function handleExecuteBatchSync() {
 
 /* PAGINATION */
 .directory-pagination {
-  padding: 0.85rem 1.25rem;
-  border-top: 1px solid #e2e8f0;
+  padding: 0 1.25rem 0.75rem;
+}
+
+/* EMPTY STATE */
+.table-empty-state {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  font-size: 0.82rem;
-  color: #64748b;
-  background: #f8fafc;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 260px;
+  padding: 3rem 1.5rem;
+  text-align: center;
+  color: var(--text-muted, #64748b);
 }
 
-.pagination-buttons {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+.table-empty-state .empty-icon {
+  margin-bottom: 0.5rem;
+  color: var(--text-muted, #94a3b8);
+  opacity: 0.6;
 }
 
-.page-nav-btn {
-  padding: 0.3rem 0.65rem;
-  border-radius: 6px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  font-size: 0.78rem;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.page-nav-btn:hover:not(:disabled) {
-  background: #f1f5f9;
-}
-
-.page-nav-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.page-current {
+.table-empty-state h4 {
+  margin: 0;
+  font-size: 0.95rem;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text-main, #1e293b);
+}
+
+.table-empty-state p {
+  margin: 0;
+  max-width: 360px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+/* MOBILE */
+@media (max-width: 640px) {
+  .unit-allocation-page {
+    padding: 1rem;
+    gap: 1rem;
+  }
+
+  .breadcrumb-bar {
+    flex-wrap: wrap;
+    row-gap: 0.25rem;
+    font-size: 0.75rem;
+  }
+
+  .crumb {
+    white-space: nowrap;
+  }
+
+  .page-header {
+    align-items: flex-start;
+  }
+
+  .title-with-badge {
+    flex-wrap: wrap;
+    gap: 0.4rem 0.6rem;
+  }
+
+  .title-with-badge h2 {
+    font-size: 1.2rem;
+    line-height: 1.3;
+  }
+
+  .badge-count {
+    white-space: nowrap;
+  }
+
+  .subtitle {
+    font-size: 0.8rem;
+    line-height: 1.5;
+  }
+
+  .header-actions .btn {
+    padding: 0.5rem;
+    white-space: nowrap;
+  }
+
+  .header-actions .btn span {
+    display: none;
+  }
+
+  .kpi-cards-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem;
+  }
+
+  .kpi-stat-card {
+    padding: 0.75rem;
+    gap: 0.6rem;
+    align-items: flex-start;
+  }
+
+  .stat-icon-wrap {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+  }
+
+  .stat-info {
+    min-width: 0;
+  }
+
+  .stat-label {
+    font-size: 0.72rem;
+    line-height: 1.3;
+  }
+
+  .stat-value {
+    font-size: 1.15rem;
+  }
+
+  .card.directory-panel {
+    padding: 0;
+  }
+
+  .directory-toolbar {
+    padding: 0.9rem;
+    gap: 0.75rem;
+  }
+
+  .search-box-wrap {
+    max-width: none;
+  }
+
+  .directory-search-input {
+    font-size: 16px; /* avoid iOS zoom on focus */
+  }
+
+  .filter-controls,
+  .filter-pills {
+    width: 100%;
+  }
+
+  .filter-pill {
+    flex: 1;
+    padding: 0.45rem 0.35rem;
+    line-height: 1.25;
+    text-align: center;
+  }
+
+  /* Table rows become cards: name + status on top, counts, then actions. */
+  .table-responsive {
+    overflow-x: visible;
+  }
+
+  .unit-directory-table,
+  .unit-directory-table tbody {
+    display: block;
+  }
+
+  .unit-directory-table thead {
+    display: none;
+  }
+
+  .unit-directory-table tr.unit-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.6rem 0.5rem;
+    padding: 0.9rem;
+    border-bottom: 1px solid var(--border-color, #e2e8f0);
+  }
+
+  .unit-directory-table tr.unit-row td {
+    display: block;
+    width: auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .unit-directory-table tr.unit-row td.col-stt {
+    display: none;
+  }
+
+  .unit-directory-table tr.unit-row td.col-name {
+    grid-column: 1 / 3;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  .unit-directory-table tr.unit-row td.col-status {
+    grid-column: 3;
+    grid-row: 1;
+    align-self: center;
+    text-align: right;
+  }
+
+  .unit-directory-table tr.unit-row td.col-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.45rem 0.25rem;
+    border-radius: 8px;
+    background: var(--bg-main, #f8fafc);
+  }
+
+  .unit-directory-table tr.unit-row td.col-stat::before {
+    content: attr(data-label);
+    font-size: 0.7rem;
+    color: var(--text-muted, #64748b);
+  }
+
+  .unit-directory-table tr.unit-row td.col-actions {
+    grid-column: 1 / -1;
+  }
+
+  .unit-name-cell {
+    min-width: 0;
+  }
+
+  .unit-main-name {
+    overflow-wrap: anywhere;
+  }
+
+  .badge-allocation-status {
+    white-space: nowrap;
+  }
+
+  .unit-row .action-buttons-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+
+  .unit-row .action-buttons-group button {
+    justify-content: center;
+    width: 100%;
+    min-height: 38px;
+  }
+
+  .table-empty-state {
+    min-height: 200px;
+    padding: 2rem 1rem;
+  }
+
+  .directory-pagination {
+    padding: 0 0.9rem 0.75rem;
+  }
 }
 
 /* DETAIL MODAL STYLES (LARGE MODAL POPUP) */
@@ -3243,28 +3458,6 @@ async function handleExecuteBatchSync() {
   color: #ffffff;
 }
 
-/* PAGINATION */
-:root[data-theme="dark"] .directory-pagination {
-  background: #151e2a;
-  border-top-color: var(--border-color);
-  color: var(--text-muted);
-}
-
-:root[data-theme="dark"] .page-nav-btn {
-  background: var(--bg-subtle);
-  border-color: var(--border-color);
-  color: var(--text-main);
-}
-
-:root[data-theme="dark"] .page-nav-btn:hover:not(:disabled) {
-  background: #2a3c50;
-  color: #ffffff;
-}
-
-:root[data-theme="dark"] .page-current {
-  color: var(--text-main);
-}
-
 /* DETAIL MODAL OVERLAY & CONTAINER */
 :root[data-theme="dark"] .detail-modal-overlay {
   background-color: rgba(5, 10, 18, 0.75);
@@ -3724,5 +3917,155 @@ async function handleExecuteBatchSync() {
 
 :root[data-theme="dark"] .btn-confirm-submit:hover:not(:disabled) {
   background: var(--primary-hover);
+}
+/* MOBILE: detail and confirm modals */
+@media (max-width: 640px) {
+  .detail-modal-overlay {
+    padding: 0;
+    align-items: stretch;
+  }
+
+  .detail-modal-overlay .detail-modal-container {
+    max-width: none;
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+    border: 0;
+  }
+
+  .detail-modal-overlay .detail-modal-header {
+    padding: 0.8rem 0.9rem;
+    gap: 0.5rem;
+    align-items: flex-start;
+  }
+
+  .detail-modal-header .modal-header-left {
+    gap: 0.6rem;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .detail-modal-header .modal-unit-icon {
+    display: none;
+  }
+
+  .detail-modal-header .modal-unit-title-row {
+    flex-wrap: wrap;
+    gap: 0.35rem 0.5rem;
+  }
+
+  .detail-modal-header .modal-unit-title-row h3 {
+    font-size: 1.05rem;
+    white-space: nowrap;
+  }
+
+  .detail-modal-header .modal-unit-pill {
+    font-size: 0.75rem;
+    overflow-wrap: anywhere;
+  }
+
+  .detail-modal-header .modal-header-right {
+    flex-shrink: 0;
+    gap: 0.4rem;
+  }
+
+  .detail-modal-header .modal-header-right .btn {
+    padding: 0.4rem 0.55rem;
+    white-space: nowrap;
+  }
+
+  .detail-modal-header .modal-header-right .btn span {
+    display: none;
+  }
+
+  .detail-modal-overlay .detail-modal-toolbar {
+    padding: 0.6rem 0.9rem;
+    gap: 0.5rem;
+  }
+
+  .detail-modal-toolbar .toolbar-search-wrap {
+    max-width: none;
+    width: 100%;
+  }
+
+  .detail-modal-toolbar .toolbar-search-input {
+    font-size: 16px; /* avoid iOS zoom on focus */
+  }
+
+  .detail-modal-toolbar .toolbar-controls {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .detail-modal-toolbar .grant-filter-pills {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .detail-modal-overlay .detail-modal-body {
+    padding: 0.6rem 0.75rem;
+  }
+
+  .detail-modal-body .assigned-domain-header {
+    padding: 0.6rem 0.7rem;
+    gap: 0.5rem;
+  }
+
+  .detail-modal-body :is(.domain-header-left, .prog-header-left, .course-left) {
+    flex-wrap: nowrap;
+    min-width: 0;
+    gap: 0.4rem;
+  }
+
+  .detail-modal-body :is(.domain-header-left, .prog-header-left, .course-left) > svg {
+    flex-shrink: 0;
+  }
+
+  .detail-modal-body :is(.domain-title, .program-title, .course-title) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .detail-modal-body :is(.domain-header-right, .prog-header-right, .course-right) {
+    flex-shrink: 0;
+  }
+
+  .detail-modal-body .detail-table-view {
+    overflow-x: auto;
+  }
+
+  .detail-modal-overlay .detail-modal-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+    padding: 0.75rem 0.9rem calc(0.75rem + env(safe-area-inset-bottom));
+  }
+
+  .detail-modal-footer .footer-stats {
+    flex-wrap: wrap;
+    gap: 0.2rem 0.4rem;
+    font-size: 0.78rem;
+  }
+
+  .detail-modal-footer .footer-stats > span {
+    white-space: nowrap;
+  }
+
+  .detail-modal-footer .footer-actions {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.5rem;
+  }
+
+  .detail-modal-footer .footer-actions .btn {
+    justify-content: center;
+  }
+
+  .confirm-modal-overlay {
+    padding: 0.75rem;
+  }
 }
 </style>

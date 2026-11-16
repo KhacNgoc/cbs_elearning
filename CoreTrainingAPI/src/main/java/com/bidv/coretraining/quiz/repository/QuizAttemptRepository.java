@@ -4,6 +4,8 @@ import com.bidv.coretraining.quiz.entity.QuizAttempt;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, String> {
+    long countByUserIdAndQuizId(Long userId, String quizId);
+
     java.util.List<QuizAttempt> findByUserIdOrderByTakenAtDesc(Long userId);
 
     @org.springframework.data.jpa.repository.Query("""

@@ -1920,4 +1920,148 @@ function handleClose() {
   background: var(--primary-hover);
 }
 
+/* MOBILE: full-screen sheet, stacked toolbar and footer */
+@media (max-width: 640px) {
+  .batch-modal-overlay {
+    padding: 0;
+    align-items: stretch;
+  }
+
+  .batch-modal-overlay .batch-modal-container {
+    max-width: none;
+    height: 100%;
+    height: 100dvh;
+    border-radius: 0;
+    border: 0;
+  }
+
+  .batch-modal-overlay .batch-modal-header {
+    padding: 0.8rem 0.9rem;
+    gap: 0.5rem;
+    align-items: flex-start;
+  }
+
+  .batch-modal-header .header-left {
+    gap: 0.6rem;
+    min-width: 0;
+  }
+
+  .batch-modal-header .header-icon-wrap {
+    display: none;
+  }
+
+  .batch-modal-header .title-row {
+    flex-wrap: wrap;
+    gap: 0.35rem 0.5rem;
+  }
+
+  .batch-modal-header .title-row h3 {
+    font-size: 1.05rem;
+    white-space: nowrap;
+  }
+
+  .batch-modal-header .target-unit-pill {
+    font-size: 0.75rem;
+    overflow-wrap: anywhere;
+  }
+
+  .batch-modal-header .btn-close-modal {
+    flex-shrink: 0;
+  }
+
+  .batch-modal-overlay .batch-toolbar {
+    padding: 0.6rem 0.9rem;
+    gap: 0.5rem;
+  }
+
+  .batch-toolbar .search-wrap {
+    min-width: 0;
+    max-width: none;
+  }
+
+  .batch-toolbar .search-input {
+    font-size: 16px; /* avoid iOS zoom on focus */
+  }
+
+  .batch-toolbar .btn-toggle-expand {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .batch-modal-overlay .batch-modal-body {
+    padding: 0.6rem 0.75rem;
+  }
+
+  .batch-modal-body .node-row {
+    padding: 0.5rem;
+    gap: 0.5rem;
+  }
+
+  .batch-modal-body .node-left {
+    min-width: 0;
+    gap: 0.4rem;
+  }
+
+  .batch-modal-body .node-left > * {
+    flex-shrink: 0;
+  }
+
+  .batch-modal-body .node-left > .node-name {
+    flex-shrink: 1;
+  }
+
+  .batch-modal-body .node-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .batch-modal-body .node-count {
+    flex-shrink: 0;
+    white-space: nowrap;
+    font-size: 0.7rem;
+  }
+
+  .batch-modal-body .children-container {
+    padding-left: 0.9rem;
+  }
+
+  .batch-modal-overlay .tree-pagination {
+    padding: 0.5rem 0.9rem;
+  }
+
+  .batch-modal-overlay .batch-modal-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+    padding: 0.75rem 0.9rem calc(0.75rem + env(safe-area-inset-bottom));
+  }
+
+  .batch-modal-footer .footer-summary {
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .batch-modal-footer .switch-label,
+  .batch-modal-footer .summary-count {
+    white-space: nowrap;
+  }
+
+  .batch-modal-footer .summary-badge {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    text-align: right;
+    font-size: 0.8rem;
+  }
+
+  .batch-modal-footer .footer-actions {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.5rem;
+  }
+
+  .batch-modal-footer .footer-actions .btn {
+    justify-content: center;
+    padding: 0.6rem 0.9rem;
+  }
+}
 </style>

@@ -1,5 +1,5 @@
 <template>
-  <div class="reports-page">
+  <div class="reports-page" :aria-busy="loading">
     <header class="report-heading">
       <div><div class="eyebrow">QUẢN TRỊ ĐÀO TẠO</div><h1>{{ selected==='overview'?'Tổng quan đào tạo':`Thống kê ${currentView?.label.toLocaleLowerCase('vi')}` }}</h1></div>
       <div class="heading-actions"><button class="r-button" :disabled="loading" @click="loadReport()">Tải lại</button><button class="r-button" :disabled="loading||!!loadError" @click="exportCsv"><Download :size="16"/> CSV chi tiết</button><button class="r-button primary" :disabled="loading||!!loadError" @click="printReport"><Printer :size="16"/> In / lưu PDF</button></div>
@@ -14,9 +14,9 @@
       <div class="filter-title"><SlidersHorizontal :size="16"/><strong>Bộ lọc toàn cục</strong><button class="reset-button" @click="reset">Đặt lại bộ lọc</button></div>
       <div class="filters">
         <label>Hoàn thành từ ngày<input v-model="filters.from" type="date" :max="reportAsOf"/></label><label>Hoàn thành đến ngày<input v-model="filters.to" type="date" :max="reportAsOf"/></label>
-        <label>Đơn vị<select v-model="filters.unit"><option value="">Tất cả đơn vị</option><option v-for="unit in units" :key="unit">{{ unit }}</option></select></label>
-        <label>Chương trình<select v-model="filters.program"><option value="">Tất cả chương trình</option><option v-for="program in programs" :key="program">{{ program }}</option></select></label>
-        <label>Khóa học<select v-model="filters.course"><option value="">Tất cả khóa học</option><option v-for="course in courses" :key="course">{{ course }}</option></select></label>
+        <label>Đơn vị<SearchSelect v-model="filters.unit" size="sm" aria-label="Đơn vị" all-label="Tất cả đơn vị" search-placeholder="Gõ tên đơn vị..." :options="unitOptions"/></label>
+        <label>Chương trình<SearchSelect v-model="filters.program" size="sm" aria-label="Chương trình" all-label="Tất cả chương trình" search-placeholder="Gõ tên chương trình..." :options="programOptions"/></label>
+        <label>Khóa học<SearchSelect v-model="filters.course" size="sm" aria-label="Khóa học" all-label="Tất cả khóa học" search-placeholder="Gõ tên khóa học..." :options="courseOptions"/></label>
         <label>Trạng thái<select v-model="filters.status"><option value="">Tất cả trạng thái</option><option v-for="status in [...statuses,'Quá hạn']" :key="status">{{ status }}</option></select></label>
       </div>
       <p v-if="invalidDates" class="validation" role="alert">Chọn khoảng ngày hợp lệ, không vượt quá ngày chốt {{ displayDate(reportAsOf) }}.</p>
@@ -27,48 +27,48 @@
     <template v-if="!invalidDates">
     <template v-if="selected==='overview'">
       <div class="section-label"><div><h2>KPI tổng quan</h2></div></div>
-      <section class="kpi-grid" aria-label="Chỉ số điều hành"><article v-for="stat in kpis" :key="stat.label" class="kpi" :class="stat.tone"><div class="kpi-top"><span>{{ stat.label }}</span><component :is="stat.icon" :size="18"/></div><strong>{{ stat.value }}</strong><small>{{ stat.note }}</small></article></section>
+      <SkeletonLoader v-if="chartsLoading" plain variant="stats" :rows="5"/><section v-else class="kpi-grid" aria-label="Chỉ số điều hành"><article v-for="stat in kpis" :key="stat.label" class="kpi" :class="stat.tone"><div class="kpi-top"><span>{{ stat.label }}</span><component :is="stat.icon" :size="18"/></div><strong>{{ stat.value }}</strong><small>{{ stat.note }}</small></article></section>
       <div class="section-label"><div><h2>Tiến độ đào tạo</h2></div></div>
       <section class="report-card status-overview" aria-label="Tình hình học tập chung">
         <div class="status-heading"><div><h2>Tình hình học tập chung</h2></div><button class="text-button" @click="selectView('completion')">Xem chi tiết <ArrowUpRight :size="15"/></button></div>
-        <div v-if="summary.total" class="status-track" aria-hidden="true"><span v-for="(status,index) in statuses" :key="status" :style="{width:`${countStatus(status)/summary.total*100}%`,background:statusColors[index]}"></span></div><p v-else class="no-data">Không có lượt học trong phạm vi đã chọn.</p>
+        <SkeletonBlock v-if="chartsLoading" height="14px" radius="999px"/><div v-else-if="summary.total" class="status-track" aria-hidden="true"><span v-for="(status,index) in statuses" :key="status" :style="{width:`${countStatus(status)/summary.total*100}%`,background:statusColors[index]}"></span></div><p v-else class="no-data">Không có lượt học trong phạm vi đã chọn.</p>
         <div class="completion-legend"><button v-for="(status,index) in statuses" :key="status" @click="showStatus(status)"><i :style="{background:statusColors[index]}"></i>{{ status }} <strong>{{ countStatus(status) }}</strong><small>{{ percent(countStatus(status),summary.total) }}</small></button></div>
       </section>
       <section class="outcomes-grid training-progress">
-        <article class="report-card"><div class="card-heading"><div><h3>Lượt hoàn thành theo tháng</h3><p></p></div><span class="chart-tag">{{ completedInPeriod.length }} lượt</span></div><ReportMockChart v-if="completedInPeriod.length" :config="trendChart" description="Lượt hoàn thành theo ngày được ghi nhận"/><div v-else class="chart-empty"><CalendarCheck :size="28"/><p>Chưa có lượt hoàn thành trong kỳ.</p></div><div class="trend-values"><span v-for="item in months" :key="item.key">{{ item.label }} <strong>{{ item.count }}</strong></span></div></article>
-        <article class="report-card"><div class="card-heading"><div><h3>So sánh tiến độ đơn vị</h3><p>Tỷ lệ hoàn thành, đang học và chưa bắt đầu trên lượt học. {{ overviewUnitsNote }}</p></div><GroupChartControls v-if="summary.total" v-model:sort="overviewUnitsSort" v-model:picked="overviewUnitsPicked" :sorts="statusSorts" :names="overviewUnitsNames" noun="đơn vị"/></div><ReportMockChart v-if="summary.total" :config="unitComparison" :height="overviewUnitsHeight" description="So sánh tỷ lệ trạng thái giữa các đơn vị"/><p v-else class="no-data">Chưa có dữ liệu so sánh.</p><div class="group-scale"><button v-for="unit in overviewUnitsShown" :key="unit.name" @click="filters.unit=unit.name || '';selectView('units')">{{ unit.name }} <strong>{{ unit.complete }}/{{ unit.total }} hoàn thành</strong></button></div></article>
+        <article class="report-card"><div class="card-heading"><div><h3>Lượt hoàn thành theo tháng</h3><p></p></div><span class="chart-tag">{{ completedInPeriod.length }} lượt</span></div><SkeletonBlock v-if="chartsLoading" height="240px" radius="var(--radius-md)"/><ReportMockChart v-else-if="completedInPeriod.length" class="fill-chart" :config="trendChart" description="Lượt hoàn thành theo ngày được ghi nhận"/><div v-else class="chart-empty fill-chart"><CalendarCheck :size="28"/><p>Chưa có lượt hoàn thành trong kỳ.</p></div><div class="trend-values"><span v-for="item in months" :key="item.key">{{ item.label }} <strong>{{ item.count }}</strong></span></div></article>
+        <article class="report-card"><div class="card-heading"><div><h3>So sánh tiến độ đơn vị</h3><p>Tỷ lệ hoàn thành, đang học và chưa bắt đầu trên lượt học. {{ overviewUnitsNote }}</p></div><GroupChartControls v-if="summary.total" v-model:sort="overviewUnitsSort" v-model:picked="overviewUnitsPicked" :sorts="statusSorts" :names="overviewUnitsNames" noun="đơn vị"/></div><SkeletonBlock v-if="chartsLoading" height="320px" radius="var(--radius-md)"/><ReportMockChart v-else-if="summary.total" :config="unitComparison" :height="overviewUnitsHeight" description="So sánh tỷ lệ trạng thái giữa các đơn vị"/><p v-else class="no-data">Chưa có dữ liệu so sánh.</p><div v-if="summary.total" class="card-foot"><Info :size="13"/> Bấm vào một đơn vị trên biểu đồ để xem báo cáo của đơn vị đó.</div></article>
       </section>
       <div class="section-label"><div><h2>Kết quả đào tạo</h2></div></div>
       <section class="outcomes-grid">
         <article class="report-card"><div class="card-heading"><div><h3>Kết quả kiểm tra</h3><p>So sánh trên cùng {{ summary.tested }} lượt học đã có kết quả.</p></div><Target :size="19"/></div><div class="exam-metrics"><div><span>Đạt ngay lần đầu</span><strong>{{ percent(summary.firstPassed,summary.tested) }}</strong><small>{{ summary.firstPassed }} / {{ summary.tested }} lượt đã kiểm tra</small><div class="metric-track"><span :style="{width:`${rate(summary.firstPassed,summary.tested)}%`}"></span></div></div><div><span>Đã từng đạt</span><strong>{{ percent(summary.passed,summary.tested) }}</strong><small>{{ summary.passed }} / {{ summary.tested }} lượt đã kiểm tra</small><div class="metric-track"><span :style="{width:`${rate(summary.passed,summary.tested)}%`}"></span></div></div></div><div class="exam-summary"><button @click="openActions('failed')"><strong>{{ summary.failed }}</strong><span>Chưa đạt yêu cầu kiểm tra</span><ArrowUpRight :size="15"/></button><button @click="openActions('untested')"><strong>{{ summary.total-summary.tested }}</strong><span>Chưa kiểm tra</span><ArrowUpRight :size="15"/></button></div><div class="card-foot">Đạt theo ngưỡng riêng từng bài. Một lượt học có nhiều lần thi chỉ được đếm một lần trong mẫu.</div><button class="text-button exam-link" @click="selectView('scores')">Xem phân bố điểm & chi tiết <ArrowUpRight :size="15"/></button></article>
-        <article class="report-card knowledge-readiness"><h3>Kết quả theo lĩnh vực</h3><div class="readiness-value"><strong>{{ summary.evaluatedPeople }}</strong><span>/ {{ summary.people }} học viên đã có kiểm tra</span></div><button class="text-button" @click="selectView('domains')">Xem báo cáo lĩnh vực <ArrowUpRight :size="15"/></button></article>
+        <article class="report-card knowledge-readiness"><h3>Kết quả theo lĩnh vực</h3><div class="readiness-value"><strong>{{ summary.evaluatedPeople }}</strong><span>/ {{ summary.people }} học viên đã có kiểm tra</span></div><h4 class="domain-low-title">Lĩnh vực có điểm thấp nhất</h4><SkeletonLoader v-if="chartsLoading" plain variant="list" :rows="3"/><div v-else-if="lowDomains.length" class="domain-low-list"><button v-for="domain in lowDomains" :key="domain.name" class="ranking-row" @click="selectView('domains')"><div><strong>{{ domain.name }}</strong><span>{{ domain.average!.toFixed(1) }}/100</span></div><div class="ranking-track"><span :style="{width:`${domain.average}%`}"></span></div><small>{{ domain.tested }} lượt đã kiểm tra · {{ percent(domain.passed,domain.tested) }} đạt</small></button></div><p v-else class="no-data">Chưa có lĩnh vực nào có kết quả kiểm tra.</p><button class="text-button" @click="selectView('domains')">Xem báo cáo lĩnh vực <ArrowUpRight :size="15"/></button></article>
       </section>
       <LiveCourseRatings :printing="printing"/>
       <div class="section-label"><div><h2>Danh sách cần chú ý</h2></div></div>
       <section class="priority-grid">
         <article class="report-card"><div class="card-heading"><div><h3>Đơn vị có lượt học quá hạn</h3><p>Xếp theo tỷ lệ quá hạn trên lượt học có hạn hoàn thành.</p></div><span class="chart-tag danger">CẦN CHÚ Ý</span></div>
-          <div v-if="unitStats.length" class="ranking-list"><button v-for="unit in unitStats" :key="unit.name" class="ranking-row" @click="openUnit(unit.name || '')"><div><strong>{{ unit.name }}</strong><span>{{ percent(unit.overdue,unit.withDeadline) }}</span></div><div class="ranking-track"><span :style="{width:`${rate(unit.overdue,unit.withDeadline)}%`}"></span></div><small>{{ unit.overdue }} quá hạn / {{ unit.withDeadline }} lượt có hạn · {{ unit.total-unit.withDeadline }} chưa có hạn</small></button></div><p v-else class="no-data">Không có dữ liệu đơn vị.</p>
+          <SkeletonLoader v-if="chartsLoading" plain variant="list" :rows="5"/><div v-else-if="unitStats.length" class="ranking-list"><button v-for="unit in unitStats" :key="unit.name" class="ranking-row" @click="openUnit(unit.name || '')"><div><strong>{{ unit.name }}</strong><span>{{ percent(unit.overdue,unit.withDeadline) }}</span></div><div class="ranking-track"><span :style="{width:`${rate(unit.overdue,unit.withDeadline)}%`}"></span></div><small>{{ unit.overdue }} quá hạn / {{ unit.withDeadline }} lượt có hạn · {{ unit.total-unit.withDeadline }} chưa có hạn</small></button></div><p v-else class="no-data">Không có dữ liệu đơn vị.</p>
           <div class="card-foot"><Info :size="13"/> {{ unitStats.length<unitGroups.length?`Hiển thị ${unitStats.length}/${unitGroups.length} đơn vị có tỷ lệ quá hạn cao nhất. `:'' }}Bấm đơn vị để xem lượt học quá hạn. Đơn vị chưa có hạn hoàn thành không được tính tỷ lệ.</div>
         </article>
         <article class="report-card"><div class="card-heading"><div><h3>Khóa học cần can thiệp</h3><p>{{ courseMode==='progress'?'Ưu tiên số lượt quá hạn, sau đó đến số lượt chưa hoàn thành.':'Ưu tiên số lượt đã kiểm tra nhưng chưa từng đạt.' }}</p></div></div>
           <div class="segmented" aria-label="Chế độ theo dõi khóa học"><button :aria-pressed="courseMode==='progress'" :class="{active:courseMode==='progress'}" @click="courseMode='progress'">Tiến độ học</button><button :aria-pressed="courseMode==='results'" :class="{active:courseMode==='results'}" @click="courseMode='results'">Kết quả kiểm tra</button></div>
-          <div v-if="courseStats.length" class="course-rankings"><button v-for="course in courseStats" :key="course.name" class="course-row" @click="openCourse(course.name || '')"><div><strong>{{ course.name }}</strong><ArrowUpRight :size="14"/></div><div class="mini-stack" aria-hidden="true"><span v-for="(color,index) in courseMode==='progress'?statusColors:examColors" :key="color" :style="{background:color,width:`${(courseMode==='progress'?[course.complete,course.learning,course.notStarted]:[course.passed,course.failed,course.total-course.tested])[index]!/course.total*100}%`}"></span></div><small v-if="courseMode==='progress'"><b>{{ course.overdue }} quá hạn</b> · {{ course.total-course.complete }} chưa hoàn thành / {{ course.total }} lượt</small><small v-else><b>{{ course.failed }} chưa đạt</b> / {{ course.tested }} đã kiểm tra · {{ course.total-course.tested }} chưa kiểm tra</small></button></div><p v-else class="no-data">Không có dữ liệu khóa học.</p>
-          <div class="mini-legend"><span v-for="(label,index) in courseMode==='progress'?statuses:examLabels" :key="label"><i :style="{background:(courseMode==='progress'?statusColors:examColors)[index]}"></i>{{ label }}</span></div><div class="card-foot">Tối đa 5 khóa · Bấm khóa học để mở danh sách cần hỗ trợ.</div>
+          <SkeletonLoader v-if="chartsLoading" plain variant="list" :rows="5"/><div v-else-if="courseStats.length" class="course-rankings"><button v-for="course in courseStats" :key="course.name" class="course-row" @click="openCourse(course.name || '')"><div><strong>{{ course.name }}</strong><ArrowUpRight :size="14"/></div><div class="mini-stack" aria-hidden="true"><span v-for="(color,index) in courseMode==='progress'?statusColors:examColors" :key="color" :style="{background:color,width:`${(courseMode==='progress'?[course.complete,course.learning,course.notStarted]:[course.passed,course.failed,course.total-course.tested])[index]!/course.total*100}%`}"></span></div><small v-if="courseMode==='progress'"><b>{{ course.overdue }} quá hạn</b> · {{ course.total-course.complete }} chưa hoàn thành / {{ course.total }} lượt</small><small v-else><b>{{ course.failed }} chưa đạt</b> / {{ course.tested }} đã kiểm tra · {{ course.total-course.tested }} chưa kiểm tra</small></button></div><p v-else class="no-data">Không có dữ liệu khóa học.</p>
+          <div class="mini-legend"><span v-for="(label,index) in courseMode==='progress'?statuses:examLabels" :key="label"><i :style="{background:(courseMode==='progress'?statusColors:examColors)[index]}"></i>{{ label }}</span></div><div class="card-foot">Tối đa {{ ATTENTION_ROWS }} khóa · Bấm khóa học để mở danh sách cần hỗ trợ.</div>
         </article>
       </section>
     </template>
     <template v-else>
-      <section class="detail-metric-row" aria-label="Chỉ số tổng quan báo cáo"><div v-for="stat in kpis" :key="stat.label"><span>{{ stat.label }}</span><strong>{{ stat.value }}</strong><small>{{ stat.note }}</small></div></section>
+      <SkeletonLoader v-if="chartsLoading" plain variant="stats" :rows="5"/><section v-else class="detail-metric-row" aria-label="Chỉ số tổng quan báo cáo"><div v-for="stat in kpis" :key="stat.label"><span>{{ stat.label }}</span><strong>{{ stat.value }}</strong><small>{{ stat.note }}</small></div></section>
 
       <div class="detail-title"><h3>{{ currentView?.label }}</h3><p>{{ currentView?.caption }}</p></div>
 
-      <article v-if="showDetailChart&&summary.total" class="report-card detail-chart"><div class="card-heading"><div><h3>{{ detailChartTitle }}</h3><p>{{ detailChartNote }}</p></div><GroupChartControls v-if="isGroupChart" v-model:sort="detailSort" v-model:picked="detailPicked" :sorts="groupSorts[selected]||[]" :names="detailNames" :noun="groupNouns[selected]||''"/></div><ReportMockChart :config="detailChart" :height="isGroupChart?detailHeight:undefined" :description="detailChartTitle+'. Số liệu chi tiết trong bảng bên dưới.'"/></article>
+      <article v-if="showDetailChart&&summary.total" class="report-card detail-chart"><div class="card-heading"><div><h3>{{ detailChartTitle }}</h3><p>{{ detailChartNote }}</p></div><GroupChartControls v-if="isGroupChart" v-model:sort="detailSort" v-model:picked="detailPicked" :sorts="groupSorts[selected]||[]" :names="detailNames" :noun="groupNouns[selected]||''"/></div><SkeletonBlock v-if="chartsLoading" height="320px" radius="var(--radius-md)"/><ReportMockChart v-else :config="detailChart" :height="isGroupChart?detailHeight:undefined" :description="detailChartTitle+'. Số liệu chi tiết trong bảng bên dưới.'"/></article>
     </template>
     <LiveCourseRatings v-if="selected==='courses'" :printing="printing"/>
     <section ref="tableSection" class="report-card detail-card" aria-label="Báo cáo chi tiết và danh sách xử lý">
       <div class="detail-heading"><div><h3>{{ selected==='overview'?'Ưu tiên hỗ trợ học viên':`Chi tiết ${currentView?.label.toLocaleLowerCase('vi')}` }}</h3><p>{{ selected==='overview'?'Chọn tình huống để xem từng lượt học cần xử lý.':'Tìm kiếm áp dụng cho bảng và CSV, không thay đổi biểu đồ.' }}</p></div><label class="search-input"><Search :size="15"/><input v-model="search" aria-label="Tìm trong báo cáo chi tiết" placeholder="Tìm học viên, khóa học..."/></label></div>
       <div v-if="selected==='overview'" class="action-tabs" aria-label="Tình huống cần xử lý"><button v-for="item in actionOptions" :key="item.id" :class="{active:actionType===item.id}" :aria-pressed="actionType===item.id" @click="actionType=item.id as ActionType">{{ item.label }} <span>{{ item.count }}</span></button></div>
-      <div class="table-scroll" tabindex="0" role="region" aria-label="Bảng báo cáo, cuộn ngang để xem thêm"><table><caption class="sr-only">Báo cáo — {{ selected==='overview'?'Danh sách cần xử lý':currentView?.label }}</caption><thead><tr><th v-for="heading in tableHeaders" :key="heading" scope="col">{{ heading }}</th></tr></thead><tbody><tr v-for="row in pagedTable" :key="row.id"><td v-for="(cell,index) in row.cells" :key="index"><span :class="{pill:statuses.includes(String(cell))||String(cell).includes('quá hạn'),good:cell==='Hoàn thành',bad:String(cell).includes('quá hạn')}">{{ cell }}</span></td><td v-if="row.record"><button class="text-button" :aria-label="`Chi tiết ${row.record.name} - ${row.record.courseName}`" @click="inspectRow=row.record">Chi tiết <ArrowUpRight :size="13"/></button></td><td v-else-if="row.drill"><button class="text-button" :aria-label="`Xem chi tiết ${row.drill.title}`" @click="dimensionRow=row.drill">Xem chi tiết <ArrowUpRight :size="13"/></button></td></tr><tr v-if="!pagedTable.length"><td :colspan="tableHeaders.length" class="table-empty"><strong>{{ summary.total?'Không có trường hợp phù hợp':'Không có dữ liệu trong phạm vi đã chọn' }}</strong><p>Thay đổi bộ lọc, tình huống hoặc tìm kiếm.</p></td></tr></tbody></table></div>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Bảng báo cáo, cuộn ngang để xem thêm"><table><caption class="sr-only">Báo cáo — {{ selected==='overview'?'Danh sách cần xử lý':currentView?.label }}</caption><thead><tr><th v-for="heading in tableHeaders" :key="heading" scope="col">{{ heading }}</th></tr></thead><tbody v-if="tableLoading" aria-hidden="true"><tr v-for="n in Math.min(pageSize,10)" :key="n" class="skeleton-row"><td v-for="c in tableHeaders.length" :key="c"><SkeletonBlock :width="`${55+((n*7+c*13)%40)}%`"/></td></tr></tbody><tbody v-else><tr v-for="row in pagedTable" :key="row.id"><td v-for="(cell,index) in row.cells" :key="index"><span :class="{pill:statuses.includes(String(cell))||String(cell).includes('quá hạn'),good:cell==='Hoàn thành',bad:String(cell).includes('quá hạn')}">{{ cell }}</span></td><td v-if="row.record"><button class="text-button" :aria-label="`Chi tiết ${row.record.name} - ${row.record.courseName}`" @click="inspectRow=row.record">Chi tiết <ArrowUpRight :size="13"/></button></td><td v-else-if="row.drill"><button class="text-button" :aria-label="`Xem chi tiết ${row.drill.title}`" @click="dimensionRow=row.drill">Xem chi tiết <ArrowUpRight :size="13"/></button></td></tr><tr v-if="!pagedTable.length"><td :colspan="tableHeaders.length" class="table-empty"><strong>{{ summary.total?'Không có trường hợp phù hợp':'Không có dữ liệu trong phạm vi đã chọn' }}</strong><p>Thay đổi bộ lọc, tình huống hoặc tìm kiếm.</p></td></tr></tbody></table></div>
       <TablePagination v-if="!printing" v-model:page="page" v-model:page-size="pageSize" :total="totalItems" :page-count="pageCount" class="report-pagination"/>
     </section>
 
@@ -89,12 +89,14 @@
 
 <script setup lang="ts">
 import SkeletonLoader from "../components/SkeletonLoader.vue";
+import SkeletonBlock from "../components/SkeletonBlock.vue";
+import SearchSelect from "../components/SearchSelect.vue";
 import { computed, reactive, ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import type { ChartConfiguration } from 'chart.js';
 import { Users, CircleCheck, Target, Download, Printer, Info, SlidersHorizontal, Search, ArrowUpRight, AlarmClock, CalendarCheck, X } from 'lucide-vue-next';
 import ReportMockChart from '../components/ReportMockChart.vue';
 import GroupChartControls from '../components/GroupChartControls.vue';
-import { useGroupChart, pointMetrics, axisLabel, GROUP_CHART_LIMIT, type GroupSort } from '../utils/reportGroups';
+import { useGroupChart, pointMetrics, axisLabel, type GroupSort } from '../utils/reportGroups';
 import LiveCourseRatings from '../components/LiveCourseRatings.vue';
 import TablePagination from '../components/TablePagination.vue';
 import ReportAttemptAnalysis from '../components/ReportAttemptAnalysis.vue';
@@ -123,24 +125,31 @@ const statuses=['Hoàn thành','Đang học','Chưa bắt đầu'];
 const statusColors=['#00856a','#e5b04c','#c4cfd8'];
 const examColors=['#00856a','#cc6d59','#c4cfd8'],examLabels=['Đã từng đạt','Chưa từng đạt','Chưa kiểm tra'];
 const report=ref<ReportPage|null>(null),loading=ref(true),loadError=ref('');
+// Summary, charts and rankings are re-read only when the scope changes; paging the table keeps them, so
+// they show a skeleton only during a metadata read, while the table shows one during every read.
+const chartsLoading=ref(false);
 // The server runs a few whole-population reports at a time and answers 503 when every slot stays busy.
 const BUSY='Hệ thống đang xử lý nhiều báo cáo cùng lúc. Vui lòng thử lại sau ít phút.';
 const reportBusy=(e:unknown)=>(e as {response?:{status?:number}})?.response?.status===503;
-const page=ref(1),pageSize=ref(20);
+const page=ref(1),pageSize=ref(10);
 let sequence=0,timer:ReturnType<typeof setTimeout>|undefined,lastScope='';
 const empty:ReportMetrics={total:0,people:0,complete:0,learning:0,notStarted:0,tested:0,passed:0,failed:0,firstPassed:0,average:null,withDeadline:0,overdue:0,overduePeople:0,peopleWithDeadline:0,mandatory:0,mandatoryComplete:0};
 const summary=computed(()=>report.value?.summary||empty);
 const choices=computed(()=>report.value?.choices||{});
 const units=computed(()=>choices.value.units||[]),programs=computed(()=>choices.value.programs||[]),courses=computed(()=>choices.value.courses||[]);
+// Filter values are names; thousands of courses are searched in SearchSelect rather than rendered as <option>s.
+const asOptions=(names:string[])=>names.map(name=>({value:name,label:name}));
+const unitOptions=computed(()=>asOptions(units.value)),programOptions=computed(()=>asOptions(programs.value)),courseOptions=computed(()=>asOptions(courses.value));
 const invalidDates=computed(()=>!!(filters.from&&filters.to&&filters.from>filters.to)||filters.to>reportAsOf.value||filters.from>reportAsOf.value);
 const params=():ReportParams=>({...filters,view:selected.value,action:actionType.value,search:search.value,page:page.value-1,size:pageSize.value});
 async function loadReport(force=true){
  clearTimeout(timer);const request=++sequence;loading.value=true;loadError.value='';
- if(invalidDates.value){loading.value=false;return;}
+ if(invalidDates.value){loading.value=false;chartsLoading.value=false;return;}
  const scope=JSON.stringify(filters),metadata=force||!report.value||lastScope!==scope;
+ chartsLoading.value=metadata&&!!report.value;
  try{const data=await readTrainingReport({...params(),metadata});if(request!==sequence)return;reportAsOf.value=data.asOf;report.value={...report.value,...data,summary:data.summary||report.value?.summary,choices:metadata?data.choices:report.value?.choices};lastScope=scope;}
  catch(e){if(request===sequence)loadError.value=reportBusy(e)?BUSY:'Không thể tải dữ liệu báo cáo. Vui lòng thử lại.';}
- finally{if(request===sequence)loading.value=false;}
+ finally{if(request===sequence){loading.value=false;chartsLoading.value=false;}}
 }
 function schedule(){sequence++;clearTimeout(timer);timer=setTimeout(()=>void loadReport(false),250);}
 watch([filters,selected,search,actionType,pageSize],()=>{page.value=1;schedule();},{deep:true});
@@ -148,6 +157,8 @@ watch(page,schedule);
 watch(()=>route.query.report,value=>{selected.value=reportViews.some(v=>v.id===value)?value as ReportView:'overview';search.value='';});
 const displayDate=(date:string)=>date?date.slice(0,10).split('-').reverse().join('/'):'—';
 const percent=formatRatio,rate=(n:number,total:number)=>total?Math.round(n/total*100):0;
+// Printing reads every page with loading on; the printed table must show those rows, not a skeleton.
+const tableLoading=computed(()=>loading.value&&!printing.value&&!!report.value);
 const totalItems=computed(()=>report.value?.total||0),pageCount=computed(()=>Math.max(1,Math.ceil(totalItems.value/pageSize.value)));
 const learnerCount=computed(()=>summary.value.people);
 function row(value:ReportFact):ReportRow{return {id:`${value.learnerId}:${value.courseId}`,learnerId:String(value.learnerId),name:value.name,unit:value.unit,courseId:value.courseId,courseName:value.courseName,program:value.program,domain:value.domain,progress:value.progress,mandatory:!!value.mandatory,dueDate:value.dueDate,completedAt:value.completedAt,date:'',status:value.status,score:value.average,passed:value.everPassed===1&&value.requiredPassed===1,requiredPending:value.attemptCount>0&&value.everPassed===1&&value.requiredPassed!==1,attempts:[],attemptCount:value.attemptCount,passingScore:value.passingScore,completed:!!value.completed};}
@@ -172,8 +183,11 @@ const allGroups=(dimension:string)=>{const points=report.value?.chartPoints?.[di
 type Group=ReturnType<typeof metrics>;
 const overdueShare=(g:Group)=>g.withDeadline?g.overdue/g.withDeadline:-1;
 const unitGroups=computed(()=>allGroups('units'));
-const unitStats=computed(()=>[...unitGroups.value].sort((a,b)=>overdueShare(b)-overdueShare(a)).slice(0,GROUP_CHART_LIMIT));
-const courseStats=computed(()=>[...allGroups('courses')].sort((a,b)=>courseMode.value==='progress'?b.overdue-a.overdue||(b.total-b.complete)-(a.total-a.complete):b.failed-a.failed).slice(0,5));
+// Five rows like the course list beside it, so the two attention cards have the same height.
+const ATTENTION_ROWS=5;
+const unitStats=computed(()=>[...unitGroups.value].sort((a,b)=>overdueShare(b)-overdueShare(a)).slice(0,ATTENTION_ROWS));
+const lowDomains=computed(()=>allGroups('domains').filter(g=>g.average!==null&&g.tested>0).sort((a,b)=>a.average!-b.average!).slice(0,3));
+const courseStats=computed(()=>[...allGroups('courses')].sort((a,b)=>courseMode.value==='progress'?b.overdue-a.overdue||(b.total-b.complete)-(a.total-a.complete):b.failed-a.failed).slice(0,ATTENTION_ROWS));
 const months=computed(()=>(report.value?.months||[]).map(m=>({key:`${m.year}-${m.month}`,label:`T${m.month}/${m.year}`,count:m.count})));
 const completedInPeriod=computed(()=>({length:months.value.reduce((n,m)=>n+m.count,0)}));
 type StatusCounts=Pick<ReportMetrics,'name'|'total'|'complete'|'learning'|'notStarted'>;
@@ -193,9 +207,13 @@ const groupNouns:Record<string,string>={units:'đơn vị',courses:'khóa học'
 const isGroupChart=computed(()=>selected.value in groupSorts);
 const detailGroups=useGroupChart(()=>isGroupChart.value?allGroups(selected.value):[],{noun:()=>groupNouns[selected.value]||'',sorts:()=>groupSorts[selected.value]||[],fullList:'xem đầy đủ ở bảng',resetOn:selected});
 const overviewUnits=useGroupChart(()=>unitGroups.value,{noun:()=>'đơn vị',sorts:()=>statusSorts,fullList:'xem đầy đủ ở báo cáo Đơn vị'});
-const unitComparison=computed(()=>comparison(overviewUnits.shown.value));
+// Clicking a unit's bar opens the unit report filtered to it (the chart used to repeat its units as a button list).
+const unitComparison=computed(()=>{const shown=overviewUnits.shown.value,config=comparison(shown);
+ config.options={...config.options,onClick:(_e,elements)=>{const g=shown[elements[0]?.index??-1];if(g){filters.unit=g.name||'';void selectView('units');}},
+  onHover:(e,elements)=>{const target=e.native?.target as HTMLElement|undefined;if(target)target.style.cursor=elements.length?'pointer':'default';}};
+ return config;});
 const {sortId:detailSort,picked:detailPicked,names:detailNames,height:detailHeight}=detailGroups;
-const {sortId:overviewUnitsSort,picked:overviewUnitsPicked,names:overviewUnitsNames,height:overviewUnitsHeight,shown:overviewUnitsShown,note:overviewUnitsNote}=overviewUnits;
+const {sortId:overviewUnitsSort,picked:overviewUnitsPicked,names:overviewUnitsNames,height:overviewUnitsHeight,note:overviewUnitsNote}=overviewUnits;
 const trendChart=computed<ChartConfiguration>(()=>({type:'bar',data:{labels:months.value.map(m=>m.label),datasets:[{label:'Lượt hoàn thành',data:months.value.map(m=>m.count),backgroundColor:'#00856a',borderRadius:5}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}}));
 const actionLabels:Record<string,string>={overdue:'Quá hạn',dueSoon:'Sắp đến hạn, chưa bắt đầu',failed:'Chưa đạt yêu cầu kiểm tra',untested:'Chưa kiểm tra',incomplete:'Chưa hoàn thành'};
 const actionOptions=computed(()=>(report.value?.actions||[]).map(a=>({...a,label:actionLabels[a.id]})));
@@ -256,6 +274,23 @@ onBeforeUnmount(()=>{sequence++;historySequence++;dimensionSequence++;clearTimeo
 <style scoped src="../assets/styles/reporting-mockup.css"></style>
 <style scoped>
 .report-pagination{margin-top:0;padding:16px 20px}
+/* Paired cards share a row height; a card's chart or list takes the spare height instead of leaving a gap. */
+.training-progress>.report-card,.outcomes-grid>.report-card,.priority-grid>.report-card{display:flex;flex-direction:column}
+.priority-grid .card-foot{margin-top:auto}
+/* The exam card's summary sits at the bottom, level with the domain card's link. */
+.outcomes-grid:not(.training-progress) .exam-summary{margin-top:auto}
+.training-progress .fill-chart{flex:1 1 auto;height:auto!important;min-height:280px}
+.training-progress .card-foot{margin-top:auto}
+.knowledge-readiness .text-button{margin-top:auto;align-self:flex-start;padding-top:14px}
+.domain-low-title{margin:20px 0 12px;font-size:12px;font-weight:600;color:var(--text-muted)}
+.domain-low-list{display:grid;gap:14px;padding-bottom:6px}
+/* Report tables fit their card: long names and results wrap instead of widening the table. The admin layout sets
+   every td to its 14px body size; report tables keep a denser 12px. Only narrow screens scroll sideways. */
+.reports-page .table-scroll table{white-space:normal}
+.reports-page .table-scroll th,.reports-page .table-scroll td{font-size:12px;padding:12px 14px;overflow-wrap:break-word}
+.reports-page .table-scroll th{white-space:nowrap}
+.reports-page .table-scroll .pill,.reports-page .table-scroll .text-button{white-space:nowrap}
+@media(max-width:768px){.reports-page .table-scroll table{min-width:760px}}
 .card-heading:has(.group-chart-controls){flex-wrap:wrap}
 .attempt-list li{flex-wrap:wrap}
 @media(max-width:600px){

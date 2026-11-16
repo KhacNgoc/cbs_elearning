@@ -1,6 +1,10 @@
 # Apply behind an HTTPS reverse proxy on the host. See DEPLOYMENT.md.
 services:
+  # Apart from the HTTPS reverse proxy only PostgreSQL is reachable from outside (POSTGRES_PUBLISH_ADDRESS /
+  # POSTGRES_PUBLISH_PORT, password login); every other service listens on loopback.
   backend:
+    ports: !override
+      - "127.0.0.1:9000:8080"
     environment:
       JWT_COOKIE_SECURE: "true"
       SERVER_FORWARD_HEADERS_STRATEGY: framework
@@ -10,9 +14,6 @@ services:
         VITE_API_URL: ""
     ports: !override
       - "127.0.0.1:5173:80"
-  pgadmin:
-    profiles: ["db-tools"]
-    ports: !override []
   rag-service:
     ports: !override
       - "127.0.0.1:8001:8001"
@@ -22,3 +23,9 @@ services:
   ollama:
     ports: !override
       - "127.0.0.1:11434:11434"
+  loki:
+    ports: !override
+      - "127.0.0.1:3100:3100"
+  grafana:
+    ports: !override
+      - "127.0.0.1:3000:3000"

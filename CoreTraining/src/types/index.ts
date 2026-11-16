@@ -68,6 +68,9 @@ export interface Lesson {
   hasText?: boolean;
   /** Outline flag for editors: the lesson has procedure steps. */
   hasProcedure?: boolean;
+  /** Outline counts: lists show badges without loading documents or procedure steps. */
+  documentCount?: number;
+  procedureStepCount?: number;
   textRequired?: boolean;
   videoRequired?: boolean;
   slideRequired?: boolean;
@@ -163,7 +166,10 @@ export interface Question {
   type?: "SINGLE_CHOICE" | "MULTIPLE_CHOICE";
 }
 
-export type QuizQuestion = Omit<Question, "correctAnswer" | "correctAnswers">;
+export type QuizQuestion = Omit<Question, "correctAnswer" | "correctAnswers"> & {
+  /** Original index of each option in display order; answers are submitted with these indexes. */
+  optionIndexes?: number[];
+};
 
 export interface Badge {
   id: string;

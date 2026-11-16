@@ -1,7 +1,7 @@
 <template>
   <div class="form-group content-selection">
-    <label id="lesson-content-types-label">Nội dung bài học</label>
-    <details aria-labelledby="lesson-content-types-label">
+    <label id="lesson-content-types-label">Nội dung bài học <span class="required-mark" aria-hidden="true">*</span></label>
+    <details aria-labelledby="lesson-content-types-label" aria-required="true" :class="{ invalid: !selected.length && !readOnly }">
       <summary aria-describedby="lesson-content-types-help">
         <span class="content-selection-copy">
           <span class="content-selection-action">Chọn nội dung bài học</span>
@@ -18,7 +18,8 @@
         </label>
       </div>
     </details>
-    <small id="lesson-content-types-help" class="content-selection-help">Nhấn để mở danh sách. Có thể chọn nhiều mục. Nội dung không bắt buộc vẫn hiển thị cho học viên nhưng không tính vào điều kiện hoàn thành bài.</small>
+    <p v-if="!selected.length && !readOnly" class="content-selection-error" role="alert">Bắt buộc chọn ít nhất một nội dung: Văn bản, Video hoặc Slide PowerPoint.</p>
+    <small id="lesson-content-types-help" class="content-selection-help">Nhấn để mở danh sách. Chọn ít nhất một mục, có thể chọn nhiều mục. Nội dung không bắt buộc vẫn hiển thị cho học viên nhưng không tính vào điều kiện hoàn thành bài.</small>
     <p v-if="selected.length && !selected.some(type => requirements[type])" class="content-selection-note" role="status">
       Chưa có nội dung bắt buộc: học viên hoàn thành bài khi đạt bài kiểm tra bắt buộc; nếu bài không có kiểm tra bắt buộc, học viên tự bấm “Đánh dấu hoàn thành”.
     </p>
@@ -124,6 +125,9 @@ details[open] > summary { border-bottom: 1px solid var(--border-color); }
 .content-option { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1rem; min-height: 44px; padding: .6rem; }
 .content-option-choice, .content-option-required { display: flex; align-items: center; gap: .5rem; margin: 0; }
 .content-option-required { color: var(--text-muted); font-size: .85rem; }
+details.invalid { border-color: #d92d20; }
+.required-mark { color: #d92d20; }
+.content-selection-error { margin: .4rem 0 0; color: var(--ink-b42318); font-size: .8rem; line-height: 1.5; }
 .content-selection-note { margin: .5rem 0 0; color: var(--text-main); font-size: .8rem; line-height: 1.6; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .slide-editor { margin-top: 1.25rem; }

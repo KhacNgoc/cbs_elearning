@@ -71,6 +71,11 @@
   color: var(--text-main);
 }
 
+/* No content selected: the shared border above must not hide the error state. */
+.lesson-authoring-fields:is(.lesson-modal-body, .legacy-lesson-fields) .content-selection details.invalid {
+  border-color: #d92d20;
+}
+
 .lesson-authoring-fields:is(.lesson-modal-body, .legacy-lesson-fields) :is(.file-picker, .readonly-file) {
   border-style: solid;
   text-transform: none;

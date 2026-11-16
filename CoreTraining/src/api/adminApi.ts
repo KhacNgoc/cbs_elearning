@@ -451,6 +451,7 @@ export const adminApi = {
     passingScore: number,
     requiredForProgress = true,
     timeLimitMinutes: number | null = null,
+    shuffle: { questions: boolean; options: boolean } = { questions: false, options: false },
   ): Promise<void> {
     await axiosClient.put("/api/admin/quizzes/settings", {
       courseId,
@@ -458,6 +459,8 @@ export const adminApi = {
       passingScore,
       requiredForProgress,
       timeLimitMinutes,
+      shuffleQuestions: shuffle.questions,
+      shuffleOptions: shuffle.options,
     });
   },
 

@@ -61,6 +61,66 @@ public interface CourseRepository extends JpaRepository<Course, String> {
             @Param("status") String status,
             @Param("programId") String programId);
 
+    /** findAdminList paged by the database, for accounts that may read every course. */
+    @Query(value = "SELECT c FROM Course c JOIN FETCH c.program p JOIN FETCH p.domain " +
+           "WHERE (:programId = '' OR p.id = :programId) " +
+           "AND (:status = '' OR c.status = :status) " +
+           "AND (:search = '' OR c.name ILIKE CONCAT('%', :search, '%') OR c.code ILIKE CONCAT('%', :search, '%')) " +
+           "ORDER BY c.code ASC, c.name ASC, c.id ASC",
+           countQuery = "SELECT count(c) FROM Course c " +
+           "WHERE (:programId = '' OR c.program.id = :programId) " +
+           "AND (:status = '' OR c.status = :status) " +
+           "AND (:search = '' OR c.name ILIKE CONCAT('%', :search, '%') OR c.code ILIKE CONCAT('%', :search, '%'))")
+    Page<Course> findAdminPage(
+            @Param("search") String search,
+            @Param("status") String status,
+            @Param("programId") String programId,
+            Pageable pageable);
+
     @Query("select distinct c from Course c join c.unitGrants ug where key(ug) = :unitId and c.status <> 'DELETED'")
     List<Course> findByUnitGrant(@Param("unitId") String unitId);
+
+    /** Course counts for a page of programs in one grouped query (programId, count). */
+    @Query("SELECT c.program.id, COUNT(c) FROM Course c " +
+           "WHERE c.program.id IN :programIds AND c.status <> 'DELETED' GROUP BY c.program.id")
+    List<Object[]> countActiveByProgramIds(@Param("programIds") Collection<String> programIds);
+
+    /**
+     * Learnable courses granted as MANDATORY to any of {@code unitIds} (the learner's unit and its ancestors).
+     * Same result as filtering every course with AccessPolicy.mandatory, without loading the catalog.
+     */
+    @Query(value = """
+        select distinct c.id from courses c join course_unit_grants g on g.course_id = c.id
+        where g.unit_id in (:unitIds) and upper(g.grant_type) = 'MANDATORY'
+          and (c.status is null or upper(c.status) in ('PUBLISHED', 'ACTIVE'))
+        """, nativeQuery = true)
+    List<String> findMandatoryCourseIds(@Param("unitIds") Collection<String> unitIds);
+
+    /**
+     * Admin "deadlines per learner" list, paged by the database. Same rule as
+     * LearnerDeadlineServiceImpl.enrolled: a published course the learner registered for
+     * (when {@code allowRegistered}), or one granted MANDATORY to any of {@code mandatoryUnitIds}.
+     * Pass a non-matching sentinel such as "" when there are no units; empty search means no filter.
+     */
+    @Query(value = "SELECT c FROM Course c WHERE c.status = 'PUBLISHED' " +
+           "AND ((:allowRegistered = true AND EXISTS (SELECT 1 FROM User u JOIN u.registeredCourses rc " +
+           "WHERE u.id = :userId AND rc.id = c.id)) " +
+           "OR EXISTS (SELECT 1 FROM Course c2 JOIN c2.unitGrants g WHERE c2.id = c.id " +
+           "AND KEY(g) IN :mandatoryUnitIds AND UPPER(VALUE(g)) = 'MANDATORY')) " +
+           "AND (:search = '' OR c.name ILIKE CONCAT('%', :search, '%') OR c.code ILIKE CONCAT('%', :search, '%') " +
+           "OR c.id ILIKE CONCAT('%', :search, '%')) " +
+           "ORDER BY c.name ASC, c.id ASC",
+           countQuery = "SELECT count(c) FROM Course c WHERE c.status = 'PUBLISHED' " +
+           "AND ((:allowRegistered = true AND EXISTS (SELECT 1 FROM User u JOIN u.registeredCourses rc " +
+           "WHERE u.id = :userId AND rc.id = c.id)) " +
+           "OR EXISTS (SELECT 1 FROM Course c2 JOIN c2.unitGrants g WHERE c2.id = c.id " +
+           "AND KEY(g) IN :mandatoryUnitIds AND UPPER(VALUE(g)) = 'MANDATORY')) " +
+           "AND (:search = '' OR c.name ILIKE CONCAT('%', :search, '%') OR c.code ILIKE CONCAT('%', :search, '%') " +
+           "OR c.id ILIKE CONCAT('%', :search, '%'))")
+    Page<Course> findLearnerDeadlineCourses(
+            @Param("userId") Long userId,
+            @Param("allowRegistered") boolean allowRegistered,
+            @Param("mandatoryUnitIds") Collection<String> mandatoryUnitIds,
+            @Param("search") String search,
+            Pageable pageable);
 }

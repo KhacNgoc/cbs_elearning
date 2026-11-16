@@ -66,4 +66,13 @@ public interface LessonDocumentRepository extends JpaRepository<LessonDocument, 
 
     boolean existsByIdAndLessonIdAndPurpose(Long id, String lessonId,
             com.bidv.coretraining.enums.DocumentPurpose purpose);
+
+    /** Document count per lesson of a course (lessonId, count), without loading the documents. */
+    @org.springframework.data.jpa.repository.Query("""
+            select d.lesson.id, count(d) from LessonDocument d
+            where d.lesson.course.id = :courseId
+            group by d.lesson.id
+            """)
+    java.util.List<Object[]> countByLessonForCourse(
+            @org.springframework.data.repository.query.Param("courseId") String courseId);
 }

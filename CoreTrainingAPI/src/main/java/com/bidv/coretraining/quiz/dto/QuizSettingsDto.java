@@ -16,4 +16,6 @@ public class QuizSettingsDto {
     private Boolean requiredForProgress;
     /** Null or absent means the quiz has no time limit. */
     private Integer timeLimitMinutes;
+    private Boolean shuffleQuestions;
+    private Boolean shuffleOptions;
 }

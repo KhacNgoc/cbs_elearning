@@ -7,7 +7,7 @@
         <button v-if="user.can('exams', 'create')" class="btn btn-primary" @click="router.push({ name: 'AdminQuizCreate', query: courseId ? { courseId } : {} })">Thêm bài kiểm tra</button>
       </div>
       <div class="exam-filters">
-        <label>Khóa học<select v-model="courseId"><option value="">Tất cả khóa học</option><option v-for="course in courses" :key="course.id" :value="course.id">{{ course.name }}</option></select></label>
+        <div class="exam-filter-field"><label for="exam-course-filter">Khóa học</label><CourseSearchSelect id="exam-course-filter" v-model="courseId" page="exams" /></div>
         <label>Tìm bài kiểm tra<input v-model="search" type="search" placeholder="Tìm theo tên bài kiểm tra hoặc bài học..." /></label>
       </div>
       <div v-if="error" class="exam-error" role="alert">{{ error }} <button class="btn btn-secondary" @click="load">Thử lại</button></div>
@@ -33,6 +33,7 @@ import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '../stores/userStore';
 import TablePagination from '../components/TablePagination.vue';
+import CourseSearchSelect from '../components/CourseSearchSelect.vue';
 import { getQuizSummaries, type QuizSummary } from '../api/quizSummaryApi';
 
 const router = useRouter();
@@ -42,7 +43,6 @@ const search = ref('');
 const page = ref(1);
 const size = ref(10);
 const rows = ref<QuizSummary[]>([]);
-const courses = ref<{ id: string; name: string }[]>([]);
 const total = ref(0);
 const pages = ref(0);
 const loading = ref(false);
@@ -71,7 +71,6 @@ async function load() {
     const result = await getQuizSummaries({ courseId: courseId.value || undefined, search: search.value, page: page.value - 1, size: size.value });
     if (id !== requestId) return;
     rows.value = result.content;
-    courses.value = result.courses;
     total.value = result.totalElements;
     pages.value = result.totalPages;
     if (page.value > Math.max(1, pages.value)) page.value = Math.max(1, pages.value);
@@ -102,6 +101,7 @@ p { color: var(--text-muted); font-size: .85rem; margin: 0; }
 .exam-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; }
 .exam-filters { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(240px, 2fr); gap: 1rem; margin-bottom: 1.25rem; }
 .exam-filters label { font-size: .8rem; font-weight: 600; }
+.exam-filter-field label { display: block; margin-bottom: .4rem; }
 .exam-filters input, .exam-filters select { box-sizing: border-box; display: block; width: 100%; min-height: 44px; margin-top: .4rem; padding: .65rem .8rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-ffffff); color: var(--text-main); font: inherit; font-weight: 400; }
 .exam-filters input:focus, .exam-filters select:focus { outline: 2px solid var(--primary-color); outline-offset: 1px; }
 .exam-table-scroll { overflow-x: auto; }

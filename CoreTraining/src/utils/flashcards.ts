@@ -93,12 +93,14 @@ export function frontParts(card: { type: "TERM" | "CLOZE"; front: string } | nul
 
 /** PDF chunks carry real page numbers; Word chunks are located by their heading. */
 export function sourceLabel(
-  source: { documentName: string; page?: number | null; section?: string | null } | null,
+  source: { documentName: string | null; page?: number | null; section?: string | null } | null,
 ): string {
   if (!source) return "";
-  const isPdf = source.documentName.toLowerCase().endsWith(".pdf");
+  // Seed cards and cards whose document was removed keep a source without a name.
+  const name = source.documentName ?? "";
+  const isPdf = name.toLowerCase().endsWith(".pdf");
   const location = isPdf && source.page ? `trang ${source.page}` : source.section || "";
-  return location ? `${source.documentName} · ${location}` : source.documentName;
+  return [name, location].filter(Boolean).join(" · ");
 }
 
 /** Mirrors the server rule so the editor can warn before saving. */

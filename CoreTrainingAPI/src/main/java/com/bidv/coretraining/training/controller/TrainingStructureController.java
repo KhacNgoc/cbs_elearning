@@ -144,6 +144,13 @@ public class TrainingStructureController {
         return service.adminProgramsPaged(domainId, search, page, size, unallocatedForUnitId);
     }
 
+    @GetMapping("/admin/programs/by-domains")
+    public List<ProgramListItem> programsByDomains(
+            @RequestParam List<String> domainIds,
+            @RequestParam(required = false) String search) {
+        return service.adminProgramsByDomains(domainIds, search);
+    }
+
     @GetMapping(value = {"/admin/programs/{programId}/courses", "/admin/courses/by-program/{programId}"}, params = "page")
     public PagedResult<CourseDto> coursesByProgramPaged(
             @PathVariable String programId,

@@ -60,9 +60,9 @@ public class QuizAdminServiceImpl implements QuizAdminService {
             if (!lesson.getCourse().getId().equals(courseId)) {
                 throw new BadRequestException("Bài học không thuộc khóa học đã chọn");
             }
-            return quizMapper.toQuestionDtoList(questionRepository.findByLessonId(lessonId));
+            return quizMapper.toQuestionDtoList(questionRepository.findByLessonIdOrderByQuestionOrderAscIdAsc(lessonId));
         }
-        return quizMapper.toQuestionDtoList(questionRepository.findByCourseIdAndLessonIsNull(courseId));
+        return quizMapper.toQuestionDtoList(questionRepository.findByCourseIdAndLessonIsNullOrderByQuestionOrderAscIdAsc(courseId));
     }
 
     @Override
@@ -83,6 +83,7 @@ public class QuizAdminServiceImpl implements QuizAdminService {
         lessonRepository.saveAndFlush(quizLesson);
         Question question = Question.builder()
                 .quiz(quizLesson.getQuiz())
+                .questionOrder(questionRepository.nextQuestionOrder(quizLesson.getQuiz().getId()))
                 .course(course)
                 .lesson(resolveQuestionLesson(questionDto, course))
                 .text(questionDto.getText())
@@ -182,6 +183,8 @@ public class QuizAdminServiceImpl implements QuizAdminService {
         lesson.getQuiz().setPassingScore(passingScore);
         lesson.getQuiz().setRequiredForProgress(!Boolean.FALSE.equals(settings.getRequiredForProgress()));
         lesson.getQuiz().setTimeLimitMinutes(timeLimit);
+        lesson.getQuiz().setShuffleQuestions(Boolean.TRUE.equals(settings.getShuffleQuestions()));
+        lesson.getQuiz().setShuffleOptions(Boolean.TRUE.equals(settings.getShuffleOptions()));
         lessonRepository.save(lesson);
         settings.setPassingScore(passingScore);
         return settings;

@@ -156,6 +156,8 @@ export function validateSelectedLessonContent(
   lesson: Content,
   selected: LessonContentType[],
 ) {
+  if (!selected.length)
+    throw new Error("Vui lòng chọn ít nhất một nội dung bài học: Văn bản, Video hoặc Slide PowerPoint.");
   if (
     selected.includes("TEXT") &&
     !lesson.textBody?.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim()

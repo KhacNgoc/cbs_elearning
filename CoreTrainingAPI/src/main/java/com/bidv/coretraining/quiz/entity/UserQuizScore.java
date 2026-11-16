@@ -44,6 +44,10 @@ public class UserQuizScore {
         @Column(name = "taken_at", nullable = false)
         private LocalDateTime takenAt;
 
+        /** JSON order of questions and options the learner saw in this result; null means the editor's order. */
+        @Column(name = "question_layout", columnDefinition = "TEXT")
+        private String questionLayout;
+
         @ElementCollection
         @CollectionTable(name = "user_quiz_score_answers", joinColumns = @JoinColumn(name = "quiz_score_id"))
         @MapKeyColumn(name = "question_id")

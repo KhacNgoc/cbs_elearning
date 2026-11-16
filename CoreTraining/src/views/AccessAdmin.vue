@@ -57,12 +57,14 @@
               aria-label="Tìm tài khoản"
             />
           </div>
-          <select v-model="unitFilter" aria-label="Lọc đơn vị">
-            <option value="">Tất cả đơn vị</option>
-            <option v-for="u in units" :key="u.id" :value="u.id">
-              {{ u.name }}
-            </option></select
-          ><select
+          <SearchSelect
+            v-model="unitFilter"
+            class="unit-filter-select"
+            aria-label="Lọc đơn vị"
+            all-label="Tất cả đơn vị"
+            search-placeholder="Gõ tên đơn vị..."
+            :options="unitFilterOptions"
+          /><select
             v-if="section === 'users'"
             v-model="statusFilter"
             aria-label="Lọc trạng thái tài khoản"
@@ -303,12 +305,14 @@
         </div>
         <div class="admin-form-grid">
           <label class="admin-form-field"
-            >Đơn vị công tác<select v-model="userForm.unitId">
-              <option v-if="system" value="">Chưa gán đơn vị</option>
-              <option v-for="u in activeUnits" :key="u.id" :value="u.id">
-                {{ u.name }}
-              </option>
-            </select></label
+            >Đơn vị công tác<SearchSelect
+              v-model="userForm.unitId"
+              aria-label="Đơn vị công tác"
+              :all-label="system ? 'Chưa gán đơn vị' : 'Chọn đơn vị'"
+              :allow-all="system"
+              search-placeholder="Gõ tên đơn vị..."
+              :options="activeUnitOptions"
+            /></label
           ><label class="admin-form-field"
             >Vai trò *<select v-model="selectedRoleId" required>
               <option
@@ -363,6 +367,7 @@
 </template>
 <script setup lang="ts">
 import SkeletonLoader from "../components/SkeletonLoader.vue";
+import SearchSelect from "../components/SearchSelect.vue";
 import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { adminListApi } from "../api/adminListApi";
 import {
@@ -435,6 +440,9 @@ const learnerNames: Record<string, string> = {
   EXTERNAL: "Học viên đơn vị khác",
 };
 const activeUnits = computed(() => units.value.filter((u) => u.active));
+// Units are picked with SearchSelect: a bank has hundreds of units and departments.
+const unitFilterOptions = computed(() => units.value.map((u) => ({ value: u.id, label: u.name })));
+const activeUnitOptions = computed(() => activeUnits.value.map((u) => ({ value: u.id, label: u.name })));
 const selectableRoles = computed(() =>
   roleOptions.value.filter(
     (r) => r.active && (system.value || !r.protectedRole),
@@ -780,6 +788,21 @@ async function importExcel(event: Event) {
 onMounted(load);
 </script>
 <style scoped>
+/* The unit picker sits beside native toolbar selects: same height, its own width; full row on phones. */
+.unit-filter-select {
+  width: 240px;
+}
+.unit-filter-select :deep(.search-select-trigger) {
+  min-height: 0;
+  padding: 0.65rem 0.75rem;
+  font-size: 0.875rem;
+}
+@media (max-width: 768px) {
+  .unit-filter-select {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+}
 .unit-tree-toolbar {
   display: flex;
   align-items: center;

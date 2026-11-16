@@ -8,27 +8,45 @@ import java.util.List;
 
 @Repository
 public interface QuestionRepository extends JpaRepository<Question, Long> {
+    /**
+     * One row per quiz that has questions, read from the quizzes table so the page and its count do not
+     * aggregate every question first. Columns: quiz id, course id, course name, lesson id, lesson title,
+     * passing score. {@code allCourses} skips the course scope (system admins); otherwise {@code ids}
+     * holds the courses the user may read.
+     */
     @org.springframework.data.jpa.repository.Query(value = """
-        select new com.bidv.coretraining.quiz.dto.QuizSummaryDto(c.id, c.name, l.id, l.title,
-            count(q.id), coalesce(k.passingScore, c.quizPassingScore, 80))
-        from Question q join q.course c left join q.lesson l left join l.quiz k
-        where c.id in :ids and
-            lower(concat(concat(concat(coalesce(l.title, 'Bài kiểm tra tổng hợp'), ' '), c.name), concat(' ', coalesce(l.id, '')))) like :pattern escape '!'
-        group by q.quiz.id, c.id, c.name, l.id, l.title, k.passingScore, c.quizPassingScore
+        select k.id, c.id, c.name, l.id, l.title, coalesce(k.passingScore, c.quizPassingScore, 80)
+        from Quiz k join k.lesson l join l.course c
+        where (:allCourses = true or c.id in :ids)
+            and (:courseId is null or c.id = :courseId)
+            and (:pattern = '%%' or lower(concat(concat(concat(coalesce(l.title, ''), ' '), c.name), concat(' ', l.id))) like :pattern escape '!')
+            and exists (select 1 from Question q where q.quiz = k)
         order by c.name, c.id, l.title, l.id
         """, countQuery = """
-        select count(distinct q.quiz.id) from Question q join q.course c left join q.lesson l
-        where c.id in :ids and
-            lower(concat(concat(concat(coalesce(l.title, 'Bài kiểm tra tổng hợp'), ' '), c.name), concat(' ', coalesce(l.id, '')))) like :pattern escape '!'
+        select count(k) from Quiz k join k.lesson l join l.course c
+        where (:allCourses = true or c.id in :ids)
+            and (:courseId is null or c.id = :courseId)
+            and (:pattern = '%%' or lower(concat(concat(concat(coalesce(l.title, ''), ' '), c.name), concat(' ', l.id))) like :pattern escape '!')
+            and exists (select 1 from Question q where q.quiz = k)
         """)
-    org.springframework.data.domain.Page<com.bidv.coretraining.quiz.dto.QuizSummaryDto> findQuizSummaries(
+    org.springframework.data.domain.Page<Object[]> findQuizSummaryPage(
+        @org.springframework.data.repository.query.Param("allCourses") boolean allCourses,
         @org.springframework.data.repository.query.Param("ids") java.util.Collection<String> ids,
+        @org.springframework.data.repository.query.Param("courseId") String courseId,
         @org.springframework.data.repository.query.Param("pattern") String pattern,
         org.springframework.data.domain.Pageable pageable);
 
-    List<Question> findByCourseIdAndLessonIsNull(String courseId);
+    /** Question count per quiz, for the quizzes shown on one page. Rows: quiz id, count. */
+    @org.springframework.data.jpa.repository.Query("select q.quiz.id, count(q) from Question q where q.quiz.id in :quizIds group by q.quiz.id")
+    List<Object[]> countByQuizIds(@org.springframework.data.repository.query.Param("quizIds") java.util.Collection<String> quizIds);
 
-    List<Question> findByLessonId(String lessonId);
+    List<Question> findByCourseIdAndLessonIsNullOrderByQuestionOrderAscIdAsc(String courseId);
+
+    List<Question> findByLessonIdOrderByQuestionOrderAscIdAsc(String lessonId);
+
+    /** Order for a question appended to the quiz: one past the last, or 0 for an empty quiz. */
+    @org.springframework.data.jpa.repository.Query("select coalesce(max(q.questionOrder) + 1, 0) from Question q where q.quiz.id = :quizId")
+    int nextQuestionOrder(@org.springframework.data.repository.query.Param("quizId") String quizId);
 
     @org.springframework.data.jpa.repository.Query("select q.text from Question q where q.lesson.id = :lessonId")
     List<String> findTextsByLessonId(@org.springframework.data.repository.query.Param("lessonId") String lessonId);

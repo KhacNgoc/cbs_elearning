@@ -14,7 +14,7 @@
         </p>
       </div>
       <button
-        v-if="!picker && writableCourses.length"
+        v-if="!picker && user.can('exams', 'create')"
         type="button"
         class="btn btn-primary"
         @click="edit()"
@@ -182,17 +182,18 @@
             :value="form.code"
             disabled
             readonly /></label
-        ><label
-          >Khóa học quản lý<select
+        ><div class="bank-course-field"
+          ><span id="bank-course-label">Khóa học quản lý</span
+          ><CourseSearchSelect
             v-model="form.courseId"
-            required
-            @change="form.lessonId = ''"
-          >
-            <option value="" disabled>Chọn khóa học</option>
-            <option v-for="c in formCourses" :key="c.id" :value="c.id">
-              {{ c.name }}
-            </option>
-          </select></label
+            page="exams"
+            all-label="Chọn khóa học"
+            :allow-all="false"
+            :required-action="form.id ? 'update' : 'create'"
+            :selected-label="form.courseName"
+            aria-labelledby="bank-course-label"
+            @update:model-value="form.lessonId = ''"
+          /></div
         ><label
           >Bài học liên quan<select v-model="form.lessonId" :disabled="lessonsLoading || !!lessonsError">
             <option value="">Theo lĩnh vực của khóa học</option>
@@ -207,7 +208,7 @@
         ><label
           >Lĩnh vực liên quan<input
             :value="
-              relatedCourse?.domainName || 'Theo lĩnh vực của khóa học đã chọn'
+              relatedDomainName || 'Theo lĩnh vực của khóa học đã chọn'
             "
             readonly
         /></label>
@@ -295,8 +296,10 @@
 </template>
 <script setup lang="ts">
 import SkeletonTableRows from "./SkeletonTableRows.vue";
-import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
-import { getQuizCourses, getQuizContext, type QuizCourseContext, type QuizLessonContext } from "../api/quizContextApi";
+import { ref, onMounted, onBeforeUnmount, watch } from "vue";
+import { getQuizContext, type QuizLessonContext } from "../api/quizContextApi";
+import CourseSearchSelect from "./CourseSearchSelect.vue";
+import { useUserStore } from "../stores/userStore";
 import {
   contentToolsApi,
   contentToolsError,
@@ -314,8 +317,8 @@ const props = defineProps<{
   existingIds?: number[];
 }>();
 const emit = defineEmits<{ added: [] }>();
+const user = useUserStore();
 const items = ref<BankQuestion[]>([]),
-  courses = ref<QuizCourseContext[]>([]),
   loading = ref(false),
   saving = ref(false),
   error = ref(""),
@@ -340,18 +343,20 @@ const blank = (): BankQuestion => ({
 });
 const form = ref<BankQuestion>(blank());
 const lessonOptions = ref<QuizLessonContext[]>([]);
+const relatedDomainName = ref('');
 const lessonsLoading = ref(false);
 const lessonsError = ref('');
 let lessonRequestId = 0;
 async function loadLessonOptions() {
   const id = ++lessonRequestId;
   lessonOptions.value = [];
+  relatedDomainName.value = '';
   lessonsError.value = '';
   if (!formOpen.value || !form.value.courseId) { lessonsLoading.value = false; return; }
   lessonsLoading.value = true;
   try {
     const context = await getQuizContext({ courseId: form.value.courseId });
-    if (id === lessonRequestId) lessonOptions.value = context.lessons;
+    if (id === lessonRequestId) { lessonOptions.value = context.lessons; relatedDomainName.value = context.domainName || ''; }
   } catch {
     if (id === lessonRequestId) lessonsError.value = 'Không thể tải bài học. Vui lòng thử lại.';
   } finally {
@@ -360,17 +365,6 @@ async function loadLessonOptions() {
 }
 watch([() => form.value.courseId, formOpen], loadLessonOptions);
 onBeforeUnmount(() => { ++lessonRequestId; });
-const writableCourses = computed(() =>
-  courses.value.filter((c) => c.adminActions?.exams?.includes("create")),
-);
-const formCourses = computed(() =>
-  courses.value.filter((c) =>
-    c.adminActions?.exams?.includes(form.value.id ? "update" : "create"),
-  ),
-);
-const relatedCourse = computed(() =>
-  courses.value.find((c) => c.id === form.value.courseId),
-);
 const page = ref(1), pageSize = ref(10), hasMore = ref(false);
 const cursors = ref<(string | undefined)[]>([undefined]);
 const pageItems = items;
@@ -468,7 +462,6 @@ async function add() {
 }
 onMounted(() => {
   void load();
-  getQuizCourses().then(result => { courses.value = result; }).catch(e => { error.value = contentToolsError(e); });
 });
 </script>
 <style scoped>
@@ -589,6 +582,7 @@ onMounted(() => {
   gap: 1rem;
 }
 .bank-form-grid label,
+.bank-course-field,
 .bank-field {
   display: grid;
   gap: 0.45rem;

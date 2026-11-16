@@ -30,10 +30,18 @@ public class Quiz {
     /** Minutes allowed per attempt; null means no time limit. */
     @Column(name = "time_limit_minutes")
     private Integer timeLimitMinutes;
+    /** Each learner attempt sees the questions in its own order. */
+    @Builder.Default
+    @Column(name = "shuffle_questions", nullable = false)
+    private boolean shuffleQuestions = false;
+    /** Each learner attempt sees the options of every question in its own order. */
+    @Builder.Default
+    @Column(name = "shuffle_options", nullable = false)
+    private boolean shuffleOptions = false;
     @Builder.Default
     private Integer revision = 1;
     @OneToMany(mappedBy = "quiz", cascade = CascadeType.ALL, orphanRemoval = true)
-    @OrderBy("id ASC")
+    @OrderBy("questionOrder ASC, id ASC")
     @Builder.Default
     private java.util.List<Question> questions = new java.util.ArrayList<>();
 }

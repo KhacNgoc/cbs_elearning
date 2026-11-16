@@ -10,7 +10,8 @@ export type FlashcardStatus = "DRAFT" | "PUBLISHED";
 
 export interface FlashcardSource {
   documentId: string;
-  documentName: string;
+  /** Null when the card points at a document that no longer exists (or seed data). */
+  documentName: string | null;
   page?: number | null;
   section?: string | null;
 }

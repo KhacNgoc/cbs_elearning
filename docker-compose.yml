@@ -1,9 +1,71 @@
+# Container stdout is capped per service (5 x 20 MB); Docker's json-file default on Linux grows without limit.
+x-logging: &default-logging
+  driver: local
+  options:
+    max-size: 20m
+    max-file: "5"
+
 services:
   postgres:
+    logging: *default-logging
     image: postgres:15-alpine
     container_name: coretraining-db
+    # Parallel queries exchange data through /dev/shm; Docker's 64 MB default fails large reports.
+    shm_size: ${POSTGRES_SHM_SIZE:-1g}
+    # Defaults suit a host with ~8 GB for this stack; see DEPLOYMENT.md "Tài nguyên và cấu hình PostgreSQL".
+    command:
+      - postgres
+      - -c
+      - max_connections=${POSTGRES_MAX_CONNECTIONS:-100}
+      - -c
+      - shared_buffers=${POSTGRES_SHARED_BUFFERS:-1GB}
+      - -c
+      - effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-3GB}
+      - -c
+      - work_mem=${POSTGRES_WORK_MEM:-16MB}
+      - -c
+      - maintenance_work_mem=${POSTGRES_MAINTENANCE_WORK_MEM:-256MB}
+      - -c
+      - wal_buffers=16MB
+      - -c
+      - min_wal_size=1GB
+      - -c
+      - max_wal_size=${POSTGRES_MAX_WAL_SIZE:-4GB}
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - random_page_cost=${POSTGRES_RANDOM_PAGE_COST:-1.1}
+      - -c
+      - effective_io_concurrency=${POSTGRES_EFFECTIVE_IO_CONCURRENCY:-200}
+      - -c
+      - max_worker_processes=${POSTGRES_MAX_WORKER_PROCESSES:-8}
+      - -c
+      - max_parallel_workers=${POSTGRES_MAX_PARALLEL_WORKERS:-4}
+      - -c
+      - max_parallel_workers_per_gather=${POSTGRES_MAX_PARALLEL_WORKERS_PER_GATHER:-2}
+      - -c
+      - autovacuum_vacuum_scale_factor=0.05
+      - -c
+      - autovacuum_analyze_scale_factor=0.02
+      - -c
+      - idle_in_transaction_session_timeout=${POSTGRES_IDLE_IN_TRANSACTION_TIMEOUT:-10min}
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - track_io_timing=on
+      - -c
+      - log_min_duration_statement=${POSTGRES_LOG_MIN_DURATION:-2000}
+      - -c
+      - log_lock_waits=on
+      - -c
+      - password_encryption=scram-sha-256
+      - -c
+      - log_connections=${POSTGRES_LOG_CONNECTIONS:-on}
+      - -c
+      - log_temp_files=65536
+    # Reachable from outside for database tools (DBeaver, psql, ...); see DEPLOYMENT.md "Truy cập PostgreSQL".
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PUBLISH_ADDRESS:-0.0.0.0}:${POSTGRES_PUBLISH_PORT:-5432}:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
       POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
@@ -17,22 +79,8 @@ services:
       retries: 5
     restart: always
 
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: coretraining-db-ide
-    ports:
-      - "5050:80"
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:?PGADMIN_DEFAULT_EMAIL is required}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?PGADMIN_DEFAULT_PASSWORD is required}
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: always
-
   qdrant:
+    logging: *default-logging
     profiles: ["chatbot"]
     image: qdrant/qdrant:v1.12.5
     ports:
@@ -41,6 +89,7 @@ services:
       - qdrant_data:/qdrant/storage
 
   ollama:
+    logging: *default-logging
     profiles: ["chatbot"]
     image: ollama/ollama:latest
     ports:
@@ -55,6 +104,7 @@ services:
     restart: unless-stopped
 
   ollama-init:
+    logging: *default-logging
     profiles: ["chatbot"]
     image: ollama/ollama:latest
     depends_on:
@@ -80,6 +130,7 @@ services:
     restart: "no"
 
   rag-service:
+    logging: *default-logging
     profiles: ["chatbot"]
     build: ./rag-service
     environment:
@@ -140,6 +191,7 @@ services:
     restart: unless-stopped
 
   backend:
+    logging: *default-logging
     build:
       context: ./CoreTrainingAPI
       dockerfile: Dockerfile
@@ -188,6 +240,18 @@ services:
       APP_UPLOAD_DIRECTORY: ${APP_UPLOAD_DIRECTORY:?APP_UPLOAD_DIRECTORY is required}
       LOG_PATH: ${LOG_PATH:?LOG_PATH is required}
       LOG_LEVEL: ${LOG_LEVEL:?LOG_LEVEL is required}
+      DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-20}
+      REPORT_MAX_CONCURRENT: ${REPORT_MAX_CONCURRENT:-2}
+      # The JVM sizes its heap from the container memory limit below; an OutOfMemoryError restarts the
+      # container instead of leaving a half-working process.
+      JAVA_TOOL_OPTIONS: ${BACKEND_JAVA_OPTS:--XX:MaxRAMPercentage=70 -XX:+ExitOnOutOfMemoryError -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/app/logs}
+    mem_limit: ${BACKEND_MEMORY_LIMIT:-3g}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:8080/api/auth/csrf || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
     volumes:
       - training_uploads:/app/uploads
       - backend_logs:/app/logs
@@ -197,6 +261,7 @@ services:
     restart: always
 
   frontend:
+    logging: *default-logging
     build:
       context: ./CoreTraining
       dockerfile: Dockerfile
@@ -218,6 +283,7 @@ services:
     restart: always
 
   loki:
+    logging: *default-logging
     image: grafana/loki:3.0.0
     container_name: cbs-elearning-loki
     user: "0:0"
@@ -230,6 +296,7 @@ services:
     restart: always
 
   promtail:
+    logging: *default-logging
     image: grafana/promtail:3.0.0
     container_name: cbs-elearning-promtail
     command: -config.file=/etc/promtail/config.yml
@@ -241,13 +308,14 @@ services:
     restart: always
 
   grafana:
+    logging: *default-logging
     image: grafana/grafana:11.0.0
     container_name: cbs-elearning-grafana
     ports:
       - "3000:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
       - GF_AUTH_ANONYMOUS_ENABLED=false
       - GF_AUTH_DISABLE_LOGIN_FORM=false
       - GF_USERS_ALLOW_SIGN_UP=false
@@ -262,7 +330,6 @@ services:
 
 volumes:
   postgres_data:
-  pgadmin_data:
   training_uploads:
   qdrant_data:
   ollama_data:

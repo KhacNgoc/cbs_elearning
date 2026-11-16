@@ -14,7 +14,8 @@ public class AdminOptionsController {
     }
 
     @GetMapping("/{page}")
-    public AdminOptionsDto options(@PathVariable String page) {
-        return service.options(page);
+    public AdminOptionsDto options(@PathVariable String page,
+            @RequestParam(required = false) java.util.Set<String> parts) {
+        return service.options(page, parts);
     }
 }

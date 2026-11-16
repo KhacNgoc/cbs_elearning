@@ -129,35 +129,61 @@ public class LearnerDashboardSqlRelations {
         var v = visible(u);
         Map<String, Object> p = new HashMap<>(v.params());
         String mandatory = mandatory(u, p);
+        // Lesson facts are computed once, only for lessons of the published courses this actor can see, and
+        // aggregated per course and per chapter. Probing a lesson relation of the whole catalog once per
+        // course made the learner dashboard scale with every lesson in the database.
         String sql = v.sql()
+                + ", courses_published as (select c.id from visible c where " + published("c") + ")"
                 + """
                         , lessons_visible as (
                           select l.id,l.course_id,l.chapter_id,
-                            case when exists(select 1 from user_completed_lessons cl where cl.user_id=:uid and cl.lesson_id=l.id) then 1 else 0 end done,
-                            case when exists(select 1 from quizzes q where q.lesson_id=l.id and q.required_for_progress=true
+                            case when cl.lesson_id is null then 0 else 1 end done,
+                            case when q.id is not null
                                 and exists(select 1 from questions qu where qu.quiz_id=q.id)
-                                and not exists(select 1 from user_quiz_scores qs where qs.user_id=:uid and qs.lesson_id=l.id and qs.total>0 and floor(qs.score*100.0/qs.total+0.5)>=q.passing_score)) then 1 else 0 end quiz_missing,
-                            (select max(lp.updated_at) from lesson_progress lp where lp.user_id=:uid and lp.lesson_id=l.id) accessed
-                          from lessons l join chapters ch on ch.id=l.chapter_id where
+                                and not exists(select 1 from user_quiz_scores qs where qs.user_id=:uid and qs.lesson_id=l.id and qs.total>0 and floor(qs.score*100.0/qs.total+0.5)>=q.passing_score) then 1 else 0 end quiz_missing,
+                            lp.updated_at accessed
+                          from lessons l
+                          join chapters ch on ch.id=l.chapter_id
+                          left join user_completed_lessons cl on cl.user_id=:uid and cl.lesson_id=l.id
+                          left join quizzes q on q.lesson_id=l.id and q.required_for_progress=true
+                          left join lesson_progress lp on lp.user_id=:uid and lp.lesson_id=l.id
+                          where l.course_id in (select id from courses_published) and
                         """
                 + published("l") + " and " + published("ch") + """
+                        ), lesson_stats as (
+                          select course_id,count(*) total_count,sum(done) completed_count,max(accessed) last_accessed_at
+                          from lessons_visible group by course_id
+                        ), chapter_lessons as (
+                          select chapter_id,count(*) lesson_count,sum(case when done=0 or quiz_missing=1 then 1 else 0 end) pending_count
+                          from lessons_visible group by chapter_id
+                        ), chapter_stats as (
+                          select ch.course_id,count(*) chapter_count,
+                            sum(case when cs.chapter_id is null or cs.pending_count>0 then 1 else 0 end) blocked_count
+                          from chapters ch left join chapter_lessons cs on cs.chapter_id=ch.id
+                          where ch.course_id in (select id from courses_published) and
+                        """
+                + published("ch") + """
+                          group by ch.course_id
+                        ), attempted as (
+                          select distinct l.course_id from quiz_attempts qa join quizzes q on q.id=qa.quiz_id join lessons l on l.id=q.lesson_id
+                          where qa.user_id=:uid and qa.total>0
+                        ), scored as (
+                          select distinct course_id from user_quiz_scores where user_id=:uid
                         ), base as (
                           select c.*,
                         """ + "case when " + mandatory + " then 1 else 0 end mandatory,"
                 + """
                             case when exists(select 1 from user_registered_courses rc where rc.user_id=:uid and rc.course_id=c.id) then 1 else 0 end registered,
-                            (select count(*) from lessons_visible l where l.course_id=c.id) total_count,
-                            (select count(*) from lessons_visible l where l.course_id=c.id and l.done=1) completed_count,
-                            (select max(l.accessed) from lessons_visible l where l.course_id=c.id) last_accessed_at,
-                            case when exists(select 1 from user_course_deadlines dd where dd.user_id=:uid and dd.course_id=c.id) then (select dd.due_date from user_course_deadlines dd where dd.user_id=:uid and dd.course_id=c.id) else c.completion_deadline end due_date,
-                            case when exists(select 1 from chapters ch where ch.course_id=c.id and
-                        """
-                + published("ch") + """
-                            ) and not exists(select 1 from chapters ch where ch.course_id=c.id and
-                        """ + published("ch")
-                + """
-                            and (not exists(select 1 from lessons_visible l where l.chapter_id=ch.id) or exists(select 1 from lessons_visible l where l.chapter_id=ch.id and (l.done=0 or l.quiz_missing=1)))) then 1 else 0 end complete
-                          from visible c where
+                            coalesce(ls.total_count,0) total_count,
+                            coalesce(ls.completed_count,0) completed_count,
+                            ls.last_accessed_at,
+                            case when dd.course_id is not null then dd.due_date else c.completion_deadline end due_date,
+                            case when coalesce(cs.chapter_count,0)>0 and cs.blocked_count=0 then 1 else 0 end complete
+                          from visible c
+                          left join lesson_stats ls on ls.course_id=c.id
+                          left join chapter_stats cs on cs.course_id=c.id
+                          left join user_course_deadlines dd on dd.user_id=:uid and dd.course_id=c.id
+                          where
                         """
                 + published("c")
                 + """
@@ -168,8 +194,8 @@ public class LearnerDashboardSqlRelations {
                         ), facts as (
                           select s.*,case when source in ('PENDING','AVAILABLE') then source when complete=1 then 'COMPLETED'
                             when last_accessed_at is not null or completed_count>0
-                              or exists(select 1 from quiz_attempts qa join quizzes q on q.id=qa.quiz_id join lessons l on l.id=q.lesson_id where qa.user_id=:uid and qa.total>0 and l.course_id=s.id)
-                              or exists(select 1 from user_quiz_scores qs where qs.user_id=:uid and qs.course_id=s.id)
+                              or s.id in (select course_id from attempted)
+                              or s.id in (select course_id from scored)
                             then 'IN_PROGRESS' else 'NOT_STARTED' end learning_status
                           from sources s
                         )

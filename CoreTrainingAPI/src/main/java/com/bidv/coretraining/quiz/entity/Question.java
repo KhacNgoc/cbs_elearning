@@ -34,6 +34,11 @@ public class Question {
     @JoinColumn(name = "quiz_id", nullable = false)
     private Quiz quiz;
 
+    /** Position of the question within its quiz, starting at 0. */
+    @Column(name = "question_order", nullable = false)
+    @Builder.Default
+    private Integer questionOrder = 0;
+
     @Column(nullable = false, columnDefinition = "TEXT")
     private String text;
     @Column(columnDefinition = "TEXT")

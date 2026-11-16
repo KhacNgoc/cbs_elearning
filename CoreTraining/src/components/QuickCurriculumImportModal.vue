@@ -95,16 +95,14 @@
               </div>
 
               <div v-if="!isNewProgram">
-                <select
+                <SearchSelect
                   v-model="selectedProgramId"
-                  class="form-control select-field"
+                  aria-label="Chương trình hiện có"
+                  all-label="-- Chọn chương trình hiện có --"
+                  search-placeholder="Gõ tên chương trình..."
+                  :options="availableProgramOptions"
                   :disabled="!selectedDomainId && !availablePrograms.length"
-                >
-                  <option value="">-- Chọn chương trình hiện có --</option>
-                  <option v-for="p in availablePrograms" :key="p.id" :value="p.id">
-                    {{ p.name }}
-                  </option>
-                </select>
+                />
               </div>
               <div v-else>
                 <input
@@ -463,6 +461,7 @@ import {
   Zap,
 } from "lucide-vue-next";
 import JSZip from "jszip";
+import SearchSelect from "./SearchSelect.vue";
 import { trainingApi } from "../api/trainingApi";
 import { adminApi } from "../api/adminApi";
 import { showToast } from "../utils/toast";
@@ -568,6 +567,7 @@ const activeDomains = computed(() =>
   props.domains.filter((d) => d.status !== "DELETED")
 );
 
+const availableProgramOptions = computed(() => availablePrograms.value.map((p) => ({ value: p.id, label: p.name })));
 const availablePrograms = computed(() => {
   if (!selectedDomainId.value) return [];
   return props.programs.filter(

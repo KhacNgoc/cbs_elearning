@@ -20,14 +20,14 @@ export interface GroupSort<T> {
   id: string;
   /** Button text, e.g. "Nhiều lượt học nhất". */
   label: string;
-  /** Completes "Hiển thị 20/57 đơn vị …", e.g. "có nhiều lượt học nhất". */
+  /** Completes "Hiển thị 10/57 đơn vị …", e.g. "có nhiều lượt học nhất". */
   note: string;
   /** Leaves the incoming order (biggest first) when absent. */
   compare?: (a: T, b: T) => number;
 }
 
 /** Most bars a chart draws: beyond this the bars stop being readable even when the chart grows. */
-export const GROUP_CHART_LIMIT = 20;
+export const GROUP_CHART_LIMIT = 10;
 const BAR_HEIGHT = 28, CHART_CHROME = 90, MIN_CHART_HEIGHT = 280;
 
 /**
