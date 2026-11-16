@@ -11,6 +11,8 @@ import com.bidv.coretraining.auth.dto.ResetPasswordOtpRequest;
 import com.bidv.coretraining.auth.service.AuthService;
 import com.bidv.coretraining.security.CustomUserDetails;
 import com.bidv.coretraining.security.JwtCookieService;
+import com.bidv.coretraining.security.LoginAttemptLimiter;
+import org.springframework.security.core.AuthenticationException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -29,11 +31,14 @@ public class AuthController {
     private final AuthService authService;
     private final JwtCookieService jwtCookieService;
     private final CsrfTokenRepository csrfTokens;
+    private final LoginAttemptLimiter loginLimiter;
 
-    public AuthController(AuthService authService, JwtCookieService jwtCookieService, CsrfTokenRepository csrfTokens) {
+    public AuthController(AuthService authService, JwtCookieService jwtCookieService, CsrfTokenRepository csrfTokens,
+            LoginAttemptLimiter loginLimiter) {
         this.authService = authService;
         this.jwtCookieService = jwtCookieService;
         this.csrfTokens = csrfTokens;
+        this.loginLimiter = loginLimiter;
     }
 
     @org.springframework.web.bind.annotation.GetMapping("/csrf")
@@ -44,7 +49,19 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<JwtAuthenticationResponse> authenticateUser(@Valid @RequestBody LoginRequest loginRequest,
             HttpServletRequest request, HttpServletResponse servletResponse) {
-        JwtAuthenticationResponse response = authService.authenticateUser(loginRequest);
+        String username = loginRequest.getUsername();
+        // With SERVER_FORWARD_HEADERS_STRATEGY=framework this is the first X-Forwarded-For address,
+        // so the outer proxy must overwrite that header with the real client address.
+        String clientIp = request.getRemoteAddr();
+        loginLimiter.checkAllowed(username, clientIp);
+        JwtAuthenticationResponse response;
+        try {
+            response = authService.authenticateUser(loginRequest);
+        } catch (AuthenticationException e) {
+            loginLimiter.recordFailure(username, clientIp);
+            throw e;
+        }
+        loginLimiter.recordSuccess(username);
         // A token issued before login must not survive it (CSRF token fixation).
         csrfTokens.saveToken(null, request, servletResponse);
         String token = response.getAccessToken();

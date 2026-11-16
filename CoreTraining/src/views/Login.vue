@@ -350,7 +350,9 @@ const handleLogin = async () => {
     });
   } catch (err: any) {
     errorMessage.value =
-      "Đăng nhập không thành công. Vui lòng kiểm tra lại tài khoản hoặc mật khẩu!";
+      err?.response?.status === 429 && err.response.data?.message
+        ? err.response.data.message
+        : "Đăng nhập không thành công. Vui lòng kiểm tra lại tài khoản hoặc mật khẩu!";
     console.error(err);
   } finally {
     isLoading.value = false;

@@ -89,6 +89,18 @@ public class GlobalExceptionHandler {
                         .path(request.getDescription(false).replace("uri=", "")).traceId(currentTraceId()).build());
     }
 
+    @ExceptionHandler(com.bidv.coretraining.security.LoginAttemptLimiter.LoginThrottledException.class)
+    public ResponseEntity<ErrorResponse> handleLoginThrottled(
+            com.bidv.coretraining.security.LoginAttemptLimiter.LoginThrottledException ex, WebRequest request) {
+        log.warn("Login rejected: too many failed attempts");
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(org.springframework.http.HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+                .body(ErrorResponse.builder().timestamp(LocalDateTime.now())
+                        .status(HttpStatus.TOO_MANY_REQUESTS.value())
+                        .error(HttpStatus.TOO_MANY_REQUESTS.getReasonPhrase()).message(ex.getMessage())
+                        .path(request.getDescription(false).replace("uri=", "")).traceId(currentTraceId()).build());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex,
             WebRequest request) {
