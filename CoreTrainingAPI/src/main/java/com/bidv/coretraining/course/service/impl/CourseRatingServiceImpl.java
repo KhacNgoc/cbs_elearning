@@ -7,7 +7,10 @@ import com.bidv.coretraining.course.dto.CourseRatingDto.*;
 import com.bidv.coretraining.access.service.AuthorizationService;
 import com.bidv.coretraining.course.entity.Course;
 import com.bidv.coretraining.course.entity.CourseRating;
+import com.bidv.coretraining.course.repository.CourseRatingReportRepository;
 import com.bidv.coretraining.course.repository.CourseRatingRepository;
+import com.bidv.coretraining.report.service.ReportScopeResolver;
+import com.bidv.coretraining.security.ReportPages;
 import com.bidv.coretraining.course.repository.CourseRepository;
 import com.bidv.coretraining.course.service.CourseRatingService;
 import com.bidv.coretraining.exception.*;
@@ -29,7 +32,9 @@ public class CourseRatingServiceImpl implements CourseRatingService {
     private final CourseRepository courses;
     private final UserRepository users;
     private final AuthorizationService auth;
-    public CourseRatingServiceImpl(CourseRatingRepository ratings,CourseRepository courses,UserRepository users,AuthorizationService auth){this.ratings=ratings;this.courses=courses;this.users=users;this.auth=auth;}
+    private final CourseRatingReportRepository reports;
+    private final ReportScopeResolver scopes;
+    public CourseRatingServiceImpl(CourseRatingRepository ratings,CourseRepository courses,UserRepository users,AuthorizationService auth,CourseRatingReportRepository reports,ReportScopeResolver scopes){this.ratings=ratings;this.courses=courses;this.users=users;this.auth=auth;this.reports=reports;this.scopes=scopes;}
     private Course course(String id){return courses.findById(id).orElseThrow(()->new ResourceNotFoundException("Course"));}
     private Rating dto(CourseRating r){return r==null?null:new Rating(r.getId(),r.getVersion(),r.getStars(),r.getContent(),r.getUpdatedAt());}
     private Summary summary(Course course){
@@ -55,19 +60,34 @@ public class CourseRatingServiceImpl implements CourseRatingService {
         LearningPolicy.recordCourseCompletion(user,course);users.save(user);ratings.saveAndFlush(rating);
         return new State(true,"Đã lưu đánh giá khóa học.",dto(rating),summary(course));
     }
+    /**
+     * The rating report of the dashboard and the course report. It is a report, not course administration: it is
+     * read with a report page (overview or the course report) and counts only the ratings and completions of
+     * learners in the units of the roles granting that page.
+     */
     public Report report(String courseId,boolean lowOnly,int page){
-        auth.requireOperation("courses","read");
-        var allowed=auth.editableCourses().stream().filter(c->courseId==null||courseId.isBlank()||c.getId().equals(courseId)).toList();
+        auth.requireOperation("reports","read");
+        var actor=auth.current();
+        ReportScopeResolver.require(actor,ReportPages.RATINGS);
+        var scope=scopes.resolve(actor,ReportPages.RATINGS);
+        Map<Integer,Set<String>> grantUnits=new HashMap<>();
+        for(int i=0;i<scope.roles().size();i++)grantUnits.put(i,scopes.grantUnits(scope.roles().get(i).unitIds()));
+        var allowed=reports.courses(scope,grantUnits).stream().filter(c->courseId==null||courseId.isBlank()||c.id().equals(courseId)).toList();
         if(courseId!=null&&!courseId.isBlank()&&allowed.isEmpty())throw new org.springframework.security.access.AccessDeniedException("Không có quyền xem đánh giá khóa học này.");
-        var summaries=allowed.stream().map(this::summary).toList();
+        var ids=allowed.stream().map(CourseRatingReportRepository.CourseName::id).toList();
+        var figures=reports.aggregate(scope,ids);var completions=reports.completed(scope,ids);
+        var summaries=allowed.stream().map(c->{
+            var f=figures.get(c.id());long count=f==null?0:f.count(),completed=completions.getOrDefault(c.id(),0L);
+            return new Summary(c.id(),c.name(),count,f==null?null:f.average(),completed,f==null?0:f.low(),completed==0?null:count*100.0/completed);
+        }).toList();
         long count=summaries.stream().mapToLong(Summary::count).sum(),completed=summaries.stream().mapToLong(Summary::completed).sum(),low=summaries.stream().mapToLong(Summary::low).sum();
         Double average=count==0?null:summaries.stream().filter(s->s.average()!=null).mapToDouble(s->s.average()*s.count()).sum()/count;
         var distribution=new TreeMap<Integer,Long>();for(int i=1;i<=5;i++)distribution.put(i,0L);
         if(allowed.isEmpty())return new Report(summaries,0,null,0,0,null,distribution,List.of(),0,0,0);
-        var ids=allowed.stream().map(Course::getId).toList();
-        ratings.distribution(ids).forEach(s->distribution.put(s.getStars(),s.getCount()));
+        reports.distribution(scope,ids).forEach(distribution::put);
         // Ten per page keeps the latest-feedback block about as tall as the rest of the report.
-        var feedback=ratings.feedback(ids,lowOnly,PageRequest.of(Math.max(0,page),FEEDBACK_PAGE_SIZE,Sort.by(Sort.Order.desc("updatedAt"),Sort.Order.desc("id"))));
-        return new Report(summaries,count,average,completed,low,completed==0?null:count*100.0/completed,distribution,feedback.stream().map(r->new Feedback(r.getId(),r.getCourse().getId(),r.getCourse().getName(),r.getUser().getFullName(),r.getStars(),r.getContent(),r.getUpdatedAt())).toList(),feedback.getTotalElements(),feedback.getNumber(),feedback.getTotalPages());
+        int current=Math.max(0,page);long total=reports.feedbackCount(scope,ids,lowOnly);
+        var feedback=reports.feedback(scope,ids,lowOnly,current,FEEDBACK_PAGE_SIZE);
+        return new Report(summaries,count,average,completed,low,completed==0?null:count*100.0/completed,distribution,feedback,total,current,(int)((total+FEEDBACK_PAGE_SIZE-1)/FEEDBACK_PAGE_SIZE));
     }
 }

@@ -11,3 +11,11 @@ export type ReportView = typeof reportViews[number]['id'];
 
 // Status detail remains reachable from Dashboard charts, without a separate menu.
 export const reportMenuViews = reportViews.filter(view => view.id !== 'completion');
+
+/**
+ * The navigation id that grants a report view. Every menu view has its own permission page; the completion
+ * detail is opened from the dashboard charts and belongs to the dashboard (admin.overview).
+ */
+export function reportPageKey(view: string): string {
+  return reportMenuViews.some(item => item.id === view) ? `admin.reports.${view}` : 'admin.overview';
+}

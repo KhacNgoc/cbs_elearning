@@ -11,7 +11,8 @@ import com.bidv.coretraining.report.dto.TrainingReportQueryDto.Filter;
 import com.bidv.coretraining.report.repository.TrainingReportQueryRepository.*;
 import com.bidv.coretraining.report.repository.TrainingReportQueryRepository;
 import com.bidv.coretraining.report.service.TrainingReportReadService;
-import com.bidv.coretraining.security.AccessPolicy;
+import com.bidv.coretraining.report.service.ReportScopeResolver;
+import com.bidv.coretraining.security.ReportPages;
 import com.bidv.coretraining.user.entity.User;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,7 +26,8 @@ public class TrainingReportReadServiceImpl implements TrainingReportReadService 
     private final UserQuizScoreRepository scores;
     private final QuizAttemptRepository quizAttempts;
     private final QuestionRepository questions;
-    public TrainingReportReadServiceImpl(AuthorizationService auth, TrainingReportQueryRepository repository, UserQuizScoreRepository scores, QuizAttemptRepository quizAttempts, QuestionRepository questions) {this.auth=auth;this.repository=repository;this.scores=scores;this.quizAttempts=quizAttempts;this.questions=questions;}
+    private final ReportScopeResolver scopes;
+    public TrainingReportReadServiceImpl(AuthorizationService auth, TrainingReportQueryRepository repository, UserQuizScoreRepository scores, QuizAttemptRepository quizAttempts, QuestionRepository questions, ReportScopeResolver scopes) {this.auth=auth;this.repository=repository;this.scores=scores;this.quizAttempts=quizAttempts;this.questions=questions;this.scopes=scopes;}
     private Filter filter(Map<String,String> p) {
         try { return new Filter(p.get("from"),p.get("to"),p.get("unit"),p.get("program"),p.get("course"),p.get("status"),p.getOrDefault("view","completion"),p.get("action"),p.get("search"),Integer.parseInt(p.getOrDefault("page","0")),Integer.parseInt(p.getOrDefault("size","20")),p.get("dimension"),p.get("key")); }
         catch(NumberFormatException e) { throw new BadRequestException("Tham số phân trang không hợp lệ"); }
@@ -37,41 +39,40 @@ public class TrainingReportReadServiceImpl implements TrainingReportReadService 
         LocalDate to=f.to()==null || f.to().isBlank() ? null : LocalDate.parse(f.to());
         if(to!=null && (to.isAfter(today) || from!=null && from.isAfter(to))) throw new BadRequestException("Khoảng ngày không hợp lệ");
     }
-    private User actor() {auth.requireOperation("overview","read");return auth.current();}
-    private Scope scope(User actor) {
-        Map<String,Unit> units=new HashMap<>(); repository.units().forEach(u->units.put(u.id(),u));
-        java.util.function.Function<String,Set<String>> ancestry=id->{
-            Set<String> ids=new HashSet<>();
-            while(id!=null) {var u=units.get(id);if(u==null || !u.active() || !ids.add(id)) return Set.of(); id=u.parent();}
-            return ids;
-        };
-        java.util.function.Function<Set<String>,Set<String>> descendants=roots->{
-            Set<String> out=new HashSet<>(); for(String id:units.keySet()) if(ancestry.apply(id).stream().anyMatch(roots::contains)) out.add(id); return out;
-        };
-        List<RoleScope> roles=new ArrayList<>();
-        if(!AccessPolicy.system(actor)) {
-            if(actor.isDynamicAccessInitialized()) {
-                for(var role:AccessPolicy.policies(actor)) if(role.active() && !role.learnerRole() && role.permissions().contains("overview:read"))
-                    roles.add(new RoleScope(descendants.apply(role.unitIds()),role.assignedCoursesOnly()));
-            } else {
-                var roots=actor.getScopeUnitIds().isEmpty() ? actor.getOrganizationUnit()==null ? Set.<String>of() : Set.of(actor.getOrganizationUnit().getId()) : actor.getScopeUnitIds();
-                roles.add(new RoleScope(descendants.apply(roots),false));
-            }
+    private User actor() {auth.requireOperation("reports","read");return auth.current();}
+    /**
+     * The report pages that admit a read of this view: the view's own page, and for a drill-down into one group
+     * (dimension and key) also the page of that group's view and the dashboard, which open such drill-downs.
+     */
+    private static Set<String> accepted(Filter f) {
+        Set<String> pages=new HashSet<>();
+        pages.add(ReportPages.pageOf(f.view())+":read");
+        if(f.dimension()!=null && !f.dimension().isBlank() && f.key()!=null && !f.key().isBlank()) {
+            pages.add(ReportPages.pageOf(f.dimension())+":read");
+            pages.add(ReportPages.OVERVIEW+":read");
         }
-        return new Scope(AccessPolicy.system(actor),actor.getId(),roles);
+        return pages;
     }
+    /** Learners within the units of the roles that grant this view's page; other roles do not widen it. */
+    private Scope scope(User actor,Filter f) {
+        var pages=accepted(f);
+        ReportScopeResolver.require(actor,pages);
+        return scopes.resolve(actor,pages);
+    }
+    /** Attempts open from the detail rows of every report view, so any report page reads them within its scope. */
+    private Scope anyReportScope(User actor) {return scopes.resolve(actor,ReportPages.READ);}
     public Map<String,Object> read(Map<String,String> params) {
-        var actor=actor(); var f=filter(params); var scope=scope(actor); validate(f);
+        var actor=actor(); var f=filter(params); var scope=scope(actor,f); validate(f);
         return repository.read(scope,f,!"false".equals(params.get("metadata")));
     }
     public Map<String,Object> read(Filter f) {return read(f,true);}
-    public Map<String,Object> read(Filter f,boolean metadata) {var scope=scope(actor());validate(f);return repository.read(scope,f,metadata);}
+    public Map<String,Object> read(Filter f,boolean metadata) {var scope=scope(actor(),f);validate(f);return repository.read(scope,f,metadata);}
     @Transactional(readOnly=true,isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public void export(Map<String,String> params,java.io.Writer writer) throws java.io.IOException {
-        var actor=actor(); var f=filter(params); var scope=scope(actor);validate(f);export(scope,f,writer);
+        var actor=actor(); var f=filter(params); var scope=scope(actor,f);validate(f);export(scope,f,writer);
     }
     @Transactional(readOnly=true,isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
-    public void export(Filter f,java.io.Writer writer) throws java.io.IOException {var scope=scope(actor());validate(f);export(scope,f,writer);}
+    public void export(Filter f,java.io.Writer writer) throws java.io.IOException {var scope=scope(actor(),f);validate(f);export(scope,f,writer);}
     private void export(Scope scope,Filter f,java.io.Writer writer) throws java.io.IOException {
         writer.write('\ufeff');csvLine(writer,csvHeaders(f.view()));
         repository.export(scope,f,row->{try {csvLine(writer,csvCells(row,f.view()));} catch(java.io.IOException e) {throw new java.io.UncheckedIOException(e);}});
@@ -154,7 +155,7 @@ public class TrainingReportReadServiceImpl implements TrainingReportReadService 
     }
 
     public Map<String,Object> attempts(String learner,String course,String before,int size) {
-        var scope=scope(actor()); long learnerId=Long.valueOf(learner);
+        var scope=anyReportScope(actor()); long learnerId=Long.valueOf(learner);
         String context = UUID
                 .nameUUIDFromBytes((learner + "\\0" + course).getBytes(java.nio.charset.StandardCharsets.UTF_8))
                 .toString();
@@ -186,7 +187,7 @@ public class TrainingReportReadServiceImpl implements TrainingReportReadService 
 
     @Override
     public AttemptAnalysis attemptAnalysis(String attemptId) {
-        if(!repository.attemptVisible(scope(actor()),attemptId))
+        if(!repository.attemptVisible(anyReportScope(actor()),attemptId))
             throw new ResourceNotFoundException("Quiz attempt","id",attemptId);
         var attempt=quizAttempts.findById(attemptId);
         if(attempt.isPresent())

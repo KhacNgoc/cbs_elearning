@@ -33,8 +33,10 @@ public record AdminOperation(String page, String action) {
         String page;
         if (java.util.Set.of("/api/admin/reports/training", "/api/admin/reports/training/read",
                 "/api/admin/reports/training/attempts", "/api/admin/reports/training/export").contains(p)
-                || p.matches("/api/admin/reports/training/attempts/(\\d+|[0-9a-fA-F]{8}-[0-9a-fA-F-]{27})/analysis"))
-            page = "overview";
+                || p.matches("/api/admin/reports/training/attempts/(\\d+|[0-9a-fA-F]{8}-[0-9a-fA-F-]{27})/analysis")
+                || p.equals("/api/admin/courses/ratings"))
+            // Any report page reaches these; the services check the page of the requested view and its scope.
+            page = "reports";
         else if (p.startsWith("/api/admin/options/"))
             page = p.substring("/api/admin/options/".length());
         else if (p.startsWith("/api/admin/rbac/roles"))

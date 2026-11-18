@@ -34,6 +34,8 @@ public class TrainingReportServiceImpl implements TrainingReportService {
     public Snapshot snapshot() {
         auth.requireOperation("overview", "read");
         User actor=auth.current();
+        // The request admits any report page; this whole-population snapshot is the dashboard's.
+        AccessPolicy.require(AccessPolicy.has(actor,"overview:read"));
         var catalog=courses.findAll().stream().filter(c->"PUBLISHED".equals(c.getStatus())).toList();
         List<Row> rows=new ArrayList<>();
         for(User learner:users.findAll()) {

@@ -7,6 +7,7 @@ import com.bidv.coretraining.access.repository.AdminPageRepository;
 import com.bidv.coretraining.course.repository.CourseRepository;
 import com.bidv.coretraining.navigation.entity.NavigationItem;
 import com.bidv.coretraining.navigation.repository.NavigationItemRepository;
+import com.bidv.coretraining.security.ReportPages;
 import com.bidv.coretraining.training.entity.TrainingProgram;
 import com.bidv.coretraining.training.repository.TrainingProgramRepository;
 import com.bidv.coretraining.user.entity.User;
@@ -41,6 +42,7 @@ public class DynamicAccessInitializer {
     @Transactional
     public void run() {
         page("overview", "Tổng quan", "/admin", 10, "read");
+        reportPages();
         page("catalog", "Danh mục đào tạo", "/admin/catalog", 20, "create", "read", "update");
         page("courses", "Khóa học và nội dung", "/admin/courses", 30, "create", "read", "update", "delete");
         page("users", "Tài khoản", "/admin/users", 40, "create", "read", "update", "delete");
@@ -125,7 +127,8 @@ public class DynamicAccessInitializer {
                                     pages.findById(page).ifPresent(
                                             p -> p.getActions().forEach(a -> permissions.add(page + ":" + a)));
                                 permissions.addAll(Set.of("permissions:read", "permissions:update", "units:read",
-                                        "enrollments:read", "enrollments:update", "overview:read"));
+                                        "enrollments:read", "enrollments:update"));
+                                permissions.addAll(ReportPages.READ);
                             }
                             case "ROLE_INSTRUCTOR" -> {
                                 name = "Giảng viên / quản lý nội dung";
@@ -135,7 +138,7 @@ public class DynamicAccessInitializer {
                             }
                             case "ROLE_REPORT_VIEWER" -> {
                                 name = "Lãnh đạo / người xem báo cáo";
-                                permissions.add("overview:read");
+                                permissions.addAll(ReportPages.READ);
                             }
                             default -> name = "Học viên";
                         }
@@ -156,6 +159,26 @@ public class DynamicAccessInitializer {
                 u.setDynamicAccessInitialized(true);
                 users.save(u);
             }
+    }
+
+    /**
+     * One permission page per view of the "Thống kê & báo cáo" menu. These views were all covered by
+     * overview:read before; when a page is first created, every role that held overview:read keeps that view.
+     */
+    private void reportPages() {
+        for (String[] view : ReportPages.VIEW_PAGE_DEFINITIONS) {
+            String id = ReportPages.VIEW_PAGES.get(view[0]);
+            if (pages.existsById(id))
+                continue;
+            page(id, view[1], "/admin?report=" + view[0], Integer.parseInt(view[2]), "read");
+            for (AccessRole r : roles.findAll())
+                if (r.getPermissions().contains("overview:read") && r.getPermissions().add(id + ":read"))
+                    roles.save(r);
+        }
+        pages.findById("overview").filter(p -> !"Báo cáo · Tổng quan".equals(p.getName())).ifPresent(p -> {
+            p.setName("Báo cáo · Tổng quan");
+            pages.save(p);
+        });
     }
 
     private void page(String id, String name, String route, int order, String... actions) {

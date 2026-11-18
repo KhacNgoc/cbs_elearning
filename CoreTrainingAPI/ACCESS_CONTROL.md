@@ -22,6 +22,14 @@ Tắt **Role học viên** để cấu hình role quản trị; phần **Phạm 
 
 Trường API mới là `learnerRole`. Khi khởi động, `LearnerRoleMigration` phân loại một lần những role cũ chỉ có quyền học tập, không có quyền quản trị và không phải role hệ thống/phân công giảng viên; phạm vi đơn vị cũ không còn cần thiết của chúng được gỡ. Role quản trị và lựa chọn loại role đã lưu không bị tự phân loại lại. Với schema quản lý thủ công, chạy `src/main/resources/migrations/20261016_learner_roles.sql` trước khi triển khai; với `ddl-auto=update`, ứng dụng tạo cột và chuyển đổi khi khởi động.
 
+## Quyền báo cáo
+
+Menu **Thống kê & báo cáo** có một trang quyền cho mỗi màn hình: `overview` (Báo cáo · Tổng quan, gồm chi tiết trạng thái học tập mở từ biểu đồ), `report-learners`, `report-courses`, `report-programs`, `report-units`, `report-scores`, `report-domains`; mỗi trang chỉ có hành động `read`. Khi các trang con được tạo lần đầu, mọi role đang có `overview:read` được cấp thêm quyền xem các trang con để giữ nguyên hành vi cũ.
+
+- API `/api/admin/reports/training/**` và `/api/admin/courses/ratings` nhận yêu cầu khi người dùng có ít nhất một trang báo cáo; service kiểm tra trang của `view` được yêu cầu (drill-down theo `dimension`/`key` chấp nhận thêm trang của nhóm đó và `overview`). Lượt thi/phân tích bài thi mở được từ mọi màn hình báo cáo.
+- Phạm vi dữ liệu là học viên thuộc đơn vị (và đơn vị con) của **chính các role cấp trang báo cáo đó**; đơn vị của role khác (ví dụ role quản trị khóa học) không mở rộng phạm vi báo cáo. Báo cáo khóa học liệt kê các khóa mà học viên trong phạm vi được giao/đăng ký/đã học, kể cả khóa do Trụ sở chính hoặc đơn vị khác phân bổ; số liệu chỉ tính trên học viên trong phạm vi.
+- Báo cáo đánh giá khóa học (trên Tổng quan và màn hình Khóa học) cần `overview:read` hoặc `report-courses:read`, không cần `courses:read`. Số đánh giá, lượt hoàn thành, phân bố sao và phản hồi chỉ tính học viên trong phạm vi.
+
 `OPTIONAL` cho phép nhìn thấy và gửi yêu cầu đăng ký học; phải được duyệt trước khi học. `MANDATORY` giao học trực tiếp, áp dụng cả đơn vị con. Việc chia sẻ không cấp quyền biên tập. Muốn chia sẻ ra ngoài phạm vi quản trị đơn vị cần quản trị toàn hệ thống thực hiện. Những chia sẻ/phân công ngoài phạm vi đã được quản trị toàn hệ thống tạo phải được quản trị đơn vị giữ nguyên khi cập nhật.
 
 ## Giao diện
