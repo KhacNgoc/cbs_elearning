@@ -2,7 +2,7 @@
   <section class="live-ratings" aria-label="Đánh giá khóa học từ cơ sở dữ liệu">
     <header><div><h3>Đánh giá khóa học</h3><p>Phản hồi của học viên đã hoàn thành · dữ liệu thực</p></div><Star :size="21"/></header>
     <div class="rating-filters"><label class="rating-course-field">Khóa học đánh giá<SearchSelect v-model="courseId" class="rating-course-select" aria-label="Khóa học đánh giá" all-label="Tất cả khóa trong phạm vi quản lý" search-placeholder="Gõ tên khóa học..." :options="courseOptions"/></label><button class="btn btn-secondary" :aria-pressed="lowOnly" @click="lowOnly=!lowOnly;page=0">{{ lowOnly?'Hiện tất cả phản hồi':'Lọc phản hồi 1–2 sao' }}</button></div>
-    <p class="scope-note">Báo cáo này tổng hợp toàn bộ đánh giá đã lưu và dùng bộ lọc khóa học riêng ở trên.</p>
+    <p class="scope-note">Chỉ gồm đánh giá và lượt hoàn thành của học viên thuộc đơn vị trong phạm vi được phân quyền; dùng bộ lọc khóa học riêng ở trên.</p>
     <button v-if="report" class="btn btn-secondary" @click="exportCsv">CSV đánh giá theo khóa</button>
     <SkeletonLoader v-if="loading" label="Đang tải đánh giá khóa học">
       <SkeletonLoader plain variant="stats" :rows="3" />

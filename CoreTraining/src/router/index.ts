@@ -10,6 +10,7 @@ const AdminOverview = () => import('../views/AdminOverview.vue');
 const AdminQuizDetail = () => import('../views/AdminQuizDetail.vue');
 const Profile = () => import('../views/Profile.vue');
 import { useNavigationStore } from '../stores/navigationStore';
+import { reportPageKey } from '../utils/reportingViews';
 import { clearAuthSession, getCachedAuthSession, isSignedOut, setCachedAuthSession } from '../utils/authSession';
 import { authApi } from '../api/authApi';
 
@@ -155,7 +156,9 @@ function patchUserStore(session: AuthSession) {
 function pageKeyOf(route: GuardedRoute) {
   const tabKey = route.path === '/admin' && typeof route.query.tab === 'string'
     ? `admin.${route.query.tab}`
-    : undefined;
+    : route.path === '/admin' && typeof route.query.report === 'string'
+      ? reportPageKey(route.query.report)
+      : undefined;
   return tabKey || [...route.matched].reverse()
     .map(record => record.meta.pageKey as string | undefined)
     .find(Boolean);

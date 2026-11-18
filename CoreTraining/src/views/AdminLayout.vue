@@ -188,8 +188,10 @@ const navigationGroups = computed(() =>
       id: "reports",
       label: "Thống kê & báo cáo",
       icon: ChartNoAxesCombined,
-      items: navigationStore.allowedPageIds.has("admin.overview")
-        ? reportViews.map((view, index): NavigationItem => ({
+      // Each report view has its own permission page (admin.reports.<view>).
+      items: reportViews
+            .filter((view) => navigationStore.allowedPageIds.has(`admin.reports.${view.id}`))
+            .map((view, index): NavigationItem => ({
             id: `admin.reports.${view.id}`,
             label: view.label,
             route: router.resolve({
@@ -203,8 +205,7 @@ const navigationGroups = computed(() =>
             area: "ADMIN",
             sortOrder: index,
             visible: true,
-          }))
-        : [],
+          })),
     },
     ...groupDefinitions.map((group) => ({
       ...group,

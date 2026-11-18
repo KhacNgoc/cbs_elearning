@@ -15,6 +15,9 @@ public final class AccessPolicy {
     private AccessPolicy() {
     }
 
+    /** The request-level permission of report endpoints: held by anyone with at least one report page. */
+    public static final String REPORTS_READ = "reports:read";
+
     public static List<RolePolicy> policies(User u) {
         return u.getPolicySnapshot() != null ? u.getPolicySnapshot()
                 : u.getAssignedRoles().stream().map(RolePolicy::of).toList();
@@ -32,6 +35,9 @@ public final class AccessPolicy {
         Set<String> perms = permissions(u);
         if (perms.contains(permission))
             return true;
+        // Report endpoints admit any report page; the report services then check the page of the requested view.
+        if (REPORTS_READ.equals(permission))
+            return perms.stream().anyMatch(ReportPages.READ::contains);
         if (permission != null && permission.startsWith("catalog:"))
             return perms.contains("courses:" + permission.substring("catalog:".length()));
         return false;
@@ -152,7 +158,7 @@ public final class AccessPolicy {
             for (String a : List.of("create", "read", "delete"))
                 p.add("documents:" + a);
         if (p.contains("USER_MANAGE") || p.contains("REPORT_VIEW"))
-            p.add("overview:read");
+            p.addAll(ReportPages.READ);
         if (u.hasRole("ROLE_UNIT_ADMIN"))
             p.add("units:read");
         return p;
