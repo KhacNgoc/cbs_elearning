@@ -32,12 +32,25 @@ public class LearnerQuizEntryServiceImpl implements LearnerQuizEntryService {
   if(lessonId!=null&&!lessonId.isBlank()) {
    lesson=lessons.findById(lessonId).orElseThrow(()->new ResourceNotFoundException("Lesson"));
    if(!courseId.equals(lesson.getCourse().getId())) throw new BadRequestException("Bài học không thuộc khóa học đã chọn");
-   LearningPolicy.assertLessonAccess(user,lesson);
-  } else {lessonId=null;LearningPolicy.assertCourseAccess(user,course);}
-  var latest=scores.latestScore(user.getId(),courseId,lessonId).orElse(null);
+  } else lessonId=null;
+  var latest=entryScore(user,course,lesson,lessonId);
   Integer score=latest==null?null:latest.score();
   Integer total=latest==null?null:latest.total();
   return new Context(courseId,course.getName(),lessonId,lesson==null?course.getQuizPassingScore():lesson.getQuizPassingScore(),score,total,
    lesson==null||lesson.getQuiz()==null?null:lesson.getQuiz().getTimeLimitMinutes());
+ }
+ /**
+  * A learner who may take the quiz gets its context. One who no longer may (course of a former unit, quiz locked
+  * or withdrawn) still gets it when they have a result to review there, as the profile's result list offers.
+  */
+ private LearnerQuizEntryRepository.Score entryScore(com.bidv.coretraining.user.entity.User user,
+   com.bidv.coretraining.course.entity.Course course,Lesson lesson,String lessonId) {
+  try {
+   if(lesson!=null) LearningPolicy.assertLessonAccess(user,lesson); else LearningPolicy.assertCourseAccess(user,course);
+  } catch(org.springframework.security.access.AccessDeniedException denied) {
+   LearningPolicy.assertResultAccess(user,course);
+   return scores.latestScore(user.getId(),course.getId(),lessonId).orElseThrow(()->denied);
+  }
+  return scores.latestScore(user.getId(),course.getId(),lessonId).orElse(null);
  }
 }
