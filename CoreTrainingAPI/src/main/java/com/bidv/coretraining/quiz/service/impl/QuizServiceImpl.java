@@ -267,7 +267,7 @@ public class QuizServiceImpl implements QuizService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course", "id", courseId));
-        LearningPolicy.assertCourseAccess(user, course);
+        LearningPolicy.assertResultAccess(user, course);
         UserQuizScore score = userQuizScoreRepository
                 .findByUserIdAndCourseIdAndLessonIsNull(user.getId(), courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz attempt", "courseId", courseId));
@@ -282,7 +282,7 @@ public class QuizServiceImpl implements QuizService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
         Lesson lesson = lessonRepository.findById(lessonId)
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson", "id", lessonId));
-        LearningPolicy.assertLessonAccess(user, lesson);
+        LearningPolicy.assertResultAccess(user, lesson.getCourse());
         UserQuizScore score = userQuizScoreRepository.findByUserIdAndLessonId(user.getId(), lessonId)
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz attempt", "lessonId", lessonId));
         return buildReview(score, questionRepository.findByLessonIdOrderByQuestionOrderAscIdAsc(lessonId), lesson.getQuizPassingScore());

@@ -98,6 +98,15 @@ public final class LearningPolicy {
             throw new AccessDeniedException("Hoàn thành các bài và chương trước để mở bài học này");
     }
 
+    /**
+     * Reading one's own past results: the profile lists attempts of every course {@link AccessPolicy#visible} admits
+     * (registered courses stay there after a unit move, archived ones included), so reviewing them asks no more than
+     * that. Taking or submitting a quiz still goes through {@link #assertCourseAccess}/{@link #assertLessonAccess}.
+     */
+    public static void assertResultAccess(User user, Course course) {
+        AccessPolicy.require(user.activeAccount() && AccessPolicy.visible(user, course));
+    }
+
     public static boolean quizPassed(User user, Lesson lesson) {
         return user.getQuizScores().stream()
                 .filter(s -> s.getLesson() != null && s.getLesson().getId().equals(lesson.getId()))
